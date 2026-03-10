@@ -137,10 +137,10 @@ describe('heartbeat', () => {
     expect(capabilities).toEqual(['cpu']);
   });
 
-  it('determines capabilities with inference (no embedding)', () => {
+  it('determines capabilities with inference', () => {
     const hardware = {
       cpuCores: 8,
-      ramGb: 6, // Below 8GB, no embedding
+      ramGb: 16, // 16GB RAM - gets embedding too
       gpuVramGb: 0,
       tier: 0 as const,
       hasOllama: true,
@@ -148,7 +148,7 @@ describe('heartbeat', () => {
 
     const capabilities = determineCapabilities(hardware);
 
-    expect(capabilities).toEqual(['cpu', 'inference']);
+    expect(capabilities).toEqual(['cpu', 'inference', 'embedding']);
   });
 
   it('determines capabilities with embedding (8GB+ RAM)', () => {
@@ -163,6 +163,20 @@ describe('heartbeat', () => {
     const capabilities = determineCapabilities(hardware);
 
     expect(capabilities).toEqual(['cpu', 'inference', 'embedding']);
+  });
+
+  it('starts periodic heartbeat with default interval', () => {
+    postMock.mockResolvedValue({ data: { registered: true, peerId: 'test' } });
+    jest.useFakeTimers();
+    // Call without intervalMs to cover the default parameter branch
+    const cleanup = startPeriodicHeartbeat(
+      'http://localhost:3001',
+      { peerId: 'p', privateKey: 'k', publicKey: 'pub' },
+      { cpuCores: 4, ramGb: 8, gpuVramGb: 0, tier: 0 as const, hasOllama: false },
+    );
+    expect(typeof cleanup).toBe('function');
+    cleanup();
+    jest.useRealTimers();
   });
 
   it('starts periodic heartbeat and returns cleanup function', async () => {
@@ -216,23 +230,27 @@ describe('heartbeat', () => {
       hasOllama: true,
     };
 
+    // Mock sendHeartbeat to reject synchronously (no backoff delays)
     postMock.mockRejectedValue(new Error('Network failed'));
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    jest.useFakeTimers();
-
+    // Use real timers with short interval — let the async catch block actually execute
     const cleanup = startPeriodicHeartbeat(
       'http://localhost:3001',
       mockIdentity,
       mockHardware,
-      1000,
+      50, // 50ms interval
     );
 
-    // Run only pending timers (this executes the setInterval callback synchronously)
-    jest.runOnlyPendingTimers();
+    // Wait for the interval to fire + sendHeartbeat to fail + catch to execute
+    await new Promise(resolve => setTimeout(resolve, 4500)); // 3 retries * ~1s each
 
-    expect(postMock).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Heartbeat failed:',
+      expect.stringContaining('attempt'),
+    );
 
     cleanup();
-    jest.useRealTimers();
+    consoleSpy.mockRestore();
   });
 });
