@@ -182,23 +182,26 @@ describe('heartbeat', () => {
 
     postMock.mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
 
+    jest.useFakeTimers();
+
     const cleanup = startPeriodicHeartbeat(
       'http://localhost:3001',
       mockIdentity,
       mockHardware,
-      50, // Very short interval 50ms
+      1000,
     );
 
     expect(typeof cleanup).toBe('function');
 
-    // Wait for at least one heartbeat to fire
-    await new Promise(resolve => setTimeout(resolve, 100));
+    jest.advanceTimersByTime(1000);
 
-    // Call cleanup to clear interval
+    expect(postMock).toHaveBeenCalled();
+
     cleanup();
+    jest.useRealTimers();
   });
 
-  it('handles errors in periodic heartbeat and continues', async () => {
+  it('handles errors in periodic heartbeat', async () => {
     const mockIdentity = {
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
@@ -213,20 +216,22 @@ describe('heartbeat', () => {
       hasOllama: true,
     };
 
-    // Mock to fail so error path is covered
     postMock.mockRejectedValue(new Error('Network failed'));
+
+    jest.useFakeTimers();
 
     const cleanup = startPeriodicHeartbeat(
       'http://localhost:3001',
       mockIdentity,
       mockHardware,
-      50, // Very short interval 50ms
+      1000,
     );
 
-    // Wait for at least one heartbeat to fire and fail
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for retries to complete
+    jest.advanceTimersByTime(1000);
 
-    // Call cleanup to clear interval
+    expect(postMock).toHaveBeenCalled();
+
     cleanup();
+    jest.useRealTimers();
   });
 });
