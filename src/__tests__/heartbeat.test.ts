@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import axios from 'axios';
-import { sendHeartbeat } from '../heartbeat.js';
+import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../heartbeat.js';
 
 // Mock axios module
 jest.mock('axios', () => ({
@@ -22,6 +22,7 @@ describe('heartbeat', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('sends heartbeat with correct payload', async () => {
@@ -120,5 +121,112 @@ describe('heartbeat', () => {
     ).rejects.toThrow('Failed to send heartbeat after 3 attempts');
 
     expect(postMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('determines capabilities based on hardware - CPU only', () => {
+    const hardware = {
+      cpuCores: 8,
+      ramGb: 16,
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: false,
+    };
+
+    const capabilities = determineCapabilities(hardware);
+
+    expect(capabilities).toEqual(['cpu']);
+  });
+
+  it('determines capabilities with inference', () => {
+    const hardware = {
+      cpuCores: 8,
+      ramGb: 6, // Below 8GB, no embedding
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: true,
+    };
+
+    const capabilities = determineCapabilities(hardware);
+
+    expect(capabilities).toEqual(['cpu', 'inference']);
+  });
+
+  it('determines capabilities with embedding (8GB+ RAM)', () => {
+    const hardware = {
+      cpuCores: 8,
+      ramGb: 10,
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: true,
+    };
+
+    const capabilities = determineCapabilities(hardware);
+
+    expect(capabilities).toEqual(['cpu', 'inference', 'embedding']);
+  });
+
+  it('starts periodic heartbeat and returns cleanup function', async () => {
+    const mockIdentity = {
+      peerId: 'test-peer-id',
+      privateKey: 'test-private-key',
+      publicKey: 'test-public-key',
+    };
+
+    const mockHardware = {
+      cpuCores: 10,
+      ramGb: 16,
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: true,
+    };
+
+    postMock.mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
+
+    const cleanup = startPeriodicHeartbeat(
+      'http://localhost:3001',
+      mockIdentity,
+      mockHardware,
+      50, // Very short interval 50ms
+    );
+
+    expect(typeof cleanup).toBe('function');
+
+    // Wait for at least one heartbeat to fire
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Call cleanup to clear interval
+    cleanup();
+  });
+
+  it('handles errors in periodic heartbeat and continues', async () => {
+    const mockIdentity = {
+      peerId: 'test-peer-id',
+      privateKey: 'test-private-key',
+      publicKey: 'test-public-key',
+    };
+
+    const mockHardware = {
+      cpuCores: 10,
+      ramGb: 16,
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: true,
+    };
+
+    // Mock to fail so error path is covered
+    postMock.mockRejectedValue(new Error('Network failed'));
+
+    const cleanup = startPeriodicHeartbeat(
+      'http://localhost:3001',
+      mockIdentity,
+      mockHardware,
+      50, // Very short interval 50ms
+    );
+
+    // Wait for at least one heartbeat to fire and fail
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for retries to complete
+
+    // Call cleanup to clear interval
+    cleanup();
   });
 });

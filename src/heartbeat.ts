@@ -67,7 +67,7 @@ export async function sendHeartbeat(
 /**
  * Determine capabilities based on hardware
  */
-function determineCapabilities(hardware: HardwareInfo): string[] {
+export function determineCapabilities(hardware: HardwareInfo): string[] {
   const capabilities: string[] = [];
 
   // CPU is always available
