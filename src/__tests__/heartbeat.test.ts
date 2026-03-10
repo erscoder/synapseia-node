@@ -137,7 +137,7 @@ describe('heartbeat', () => {
     expect(capabilities).toEqual(['cpu']);
   });
 
-  it('determines capabilities with inference', () => {
+  it('determines capabilities with inference (no embedding)', () => {
     const hardware = {
       cpuCores: 8,
       ramGb: 6, // Below 8GB, no embedding
@@ -227,7 +227,8 @@ describe('heartbeat', () => {
       1000,
     );
 
-    jest.advanceTimersByTime(1000);
+    // Run only pending timers (this executes the setInterval callback synchronously)
+    jest.runOnlyPendingTimers();
 
     expect(postMock).toHaveBeenCalled();
 
