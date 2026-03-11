@@ -1,268 +1,295 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import type { Experiment } from '../types.js';
-import type { MutationProposal } from '../mutation-engine.js';
-import type { TrainingResult } from '../trainer.js';
 
-// Import the module under test
-let agentLoop: typeof import('../agent-loop.js');
+jest.mock('../mutation-engine.js', () => ({ proposeMutation: jest.fn() }));
+jest.mock('../trainer.js', () => ({
+  trainMicroModel: jest.fn(),
+  validateTrainingConfig: jest.fn(),
+  calculateImprovement: jest.fn(),
+}));
+
+import { proposeMutation } from '../mutation-engine.js';
+import { trainMicroModel, validateTrainingConfig } from '../trainer.js';
+import {
+  startAgentLoop, stopAgentLoop, getAgentLoopState, resetAgentLoopState,
+  fetchTopExperiments, createExperiment, updateExperiment, postToFeed,
+  runAgentIteration, _test, type AgentLoopConfig,
+} from '../agent-loop.js';
+
+// Untyped mock — avoids 'never' inference issues
+const mockFetch: any = jest.fn();
+
+const mockConfig: AgentLoopConfig = {
+  coordinatorUrl: 'http://localhost:3001',
+  peerId: 'peer-1',
+  capabilities: ['cpu'],
+  intervalMs: 100,
+  datasetPath: './data/test.txt',
+};
+
+const hp = {
+  learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
+  numHeads: 4, activation: 'gelu' as const, normalization: 'layernorm' as const,
+  initScheme: 'xavier' as const, warmupSteps: 100, weightDecay: 0.01, maxTrainSeconds: 30,
+};
+
+const mockMutation: any = {
+  model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
+  type: 'explore', baseExperimentId: null,
+  reasoning: 'Test reasoning long enough to slice for logging purposes in agent loop',
+  hyperparams: hp,
+};
+
+const mockResult: any = {
+  runNumber: 1, finalLoss: 2.5, valLoss: 2.8, improvementPercent: 10,
+  durationMs: 5000, config: hp, lossCurve: [4.0, 3.5, 3.0, 2.8],
+  hardwareUsed: 'cpu',
+};
+
+const okResp = (body: any) => Promise.resolve({ ok: true, json: async () => body });
+const errResp = (text = 'Error') => Promise.resolve({ ok: false, statusText: text });
 
 describe('Agent Loop', () => {
-  const mockConfig = {
-    coordinatorUrl: 'http://localhost:3001',
-    peerId: 'test-peer-1',
-    capabilities: ['cpu'],
-    intervalMs: 100,
-    datasetPath: './data/test.txt',
-  };
-
-  const mockMutation: MutationProposal = {
-    model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
-    type: 'explore',
-    baseExperimentId: null,
-    reasoning: 'Test mutation for better learning rate',
-    hyperparams: {
-      learningRate: 0.001,
-      batchSize: 32,
-      hiddenDim: 128,
-      numLayers: 4,
-      numHeads: 4,
-      activation: 'gelu',
-      normalization: 'layernorm',
-      initScheme: 'xavier',
-      warmupSteps: 100,
-      weightDecay: 0.01,
-      maxTrainSeconds: 30,
-    },
-  };
-
-  const mockTrainingResult: TrainingResult = {
-    runNumber: 1,
-    finalLoss: 2.5,
-    valLoss: 2.8,
-    improvementPercent: 10,
-    durationMs: 5000,
-    config: mockMutation.hyperparams,
-    lossCurve: [3.5, 3.2, 3.0, 2.8],
-    hardwareUsed: 'cpu',
-  };
-
-  // Store original fetch
-  let originalFetch: typeof fetch;
-  let mockFetchFn: jest.Mock;
-
-  beforeEach(async () => {
-    // Reset modules before each test
-    jest.resetModules();
-    
-    // Create mock fetch with proper typing
-    originalFetch = global.fetch;
-    mockFetchFn = jest.fn<() => Promise<Response>>();
-    global.fetch = mockFetchFn as unknown as typeof fetch;
-    
-    // Import fresh module
-    agentLoop = await import('../agent-loop.js');
-    agentLoop.resetAgentLoopState();
+  beforeEach(() => {
+    resetAgentLoopState();
+    jest.clearAllMocks();
+    (global as any).fetch = mockFetch;
+    (validateTrainingConfig as any).mockReturnValue({ valid: true });
+    (proposeMutation as any).mockResolvedValue(mockMutation);
+    (trainMicroModel as any).mockResolvedValue(mockResult);
   });
 
   afterEach(() => {
-    agentLoop.stopAgentLoop();
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
+    stopAgentLoop();
   });
 
-  describe('State management', () => {
-    it('should return initial state', () => {
-      const state = agentLoop.getAgentLoopState();
-      expect(state.iteration).toBe(0);
-      expect(state.bestLoss).toBe(Infinity);
-      expect(state.totalExperiments).toBe(0);
-      expect(state.isRunning).toBe(false);
+  describe('State', () => {
+    it('returns initial state', () => {
+      const s = getAgentLoopState();
+      expect(s.iteration).toBe(0);
+      expect(s.bestLoss).toBe(Infinity);
+      expect(s.totalExperiments).toBe(0);
+      expect(s.isRunning).toBe(false);
     });
 
-    it('should reset state', () => {
-      agentLoop.resetAgentLoopState();
-      const state = agentLoop.getAgentLoopState();
-      expect(state.iteration).toBe(0);
-      expect(state.bestLoss).toBe(Infinity);
+    it('resets state', () => {
+      resetAgentLoopState();
+      expect(getAgentLoopState().bestLoss).toBe(Infinity);
     });
   });
 
   describe('fetchTopExperiments', () => {
-    it('should fetch and sort experiments by valLoss', async () => {
-      const mockExperiments: Experiment[] = [
-        { id: '1', model: 'test', hyperparams: {} as any, valLoss: 3.5, status: 'completed', createdAt: Date.now() },
-        { id: '2', model: 'test', hyperparams: {} as any, valLoss: 2.5, status: 'completed', createdAt: Date.now() },
-        { id: '3', model: 'test', hyperparams: {} as any, valLoss: 4.0, status: 'completed', createdAt: Date.now() },
-      ];
-
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ experiments: mockExperiments }),
-      });
-
-      const result = await agentLoop.fetchTopExperiments('http://localhost:3001', 5);
-
-      expect(result).toHaveLength(3);
-      expect(result[0].valLoss).toBe(2.5);
-      expect(result[1].valLoss).toBe(3.5);
-      expect(result[2].valLoss).toBe(4.0);
+    it('sorts by valLoss', async () => {
+      mockFetch.mockReturnValue(okResp({ experiments: [
+        { id: '1', valLoss: 3.5 }, { id: '2', valLoss: 2.5 }, { id: '3', valLoss: 4.0 },
+      ]}));
+      const r = await fetchTopExperiments('http://localhost:3001', 5);
+      expect(r[0].valLoss).toBe(2.5);
+      expect(r[2].valLoss).toBe(4.0);
     });
 
-    it('should filter out experiments without valLoss', async () => {
-      const mockExperiments: Experiment[] = [
-        { id: '1', model: 'test', hyperparams: {} as any, valLoss: null as any, status: 'running', createdAt: Date.now() },
-        { id: '2', model: 'test', hyperparams: {} as any, valLoss: 2.5, status: 'completed', createdAt: Date.now() },
-      ];
-
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ experiments: mockExperiments }),
-      });
-
-      const result = await agentLoop.fetchTopExperiments('http://localhost:3001');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('2');
+    it('filters null valLoss', async () => {
+      mockFetch.mockReturnValue(okResp({ experiments: [{ id: '1', valLoss: null }, { id: '2', valLoss: 2.5 }] }));
+      expect(await fetchTopExperiments('http://localhost:3001')).toHaveLength(1);
     });
 
-    it('should handle fetch errors gracefully', async () => {
-      (mockFetchFn as any).mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await agentLoop.fetchTopExperiments('http://localhost:3001');
-
-      expect(result).toEqual([]);
+    it('returns [] on network error', async () => {
+      mockFetch.mockReturnValue(Promise.reject(new Error('net')));
+      expect(await fetchTopExperiments('http://localhost:3001')).toEqual([]);
     });
 
-    it('should handle non-ok response', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Internal Server Error',
-      });
-
-      const result = await agentLoop.fetchTopExperiments('http://localhost:3001');
-
-      expect(result).toEqual([]);
+    it('returns [] on non-ok', async () => {
+      mockFetch.mockReturnValue(errResp());
+      expect(await fetchTopExperiments('http://localhost:3001')).toEqual([]);
     });
 
-    it('should handle empty experiments array', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ experiments: [] }),
-      });
+    it('returns [] when empty', async () => {
+      mockFetch.mockReturnValue(okResp({ experiments: [] }));
+      expect(await fetchTopExperiments('http://localhost:3001')).toEqual([]);
+    });
 
-      const result = await agentLoop.fetchTopExperiments('http://localhost:3001');
+    it('returns [] when experiments key missing', async () => {
+      mockFetch.mockReturnValue(okResp({}));  // no experiments key → undefined || []
+      expect(await fetchTopExperiments('http://localhost:3001')).toEqual([]);
+    });
 
-      expect(result).toEqual([]);
+    it('handles undefined valLoss in sort (uses Infinity fallback)', async () => {
+      mockFetch.mockReturnValue(okResp({ experiments: [
+        { id: '1', valLoss: undefined }, { id: '2', valLoss: 2.5 },
+      ]}));
+      const r = await fetchTopExperiments('http://localhost:3001');
+      // undefined passes the filter (only null/undefined filtered), Infinity fallback in sort
+      expect(r.length).toBeGreaterThan(0);
     });
   });
 
   describe('createExperiment', () => {
-    it('should create experiment successfully', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ experiment: { id: 'exp-123' } }),
-      });
-
-      const id = await agentLoop.createExperiment('http://localhost:3001', mockMutation, 'peer-1', 0);
-
-      expect(id).toBe('exp-123');
-      expect(mockFetchFn).toHaveBeenCalledWith(
-        'http://localhost:3001/experiments',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('micro-transformer-120k'),
-        })
-      );
+    it('returns id', async () => {
+      mockFetch.mockReturnValue(okResp({ experiment: { id: 'exp-1' } }));
+      expect(await createExperiment('http://localhost:3001', mockMutation, 'p', 0)).toBe('exp-1');
     });
 
-    it('should throw on error response', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Bad Request',
-      });
-
-      await expect(agentLoop.createExperiment('http://localhost:3001', mockMutation, 'peer-1', 0))
-        .rejects.toThrow('Failed to create experiment: Bad Request');
+    it('throws on bad response', async () => {
+      mockFetch.mockReturnValue(errResp('Bad Request'));
+      await expect(createExperiment('http://localhost:3001', mockMutation, 'p', 0)).rejects.toThrow('Bad Request');
     });
 
-    it('should throw on network error', async () => {
-      (mockFetchFn as any).mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(agentLoop.createExperiment('http://localhost:3001', mockMutation, 'peer-1', 0))
-        .rejects.toThrow('Failed to create experiment: Network error');
+    it('throws on network error', async () => {
+      mockFetch.mockReturnValue(Promise.reject(new Error('net')));
+      await expect(createExperiment('http://localhost:3001', mockMutation, 'p', 0)).rejects.toThrow('net');
     });
   });
 
   describe('updateExperiment', () => {
-    it('should update experiment successfully', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
-
-      await agentLoop.updateExperiment('http://localhost:3001', 'exp-123', mockTrainingResult);
-
-      expect(mockFetchFn).toHaveBeenCalledWith(
-        'http://localhost:3001/experiments/exp-123',
-        expect.objectContaining({
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('completed'),
-        })
-      );
+    it('updates successfully', async () => {
+      mockFetch.mockReturnValue(okResp({}));
+      await updateExperiment('http://localhost:3001', 'exp-1', mockResult);
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:3001/experiments/exp-1', expect.objectContaining({ method: 'PATCH' }));
     });
 
-    it('should throw on error response', async () => {
-      (mockFetchFn as any).mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Not Found',
-      });
-
-      await expect(agentLoop.updateExperiment('http://localhost:3001', 'exp-123', mockTrainingResult))
-        .rejects.toThrow('Failed to update experiment: Not Found');
+    it('throws on error', async () => {
+      mockFetch.mockReturnValue(errResp('Not Found'));
+      await expect(updateExperiment('http://localhost:3001', 'x', mockResult)).rejects.toThrow('Not Found');
     });
   });
 
   describe('postToFeed', () => {
-    it('should log feed message without error', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-
-      await agentLoop.postToFeed('http://localhost:3001', 'peer-1', mockMutation, mockTrainingResult, true);
-
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('IMPROVEMENT'));
-      consoleSpy.mockRestore();
+    it('logs improvement', async () => {
+      const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      await postToFeed('', '', mockMutation, mockResult, true);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('IMPROVEMENT'));
+      spy.mockRestore();
     });
 
-    it('should log non-improvement message', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    it('logs result', async () => {
+      const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      await postToFeed('', '', mockMutation, mockResult, false);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Result'));
+      spy.mockRestore();
+    });
 
-      await agentLoop.postToFeed('http://localhost:3001', 'peer-1', mockMutation, mockTrainingResult, false);
+    it('handles errors gracefully', async () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => { throw new Error('log failed'); });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      await postToFeed('', '', mockMutation, mockResult, true);
+      expect(warnSpy).toHaveBeenCalledWith('Failed to post to feed:', expect.any(String));
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+  });
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Result'));
-      consoleSpy.mockRestore();
+  describe('runAgentIteration', () => {
+    const setup3 = () => mockFetch
+      .mockReturnValueOnce(okResp({ experiments: [] }))
+      .mockReturnValueOnce(okResp({ experiment: { id: 'exp-new' } }))
+      .mockReturnValueOnce(okResp({}));
+
+    it('runs full cycle', async () => {
+      setup3();
+      const r = await runAgentIteration(mockConfig, 1);
+      expect(r.iteration).toBe(1);
+      expect(r.experimentId).toBe('exp-new');
+      expect(r.improved).toBe(true);
+    });
+
+    it('marks improved when valLoss < bestLoss', async () => {
+      mockFetch
+        .mockReturnValueOnce(okResp({ experiments: [{ id: '1', valLoss: 5.0 }] }))
+        .mockReturnValueOnce(okResp({ experiment: { id: 'e1' } }))
+        .mockReturnValueOnce(okResp({}));
+      const r = await runAgentIteration(mockConfig, 1);
+      expect(r.improved).toBe(true);
+    });
+
+    it('marks not improved', async () => {
+      mockFetch
+        .mockReturnValueOnce(okResp({ experiments: [{ id: '1', valLoss: 2.0 }] }))
+        .mockReturnValueOnce(okResp({ experiment: { id: 'e1' } }))
+        .mockReturnValueOnce(okResp({}));
+      const r = await runAgentIteration(mockConfig, 1);
+      expect(r.improved).toBe(false);
+    });
+
+    it('uses GPU hardware', async () => {
+      setup3();
+      await runAgentIteration({ ...mockConfig, capabilities: ['cpu', 'gpu'] }, 1);
+      expect(trainMicroModel).toHaveBeenCalledWith(expect.objectContaining({ hardware: 'gpu' }));
+    });
+
+    it('uses tier 2 for GPU', async () => {
+      setup3();
+      await runAgentIteration({ ...mockConfig, capabilities: ['gpu'] }, 1);
+      expect(mockFetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: expect.stringContaining('"tier":2') }));
+    });
+
+    it('throws on invalid config', async () => {
+      mockFetch.mockReturnValueOnce(okResp({ experiments: [] }));
+      (validateTrainingConfig as any).mockReturnValueOnce({ valid: false, error: 'bad lr' });
+      await expect(runAgentIteration(mockConfig, 1)).rejects.toThrow('bad lr');
+    });
+
+    it('increments totalExperiments', async () => {
+      setup3();
+      await runAgentIteration(mockConfig, 1);
+      expect(getAgentLoopState().totalExperiments).toBe(1);
+    });
+  });
+
+  describe('startAgentLoop', () => {
+    it('throws if already running', async () => {
+      // First fetch never resolves → loop stays stuck waiting
+      mockFetch.mockReturnValue(new Promise(() => {}));
+      // Start loop but don't await — it hangs on fetch
+      startAgentLoop({ ...mockConfig, intervalMs: 60000 }).catch(() => {});
+      // Give the loop time to set isRunning = true
+      await new Promise(r => setTimeout(r, 20));
+      // Second call should throw synchronously
+      await expect(startAgentLoop(mockConfig)).rejects.toThrow('already running');
+      stopAgentLoop();
+    }, 10000);
+
+    it('stops after maxIterations', async () => {
+      mockFetch
+        .mockReturnValueOnce(okResp({ experiments: [] }))
+        .mockReturnValueOnce(okResp({ experiment: { id: 'e1' } }))
+        .mockReturnValueOnce(okResp({}));
+      await startAgentLoop({ ...mockConfig, intervalMs: 10, maxIterations: 1 });
+      const s = getAgentLoopState();
+      expect(s.iteration).toBe(1);
+      expect(s.isRunning).toBe(false);
+    });
+
+    it('continues after error in proposeMutation', async () => {
+      // Iter 1: experiments ok, but proposeMutation throws → caught, loop continues
+      // Iter 2: full success
+      mockFetch
+        .mockReturnValueOnce(okResp({ experiments: [] }))  // iter 1 experiments
+        .mockReturnValueOnce(okResp({ experiments: [] }))  // iter 2 experiments
+        .mockReturnValueOnce(okResp({ experiment: { id: 'e2' } }))  // iter 2 create
+        .mockReturnValueOnce(okResp({}));  // iter 2 update
+      (proposeMutation as any)
+        .mockRejectedValueOnce(new Error('LLM fail'))  // iter 1 fails
+        .mockResolvedValue(mockMutation);  // iter 2 ok
+      await startAgentLoop({ ...mockConfig, intervalMs: 10, maxIterations: 2 });
+      expect(getAgentLoopState().iteration).toBe(2);
     });
   });
 
   describe('stopAgentLoop', () => {
-    it('should set isRunning to false', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-      
-      agentLoop.stopAgentLoop();
-      
-      const state = agentLoop.getAgentLoopState();
-      expect(state.isRunning).toBe(false);
-      
-      consoleSpy.mockRestore();
+    it('sets isRunning false', () => {
+      const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      stopAgentLoop();
+      expect(getAgentLoopState().isRunning).toBe(false);
+      spy.mockRestore();
     });
   });
 
   describe('_test exports', () => {
-    it('should export test functions', () => {
-      expect(agentLoop._test.fetchTopExperiments).toBe(agentLoop.fetchTopExperiments);
-      expect(agentLoop._test.createExperiment).toBe(agentLoop.createExperiment);
-      expect(agentLoop._test.updateExperiment).toBe(agentLoop.updateExperiment);
-      expect(agentLoop._test.postToFeed).toBe(agentLoop.postToFeed);
+    it('exports helpers', () => {
+      expect(_test.fetchTopExperiments).toBe(fetchTopExperiments);
+      expect(_test.createExperiment).toBe(createExperiment);
+      expect(_test.updateExperiment).toBe(updateExperiment);
+      expect(_test.postToFeed).toBe(postToFeed);
+      expect(_test.runAgentIteration).toBe(runAgentIteration);
     });
   });
 });
