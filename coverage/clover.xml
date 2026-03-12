@@ -1,7 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1773329774533" clover="3.2.0">
-  <project timestamp="1773329774533" name="All files">
-    <metrics statements="727" coveredstatements="37" conditionals="392" coveredconditionals="10" methods="111" coveredmethods="5" elements="1230" coveredelements="52" complexity="0" loc="727" ncloc="727" packages="1" files="11" classes="11"/>
+<coverage generated="1773329928610" clover="3.2.0">
+  <project timestamp="1773329928610" name="All files">
+    <metrics statements="766" coveredstatements="39" conditionals="421" coveredconditionals="29" methods="118" coveredmethods="7" elements="1305" coveredelements="75" complexity="0" loc="766" ncloc="766" packages="1" files="12" classes="12"/>
+    <file name="agent-brain.ts" path="/Users/kike/clawd/projects/synapseia-network/packages/node/src/agent-brain.ts">
+      <metrics statements="39" coveredstatements="39" conditionals="29" coveredconditionals="29" methods="7" coveredmethods="7"/>
+      <line num="36" count="1" type="stmt"/>
+      <line num="41" count="1" type="stmt"/>
+      <line num="42" count="25" type="stmt"/>
+      <line num="60" count="1" type="stmt"/>
+      <line num="70" count="394" type="stmt"/>
+      <line num="73" count="394" type="cond" truecount="3" falsecount="0"/>
+      <line num="74" count="25" type="stmt"/>
+      <line num="78" count="394" type="stmt"/>
+      <line num="84" count="394" type="stmt"/>
+      <line num="87" count="394" type="stmt"/>
+      <line num="95" count="394" type="stmt"/>
+      <line num="98" count="394" type="cond" truecount="2" falsecount="0"/>
+      <line num="100" count="365" type="stmt"/>
+      <line num="101" count="365" type="stmt"/>
+      <line num="104" count="365" type="cond" truecount="3" falsecount="0"/>
+      <line num="105" count="18" type="stmt"/>
+      <line num="107" count="18" type="cond" truecount="1" falsecount="0"/>
+      <line num="108" count="5" type="stmt"/>
+      <line num="113" count="29" type="stmt"/>
+      <line num="116" count="29" type="cond" truecount="1" falsecount="0"/>
+      <line num="117" count="19" type="stmt"/>
+      <line num="122" count="394" type="cond" truecount="1" falsecount="0"/>
+      <line num="123" count="100" type="stmt"/>
+      <line num="125" count="394" type="cond" truecount="1" falsecount="0"/>
+      <line num="126" count="100" type="stmt"/>
+      <line num="129" count="394" type="stmt"/>
+      <line num="135" count="1" type="stmt"/>
+      <line num="137" count="6" type="cond" truecount="1" falsecount="0"/>
+      <line num="138" count="2" type="stmt"/>
+      <line num="142" count="4" type="cond" truecount="1" falsecount="0"/>
+      <line num="143" count="2" type="stmt"/>
+      <line num="147" count="2" type="stmt"/>
+      <line num="153" count="1" type="stmt"/>
+      <line num="158" count="5" type="stmt"/>
+      <line num="159" count="12" type="stmt"/>
+      <line num="160" count="6" type="stmt"/>
+      <line num="163" count="5" type="stmt"/>
+      <line num="169" count="1" type="cond" truecount="1" falsecount="0"/>
+      <line num="170" count="4" type="stmt"/>
+    </file>
     <file name="agent-loop.ts" path="/Users/kike/clawd/projects/synapseia-network/packages/node/src/agent-loop.ts">
       <metrics statements="106" coveredstatements="0" conditionals="29" coveredconditionals="0" methods="13" coveredmethods="0"/>
       <line num="12" count="0" type="stmt"/>
@@ -112,44 +154,44 @@
       <line num="319" count="0" type="stmt"/>
     </file>
     <file name="embedding.ts" path="/Users/kike/clawd/projects/synapseia-network/packages/node/src/embedding.ts">
-      <metrics statements="37" coveredstatements="37" conditionals="11" coveredconditionals="10" methods="5" coveredmethods="5"/>
-      <line num="9" count="1" type="stmt"/>
-      <line num="13" count="46" type="stmt"/>
-      <line num="14" count="46" type="stmt"/>
-      <line num="19" count="46" type="stmt"/>
-      <line num="25" count="44" type="cond" truecount="1" falsecount="0"/>
-      <line num="26" count="1" type="stmt"/>
-      <line num="29" count="43" type="stmt"/>
-      <line num="30" count="43" type="stmt"/>
-      <line num="36" count="1" type="stmt"/>
-      <line num="37" count="42" type="cond" truecount="1" falsecount="0"/>
-      <line num="38" count="1" type="stmt"/>
-      <line num="41" count="41" type="cond" truecount="1" falsecount="0"/>
-      <line num="42" count="1" type="stmt"/>
-      <line num="45" count="40" type="stmt"/>
-      <line num="46" count="40" type="stmt"/>
-      <line num="47" count="40" type="stmt"/>
-      <line num="49" count="40" type="stmt"/>
-      <line num="50" count="1115" type="stmt"/>
-      <line num="51" count="1115" type="stmt"/>
-      <line num="52" count="1115" type="stmt"/>
-      <line num="55" count="40" type="cond" truecount="3" falsecount="0"/>
-      <line num="56" count="1" type="stmt"/>
-      <line num="59" count="39" type="stmt"/>
-      <line num="83" count="1" type="stmt"/>
-      <line num="89" count="11" type="cond" truecount="1" falsecount="0"/>
-      <line num="90" count="1" type="stmt"/>
-      <line num="93" count="10" type="cond" truecount="1" falsecount="0"/>
-      <line num="94" count="2" type="stmt"/>
-      <line num="98" count="8" type="stmt"/>
-      <line num="104" count="7" type="stmt"/>
-      <line num="106" count="7" type="stmt"/>
-      <line num="107" count="31" type="stmt"/>
-      <line num="108" count="31" type="stmt"/>
-      <line num="109" count="31" type="stmt"/>
-      <line num="113" count="24" type="stmt"/>
-      <line num="114" count="7" type="stmt"/>
-      <line num="116" count="14" type="stmt"/>
+      <metrics statements="37" coveredstatements="0" conditionals="11" coveredconditionals="0" methods="5" coveredmethods="0"/>
+      <line num="9" count="0" type="stmt"/>
+      <line num="13" count="0" type="stmt"/>
+      <line num="14" count="0" type="stmt"/>
+      <line num="19" count="0" type="stmt"/>
+      <line num="25" count="0" type="cond" truecount="0" falsecount="1"/>
+      <line num="26" count="0" type="stmt"/>
+      <line num="29" count="0" type="stmt"/>
+      <line num="30" count="0" type="stmt"/>
+      <line num="36" count="0" type="stmt"/>
+      <line num="37" count="0" type="cond" truecount="0" falsecount="1"/>
+      <line num="38" count="0" type="stmt"/>
+      <line num="41" count="0" type="cond" truecount="0" falsecount="1"/>
+      <line num="42" count="0" type="stmt"/>
+      <line num="45" count="0" type="stmt"/>
+      <line num="46" count="0" type="stmt"/>
+      <line num="47" count="0" type="stmt"/>
+      <line num="49" count="0" type="stmt"/>
+      <line num="50" count="0" type="stmt"/>
+      <line num="51" count="0" type="stmt"/>
+      <line num="52" count="0" type="stmt"/>
+      <line num="55" count="0" type="cond" truecount="0" falsecount="3"/>
+      <line num="56" count="0" type="stmt"/>
+      <line num="59" count="0" type="stmt"/>
+      <line num="83" count="0" type="stmt"/>
+      <line num="89" count="0" type="cond" truecount="0" falsecount="1"/>
+      <line num="90" count="0" type="stmt"/>
+      <line num="93" count="0" type="cond" truecount="0" falsecount="1"/>
+      <line num="94" count="0" type="stmt"/>
+      <line num="98" count="0" type="stmt"/>
+      <line num="104" count="0" type="stmt"/>
+      <line num="106" count="0" type="stmt"/>
+      <line num="107" count="0" type="stmt"/>
+      <line num="108" count="0" type="stmt"/>
+      <line num="109" count="0" type="stmt"/>
+      <line num="113" count="0" type="stmt"/>
+      <line num="114" count="0" type="stmt"/>
+      <line num="116" count="0" type="stmt"/>
     </file>
     <file name="hardware.ts" path="/Users/kike/clawd/projects/synapseia-network/packages/node/src/hardware.ts">
       <metrics statements="104" coveredstatements="0" conditionals="122" coveredconditionals="0" methods="10" coveredmethods="0"/>
