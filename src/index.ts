@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-import { generateIdentity, loadIdentity } from './identity.js';
+import { generateIdentity, loadIdentity, getAgentProfile } from './identity.js';
 import { detectHardware, getTierName } from './hardware.js';
 import { startPeriodicHeartbeat } from './heartbeat.js';
 import { startAgentLoop, type AgentLoopConfig } from './agent-loop.js';
@@ -222,6 +222,30 @@ program
     }
     console.log('');
     console.log('Pull with: ollama pull <model-name>');
+  });
+
+program
+  .command('hive')
+  .description('Hive operations')
+  .command('whoami')
+  .description('Show agent identity information')
+  .action(() => {
+    const identityPath = path.join(os.homedir(), '.synapse');
+    if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
+      console.log('❌ No identity found. Run `synapse start` first.');
+      return;
+    }
+
+    const identity = loadIdentity(identityPath);
+    const profile = getAgentProfile(identity);
+
+    console.log('🐝 Hive Agent Identity\n');
+    console.log(`   Agent ID: ${profile.agentId}`);
+    console.log(`   Peer ID:  ${profile.peerId}`);
+    console.log(`   Tier:     ${profile.tier} (${getTierName(profile.tier as any)})`);
+    console.log(`   Mode:     ${profile.mode.toUpperCase()}`);
+    console.log(`   Status:   ${profile.status.toUpperCase()}`);
+    console.log(`   Created:  ${new Date(profile.createdAt).toISOString()}`);
   });
 
 program.parse();
