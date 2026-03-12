@@ -31,7 +31,6 @@ describe('heartbeat', () => {
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',
-      createdAt: 1234567890,
     };
 
     const mockHardware = {
@@ -175,7 +174,7 @@ describe('heartbeat', () => {
     // Call without intervalMs to cover the default parameter branch
     const cleanup = startPeriodicHeartbeat(
       'http://localhost:3001',
-      { peerId: 'p', privateKey: 'k', publicKey: 'pub' },
+      { peerId: 'p', privateKey: 'k', publicKey: 'pub', createdAt: Date.now() },
       { cpuCores: 4, ramGb: 8, gpuVramGb: 0, tier: 0 as const, hasOllama: false },
     );
     expect(typeof cleanup).toBe('function');
