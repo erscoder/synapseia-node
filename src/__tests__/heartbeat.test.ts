@@ -27,9 +27,11 @@ describe('heartbeat', () => {
 
   it('sends heartbeat with correct payload', async () => {
     const mockIdentity = {
+      createdAt: 1234567890,
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',
+      createdAt: 1234567890,
     };
 
     const mockHardware = {
@@ -68,6 +70,7 @@ describe('heartbeat', () => {
 
   it('retries on failure with exponential backoff', async () => {
     const mockIdentity = {
+      createdAt: 1234567890,
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',
@@ -101,6 +104,7 @@ describe('heartbeat', () => {
 
   it('throws after 3 failed attempts', async () => {
     const mockIdentity = {
+      createdAt: 1234567890,
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',
@@ -180,6 +184,7 @@ describe('heartbeat', () => {
 
   it('starts periodic heartbeat and returns cleanup function', async () => {
     const mockIdentity = {
+      createdAt: 1234567890,
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',
@@ -208,6 +213,7 @@ describe('heartbeat', () => {
 
   it('handles errors in periodic heartbeat', async () => {
     const mockIdentity = {
+      createdAt: 1234567890,
       peerId: 'test-peer-id',
       privateKey: 'test-private-key',
       publicKey: 'test-public-key',

@@ -5,6 +5,8 @@ import {
   MODEL_METADATA,
   checkLLM,
   generateLLM,
+  getOptionalString,
+  toErrorMessage,
   type LLMModel,
 } from '../llm-provider';
 
@@ -63,6 +65,54 @@ describe('LLM Provider Abstraction', () => {
     it('should return null for invalid models', () => {
       expect(parseModel('invalid/model')).toBeNull();
       expect(parseModel('')).toBeNull();
+    });
+  });
+
+  describe('getOptionalString helper', () => {
+    it('should return string when valid object with string property', () => {
+      const obj: any = { error: { message: 'Test error' } };
+      expect(getOptionalString(obj.error, 'message')).toBe('Test error');
+    });
+
+    it('should return undefined when object is null', () => {
+      expect(getOptionalString(null, 'message')).toBeUndefined();
+    });
+
+    it('should return undefined when object is undefined', () => {
+      expect(getOptionalString(undefined, 'message')).toBeUndefined();
+    });
+
+    it('should return undefined when property is not a string', () => {
+      const obj: any = { error: { message: 123 as any } };
+      expect(getOptionalString(obj.error, 'message')).toBeUndefined();
+    });
+
+    it('should return undefined when property does not exist', () => {
+      const obj: any = { error: {} };
+      expect(getOptionalString(obj.error, 'message')).toBeUndefined();
+    });
+  });
+
+  describe('toErrorMessage helper', () => {
+    it('should return message from Error object', () => {
+      const error = new Error('Test error message');
+      expect(toErrorMessage(error)).toBe('Test error message');
+    });
+
+    it('should return "Unknown error" for string', () => {
+      expect(toErrorMessage('String error')).toBe('Unknown error');
+    });
+
+    it('should return "Unknown error" for object without message', () => {
+      expect(toErrorMessage({ code: 500 })).toBe('Unknown error');
+    });
+
+    it('should return "Unknown error" for null', () => {
+      expect(toErrorMessage(null)).toBe('Unknown error');
+    });
+
+    it('should return "Unknown error" for undefined', () => {
+      expect(toErrorMessage(undefined)).toBe('Unknown error');
     });
   });
 
@@ -148,12 +198,36 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama errors', async () => {
-      (checkOllama as jest.Mock).mockRejectedValue(new Error('Check failed'));
+      (checkOllama as jest.Mock).mockImplementation(async () => {
+        throw new Error('Check failed');
+      });
 
       const status = await checkLLM(ollamaModel);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Check failed');
+    });
+
+    it('should handle checkOllama with non-Error rejection', async () => {
+      (checkOllama as jest.Mock).mockImplementation(async () => {
+        throw 'String error from Ollama';
+      });
+
+      const status = await checkLLM(ollamaModel);
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
+    });
+
+    it('should handle checkOllama with object rejection', async () => {
+      (checkOllama as jest.Mock).mockImplementation(async () => {
+        throw { code: 'ECONNREFUSED' };
+      });
+
+      const status = await checkLLM(ollamaModel);
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
     });
   });
 
@@ -216,6 +290,24 @@ describe('LLM Provider Abstraction', () => {
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Network error');
+    });
+
+    it('should handle non-Error errors in catch', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue('String error');
+
+      const status = await checkLLM(anthropicModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
+    });
+
+    it('should handle object errors without message property', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+
+      const status = await checkLLM(anthropicModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
     });
   });
 
@@ -281,6 +373,33 @@ describe('LLM Provider Abstraction', () => {
       expect(status.available).toBe(false);
       expect(status.error).toBe('Unauthorized');
     });
+
+    it('should handle network errors', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+      const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Network error');
+    });
+
+    it('should handle non-Error errors in catch', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue('String error');
+
+      const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
+    });
+
+    it('should handle object errors without message property', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+
+      const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
+    });
   });
 
   describe('generateLLM - Cloud Moonshot', () => {
@@ -344,6 +463,33 @@ describe('LLM Provider Abstraction', () => {
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Invalid request');
+    });
+
+    it('should handle network errors', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+      const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Network error');
+    });
+
+    it('should handle non-Error errors in catch', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue('String error');
+
+      const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
+    });
+
+    it('should handle object errors without message property', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+
+      const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
+
+      expect(status.available).toBe(false);
+      expect(status.error).toBe('Unknown error');
     });
   });
 

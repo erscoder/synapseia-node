@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { Identity } from './identity.js';
-import type { HardwareInfo } from './hardware.js';
+import type { Hardware } from './hardware.js';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -21,7 +21,7 @@ export interface HeartbeatResponse {
 export async function sendHeartbeat(
   coordinatorUrl: string,
   identity: Identity,
-  hardware: HardwareInfo,
+  hardware: Hardware,
 ): Promise<HeartbeatResponse> {
   const startTime = Date.now();
   const capabilities = determineCapabilities(hardware);
@@ -67,7 +67,7 @@ export async function sendHeartbeat(
 /**
  * Determine capabilities based on hardware
  */
-export function determineCapabilities(hardware: HardwareInfo): string[] {
+export function determineCapabilities(hardware: Hardware): string[] {
   const capabilities: string[] = [];
 
   // CPU is always available
@@ -92,7 +92,7 @@ export function determineCapabilities(hardware: HardwareInfo): string[] {
 export function startPeriodicHeartbeat(
   coordinatorUrl: string,
   identity: Identity,
-  hardware: HardwareInfo,
+  hardware: Hardware,
   intervalMs: number = 30000,
 ): () => void {
   const intervalId = setInterval(async () => {

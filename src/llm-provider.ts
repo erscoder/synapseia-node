@@ -3,6 +3,8 @@
  * Unifies Ollama and Cloud APIs under a common interface
  */
 
+import { checkOllama, generate as generateOllama } from './ollama.js';
+
 export type LLMProvider = 'ollama' | 'cloud';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax';
 
@@ -25,6 +27,17 @@ export interface LLMConfig {
   apiKey?: string;
   baseUrl?: string;
   timeoutMs?: number;
+}
+
+/**
+ * Convert anything to error message - no分支版本
+ */
+export function toErrorMessage(error: unknown): string {
+  try {
+    return String((error as any)?.message ?? 'Unknown error');
+  } catch {
+    return 'Unknown error';
+  }
 }
 
 /**
@@ -54,6 +67,15 @@ export const MODEL_METADATA = {
 };
 
 /**
+ * Helper: Extract optional string safely without branches
+ */
+export function getOptionalString<T>(obj: T | null | undefined, key: keyof T): string | undefined {
+  if (obj == null) return undefined;
+  const value = obj[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
  * Parse model string to LLMModel
  */
 export function parseModel(modelStr: string): LLMModel | null {
@@ -72,7 +94,8 @@ export function parseModel(modelStr: string): LLMModel | null {
 export async function checkLLM(model: LLMModel, config?: LLMConfig): Promise<LLMStatus> {
   if (model.provider === 'ollama') {
     return checkOllamaLLM(model);
-  } else if (model.provider === 'cloud') {
+  }
+  if (model.provider === 'cloud') {
     return checkCloudLLM(model, config);
   }
 
@@ -98,7 +121,8 @@ export async function generateLLM(
 ): Promise<string> {
   if (model.provider === 'ollama') {
     return generateOllamaLLM(model, prompt);
-  } else if (model.provider === 'cloud') {
+  }
+  if (model.provider === 'cloud') {
     return generateCloudLLM(model, prompt, config);
   }
 
@@ -109,7 +133,6 @@ export async function generateLLM(
 
 async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
   try {
-    const { checkOllama } = await import('./ollama.js');
     const status = await checkOllama();
 
     if (!status.available) {
@@ -128,7 +151,7 @@ async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
       return {
         available: false,
         model,
-        estimatedLatencyMs: modelMetadata?.latencyMs || 500,
+        estimatedLatencyMs: modelMetadata?.latencyMs ?? 500,
         error: `Model ${model.modelId} not found. Pull with: ollama pull ${model.modelId}`,
       };
     }
@@ -136,7 +159,7 @@ async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
     return {
       available: true,
       model,
-      estimatedLatencyMs: modelMetadata?.latencyMs || 500,
+      estimatedLatencyMs: modelMetadata?.latencyMs ?? 500,
       maxTokens: modelMetadata?.maxTokens,
     };
   } catch (error) {
@@ -144,14 +167,13 @@ async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
       available: false,
       model,
       estimatedLatencyMs: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: toErrorMessage(error),
     };
   }
 }
 
 async function generateOllamaLLM(model: LLMModel, prompt: string): Promise<string> {
-  const { generate } = await import('./ollama.js');
-  return generate(prompt, model.modelId);
+  return generateOllama(prompt, model.modelId);
 }
 
 // --- Private: Cloud API implementations ---
@@ -168,9 +190,11 @@ async function checkCloudLLM(model: LLMModel, config?: LLMConfig): Promise<LLMSt
 
   if (model.providerId === 'anthropic') {
     return checkAnthropic(model, config.apiKey);
-  } else if (model.providerId === 'moonshot') {
+  }
+  if (model.providerId === 'moonshot') {
     return checkMoonshot(model, config.apiKey);
-  } else if (model.providerId === 'minimax') {
+  }
+  if (model.providerId === 'minimax') {
     return checkMinimax(model, config.apiKey);
   }
 
@@ -189,9 +213,11 @@ async function generateCloudLLM(model: LLMModel, prompt: string, config?: LLMCon
 
   if (model.providerId === 'anthropic') {
     return generateAnthropic(model, prompt, config.apiKey);
-  } else if (model.providerId === 'moonshot') {
+  }
+  if (model.providerId === 'moonshot') {
     return generateMoonshot(model, prompt, config.apiKey);
-  } else if (model.providerId === 'minimax') {
+  }
+  if (model.providerId === 'minimax') {
     return generateMinimax(model, prompt, config.apiKey, config.baseUrl);
   }
 
@@ -221,13 +247,14 @@ async function checkAnthropic(model: LLMModel, apiKey: string): Promise<LLMStatu
 
     if (!response.ok) {
       const error = await response.json() as any;
-      throw new Error(error.error?.message || response.statusText);
+      const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+      throw new Error(errorMessage);
     }
 
     return {
       available: true,
       model,
-      estimatedLatencyMs: modelMetadata?.latencyMs || 200,
+      estimatedLatencyMs: modelMetadata?.latencyMs ?? 200,
       estimatedCostPerCall: modelMetadata?.costPerCall,
       maxTokens: modelMetadata?.maxTokens,
     };
@@ -236,7 +263,7 @@ async function checkAnthropic(model: LLMModel, apiKey: string): Promise<LLMStatu
       available: false,
       model,
       estimatedLatencyMs: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: toErrorMessage(error),
     };
   }
 }
@@ -263,7 +290,8 @@ async function generateAnthropic(model: LLMModel, prompt: string, apiKey: string
 
   if (!response.ok) {
     const error = await response.json() as any;
-    throw new Error(error.error?.message || response.statusText);
+    const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+    throw new Error(errorMessage);
   }
 
   const data = await response.json() as any;
@@ -291,13 +319,14 @@ async function checkMoonshot(model: LLMModel, apiKey: string): Promise<LLMStatus
 
     if (!response.ok) {
       const error = await response.json() as any;
-      throw new Error(error.error?.message || response.statusText);
+      const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+      throw new Error(errorMessage);
     }
 
     return {
       available: true,
       model,
-      estimatedLatencyMs: modelMetadata?.latencyMs || 300,
+      estimatedLatencyMs: modelMetadata?.latencyMs ?? 300,
       estimatedCostPerCall: modelMetadata?.costPerCall,
       maxTokens: modelMetadata?.maxTokens,
     };
@@ -306,7 +335,7 @@ async function checkMoonshot(model: LLMModel, apiKey: string): Promise<LLMStatus
       available: false,
       model,
       estimatedLatencyMs: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: toErrorMessage(error),
     };
   }
 }
@@ -331,7 +360,8 @@ async function generateMoonshot(model: LLMModel, prompt: string, apiKey: string)
 
   if (!response.ok) {
     const error = await response.json() as any;
-    throw new Error(error.error?.message || response.statusText);
+    const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+    throw new Error(errorMessage);
   }
 
   const data = await response.json() as any;
@@ -359,13 +389,14 @@ async function checkMinimax(model: LLMModel, apiKey: string): Promise<LLMStatus>
 
     if (!response.ok) {
       const error = await response.json() as any;
-      throw new Error(error.error?.message || response.statusText);
+      const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+      throw new Error(errorMessage);
     }
 
     return {
       available: true,
       model,
-      estimatedLatencyMs: modelMetadata?.latencyMs || 250,
+      estimatedLatencyMs: modelMetadata?.latencyMs ?? 250,
       estimatedCostPerCall: modelMetadata?.costPerCall,
       maxTokens: modelMetadata?.maxTokens,
     };
@@ -374,7 +405,7 @@ async function checkMinimax(model: LLMModel, apiKey: string): Promise<LLMStatus>
       available: false,
       model,
       estimatedLatencyMs: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: toErrorMessage(error),
     };
   }
 }
@@ -385,7 +416,7 @@ async function generateMinimax(
   apiKey: string,
   baseUrl?: string
 ): Promise<string> {
-  const url = baseUrl || 'https://api.minimax.chat/v1/text/chatcompletion_v2';
+  const url = baseUrl ?? 'https://api.minimax.chat/v1/text/chatcompletion_v2';
 
   const response = await fetch(url, {
     method: 'POST',
@@ -406,9 +437,15 @@ async function generateMinimax(
 
   if (!response.ok) {
     const error = await response.json() as any;
-    throw new Error(error.error?.message || response.statusText);
+    const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+    throw new Error(errorMessage);
   }
 
   const data = await response.json() as any;
   return data.choices[0].message.content;
 }
+
+// Export for testing
+export const _test = {
+  toErrorMessage,
+};
