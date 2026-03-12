@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { getOrCreateIdentity } from '../identity.js';
-import { detectHardware, type HardwareInfo } from '../hardware.js';
+import { detectHardware, getSystemInfo, getCompatibleModels, getRecommendedTier, type Hardware } from '../hardware.js';
 
 const program = new Command();
 
@@ -61,7 +61,7 @@ program
 
     console.log('Node Status:');
     console.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
-    console.log(`Tier:    ${status.tier} (${getTierName(status.tier)})`);
+    console.log(`Tier:    ${status.tier} (${getTierName(status.tier as any)})`);
     console.log(`Wallet:  ${status.wallet}`);
     console.log(`Balance: ${status.balance} SYN`);
     console.log(`Staked:  ${status.staked} SYN`);
@@ -87,6 +87,54 @@ program
     console.log(`Unstaking ${amount} SYN...`);
     // TODO: Call unstake program on Devnet
     console.log('Tx hash: <placeholder>'); // Will replace with actual tx hash
+  });
+
+program
+  .command('system-info')
+  .description('Show detailed system information')
+  .action(async () => {
+    const sysInfo = getSystemInfo();
+    const recommendedTier = getRecommendedTier(sysInfo.gpu.vramGb);
+    const compatibleModels = getCompatibleModels(sysInfo.gpu.vramGb);
+
+    console.log('═══════════════════════════════════════════════════');
+    console.log('       SynapseIA Node - System Information');
+    console.log('═══════════════════════════════════════════════════');
+    console.log();
+    console.log('📋 Operating System:');
+    console.log(`   ${sysInfo.os}`);
+    console.log();
+    console.log('🔧 CPU Information:');
+    console.log(`   Model: ${sysInfo.cpu.model}`);
+    console.log(`   Cores: ${sysInfo.cpu.cores}`);
+    console.log();
+    console.log('💾 Memory:');
+    console.log(`   Total RAM: ${sysInfo.memory.totalGb} GB`);
+    console.log();
+    console.log('🎮 GPU Information:');
+    if (sysInfo.gpu.type) {
+      console.log(`   Type: ${sysInfo.gpu.type}`);
+      console.log(`   VRAM: ${sysInfo.gpu.vramGb} GB`);
+    } else {
+      console.log('   No GPU detected');
+    }
+    console.log();
+    console.log('🎯 Hardware Tier Assessment:');
+    const tierName = ['CPU-Only', 'Tier 1', 'Tier 2', 'Tier 3', 'Tier 4', 'Tier 5'][recommendedTier] || 'Unknown';
+    console.log(`   Recommended Tier: ${recommendedTier} (${tierName})`);
+    console.log();
+    console.log('🤖 Compatible Models:');
+    if (compatibleModels.length > 0) {
+      console.log(`   Found ${compatibleModels.length} models compatible with ${sysInfo.gpu.vramGb}GB VRAM:`);
+      compatibleModels.forEach((model, index) => {
+        const tierName = ['CPU', 'T1', 'T2', 'T3', 'T4', 'T5'][model.recommendedTier] || 'Unknown';
+        console.log(`   ${index + 1}. ${model.name.padEnd(30)} (min ${model.minVram}GB, rec ${tierName})`);
+      });
+    } else {
+      console.log('   No compatible models found. Consider upgrading GPU or using cloud LLM.');
+    }
+    console.log();
+    console.log('═══════════════════════════════════════════════════');
   });
 
 function getTierName(tier: number): string {

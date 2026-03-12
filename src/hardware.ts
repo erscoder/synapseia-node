@@ -5,6 +5,33 @@
 import * as os from 'os';
 import { execSync } from 'child_process';
 
+/**
+ * Model compatibility info
+ */
+export interface ModelInfo {
+  name: string;
+  minVram: number; // GB
+  recommendedTier: number;
+}
+
+/**
+ * System information
+ */
+export interface SystemInfo {
+  os: string;
+  cpu: {
+    model: string;
+    cores: number;
+  };
+  memory: {
+    totalGb: number;
+  };
+  gpu: {
+    type: string | null;
+    vramGb: number;
+  };
+}
+
 export interface Hardware {
   cpuCores: number;
   ramGb: number;
@@ -124,4 +151,123 @@ export function detectHardware(cpuOnly = false): Hardware {
 export function getTierName(tier: HardwareTier): string {
   const names = ['CPU-Only', 'Tier 1', 'Tier 2', 'Tier 3', 'Tier 4', 'Tier 5'];
   return names[tier] || 'Unknown';
+}
+
+/**
+ * Get system information
+ */
+export function getSystemInfo(): SystemInfo {
+  const osType = os.type();
+  const osPlatform = os.platform();
+  const osRelease = os.release();
+  const arch = os.arch();
+
+  let osString = `${osType} ${osRelease} (${arch})`;
+  if (osPlatform === 'darwin') {
+    osString = `macOS ${osRelease} (${arch})`;
+  } else if (osPlatform === 'linux') {
+    osString = `Linux ${osRelease} (${arch})`;
+  } else if (osPlatform === 'win32') {
+    osString = `Windows ${osRelease} (${arch})`;
+  }
+
+  const cpuModel = os.cpus()[0]?.model || 'Unknown CPU';
+  const cpuCores = os.cpus().length || 0;
+  const memoryTotal = os.totalmem();
+
+  let gpuType: string | null = null;
+  let gpuVram = 0;
+
+  try {
+    if (arch === 'arm64' && osPlatform === 'darwin') {
+      const model = execSync('sysctl -n machdep.cpu.brand_string', { encoding: 'utf-8' }).trim();
+      gpuType = model;
+      // Estimate VRAM based on model
+      if (model.includes('M3 Ultra')) gpuVram = 192;
+      else if (model.includes('M3 Max')) gpuVram = 128;
+      else if (model.includes('M2 Ultra')) gpuVram = 128;
+      else if (model.includes('M2 Max')) gpuVram = 96;
+      else if (model.includes('M3 Pro')) gpuVram = 48;
+      else if (model.includes('M2 Pro')) gpuVram = 18;
+      else if (model.includes('M1 Ultra')) gpuVram = 128;
+      else if (model.includes('M1 Max')) gpuVram = 96;
+      else if (model.includes('M3') || model.includes('M2')) gpuVram = 10;
+      else if (model.includes('M1')) gpuVram = 7;
+    } else if (arch === 'x86_64' || arch === 'x64') {
+      try {
+        const smiOutput = execSync('nvidia-smi --query-gpu=name,memory.free --format=csv,noheader', { encoding: 'utf-8' });
+        const lines = smiOutput.trim().split('\n');
+        if (lines.length > 0) {
+          const [name, vramStr] = lines[0].split(',').map((s) => s.trim());
+          gpuType = name || 'NVIDIA GPU';
+          // Parse VRAM
+          const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
+          if (match) {
+            const value = parseInt(match[1]);
+            const unit = match[2];
+            gpuVram = unit === 'GiB' ? value : Math.round(value / 1024);
+          }
+        }
+      } catch {
+        // No NVIDIA GPU
+      }
+    }
+  } catch (error) {
+    // GPU detection failed
+  }
+
+  return {
+    os: osString,
+    cpu: {
+      model: cpuModel,
+      cores: cpuCores,
+    },
+    memory: {
+      totalGb: Math.round(memoryTotal / (1024 ** 3)),
+    },
+    gpu: {
+      type: gpuType,
+      vramGb: gpuVram,
+    },
+  };
+}
+
+/**
+ * Get compatible models based on available VRAM
+ */
+export function getCompatibleModels(vramGb: number, allModels: ModelInfo[] = []): ModelInfo[] {
+  if (!allModels || allModels.length === 0) {
+    // Default model catalog (subset of full catalog)
+    const defaultModels: ModelInfo[] = [
+      { name: 'qwen2.5-0.5b', minVram: 1, recommendedTier: 1 },
+      { name: 'gemma-3-1b-web', minVram: 2, recommendedTier: 1 },
+      { name: 'phi-2', minVram: 2, recommendedTier: 1 },
+      { name: 'gemma-3-4b', minVram: 4, recommendedTier: 2 },
+      { name: 'qwen2.5-coder-7b', minVram: 6, recommendedTier: 2 },
+      { name: 'llama-3.1-8b-instruct', minVram: 10, recommendedTier: 3 },
+      { name: 'gemma-3-12b', minVram: 10, recommendedTier: 3 },
+      { name: 'gpt-oss-20b', minVram: 16, recommendedTier: 4 },
+      { name: 'qwen2.5-coder-32b', minVram: 24, recommendedTier: 4 },
+      { name: 'glm-4.7-flash', minVram: 24, recommendedTier: 5 },
+      { name: 'qwen3-coder-30b-a3b', minVram: 24, recommendedTier: 5 },
+    ];
+    return defaultModels.filter((model) => model.minVram <= vramGb);
+  }
+
+  return allModels.filter((model) => model.minVram <= vramGb);
+}
+
+/**
+ * Get recommended tier based on VRAM
+ */
+export function getRecommendedTier(vramGb: number): number {
+  if (vramGb >= 80) return 5;
+  if (vramGb >= 48) return 5;
+  if (vramGb >= 24) return 4;
+  if (vramGb >= 16) return 4;
+  if (vramGb >= 14) return 3;
+  if (vramGb >= 10) return 3;
+  if (vramGb >= 6) return 2;
+  if (vramGb >= 1) return 1;
+  return 0;
 }

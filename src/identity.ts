@@ -82,3 +82,10 @@ export function sign(message: string, privateKeyHex: string): string {
   const signature = hmac.digest('hex');
   return signature;
 }
+
+/**
+ * Get or create identity (convenience function for CLI)
+ */
+export function getOrCreateIdentity(identityDir: string = IDENTITY_DIR): Identity {
+  return loadIdentity(identityDir) || generateIdentity(identityDir);
+}
