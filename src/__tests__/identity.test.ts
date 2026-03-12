@@ -6,6 +6,7 @@ import {
   loadIdentity,
   updateIdentity,
   getAgentProfile,
+  getOrCreateIdentity,
   sign,
   type Identity,
 } from '../identity.js';
@@ -374,6 +375,89 @@ describe('identity', () => {
       const sig2 = sign('same message', privateKeyHex);
 
       expect(sig1).toBe(sig2);
+    });
+  });
+
+  describe('getOrCreateIdentity', () => {
+    it('loads existing identity', () => {
+      // Generate first, then getOrCreate should load it
+      generateIdentity(testDir);
+      const identity = getOrCreateIdentity(testDir);
+      expect(identity).toBeDefined();
+      expect(identity.peerId).toBeDefined();
+      expect(identity.publicKey).toBeDefined();
+    });
+
+    it('creates identity when none exists', () => {
+      const freshDir = path.join(os.tmpdir(), '.synapse-getorcreate-' + Date.now());
+      const identity = getOrCreateIdentity(freshDir);
+      expect(identity).toBeDefined();
+      expect(identity.peerId).toBeDefined();
+      // Clean up
+      const fs = require('fs');
+      try { fs.rmSync(freshDir, { recursive: true }); } catch {}
+    });
+  });
+
+  describe('getAgentProfile fallback branches', () => {
+    it('uses fallback values for missing optional fields', () => {
+      const minimalIdentity: Identity = {
+        peerId: 'abc123',
+        publicKey: 'deadbeefcafe1234',
+        privateKey: 'private',
+        createdAt: 12345,
+        // agentId, tier, mode, status all undefined
+      };
+      const profile = getAgentProfile(minimalIdentity);
+      expect(profile.agentId).toBe('deadbeef'); // first 8 chars of publicKey
+      expect(profile.tier).toBe(0);
+      expect(profile.mode).toBe('chill');
+      expect(profile.status).toBe('idle');
+    });
+  });
+
+  describe('updateIdentity partial branches', () => {
+    it('updates only status', () => {
+      generateIdentity(testDir);
+      const updated = updateIdentity({ status: 'active' }, testDir);
+      expect(updated.status).toBe('active');
+    });
+
+    it('updates tier to 0 explicitly', () => {
+      generateIdentity(testDir);
+      updateIdentity({ tier: 5 }, testDir);
+      const updated = updateIdentity({ tier: 0 }, testDir);
+      expect(updated.tier).toBe(0);
+    });
+
+    it('does not change unspecified fields', () => {
+      generateIdentity(testDir);
+      updateIdentity({ tier: 3, mode: 'power', status: 'active' }, testDir);
+      const updated = updateIdentity({ tier: 5 }, testDir);
+      expect(updated.tier).toBe(5);
+      expect(updated.mode).toBe('power'); // unchanged
+      expect(updated.status).toBe('active'); // unchanged
+    });
+  });
+
+  describe('loadIdentity backfill branches', () => {
+    it('backfills missing A16 fields from old format', () => {
+      const fs = require('fs');
+      // Write old-format identity without A16 fields
+      const oldIdentity = {
+        peerId: 'old-peer-123',
+        publicKey: 'aabbccdd11223344',
+        privateKey: 'privkey123',
+        createdAt: 999999,
+      };
+      if (!fs.existsSync(testDir)) fs.mkdirSync(testDir, { recursive: true });
+      fs.writeFileSync(path.join(testDir, 'identity.json'), JSON.stringify(oldIdentity));
+
+      const loaded = loadIdentity(testDir);
+      expect(loaded.agentId).toBe('aabbccdd'); // backfilled
+      expect(loaded.tier).toBe(0); // backfilled
+      expect(loaded.mode).toBe('chill'); // backfilled
+      expect(loaded.status).toBe('idle'); // backfilled
     });
   });
 });

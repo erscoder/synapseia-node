@@ -17,7 +17,7 @@ describe('inference-server', () => {
     jest.clearAllMocks();
   });
 
-  describe('parseBody', async () => {
+  describe('parseBody', () => {
     it('should parse valid JSON body', async () => {
       const { parseBody } = await import('../inference-server.js');
 
@@ -118,7 +118,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
@@ -130,7 +130,7 @@ describe('inference-server', () => {
       });
 
       expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.object).toBe('chat.completion');
       expect(response.choices[0].message.content).toBe('Hi there!');
     });
@@ -157,7 +157,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
@@ -184,7 +184,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('invalid_request_error');
     });
 
@@ -204,7 +204,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('invalid_request_error');
     });
 
@@ -224,7 +224,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('invalid_request_error');
     });
 
@@ -250,7 +250,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('server_error');
     });
 
@@ -272,7 +272,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('server_error');
     });
 
@@ -298,7 +298,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
@@ -331,7 +331,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
@@ -358,7 +358,7 @@ describe('inference-server', () => {
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
       expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.error.type).toBe('server_error');
     });
 
@@ -384,7 +384,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
@@ -421,7 +421,7 @@ describe('inference-server', () => {
       await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
 
       expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.peerId).toBe('test-peer-123');
       expect(response.tier).toBe(3);
       expect(response.models).toEqual(['llama2', 'mistral']);
@@ -439,7 +439,7 @@ describe('inference-server', () => {
 
       await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
 
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.models).toEqual([]);
     });
 
@@ -454,7 +454,7 @@ describe('inference-server', () => {
 
       await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
 
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.tier).toBe(5);
     });
   });
@@ -479,7 +479,7 @@ describe('inference-server', () => {
       await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
 
       expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.status).toBe('ok');
       expect(typeof response.uptime).toBe('number');
       expect(response.uptime).toBeGreaterThanOrEqual(0);
@@ -489,11 +489,11 @@ describe('inference-server', () => {
       const { handleHealth } = await import('../inference-server.js');
 
       await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
-      const response1 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
+      const response1 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0] as string);
       const uptime1 = response1.uptime;
 
       await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
-      const response2 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
+      const response2 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0] as string);
       const uptime2 = response2.uptime;
 
       expect(typeof uptime1).toBe('number');
@@ -560,7 +560,7 @@ describe('inference-server', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+        json: (jest.fn() as any).mockResolvedValueOnce(mockOllamaResponse),
       });
 
       const result = await forwardToOllama(mockRequest as any);
@@ -602,6 +602,122 @@ describe('inference-server', () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       await expect(forwardToOllama(mockRequest as any)).rejects.toThrow('ECONNREFUSED');
+    });
+  });
+
+  describe('startInferenceServer', () => {
+    it('should return object with close and server', async () => {
+      const { startInferenceServer } = await import('../inference-server.js');
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      const instance = startInferenceServer({
+        port: 0,
+        peerId: 'test-peer',
+        tier: 2,
+        models: ['llama2'],
+      });
+
+      expect(instance).toHaveProperty('close');
+      expect(instance).toHaveProperty('server');
+      expect(typeof instance.close).toBe('function');
+
+      // Wait for listening then immediately close
+      await new Promise<void>((resolve) => instance.server.on('listening', resolve));
+      instance.close();
+      // Wait for close to complete
+      await new Promise<void>((resolve) => instance.server.on('close', resolve));
+      consoleSpy.mockRestore();
+    });
+
+    it('should default to port 8080 when not specified', async () => {
+      const { startInferenceServer } = await import('../inference-server.js');
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Use port 0 to avoid conflict but verify defaults work
+      const instance = startInferenceServer({
+        port: 0,
+        peerId: 'default-peer',
+        tier: 0,
+        models: [],
+      });
+
+      await new Promise<void>((resolve) => instance.server.on('listening', resolve));
+      const addr = instance.server.address() as any;
+      expect(typeof addr.port).toBe('number');
+
+      instance.close();
+      await new Promise<void>((resolve) => instance.server.on('close', resolve));
+      consoleSpy.mockRestore();
+    });
+
+    it('should serve requests correctly', async () => {
+      const { startInferenceServer } = await import('../inference-server.js');
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Restore real fetch for e2e tests
+      const realFetch = globalThis.fetch;
+      // @ts-ignore
+      delete globalThis.fetch;
+      const nodeFetch = (await import('node:http')).default;
+
+      const instance = startInferenceServer({
+        port: 0,
+        peerId: 'e2e-peer',
+        tier: 3,
+        models: ['gemma3'],
+      });
+
+      await new Promise<void>((resolve) => instance.server.on('listening', resolve));
+      const addr = instance.server.address() as any;
+      const port = addr.port;
+
+      // Use http.get for e2e to avoid mocked fetch
+      const httpGet = (path: string): Promise<{ statusCode: number; body: string }> =>
+        new Promise((resolve, reject) => {
+          nodeFetch.get(`http://127.0.0.1:${port}${path}`, (res: any) => {
+            let body = '';
+            res.on('data', (c: any) => (body += c));
+            res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+          }).on('error', reject);
+        });
+
+      const httpRequest = (path: string, method: string): Promise<{ statusCode: number; body: string }> =>
+        new Promise((resolve, reject) => {
+          const req = nodeFetch.request(`http://127.0.0.1:${port}${path}`, { method }, (res: any) => {
+            let body = '';
+            res.on('data', (c: any) => (body += c));
+            res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+          });
+          req.on('error', reject);
+          req.end();
+        });
+
+      try {
+        // Test /health
+        const healthRes = await httpGet('/health');
+        expect(healthRes.statusCode).toBe(200);
+        const healthData = JSON.parse(healthRes.body);
+        expect(healthData.status).toBe('ok');
+
+        // Test /api/v1/state
+        const stateRes = await httpGet('/api/v1/state');
+        expect(stateRes.statusCode).toBe(200);
+        const stateData = JSON.parse(stateRes.body);
+        expect(stateData.peerId).toBe('e2e-peer');
+
+        // Test 404
+        const notFoundRes = await httpGet('/nonexistent');
+        expect(notFoundRes.statusCode).toBe(404);
+
+        // Test OPTIONS (CORS)
+        const optionsRes = await httpRequest('/health', 'OPTIONS');
+        expect(optionsRes.statusCode).toBe(200);
+      } finally {
+        instance.close();
+        await new Promise<void>((resolve) => instance.server.on('close', resolve));
+        globalThis.fetch = realFetch;
+        consoleSpy.mockRestore();
+      }
     });
   });
 });

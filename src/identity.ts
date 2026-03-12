@@ -112,7 +112,11 @@ export function sign(message: string, privateKeyHex: string): string {
  * Get or create identity (convenience function for CLI)
  */
 export function getOrCreateIdentity(identityDir: string = IDENTITY_DIR): Identity {
-  return loadIdentity(identityDir) || generateIdentity(identityDir);
+  try {
+    return loadIdentity(identityDir);
+  } catch {
+    return generateIdentity(identityDir);
+  }
 }
 
 /**

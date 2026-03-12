@@ -227,9 +227,9 @@ function handleNotFound(req: http.IncomingMessage, res: http.ServerResponse): vo
 /**
  * Start inference server
  */
-export function startInferenceServer(config: InferenceServerConfig): { close: () => void } {
+export function startInferenceServer(config: InferenceServerConfig): { close: () => void; server: http.Server } {
   serverStartTime = Date.now();
-  const port = config.port || 8080;
+  const port = config.port !== undefined && config.port !== null ? config.port : 8080;
 
   const server = http.createServer(async (req, res) => {
     // CORS headers
@@ -276,6 +276,7 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
   });
 
   return {
+    server,
     close: () => {
       server.close();
       console.log('✅ Inference server closed');
