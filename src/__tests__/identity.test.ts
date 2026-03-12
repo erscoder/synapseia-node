@@ -1,12 +1,6 @@
-/**
- * Tests for identity.ts (A16 - Agent identity enhancement)
- * Tests for agentId, tier, mode, status, updateIdentity, getAgentProfile
- */
-
-import { readFileSync, unlinkSync, existsSync } from 'fs';
+import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import * as path from 'path';
 import * as os from 'os';
-import * as crypto from 'crypto';
 import {
   generateIdentity,
   loadIdentity,
@@ -18,12 +12,13 @@ import {
 
 describe('identity', () => {
   const testDir = path.join(os.tmpdir(), '.synapse-test-' + Date.now());
-  const identityPath = path.join(testDir, 'identity.json');
 
   afterEach(() => {
     // Clean up test directory
-    if (existsSync(identityPath)) {
-      unlinkSync(identityPath);
+    const fs = require('fs');
+    const identityPath = path.join(testDir, 'identity.json');
+    if (fs.existsSync(identityPath)) {
+      fs.unlinkSync(identityPath);
     }
   });
 
@@ -70,9 +65,12 @@ describe('identity', () => {
     });
 
     it('should create identity file', () => {
+      const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
       generateIdentity(testDir);
 
-      expect(existsSync(identityPath)).toBe(true);
+      expect(fs.existsSync(identityPath)).toBe(true);
     });
 
     it('should be able to load generated identity', () => {
@@ -89,8 +87,11 @@ describe('identity', () => {
     });
 
     it('should generate different identities on multiple calls', () => {
+      const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
       const identity1 = generateIdentity(testDir);
-      unlinkSync(identityPath);
+      fs.unlinkSync(identityPath);
 
       const identity2 = generateIdentity(testDir);
 
@@ -114,21 +115,23 @@ describe('identity', () => {
     });
 
     it('should throw if identity file has invalid structure', () => {
-      // Create invalid identity file
       const fs = require('fs');
-      const { mkdirSync, writeFileSync } = fs;
-      if (!existsSync(testDir)) {
-        mkdirSync(testDir, { recursive: true });
+      const identityPath = path.join(testDir, 'identity.json');
+
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
       }
-      writeFileSync(identityPath, JSON.stringify({ invalid: 'data' }));
+      fs.writeFileSync(identityPath, JSON.stringify({ invalid: 'data' }));
 
       expect(() => loadIdentity(testDir)).toThrow('Invalid identity file structure');
     });
 
     it('should backfill missing agentId', () => {
-      const generated = generateIdentity(testDir);
-      // Remove agentId from file
       const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
+      const generated = generateIdentity(testDir);
+
       const content = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
       delete content.agentId;
       fs.writeFileSync(identityPath, JSON.stringify(content));
@@ -140,9 +143,11 @@ describe('identity', () => {
     });
 
     it('should backfill missing tier', () => {
-      const generated = generateIdentity(testDir);
-      // Remove tier from file
       const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
+      const generated = generateIdentity(testDir);
+
       const content = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
       delete content.tier;
       fs.writeFileSync(identityPath, JSON.stringify(content));
@@ -153,9 +158,11 @@ describe('identity', () => {
     });
 
     it('should backfill missing mode', () => {
-      const generated = generateIdentity(testDir);
-      // Remove mode from file
       const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
+      const generated = generateIdentity(testDir);
+
       const content = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
       delete content.mode;
       fs.writeFileSync(identityPath, JSON.stringify(content));
@@ -166,9 +173,11 @@ describe('identity', () => {
     });
 
     it('should backfill missing status', () => {
-      const generated = generateIdentity(testDir);
-      // Remove status from file
       const fs = require('fs');
+      const identityPath = path.join(testDir, 'identity.json');
+
+      const generated = generateIdentity(testDir);
+
       const content = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
       delete content.status;
       fs.writeFileSync(identityPath, JSON.stringify(content));
@@ -340,6 +349,7 @@ describe('identity', () => {
 
   describe('sign', () => {
     it('should sign a message', () => {
+      const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const message = 'test message';
       const signature = sign(message, privateKeyHex);
@@ -349,6 +359,7 @@ describe('identity', () => {
     });
 
     it('should produce different signatures for different messages', () => {
+      const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const sig1 = sign('message1', privateKeyHex);
       const sig2 = sign('message2', privateKeyHex);
@@ -357,6 +368,7 @@ describe('identity', () => {
     });
 
     it('should produce same signature for same message', () => {
+      const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const sig1 = sign('same message', privateKeyHex);
       const sig2 = sign('same message', privateKeyHex);

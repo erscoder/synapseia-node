@@ -34,6 +34,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var hardware_exports = {};
 __export(hardware_exports, {
   detectHardware: () => detectHardware,
+  getCompatibleModels: () => getCompatibleModels,
+  getRecommendedTier: () => getRecommendedTier,
+  getSystemInfo: () => getSystemInfo,
   getTierName: () => getTierName
 });
 function detectAppleSilicon(hardware, model) {
@@ -97,6 +100,102 @@ function getTierName(tier) {
   const names = ["CPU-Only", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Tier 5"];
   return names[tier] || "Unknown";
 }
+function getSystemInfo() {
+  const osType = os2.type();
+  const osPlatform = os2.platform();
+  const osRelease = os2.release();
+  const arch3 = os2.arch();
+  let osString = `${osType} ${osRelease} (${arch3})`;
+  if (osPlatform === "darwin") {
+    osString = `macOS ${osRelease} (${arch3})`;
+  } else if (osPlatform === "linux") {
+    osString = `Linux ${osRelease} (${arch3})`;
+  } else if (osPlatform === "win32") {
+    osString = `Windows ${osRelease} (${arch3})`;
+  }
+  const cpuModel = os2.cpus()[0]?.model || "Unknown CPU";
+  const cpuCores = os2.cpus().length || 0;
+  const memoryTotal = os2.totalmem();
+  let gpuType = null;
+  let gpuVram = 0;
+  try {
+    if (arch3 === "arm64" && osPlatform === "darwin") {
+      const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string", { encoding: "utf-8" }).trim();
+      gpuType = model;
+      if (model.includes("M3 Ultra")) gpuVram = 192;
+      else if (model.includes("M3 Max")) gpuVram = 128;
+      else if (model.includes("M2 Ultra")) gpuVram = 128;
+      else if (model.includes("M2 Max")) gpuVram = 96;
+      else if (model.includes("M3 Pro")) gpuVram = 48;
+      else if (model.includes("M2 Pro")) gpuVram = 18;
+      else if (model.includes("M1 Ultra")) gpuVram = 128;
+      else if (model.includes("M1 Max")) gpuVram = 96;
+      else if (model.includes("M3") || model.includes("M2")) gpuVram = 10;
+      else if (model.includes("M1")) gpuVram = 7;
+    } else if (arch3 === "x86_64" || arch3 === "x64") {
+      try {
+        const smiOutput = (0, import_child_process.execSync)("nvidia-smi --query-gpu=name,memory.free --format=csv,noheader", { encoding: "utf-8" });
+        const lines = smiOutput.trim().split("\n");
+        if (lines.length > 0) {
+          const [name, vramStr] = lines[0].split(",").map((s) => s.trim());
+          gpuType = name || "NVIDIA GPU";
+          const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
+          if (match) {
+            const value = parseInt(match[1]);
+            const unit = match[2];
+            gpuVram = unit === "GiB" ? value : Math.round(value / 1024);
+          }
+        }
+      } catch {
+      }
+    }
+  } catch (error) {
+  }
+  return {
+    os: osString,
+    cpu: {
+      model: cpuModel,
+      cores: cpuCores
+    },
+    memory: {
+      totalGb: Math.round(memoryTotal / 1024 ** 3)
+    },
+    gpu: {
+      type: gpuType,
+      vramGb: gpuVram
+    }
+  };
+}
+function getCompatibleModels(vramGb, allModels = []) {
+  if (!allModels || allModels.length === 0) {
+    const defaultModels = [
+      { name: "qwen2.5-0.5b", minVram: 1, recommendedTier: 1 },
+      { name: "gemma-3-1b-web", minVram: 2, recommendedTier: 1 },
+      { name: "phi-2", minVram: 2, recommendedTier: 1 },
+      { name: "gemma-3-4b", minVram: 4, recommendedTier: 2 },
+      { name: "qwen2.5-coder-7b", minVram: 6, recommendedTier: 2 },
+      { name: "llama-3.1-8b-instruct", minVram: 10, recommendedTier: 3 },
+      { name: "gemma-3-12b", minVram: 10, recommendedTier: 3 },
+      { name: "gpt-oss-20b", minVram: 16, recommendedTier: 4 },
+      { name: "qwen2.5-coder-32b", minVram: 24, recommendedTier: 4 },
+      { name: "glm-4.7-flash", minVram: 24, recommendedTier: 5 },
+      { name: "qwen3-coder-30b-a3b", minVram: 24, recommendedTier: 5 }
+    ];
+    return defaultModels.filter((model) => model.minVram <= vramGb);
+  }
+  return allModels.filter((model) => model.minVram <= vramGb);
+}
+function getRecommendedTier(vramGb) {
+  if (vramGb >= 80) return 5;
+  if (vramGb >= 48) return 5;
+  if (vramGb >= 24) return 4;
+  if (vramGb >= 16) return 4;
+  if (vramGb >= 14) return 3;
+  if (vramGb >= 10) return 3;
+  if (vramGb >= 6) return 2;
+  if (vramGb >= 1) return 1;
+  return 0;
+}
 var os2, import_child_process;
 var init_hardware = __esm({
   "src/hardware.ts"() {
@@ -129,11 +228,20 @@ function generateIdentity(identityDir = IDENTITY_DIR) {
   const publicKeyHex = hash.toString("hex");
   const peerIdHash = crypto.createHash("sha256").update(publicKeyHex, "hex").digest("hex");
   const peerId = peerIdHash.slice(0, 32);
+  const agentId = publicKeyHex.slice(0, 8);
   const identity = {
     peerId,
     publicKey: publicKeyHex,
     privateKey: privateKeyHex,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    agentId,
+    // A16
+    tier: 0,
+    // A16 - default tier
+    mode: "chill",
+    // A16 - default mode
+    status: "idle"
+    // A16 - default status
   };
   (0, import_fs.writeFileSync)(path.join(identityDir, "identity.json"), JSON.stringify(identity, null, 2));
   (0, import_fs.writeFileSync)(path.join(identityDir, "publickey.pem"), `public key: ${publicKeyHex}
@@ -150,7 +258,30 @@ function loadIdentity(identityDir = IDENTITY_DIR) {
   if (!identity.peerId || !identity.publicKey || !identity.privateKey) {
     throw new Error("Invalid identity file structure");
   }
+  if (!identity.agentId) {
+    identity.agentId = identity.publicKey.slice(0, 8);
+  }
+  if (identity.tier === void 0) {
+    identity.tier = 0;
+  }
+  if (!identity.mode) {
+    identity.mode = "chill";
+  }
+  if (!identity.status) {
+    identity.status = "idle";
+  }
   return identity;
+}
+function getAgentProfile(identity) {
+  return {
+    agentId: identity.agentId || identity.publicKey.slice(0, 8),
+    peerId: identity.peerId,
+    tier: identity.tier || 0,
+    mode: identity.mode || "chill",
+    status: identity.status || "idle",
+    createdAt: identity.createdAt,
+    publicKey: identity.publicKey
+  };
 }
 
 // src/index.ts
@@ -972,5 +1103,21 @@ program.command("models").description("Manage local models (Ollama)").action(asy
   }
   console.log("");
   console.log("Pull with: ollama pull <model-name>");
+});
+program.command("hive").description("Hive operations").command("whoami").description("Show agent identity information").action(() => {
+  const identityPath = path2.join(os3.homedir(), ".synapse");
+  if (!fs.existsSync(path2.join(identityPath, "identity.json"))) {
+    console.log("\u274C No identity found. Run `synapse start` first.");
+    return;
+  }
+  const identity = loadIdentity(identityPath);
+  const profile = getAgentProfile(identity);
+  console.log("\u{1F41D} Hive Agent Identity\n");
+  console.log(`   Agent ID: ${profile.agentId}`);
+  console.log(`   Peer ID:  ${profile.peerId}`);
+  console.log(`   Tier:     ${profile.tier} (${getTierName(profile.tier)})`);
+  console.log(`   Mode:     ${profile.mode.toUpperCase()}`);
+  console.log(`   Status:   ${profile.status.toUpperCase()}`);
+  console.log(`   Created:  ${new Date(profile.createdAt).toISOString()}`);
 });
 program.parse();

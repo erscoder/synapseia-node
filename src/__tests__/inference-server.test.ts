@@ -1,630 +1,607 @@
-/**
- * Tests for inference-server.ts (A15)
- * Focus on handler functions, skip actual server creation
- */
-
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import * as http from 'node:http';
-type InferenceServerConfig = import('../inference-server.js').InferenceServerConfig;
 
-// Mock fetch for Ollama API
-global.fetch = jest.fn() as jest.MockedFunction<typeof fetch>;
+type InferenceServerConfig = {
+  peerId: string;
+  tier: number;
+  models: string[];
+  port?: number;
+};
 
-describe('parseBody', () => {
-  it('should parse valid JSON body', async () => {
-    const { parseBody } = await import('../inference-server.js');
+// Mock fetch globally
+const mockFetch = jest.fn() as any;
+global.fetch = mockFetch;
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"test":"value"}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    const result = await parseBody(mockReq as http.IncomingMessage);
-    expect(result).toEqual({ test: 'value' });
-  });
-
-  it('should parse empty body', async () => {
-    const { parseBody } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    const result = await parseBody(mockReq as http.IncomingMessage);
-    expect(result).toEqual({});
-  });
-
-  it('should throw on invalid JSON', async () => {
-    const { parseBody } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('invalid json'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    await expect(parseBody(mockReq as http.IncomingMessage)).rejects.toThrow();
-  });
-
-  it('should handle error event', async () => {
-    const { parseBody } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'error') {
-          handler(new Error('Request error'));
-        }
-      }) as any,
-    };
-
-    await expect(parseBody(mockReq as http.IncomingMessage)).rejects.toThrow('Request error');
-  });
-});
-
-describe('handleChatCompletions', () => {
-  let mockRes: any;
-  let writeHeadSpy: jest.Mock;
-  let endSpy: jest.Mock;
-
-  beforeEach(() => {
-    writeHeadSpy = jest.fn();
-    endSpy = jest.fn();
-    mockRes = {
-      writeHead: writeHeadSpy,
-      end: endSpy,
-    };
+describe('inference-server', () => {
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should proxy valid request to Ollama and return OpenAI format', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
+  describe('parseBody', async () => {
+    it('should parse valid JSON body', async () => {
+      const { parseBody } = await import('../inference-server.js');
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"test":"value"}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Hi there!' },
-      done: true,
-      model: 'llama2',
-      created_at: new Date().toISOString(),
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      const result = await parseBody(mockReq as http.IncomingMessage);
+      expect(result).toEqual({ test: 'value' });
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should parse empty body', async () => {
+      const { parseBody } = await import('../inference-server.js');
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:11434/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: expect.stringContaining('"model":"llama2"'),
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      const result = await parseBody(mockReq as http.IncomingMessage);
+      expect(result).toEqual({});
     });
 
-    expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.object).toBe('chat.completion');
-    expect(response.choices[0].message.content).toBe('Hi there!');
-  });
+    it('should throw on invalid JSON', async () => {
+      const { parseBody } = await import('../inference-server.js');
 
-  it('should handle request with options', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('invalid json'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"temperature":0.7,"max_tokens":100}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Response' },
-      done: true,
-      model: 'llama2',
-      created_at: new Date().toISOString(),
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      await expect(parseBody(mockReq as http.IncomingMessage)).rejects.toThrow();
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should handle error event', async () => {
+      const { parseBody } = await import('../inference-server.js');
 
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
-    const body = JSON.parse(fetchCall.body);
-    expect(body.options.temperature).toBe(0.7);
-    expect(body.options.num_predict).toBe(100);
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'error') {
+            handler(new Error('Request error'));
+          }
+        }) as any,
+      };
+
+      await expect(parseBody(mockReq as http.IncomingMessage)).rejects.toThrow('Request error');
+    });
   });
 
-  it('should return 400 for missing model', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
+  describe('handleChatCompletions', () => {
+    let mockRes: any;
+    let writeHeadSpy: jest.Mock;
+    let endSpy: jest.Mock;
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"messages":[{"role":"user","content":"Hello"}]}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
-
-    expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('invalid_request_error');
-  });
-
-  it('should return 400 for missing messages', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2"}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
-
-    expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('invalid_request_error');
-  });
-
-  it('should return 400 for empty messages array', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[]}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
-
-    expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('invalid_request_error');
-  });
-
-  it('should handle Ollama API error', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
+    beforeEach(() => {
+      writeHeadSpy = jest.fn();
+      endSpy = jest.fn();
+      mockRes = {
+        writeHead: writeHeadSpy,
+        end: endSpy,
+      };
+      jest.clearAllMocks();
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should proxy valid request to Ollama', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-    expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('server_error');
-  });
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-  it('should handle Ollama connection error', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Hi there!' },
+        done: true,
+        model: 'llama2',
+        created_at: new Date().toISOString(),
+      };
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
 
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection refused'));
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('"model":"llama2"'),
+      });
 
-    expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('server_error');
-  });
-
-  it('should handle request without max_tokens', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"temperature":0.7}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Response' },
-      done: true,
-      model: 'llama2',
-      created_at: new Date().toISOString(),
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.object).toBe('chat.completion');
+      expect(response.choices[0].message.content).toBe('Hi there!');
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should handle request with options', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
-    const body = JSON.parse(fetchCall.body);
-    expect(body.options.temperature).toBe(0.7);
-    expect(body.options.num_predict).toBeUndefined();
-  });
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"temperature":0.7,"max_tokens":100}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-  it('should handle request with only max_tokens', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Response' },
+        done: true,
+        model: 'llama2',
+        created_at: new Date().toISOString(),
+      };
 
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"max_tokens":200}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
 
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Response' },
-      done: true,
-      model: 'llama2',
-      created_at: new Date().toISOString(),
-    };
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.options.temperature).toBe(0.7);
+      expect(body.options.num_predict).toBe(100);
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should return 400 for missing model', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
-    const body = JSON.parse(fetchCall.body);
-    expect(body.options.temperature).toBeUndefined();
-    expect(body.options.num_predict).toBe(200);
-  });
-});
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"messages":[{"role":"user","content":"Hello"}]}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-describe('handleState', () => {
-  let mockRes: any;
-  let writeHeadSpy: jest.Mock;
-  let endSpy: jest.Mock;
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-  beforeEach(() => {
-    writeHeadSpy = jest.fn();
-    endSpy = jest.fn();
-    mockRes = {
-      writeHead: writeHeadSpy,
-      end: endSpy,
-    };
-  });
-
-  it('should return node state', async () => {
-    const { handleState } = await import('../inference-server.js');
-
-    const config: InferenceServerConfig = {
-      peerId: 'test-peer-123',
-      tier: 3,
-      models: ['llama2', 'mistral'],
-    };
-
-    await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
-
-    expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.peerId).toBe('test-peer-123');
-    expect(response.tier).toBe(3);
-    expect(response.models).toEqual(['llama2', 'mistral']);
-    expect(typeof response.uptime).toBe('number');
-  });
-
-  it('should handle empty models array', async () => {
-    const { handleState } = await import('../inference-server.js');
-
-    const config: InferenceServerConfig = {
-      peerId: 'test-peer-123',
-      tier: 1,
-      models: [],
-    };
-
-    await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
-
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.models).toEqual([]);
-  });
-
-  it('should handle different tier values', async () => {
-    const { handleState } = await import('../inference-server.js');
-
-    const config: InferenceServerConfig = {
-      peerId: 'test-tier-5',
-      tier: 5,
-      models: ['gemma3'],
-    };
-
-    await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
-
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.tier).toBe(5);
-  });
-});
-
-describe('handleHealth', () => {
-  let mockRes: any;
-  let writeHeadSpy: jest.Mock;
-  let endSpy: jest.Mock;
-
-  beforeEach(() => {
-    writeHeadSpy = jest.fn();
-    endSpy = jest.fn();
-    mockRes = {
-      writeHead: writeHeadSpy,
-      end: endSpy,
-    };
-  });
-
-  it('should return health status with uptime', async () => {
-    const { handleHealth } = await import('../inference-server.js');
-
-    await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
-
-    expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.status).toBe('ok');
-    expect(typeof response.uptime).toBe('number');
-    expect(response.uptime).toBeGreaterThanOrEqual(0);
-  });
-
-  it('should return valid uptime multiple times', async () => {
-    const { handleHealth } = await import('../inference-server.js');
-
-    await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
-    const response1 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
-    const uptime1 = response1.uptime;
-
-    await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
-    const response2 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
-    const uptime2 = response2.uptime;
-
-    expect(typeof uptime1).toBe('number');
-    expect(typeof uptime2).toBe('number');
-  });
-});
-
-describe('transformToOpenAI', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should correctly transform Ollama response format', async () => {
-    const { transformToOpenAI } = await import('../inference-server.js');
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Test response' },
-      done: true,
-      model: 'llama2',
-      created_at: '2024-01-01T00:00:00Z',
-    };
-
-    const openaiResult = transformToOpenAI(mockOllamaResponse, 'llama2');
-
-    expect(openaiResult.object).toBe('chat.completion');
-    expect(openaiResult.model).toBe('llama2');
-    expect(openaiResult.choices[0].message.content).toBe('Test response');
-    expect(openaiResult.choices[0].message.role).toBe('assistant');
-    expect(openaiResult.choices[0].finish_reason).toBe('stop');
-    expect(typeof openaiResult.id).toBe('string');
-    expect(typeof openaiResult.created).toBe('number');
-  });
-
-  it('should handle different model names', async () => {
-    const { transformToOpenAI } = await import('../inference-server.js');
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Another response' },
-      done: true,
-      model: 'gemma3',
-      created_at: '2024-01-01T00:00:00Z',
-    };
-
-    const openaiResult = transformToOpenAI(mockOllamaResponse, 'gemma3');
-
-    expect(openaiResult.model).toBe('gemma3');
-    expect(openaiResult.choices[0].message.content).toBe('Another response');
-  });
-});
-
-describe('forwardToOllama', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should call Ollama API with correct parameters', async () => {
-    const { forwardToOllama } = await import('../inference-server.js');
-
-    const mockRequest = {
-      model: 'llama2',
-      messages: [{ role: 'user', content: 'Test' }],
-      temperature: 0.7,
-      max_tokens: 100,
-    };
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Response' },
-      done: true,
-      model: 'llama2',
-      created_at: '2024-01-01T00:00:00Z',
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('invalid_request_error');
     });
 
-    const result = await forwardToOllama(mockRequest as any);
+    it('should return 400 for missing messages', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:11434/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: expect.stringContaining('"model":"llama2"'),
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2"}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('invalid_request_error');
     });
 
-    expect(result.message.content).toBe('Response');
-  });
+    it('should return 400 for empty messages array', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-  it('should throw on API error', async () => {
-    const { forwardToOllama } = await import('../inference-server.js');
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[]}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-    const mockRequest = {
-      model: 'llama2',
-      messages: [{ role: 'user', content: 'Test' }],
-    };
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: 'Server Error',
+      expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('invalid_request_error');
     });
 
-    await expect(forwardToOllama(mockRequest as any)).rejects.toThrow('Ollama API error');
-  });
+    it('should handle Ollama API error', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-  it('should throw on connection error', async () => {
-    const { forwardToOllama } = await import('../inference-server.js');
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
 
-    const mockRequest = {
-      model: 'llama2',
-      messages: [{ role: 'user', content: 'Test' }],
-    };
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
 
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-    await expect(forwardToOllama(mockRequest as any)).rejects.toThrow('ECONNREFUSED');
-  });
-});
-
-describe('Error handling tests', () => {
-  let mockRes: any;
-  let writeHeadSpy: jest.Mock;
-  let endSpy: jest.Mock;
-
-  beforeEach(() => {
-    writeHeadSpy = jest.fn();
-    endSpy = jest.fn();
-    mockRes = {
-      writeHead: writeHeadSpy,
-      end: endSpy,
-    };
-  });
-
-  it('should handle JSON parse errors in request', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('invalid json'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
-
-    // JSON parse error results in 500 (server error)
-    expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
-
-    const response = JSON.parse(endSpy.mock.calls[0][0]);
-    expect(response.error.type).toBe('server_error');
-  });
-
-  it('should handle stream option in request', async () => {
-    const { handleChatCompletions } = await import('../inference-server.js');
-
-    const mockReq: Partial<http.IncomingMessage> = {
-      on: jest.fn((event: string, handler: Function) => {
-        if (event === 'data') {
-          handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Test"}],"stream":true}'));
-        } else if (event === 'end') {
-          handler();
-        }
-      }) as any,
-    };
-
-    const mockOllamaResponse = {
-      message: { role: 'assistant', content: 'Response' },
-      done: true,
-      model: 'llama2',
-      created_at: '2024-01-01T00:00:00Z',
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('server_error');
     });
 
-    await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+    it('should handle Ollama connection error', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
 
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
-    const body = JSON.parse(fetchCall.body);
-    expect(body.stream).toBe(false); // We always set stream to false
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}]}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('server_error');
+    });
+
+    it('should handle request without max_tokens', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
+
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"temperature":0.7}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Response' },
+        done: true,
+        model: 'llama2',
+        created_at: new Date().toISOString(),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.options.temperature).toBe(0.7);
+      expect(body.options.num_predict).toBeUndefined();
+    });
+
+    it('should handle request with only max_tokens', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
+
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Hello"}],"max_tokens":200}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Response' },
+        done: true,
+        model: 'llama2',
+        created_at: new Date().toISOString(),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.options.temperature).toBeUndefined();
+      expect(body.options.num_predict).toBe(200);
+    });
+
+    it('should handle JSON parse errors', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
+
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('invalid json'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.error.type).toBe('server_error');
+    });
+
+    it('should handle stream option', async () => {
+      const { handleChatCompletions } = await import('../inference-server.js');
+
+      const mockReq: Partial<http.IncomingMessage> = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'data') {
+            handler(Buffer.from('{"model":"llama2","messages":[{"role":"user","content":"Test"}],"stream":true}'));
+          } else if (event === 'end') {
+            handler();
+          }
+        }) as any,
+      };
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Response' },
+        done: true,
+        model: 'llama2',
+        created_at: new Date().toISOString(),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
+
+      await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
+
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.stream).toBe(false);
+    });
   });
-});
 
-// Skip startInferenceServer tests as they require full http module mocking
-describe.skip('startInferenceServer integration', () => {
-  it('should be covered by manual testing', () => {
-    // Tests that require actual server creation are done in integration tests
+  describe('handleState', () => {
+    let mockRes: any;
+    let writeHeadSpy: jest.Mock;
+    let endSpy: jest.Mock;
+
+    beforeEach(() => {
+      writeHeadSpy = jest.fn();
+      endSpy = jest.fn();
+      mockRes = {
+        writeHead: writeHeadSpy,
+        end: endSpy,
+      };
+    });
+
+    it('should return node state', async () => {
+      const { handleState } = await import('../inference-server.js');
+
+      const config: InferenceServerConfig = {
+        peerId: 'test-peer-123',
+        tier: 3,
+        models: ['llama2', 'mistral'],
+      };
+
+      await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
+
+      expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.peerId).toBe('test-peer-123');
+      expect(response.tier).toBe(3);
+      expect(response.models).toEqual(['llama2', 'mistral']);
+      expect(typeof response.uptime).toBe('number');
+    });
+
+    it('should handle empty models array', async () => {
+      const { handleState } = await import('../inference-server.js');
+
+      const config: InferenceServerConfig = {
+        peerId: 'test-peer-123',
+        tier: 1,
+        models: [],
+      };
+
+      await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
+
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.models).toEqual([]);
+    });
+
+    it('should handle different tier values', async () => {
+      const { handleState } = await import('../inference-server.js');
+
+      const config: InferenceServerConfig = {
+        peerId: 'test-tier-5',
+        tier: 5,
+        models: ['gemma3'],
+      };
+
+      await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
+
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.tier).toBe(5);
+    });
+  });
+
+  describe('handleHealth', () => {
+    let mockRes: any;
+    let writeHeadSpy: jest.Mock;
+    let endSpy: jest.Mock;
+
+    beforeEach(() => {
+      writeHeadSpy = jest.fn();
+      endSpy = jest.fn();
+      mockRes = {
+        writeHead: writeHeadSpy,
+        end: endSpy,
+      };
+    });
+
+    it('should return health status with uptime', async () => {
+      const { handleHealth } = await import('../inference-server.js');
+
+      await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
+
+      expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
+      const response = JSON.parse(endSpy.mock.calls[0][0]);
+      expect(response.status).toBe('ok');
+      expect(typeof response.uptime).toBe('number');
+      expect(response.uptime).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return valid uptime multiple times', async () => {
+      const { handleHealth } = await import('../inference-server.js');
+
+      await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
+      const response1 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
+      const uptime1 = response1.uptime;
+
+      await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
+      const response2 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0]);
+      const uptime2 = response2.uptime;
+
+      expect(typeof uptime1).toBe('number');
+      expect(typeof uptime2).toBe('number');
+    });
+  });
+
+  describe('transformToOpenAI', () => {
+    it('should correctly transform Ollama response format', async () => {
+      const { transformToOpenAI } = await import('../inference-server.js');
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Test response' },
+        done: true,
+        model: 'llama2',
+        created_at: '2024-01-01T00:00:00Z',
+      };
+
+      const openaiResult = transformToOpenAI(mockOllamaResponse as any, 'llama2');
+
+      expect(openaiResult.object).toBe('chat.completion');
+      expect(openaiResult.model).toBe('llama2');
+      expect(openaiResult.choices[0].message.content).toBe('Test response');
+      expect(openaiResult.choices[0].message.role).toBe('assistant');
+      expect(openaiResult.choices[0].finish_reason).toBe('stop');
+      expect(typeof openaiResult.id).toBe('string');
+      expect(typeof openaiResult.created).toBe('number');
+    });
+
+    it('should handle different model names', async () => {
+      const { transformToOpenAI } = await import('../inference-server.js');
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Another response' },
+        done: true,
+        model: 'gemma3',
+        created_at: '2024-01-01T00:00:00Z',
+      };
+
+      const openaiResult = transformToOpenAI(mockOllamaResponse as any, 'gemma3');
+
+      expect(openaiResult.model).toBe('gemma3');
+      expect(openaiResult.choices[0].message.content).toBe('Another response');
+    });
+  });
+
+  describe('forwardToOllama', () => {
+    it('should call Ollama API with correct parameters', async () => {
+      const { forwardToOllama } = await import('../inference-server.js');
+
+      const mockRequest = {
+        model: 'llama2',
+        messages: [{ role: 'user', content: 'Test' }],
+        temperature: 0.7,
+        max_tokens: 100,
+      };
+
+      const mockOllamaResponse = {
+        message: { role: 'assistant', content: 'Response' },
+        done: true,
+        model: 'llama2',
+        created_at: '2024-01-01T00:00:00Z',
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockOllamaResponse),
+      });
+
+      const result = await forwardToOllama(mockRequest as any);
+
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('"model":"llama2"'),
+      });
+
+      expect(result.message.content).toBe('Response');
+    });
+
+    it('should throw on API error', async () => {
+      const { forwardToOllama } = await import('../inference-server.js');
+
+      const mockRequest = {
+        model: 'llama2',
+        messages: [{ role: 'user', content: 'Test' }],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Server Error',
+      });
+
+      await expect(forwardToOllama(mockRequest as any)).rejects.toThrow('Ollama API error');
+    });
+
+    it('should throw on connection error', async () => {
+      const { forwardToOllama } = await import('../inference-server.js');
+
+      const mockRequest = {
+        model: 'llama2',
+        messages: [{ role: 'user', content: 'Test' }],
+      };
+
+      mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+      await expect(forwardToOllama(mockRequest as any)).rejects.toThrow('ECONNREFUSED');
+    });
   });
 });
