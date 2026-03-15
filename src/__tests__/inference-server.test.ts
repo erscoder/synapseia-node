@@ -681,14 +681,17 @@ describe('inference-server', () => {
           }).on('error', reject);
         });
 
-      const httpRequest = (path: string, method: string): Promise<{ statusCode: number; body: string }> =>
+      const httpRequest = (path: string, method: string, body?: string): Promise<{ statusCode: number; body: string }> =>
         new Promise((resolve, reject) => {
           const req = nodeFetch.request(`http://127.0.0.1:${port}${path}`, { method }, (res: any) => {
-            let body = '';
-            res.on('data', (c: any) => (body += c));
-            res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+            let responseBody = '';
+            res.on('data', (c: any) => (responseBody += c));
+            res.on('end', () => resolve({ statusCode: res.statusCode, body: responseBody }));
           });
           req.on('error', reject);
+          if (body) {
+            req.write(body);
+          }
           req.end();
         });
 
@@ -710,11 +713,15 @@ describe('inference-server', () => {
         expect(notFoundRes.statusCode).toBe(404);
 
         // Test OPTIONS (CORS)
+        // Test OPTIONS (CORS)
         const optionsRes = await httpRequest('/health', 'OPTIONS');
         expect(optionsRes.statusCode).toBe(200);
 
         // Test /v1/chat/completions (with real Ollama call mocked)
-        const chatRes = await httpRequest('/v1/chat/completions', 'POST');
+        const chatRes = await httpRequest('/v1/chat/completions', 'POST', JSON.stringify({
+          model: 'llama2',
+          messages: [{ role: 'user', content: 'test' }]
+        }));
         expect([200, 500]).toContain(chatRes.statusCode); // May fail if Ollama not running
       } finally {
         instance.close();
