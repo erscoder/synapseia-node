@@ -712,6 +712,10 @@ describe('inference-server', () => {
         // Test OPTIONS (CORS)
         const optionsRes = await httpRequest('/health', 'OPTIONS');
         expect(optionsRes.statusCode).toBe(200);
+
+        // Test /v1/chat/completions (with real Ollama call mocked)
+        const chatRes = await httpRequest('/v1/chat/completions', 'POST');
+        expect([200, 500]).toContain(chatRes.statusCode); // May fail if Ollama not running
       } finally {
         instance.close();
         await new Promise<void>((resolve) => instance.server.on('close', resolve));

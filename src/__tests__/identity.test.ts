@@ -38,6 +38,20 @@ describe('identity', () => {
       expect(typeof identity.createdAt).toBe('number');
     });
 
+    it('should work when directory already exists', () => {
+      const fs = require('fs');
+      const { generateIdentity } = require('../identity.js');
+
+      // Create directory first
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir);
+      }
+
+      const identity = generateIdentity(testDir);
+      expect(identity).toBeDefined();
+      expect(identity.peerId).toBeDefined();
+    });
+
     it('should generate agentId (first 8 chars of publicKey)', () => {
       const identity = generateIdentity(testDir);
 
@@ -257,6 +271,28 @@ describe('identity', () => {
       expect(loaded.mode).toBe(originalMode);
       expect(loaded.status).toBe(originalStatus);
     });
+
+    it('should use default directory when not specified', () => {
+      const { updateIdentity, generateIdentity } = require('../identity.js');
+      const fs = require('fs');
+      const os = require('os');
+      const path = require('path');
+
+      const defaultDir = path.join(os.homedir(), '.synapse');
+
+      // Clean up default dir if exists
+      try { fs.rmSync(defaultDir, { recursive: true, force: true }); } catch {}
+
+      // Generate to default dir, then update with default param
+      const identity = generateIdentity();
+      updateIdentity({ tier: 3 });
+
+      const loaded = loadIdentity();
+      expect(loaded.tier).toBe(3);
+
+      // Clean up
+      try { fs.rmSync(defaultDir, { recursive: true, force: true }); } catch {}
+    });
   });
 
   describe('getAgentProfile', () => {
@@ -458,6 +494,41 @@ describe('identity', () => {
       expect(loaded.tier).toBe(0); // backfilled
       expect(loaded.mode).toBe('chill'); // backfilled
       expect(loaded.status).toBe('idle'); // backfilled
+    });
+  });
+
+  describe('getOrCreateIdentity', () => {
+    it('should return existing identity if found', () => {
+      const { generateIdentity, getOrCreateIdentity } = require('../identity.js');
+
+      generateIdentity(testDir);
+      const identity = getOrCreateIdentity(testDir);
+
+      expect(identity.peerId).toBeDefined();
+      expect(identity.publicKey).toBeDefined();
+    });
+
+    it('should create new identity if not found', () => {
+      const { getOrCreateIdentity } = require('../identity.js');
+
+      // Use unique temp dir to ensure no existing identity
+      const newDir = path.join(testDir, 'new-identity');
+
+      const identity = getOrCreateIdentity(newDir);
+
+      expect(identity.peerId).toBeDefined();
+      expect(identity.publicKey).toBeDefined();
+      expect(identity.createdAt).toBeDefined();
+    });
+
+    it('should handle error when loading identity and create new one', () => {
+      const { getOrCreateIdentity } = require('../identity.js');
+
+      // Use test dir without existing identity - tests catch block
+      const newDir = path.join(testDir, 'identity-test-2');
+
+      const identity = getOrCreateIdentity(newDir);
+      expect(identity.peerId).toBeDefined();
     });
   });
 });

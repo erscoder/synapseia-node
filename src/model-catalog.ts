@@ -338,3 +338,18 @@ export function getRecommendedModel(tier: number, category?: ModelCategory): Mod
 
   return models[0];
 }
+
+/**
+ * Get full model catalog
+ */
+export function getModelCatalog(): ModelInfo[] {
+  return [...MODEL_CATALOG];
+}
+
+/**
+ * Get model by name
+ */
+export function getModelByName(name: string): ModelInfo | null {
+  return MODEL_CATALOG.find((m) => m.name === name) || null;
+}
+

@@ -33,11 +33,16 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 // src/hardware.ts
 var hardware_exports = {};
 __export(hardware_exports, {
+  buildOsString: () => buildOsString,
+  detectAppleSilicon: () => detectAppleSilicon,
   detectHardware: () => detectHardware,
+  detectNvidiaGPU: () => detectNvidiaGPU,
+  estimateAppleSiliconVram: () => estimateAppleSiliconVram,
   getCompatibleModels: () => getCompatibleModels,
   getRecommendedTier: () => getRecommendedTier,
   getSystemInfo: () => getSystemInfo,
-  getTierName: () => getTierName
+  getTierName: () => getTierName,
+  parseNvidiaSmiOutput: () => parseNvidiaSmiOutput
 });
 function detectAppleSilicon(hardware, model) {
   if (model.includes("M3 Ultra")) hardware.tier = 5;
@@ -52,8 +57,10 @@ function detectAppleSilicon(hardware, model) {
   else if (model.includes("Pro")) hardware.gpuVramGb = hardware.tier >= 3 ? 48 : 18;
   else hardware.gpuVramGb = hardware.tier === 1 ? 10 : 7;
 }
-function detectNvidiaGPU(hardware) {
-  const smiOutput = (0, import_child_process.execSync)("nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits", { encoding: "utf-8" });
+function detectNvidiaGPU(hardware, smiOutput) {
+  if (!smiOutput) {
+    smiOutput = (0, import_child_process.execSync)("nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits", { encoding: "utf-8" });
+  }
   if (smiOutput.includes("GiB")) {
     const match = smiOutput.match(/(\d+)\s*GiB/);
     if (match) hardware.gpuVramGb = parseInt(match[1]);
@@ -100,19 +107,43 @@ function getTierName(tier) {
   const names = ["CPU-Only", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Tier 5"];
   return names[tier] || "Unknown";
 }
+function buildOsString(platform3, release2, arch3, osType) {
+  if (platform3 === "darwin") return `macOS ${release2} (${arch3})`;
+  if (platform3 === "linux") return `Linux ${release2} (${arch3})`;
+  if (platform3 === "win32") return `Windows ${release2} (${arch3})`;
+  return `${osType} ${release2} (${arch3})`;
+}
+function estimateAppleSiliconVram(model) {
+  if (model.includes("M3 Ultra")) return 192;
+  if (model.includes("M3 Max")) return 128;
+  if (model.includes("M2 Ultra")) return 128;
+  if (model.includes("M2 Max")) return 96;
+  if (model.includes("M3 Pro")) return 48;
+  if (model.includes("M2 Pro")) return 18;
+  if (model.includes("M1 Ultra")) return 128;
+  if (model.includes("M1 Max")) return 96;
+  if (model.includes("M3") || model.includes("M2")) return 10;
+  if (model.includes("M1")) return 7;
+  return 0;
+}
+function parseNvidiaSmiOutput(smiOutput) {
+  const lines = smiOutput.trim().split("\n");
+  if (lines.length === 0) return { name: null, vramGb: 0 };
+  const parts = lines[0].split(",").map((s) => s.trim());
+  const name = parts[0] || "NVIDIA GPU";
+  const vramStr = parts[1] || "";
+  const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
+  if (!match) return { name, vramGb: 0 };
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  const vramGb = unit === "GiB" ? value : Math.round(value / 1024);
+  return { name, vramGb };
+}
 function getSystemInfo() {
-  const osType = os2.type();
   const osPlatform = os2.platform();
   const osRelease = os2.release();
   const arch3 = os2.arch();
-  let osString = `${osType} ${osRelease} (${arch3})`;
-  if (osPlatform === "darwin") {
-    osString = `macOS ${osRelease} (${arch3})`;
-  } else if (osPlatform === "linux") {
-    osString = `Linux ${osRelease} (${arch3})`;
-  } else if (osPlatform === "win32") {
-    osString = `Windows ${osRelease} (${arch3})`;
-  }
+  const osString = buildOsString(osPlatform, osRelease, arch3, os2.type());
   const cpuModel = os2.cpus()[0]?.model || "Unknown CPU";
   const cpuCores = os2.cpus().length || 0;
   const memoryTotal = os2.totalmem();
@@ -122,30 +153,13 @@ function getSystemInfo() {
     if (arch3 === "arm64" && osPlatform === "darwin") {
       const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string", { encoding: "utf-8" }).trim();
       gpuType = model;
-      if (model.includes("M3 Ultra")) gpuVram = 192;
-      else if (model.includes("M3 Max")) gpuVram = 128;
-      else if (model.includes("M2 Ultra")) gpuVram = 128;
-      else if (model.includes("M2 Max")) gpuVram = 96;
-      else if (model.includes("M3 Pro")) gpuVram = 48;
-      else if (model.includes("M2 Pro")) gpuVram = 18;
-      else if (model.includes("M1 Ultra")) gpuVram = 128;
-      else if (model.includes("M1 Max")) gpuVram = 96;
-      else if (model.includes("M3") || model.includes("M2")) gpuVram = 10;
-      else if (model.includes("M1")) gpuVram = 7;
+      gpuVram = estimateAppleSiliconVram(model);
     } else if (arch3 === "x86_64" || arch3 === "x64") {
       try {
         const smiOutput = (0, import_child_process.execSync)("nvidia-smi --query-gpu=name,memory.free --format=csv,noheader", { encoding: "utf-8" });
-        const lines = smiOutput.trim().split("\n");
-        if (lines.length > 0) {
-          const [name, vramStr] = lines[0].split(",").map((s) => s.trim());
-          gpuType = name || "NVIDIA GPU";
-          const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
-          if (match) {
-            const value = parseInt(match[1]);
-            const unit = match[2];
-            gpuVram = unit === "GiB" ? value : Math.round(value / 1024);
-          }
-        }
+        const parsed = parseNvidiaSmiOutput(smiOutput);
+        gpuType = parsed.name;
+        gpuVram = parsed.vramGb;
       } catch {
       }
     }

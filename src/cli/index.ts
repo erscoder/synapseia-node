@@ -2,6 +2,12 @@
 import { Command } from 'commander';
 import { getOrCreateIdentity } from '../identity.js';
 import { detectHardware, getSystemInfo, getCompatibleModels, getRecommendedTier, type Hardware } from '../hardware.js';
+import {
+  getModelCatalog,
+  getModelByName,
+  type ModelInfo,
+  type ModelCategory
+} from '../model-catalog.js';
 
 const program = new Command();
 
@@ -30,21 +36,62 @@ program
 program
   .command('start')
   .description('Start SynapseIA node')
-  .action(async () => {
+  .option('--model <name>', 'Model to use (default: recommended for hardware)')
+  .action(async (options: { model?: string }) => {
     const identity = await getOrCreateIdentity();
     const hardware = await detectHardware();
+
+    // Determine model to use
+    let selectedModel: ModelInfo | null = null;
+
+    if (options.model) {
+      // User specified a model - validate it exists
+      selectedModel = getModelByName(options.model);
+      if (!selectedModel) {
+        console.error(`Error: Model '${options.model}' not found in catalog.`);
+        console.error('Available models:');
+        const catalog = getModelCatalog();
+        catalog.forEach((model) => {
+          console.error(`  ${model.name} (${model.category}, ${model.minVram}GB VRAM)`);
+        });
+        process.exit(1);
+      }
+
+      // Check if model is compatible with hardware
+      if (hardware.tier < selectedModel.recommendedTier) {
+        console.error(
+          `Error: Model '${options.model}' requires Tier ${selectedModel.recommendedTier} or higher.`
+        );
+        console.error(`Your hardware is Tier ${hardware.tier}.`);
+        process.exit(1);
+      }
+    } else {
+      // No model specified - use recommended model for hardware
+      const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
+      if (compatibleModels.length === 0) {
+        console.error('Error: No compatible models found for your hardware.');
+        console.error('Consider using cloud LLM providers.');
+        process.exit(1);
+      }
+      selectedModel = compatibleModels[0];
+      console.log(`Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`);
+    }
 
     console.log('Starting SynapseIA node...');
     console.log(`PeerID: ${identity.peerId}`);
     console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
     console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
+    console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category})`);
+
+    // TODO: Start agent loop with selected model
+    // await startAgentLoop(config);
   });
 
 program
   .command('status')
   .description('Show node status')
   .action(async () => {
-    const identity = await getOrCreateIdentity().catch(() => null);
+    const identity = getOrCreateIdentity();
     const hardware = await detectHardware();
 
     const status: StatusOutput = {

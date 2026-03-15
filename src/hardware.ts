@@ -86,7 +86,7 @@ export function detectAppleSilicon(hardware: Hardware, model: string): void {
 
   // Apple Silicon GPU VRAM estimates
   if (model.includes('Ultra')) hardware.gpuVramGb = hardware.tier === 5 ? 192 : 128;
-  else if (model.includes('Max')) hardware.gpuVramGb = hardware.tier === 5 ? 128 : 96;
+  else if (model.includes('Max')) hardware.gpuVramGb = 96; // Max models always set tier to 4 or 3 before this, so tier===5 never happens
   else if (model.includes('Pro')) hardware.gpuVramGb = hardware.tier >= 3 ? 48 : 18;
   else hardware.gpuVramGb = hardware.tier === 1 ? 10 : 7;
 }
@@ -114,7 +114,7 @@ export function detectNvidiaGPU(hardware: Hardware, smiOutput?: string): void {
   else if (hardware.tier < 2 && hardware.gpuVramGb >= 6) hardware.tier = 1;
 }
 
-export function detectHardware(cpuOnly = false): Hardware {
+export function detectHardware(cpuOnly = false, archOverride?: string): Hardware {
   const hardware: Hardware = {
     cpuCores: os.cpus().length || 2,
     ramGb: Math.round(os.totalmem() / (1024 ** 3)),
@@ -126,7 +126,7 @@ export function detectHardware(cpuOnly = false): Hardware {
   if (!cpuOnly) {
     // Detect GPU
     try {
-      const arch = os.arch();
+      const arch = archOverride || os.arch();
       if (arch === 'arm64') {
         const model = execSync('sysctl -n machdep.cpu.brand_string').toString().trim();
         detectAppleSilicon(hardware, model);
@@ -183,9 +183,8 @@ export function estimateAppleSiliconVram(model: string): number {
 /** @internal Parse nvidia-smi CSV output — exported for testing */
 export function parseNvidiaSmiOutput(smiOutput: string): { name: string | null; vramGb: number } {
   const lines = smiOutput.trim().split('\n');
-  if (lines.length === 0) return { name: null, vramGb: 0 };
 
-  const parts = lines[0].split(',').map((s) => s.trim());
+  const parts = lines[0]?.split(',')?.map((s) => s.trim()) || [];
   const name = parts[0] || 'NVIDIA GPU';
   const vramStr = parts[1] || '';
 
@@ -201,10 +200,10 @@ export function parseNvidiaSmiOutput(smiOutput: string): { name: string | null; 
 /**
  * Get system information
  */
-export function getSystemInfo(): SystemInfo {
+export function getSystemInfo(archOverride?: string): SystemInfo {
   const osPlatform = os.platform();
   const osRelease = os.release();
-  const arch = os.arch();
+  const arch = archOverride || os.arch();
   const osString = buildOsString(osPlatform, osRelease, arch, os.type());
 
   const cpuModel = os.cpus()[0]?.model || 'Unknown CPU';
