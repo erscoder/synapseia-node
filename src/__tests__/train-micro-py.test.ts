@@ -16,7 +16,7 @@ describe('train_micro.py', () => {
     expect(existsSync(scriptPath)).toBe(true);
   });
 
-  it('should process valid JSON input and produce output', async () => {
+  it('should process valid JSON input and produce output', () => {
     // Mock result instead of running actual Python script (timeout issues)
     const mockResult = {
       progress: [
@@ -50,7 +50,7 @@ describe('train_micro.py', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it('should handle different hyperparameter configurations', async () => {
+  it('should handle different hyperparameter configurations', () => {
     const configs = [
       { activation: 'relu', normalization: 'layernorm', initScheme: 'kaiming' },
       { activation: 'silu', normalization: 'rmsnorm', initScheme: 'normal' },
@@ -77,7 +77,7 @@ describe('train_micro.py', () => {
     }
   });
 
-  it('should handle invalid JSON input gracefully', async () => {
+  it('should handle invalid JSON input gracefully', () => {
     // Mock error result
     const mockResult = {
       exitCode: 1,
@@ -89,7 +89,7 @@ describe('train_micro.py', () => {
     expect(mockResult.stderr).toContain('error');
   });
 
-  it('should use embedded sample data when file does not exist', async () => {
+  it('should use embedded sample data when file does not exist', () => {
     // Mock result for nonexistent data path
     const mockResult = {
       finalResult: {
