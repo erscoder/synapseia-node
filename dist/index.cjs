@@ -53,7 +53,7 @@ function detectAppleSilicon(hardware, model) {
   else if (model.includes("M1 Max")) hardware.tier = 2;
   else if (model.includes("M3") || model.includes("M2") || model.includes("M1")) hardware.tier = 1;
   if (model.includes("Ultra")) hardware.gpuVramGb = hardware.tier === 5 ? 192 : 128;
-  else if (model.includes("Max")) hardware.gpuVramGb = hardware.tier === 5 ? 128 : 96;
+  else if (model.includes("Max")) hardware.gpuVramGb = 96;
   else if (model.includes("Pro")) hardware.gpuVramGb = hardware.tier >= 3 ? 48 : 18;
   else hardware.gpuVramGb = hardware.tier === 1 ? 10 : 7;
 }
@@ -75,7 +75,7 @@ function detectNvidiaGPU(hardware, smiOutput) {
   else if (hardware.tier < 3 && hardware.gpuVramGb >= 10) hardware.tier = 2;
   else if (hardware.tier < 2 && hardware.gpuVramGb >= 6) hardware.tier = 1;
 }
-function detectHardware(cpuOnly = false) {
+function detectHardware(cpuOnly = false, archOverride) {
   const hardware = {
     cpuCores: os2.cpus().length || 2,
     ramGb: Math.round(os2.totalmem() / 1024 ** 3),
@@ -85,7 +85,7 @@ function detectHardware(cpuOnly = false) {
   };
   if (!cpuOnly) {
     try {
-      const arch3 = os2.arch();
+      const arch3 = archOverride || os2.arch();
       if (arch3 === "arm64") {
         const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string").toString().trim();
         detectAppleSilicon(hardware, model);
@@ -128,8 +128,7 @@ function estimateAppleSiliconVram(model) {
 }
 function parseNvidiaSmiOutput(smiOutput) {
   const lines = smiOutput.trim().split("\n");
-  if (lines.length === 0) return { name: null, vramGb: 0 };
-  const parts = lines[0].split(",").map((s) => s.trim());
+  const parts = lines[0]?.split(",")?.map((s) => s.trim()) || [];
   const name = parts[0] || "NVIDIA GPU";
   const vramStr = parts[1] || "";
   const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
@@ -139,10 +138,10 @@ function parseNvidiaSmiOutput(smiOutput) {
   const vramGb = unit === "GiB" ? value : Math.round(value / 1024);
   return { name, vramGb };
 }
-function getSystemInfo() {
+function getSystemInfo(archOverride) {
   const osPlatform = os2.platform();
   const osRelease = os2.release();
-  const arch3 = os2.arch();
+  const arch3 = archOverride || os2.arch();
   const osString = buildOsString(osPlatform, osRelease, arch3, os2.type());
   const cpuModel = os2.cpus()[0]?.model || "Unknown CPU";
   const cpuCores = os2.cpus().length || 0;
