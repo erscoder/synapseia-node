@@ -1,0 +1,46 @@
+# .dockerignore for synapse-node
+
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+dist
+build
+*.tsbuildinfo
+
+# Tests
+coverage
+.nyc_output
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Config files
+.env
+.env.*
+!.env.example
+
+# Tests
+**/*.test.ts
+**/*.spec.ts
+
+# Misc
+*.log

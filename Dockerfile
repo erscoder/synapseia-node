@@ -1,38 +1,56 @@
-FROM node:20-alpine AS builder
-
+# Multi-stage build for synapse-node
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
-# Install build deps
-RUN apk add --no-cache python3 py3-pip curl bash
 
 # Copy package files
-COPY package.json tsconfig.json ./
-RUN npm install
+COPY packages/node/package.json packages/node/package-lock.json* ./
 
-# Copy source and build
-COPY src/ ./src/
-RUN npm run build
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
 
-# ---------- runtime ----------
-FROM node:20-alpine
-
+# Stage 2: Builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-RUN apk add --no-cache python3 py3-pip curl bash
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY packages/node ./
 
-# Install Ollama
-RUN curl -fsSL https://ollama.ai/install.sh | sh || true
+# Build TypeScript
+RUN npm run build
 
-# Copy built artifacts + deps
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+# Stage 3: Runner
+FROM node:20-alpine AS runner
+WORKDIR /app
 
-# Create data dir for identity/keypair persistence
-RUN mkdir -p /app/data
+# Create non-root user
+RUN addgroup -g 1001 -S synapse && \
+    adduser -S synapse -u 1001
+
+# Copy built files
+COPY --from=builder --chown=synapse:synapse /app/dist ./dist
+COPY --from=builder --chown=synapse:synapse /app/node_modules ./node_modules
+COPY --from=deps --chown=synapse:synapse /app/package.json ./
+
+# Create directories for runtime
+RUN mkdir -p /app/data && \
+    chown synapse:synapse /app/data
+
+USER synapse
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "console.log('healthy')" || exit 1
+
+# Set environment
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
 
 # Expose inference server port
-EXPOSE 8080
+EXPOSE 3000
 
-# Entrypoint: start node in agent mode
-CMD ["node", "dist/index.cjs", "start"]
+ENTRYPOINT ["node", "dist/index.js"]
+CMD ["--help"]
