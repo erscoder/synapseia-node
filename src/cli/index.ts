@@ -8,6 +8,8 @@ import {
   type ModelInfo,
   type ModelCategory
 } from '../model-catalog.js';
+import { parseModel, type LLMModel, type LLMConfig } from '../llm-provider.js';
+import { startWorkOrderAgent } from '../work-order-agent.js';
 
 const program = new Command();
 
@@ -37,9 +39,25 @@ program
   .command('start')
   .description('Start SynapseIA node')
   .option('--model <name>', 'Model to use (default: recommended for hardware)')
-  .action(async (options: { model?: string }) => {
+  .option('--llm-url <url>', 'Custom LLM API base URL (for openai-compat provider)')
+  .option('--llm-key <key>', 'API key for cloud LLM provider')
+  .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3001)')
+  .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
+  .action(async (options: { 
+    model?: string; 
+    llmUrl?: string; 
+    llmKey?: string;
+    coordinator?: string;
+    maxIterations?: number;
+  }) => {
     const identity = await getOrCreateIdentity();
     const hardware = await detectHardware();
+
+    // LLM config for cloud providers
+    const llmConfig = {
+      apiKey: options.llmKey,
+      baseUrl: options.llmUrl,
+    };
 
     // Determine model to use
     let selectedModel: ModelInfo | null = null;
@@ -57,12 +75,20 @@ program
         process.exit(1);
       }
 
-      // Check if model is compatible with hardware
-      if (hardware.tier < selectedModel.recommendedTier) {
+      // Check if model is compatible with hardware (only for ollama models)
+      const isOllamaModel = options.model?.startsWith('ollama/') || (!options.model && hardware.hasOllama);
+      if (isOllamaModel && hardware.tier < selectedModel.recommendedTier) {
         console.error(
           `Error: Model '${options.model}' requires Tier ${selectedModel.recommendedTier} or higher.`
         );
         console.error(`Your hardware is Tier ${hardware.tier}.`);
+        process.exit(1);
+      }
+
+      // Check if API key is provided for cloud models
+      const isCloudModel = options.model?.startsWith('openai-compat/') || options.model?.startsWith('anthropic/') || options.model?.startsWith('kimi/') || options.model?.startsWith('minimax/');
+      if (isCloudModel && !options.llmKey) {
+        console.error(`Error: Cloud model '${options.model}' requires --llm-key`);
         process.exit(1);
       }
     } else {
@@ -70,7 +96,7 @@ program
       const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
       if (compatibleModels.length === 0) {
         console.error('Error: No compatible models found for your hardware.');
-        console.error('Consider using cloud LLM providers.');
+        console.error('Consider using cloud LLM providers with --model openai-compat/asi1-mini --llm-key <key>');
         process.exit(1);
       }
       selectedModel = compatibleModels[0];
@@ -81,10 +107,38 @@ program
     console.log(`PeerID: ${identity.peerId}`);
     console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
     console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
-    console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category})`);
+    console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`);
+    
+    if (options.llmUrl) {
+      console.log(`LLM URL: ${options.llmUrl}`);
+    }
 
-    // TODO: Start agent loop with selected model
-    // await startAgentLoop(config);
+    // Parse LLM model for work order agent
+    const llmModel = parseModel(options.model || 'ollama/qwen2.5:0.5b');
+    if (!llmModel) {
+      console.error(`Error: Invalid model format '${options.model}'`);
+      process.exit(1);
+    }
+
+    // Start work order agent
+    console.log('\n🚀 Starting work order agent...');
+    
+    const capabilities = hardware.hasOllama 
+      ? ['llm', 'ollama', `tier-${hardware.tier}`]
+      : ['llm', `tier-${hardware.tier}`];
+
+    await startWorkOrderAgent({
+      coordinatorUrl: options.coordinator || 'http://localhost:3001',
+      peerId: identity.peerId,
+      capabilities,
+      llmModel,
+      llmConfig: {
+        apiKey: options.llmKey,
+        baseUrl: options.llmUrl,
+      },
+      intervalMs: 30000, // 30 seconds
+      maxIterations: options.maxIterations,
+    });
   });
 
 program
