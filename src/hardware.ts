@@ -5,6 +5,8 @@
 import * as os from 'os';
 import { execSync } from 'child_process';
 
+import type { ModelCategory } from './model-catalog.js';
+
 /**
  * Model compatibility info
  */
@@ -12,6 +14,7 @@ export interface ModelInfo {
   name: string;
   minVram: number; // GB
   recommendedTier: number;
+  category?: ModelCategory; // Optional category for compatibility with model-catalog
 }
 
 /**

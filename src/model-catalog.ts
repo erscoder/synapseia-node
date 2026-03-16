@@ -17,7 +17,8 @@ export interface ModelInfo {
   name: string;
   minVram: number; // GB
   recommendedTier: number;
-  category: ModelCategory;
+  category?: ModelCategory;
+  provider?: 'ollama' | 'cloud';
   description?: string;
   isCloud?: boolean; // Cloud-only models (0 VRAM)
 }
