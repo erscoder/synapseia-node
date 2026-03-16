@@ -6,7 +6,7 @@
 import { checkOllama, generate as generateOllama } from './ollama.js';
 
 export type LLMProvider = 'ollama' | 'cloud';
-export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax';
+export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
 
 export interface LLMModel {
   provider: LLMProvider;
@@ -51,6 +51,8 @@ export const SUPPORTED_MODELS: Record<string, LLMModel> = {
   'anthropic/sonnet-4.6': { provider: 'cloud', providerId: 'anthropic', modelId: 'sonnet-4.6' },
   'kimi/k2.5': { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.5' },
   'minimax/MiniMax-M2.5': { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.5' },
+  'openai-compat/asi1-mini': { provider: 'cloud', providerId: 'openai-compat', modelId: 'asi1-mini' },
+  'openai-compat/custom': { provider: 'cloud', providerId: 'openai-compat', modelId: 'custom' },
 };
 
 /**
@@ -64,6 +66,8 @@ export const MODEL_METADATA = {
   'sonnet-4.6': { latencyMs: 200, maxTokens: 200000, costPerCall: 0.003 },
   'kimi-k2.5': { latencyMs: 300, maxTokens: 131072, costPerCall: 0.002 },
   'MiniMax-M2.5': { latencyMs: 250, maxTokens: 131072, costPerCall: 0.0015 },
+  'asi1-mini': { latencyMs: 400, maxTokens: 8192, costPerCall: 0.001 },
+  'custom': { latencyMs: 500, maxTokens: 4096 },
 };
 
 /**
@@ -197,6 +201,9 @@ async function checkCloudLLM(model: LLMModel, config?: LLMConfig): Promise<LLMSt
   if (model.providerId === 'minimax') {
     return checkMinimax(model, config.apiKey);
   }
+  if (model.providerId === 'openai-compat') {
+    return checkOpenAICompat(model, config.apiKey, config.baseUrl);
+  }
 
   return {
     available: false,
@@ -219,6 +226,9 @@ async function generateCloudLLM(model: LLMModel, prompt: string, config?: LLMCon
   }
   if (model.providerId === 'minimax') {
     return generateMinimax(model, prompt, config.apiKey, config.baseUrl);
+  }
+  if (model.providerId === 'openai-compat') {
+    return generateOpenAICompat(model, prompt, config.apiKey, config.baseUrl);
   }
 
   throw new Error('Unknown cloud provider');
@@ -417,6 +427,84 @@ async function generateMinimax(
   baseUrl?: string
 ): Promise<string> {
   const url = baseUrl ?? 'https://api.minimax.chat/v1/text/chatcompletion_v2';
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: model.modelId,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json() as any;
+    const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+    throw new Error(errorMessage);
+  }
+
+  const data = await response.json() as any;
+  return data.choices[0].message.content;
+}
+
+// --- OpenAI-compatible (ASI1, etc.) ---
+
+async function checkOpenAICompat(model: LLMModel, apiKey: string, baseUrl?: string): Promise<LLMStatus> {
+  try {
+    const modelMetadata = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
+    const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model.modelId,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 1,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as any;
+      const errorMessage = getOptionalString(error.error, 'message') ?? response.statusText;
+      throw new Error(errorMessage);
+    }
+
+    return {
+      available: true,
+      model,
+      estimatedLatencyMs: modelMetadata?.latencyMs ?? 400,
+      estimatedCostPerCall: modelMetadata?.costPerCall,
+      maxTokens: modelMetadata?.maxTokens,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      model,
+      estimatedLatencyMs: 0,
+      error: toErrorMessage(error),
+    };
+  }
+}
+
+async function generateOpenAICompat(
+  model: LLMModel,
+  prompt: string,
+  apiKey: string,
+  baseUrl?: string
+): Promise<string> {
+  const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
 
   const response = await fetch(url, {
     method: 'POST',
