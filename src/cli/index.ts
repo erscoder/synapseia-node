@@ -10,49 +10,10 @@ import {
 } from '../model-catalog.js';
 import { parseModel, type LLMModel, type LLMConfig } from '../llm-provider.js';
 import { startWorkOrderAgent, stopWorkOrderAgent, getWorkOrderAgentState } from '../work-order-agent.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
-import readline from 'readline';
+import { input, select, confirm, password } from '@inquirer/prompts';
+import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, isCloudModel, Config, CONFIG_FILE } from '../config.js';
 
 const program = new Command();
-
-// Config file path
-const CONFIG_DIR = join(homedir(), '.synapseia');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-
-interface Config {
-  coordinatorUrl: string;
-  defaultModel: string;
-  llmUrl?: string;
-  llmKey?: string;
-  wallet?: string;
-}
-
-function loadConfig(): Config {
-  if (existsSync(CONFIG_FILE)) {
-    try {
-      return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
-    } catch {
-      return defaultConfig();
-    }
-  }
-  return defaultConfig();
-}
-
-function defaultConfig(): Config {
-  return {
-    coordinatorUrl: 'http://localhost:3001',
-    defaultModel: 'ollama/qwen2.5:0.5b',
-  };
-}
-
-function saveConfig(config: Config): void {
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
-  }
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-}
 
 interface IdentityOutput {
   peerId: string;
@@ -105,30 +66,34 @@ program
     let selectedModel: ModelInfo | null = null;
 
     if (model) {
-      // User specified a model - validate it exists
-      selectedModel = getModelByName(model);
-      if (!selectedModel) {
-        console.error(`Error: Model '${model}' not found in catalog.`);
-        console.error('Available models:');
-        const catalog = getModelCatalog();
-        catalog.forEach((m) => {
-          console.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
-        });
-        process.exit(1);
-      }
+      // Determine if this is a cloud model before catalog lookup
+      const isCloudModel = model?.startsWith('openai-compat/') || model?.startsWith('anthropic/') || model?.startsWith('kimi/') || model?.startsWith('minimax/');
 
-      // Check if model is compatible with hardware (only for ollama models)
-      const isOllamaModel = model?.startsWith('ollama/') || (!model && hardware.hasOllama);
-      if (isOllamaModel && hardware.tier < selectedModel.recommendedTier) {
-        console.error(
-          `Error: Model '${model}' requires Tier ${selectedModel.recommendedTier} or higher.`
-        );
-        console.error(`Your hardware is Tier ${hardware.tier}.`);
-        process.exit(1);
+      if (!isCloudModel) {
+        // Local model - validate it exists in catalog
+        selectedModel = getModelByName(model);
+        if (!selectedModel) {
+          console.error(`Error: Model '${model}' not found in catalog.`);
+          console.error('Available models:');
+          const catalog = getModelCatalog();
+          catalog.forEach((m) => {
+            console.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
+          });
+          process.exit(1);
+        }
+
+        // Check if model is compatible with hardware (only for ollama models)
+        const isOllamaModel = model?.startsWith('ollama/') || (!model && hardware.hasOllama);
+        if (isOllamaModel && hardware.tier < selectedModel.recommendedTier) {
+          console.error(
+            `Error: Model '${model}' requires Tier ${selectedModel.recommendedTier} or higher.`
+          );
+          console.error(`Your hardware is Tier ${hardware.tier}.`);
+          process.exit(1);
+        }
       }
 
       // Check if API key is provided for cloud models
-      const isCloudModel = model?.startsWith('openai-compat/') || model?.startsWith('anthropic/') || model?.startsWith('kimi/') || model?.startsWith('minimax/');
       if (isCloudModel && !llmKey) {
         console.error(`Error: Cloud model '${model}' requires --llm-key`);
         process.exit(1);
@@ -302,36 +267,161 @@ program
       return;
     }
 
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
+    console.log('🔧 SynapseIA Configuration Wizard\n');
+
+    // Coordinator URL
+    const coordinatorUrl = await input({
+      message: 'Coordinator URL:',
+      default: config.coordinatorUrl,
+      validate: (value) => {
+        if (!value) return 'Coordinator URL is required';
+        if (!value.startsWith('http')) return 'URL must start with http:// or https://';
+        return true;
+      },
+    });
+    config.coordinatorUrl = coordinatorUrl;
+
+    // Model selection
+    const catalog = getModelCatalog();
+    const hardware = await detectHardware();
+    const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
+
+    const modelChoices = [
+      { name: 'Use recommended model for your hardware', value: 'recommended' },
+      { name: 'Select from compatible models', value: 'compatible' },
+      { name: 'Select from all models', value: 'all' },
+      { name: 'Use cloud LLM provider', value: 'cloud' },
+    ];
+
+    const modelSelectionMode = await select({
+      message: 'How would you like to configure your LLM model?',
+      choices: modelChoices,
     });
 
-    const ask = (question: string): Promise<string> => {
-      return new Promise((resolve) => {
-        rl.question(question, (answer) => resolve(answer));
+    if (modelSelectionMode === 'recommended') {
+      if (compatibleModels.length > 0) {
+        config.defaultModel = compatibleModels[0].name;
+        console.log(`✓ Selected recommended model: ${config.defaultModel}`);
+      } else {
+        console.log('⚠ No compatible local models found. Please select a cloud provider.');
+        const cloudModel = await select({
+          message: 'Select cloud LLM provider:',
+          choices: [
+            { name: 'ASI1 Mini (openai-compat)', value: 'openai-compat/asi1-mini' },
+            { name: 'ASI1 (openai-compat)', value: 'openai-compat/asi1' },
+            { name: 'Custom OpenAI-compatible', value: 'custom' },
+          ],
+        });
+        config.defaultModel = cloudModel === 'custom' ? 'openai-compat/custom' : cloudModel;
+      }
+    } else if (modelSelectionMode === 'compatible') {
+      if (compatibleModels.length === 0) {
+        console.log('⚠ No compatible models found for your hardware.');
+        const useCloud = await confirm({
+          message: 'Would you like to use a cloud LLM provider instead?',
+          default: true,
+        });
+        if (useCloud) {
+          const cloudModel = await select({
+            message: 'Select cloud LLM provider:',
+            choices: [
+              { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini' },
+              { name: 'ASI1', value: 'openai-compat/asi1' },
+            ],
+          });
+          config.defaultModel = cloudModel;
+        } else {
+          console.log('Skipping model configuration.');
+        }
+      } else {
+        const modelChoices = compatibleModels.map((m) => ({
+          name: `${m.name} (${m.minVram}GB VRAM, Tier ${m.recommendedTier})`,
+          value: m.name,
+          description: (m as ModelInfo).description,
+        }));
+        const selectedModel = await select({
+          message: 'Select a model:',
+          choices: modelChoices,
+        });
+        config.defaultModel = selectedModel;
+      }
+    } else if (modelSelectionMode === 'all') {
+      const allModelChoices = catalog.map((m) => ({
+        name: `${m.name} (${m.category}, ${m.minVram}GB VRAM)`,
+        value: m.name,
+        description: (m as ModelInfo).description,
+        disabled: m.recommendedTier > hardware.tier ? 'Requires higher tier hardware' : false,
+      }));
+      const selectedModel = await select({
+        message: 'Select a model (⚠ some may not work with your hardware):',
+        choices: allModelChoices,
       });
-    };
+      config.defaultModel = selectedModel;
+    } else if (modelSelectionMode === 'cloud') {
+      const cloudChoices = [
+        { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini', description: 'Smaller, faster model' },
+        { name: 'ASI1', value: 'openai-compat/asi1', description: 'Full ASI1 model' },
+        { name: 'Custom OpenAI-compatible endpoint', value: 'openai-compat/custom', description: 'Use your own endpoint' },
+      ];
+      const cloudModel = await select({
+        message: 'Select cloud LLM provider:',
+        choices: cloudChoices,
+      });
+      config.defaultModel = cloudModel;
+    }
 
-    console.log('🔧 SynapseIA Configuration Wizard');
-    console.log('Press Enter to keep current value\n');
+    // Cloud LLM configuration if using cloud provider
+    const usingCloudModel = isCloudModel(config.defaultModel);
+    if (usingCloudModel) {
+      console.log('\n☁️ Cloud LLM Configuration');
+      
+      const llmUrl = await input({
+        message: 'LLM API base URL:',
+        default: config.llmUrl || 'https://api.asi1.ai',
+        validate: (value) => {
+          if (!value) return 'URL is required for cloud models';
+          if (!value.startsWith('http')) return 'URL must start with http:// or https://';
+          return true;
+        },
+      });
+      config.llmUrl = llmUrl;
 
-    const coordinatorUrl = await ask(`Coordinator URL [${config.coordinatorUrl}]: `);
-    if (coordinatorUrl) config.coordinatorUrl = coordinatorUrl;
+      const hasApiKey = await confirm({
+        message: 'Do you have an API key?',
+        default: true,
+      });
 
-    const defaultModel = await ask(`Default model [${config.defaultModel}]: `);
-    if (defaultModel) config.defaultModel = defaultModel;
-
-    const llmUrl = await ask(`Custom LLM URL (optional) [${config.llmUrl || ''}]: `);
-    config.llmUrl = llmUrl || undefined;
-
-    const llmKey = await ask(`LLM API key (optional) [${config.llmKey ? '***' : ''}]: `);
-    if (llmKey) config.llmKey = llmKey;
-
-    rl.close();
+      if (hasApiKey) {
+        const llmKey = await password({
+          message: 'Enter your API key:',
+          mask: '*',
+        });
+        if (llmKey) config.llmKey = llmKey;
+      } else {
+        console.log('⚠ You will need to provide --llm-key when starting the node.');
+      }
+    } else {
+      // Local models - optional custom URL for Ollama
+      const useCustomOllama = await confirm({
+        message: 'Use custom Ollama URL?',
+        default: !!config.llmUrl,
+      });
+      if (useCustomOllama) {
+        const ollamaUrl = await input({
+          message: 'Ollama URL:',
+          default: config.llmUrl || 'http://localhost:11434',
+        });
+        config.llmUrl = ollamaUrl;
+      } else {
+        config.llmUrl = undefined;
+      }
+    }
 
     saveConfig(config);
     console.log('\n✅ Configuration saved to', CONFIG_FILE);
+    console.log('\nNext steps:');
+    console.log('  synapseia start     # Start the node with your configuration');
+    console.log('  synapseia status    # Check node status');
   });
 
 function getTierName(tier: number): string {
