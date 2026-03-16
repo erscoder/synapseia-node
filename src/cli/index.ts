@@ -114,7 +114,11 @@ program
     console.log(`PeerID: ${identity.peerId}`);
     console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
     console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
-    console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`);
+    if (selectedModel) {
+      console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`);
+    } else {
+      console.log(`Model: ${model} (cloud)`);
+    };
     
     if (llmUrl) {
       console.log(`LLM URL: ${llmUrl}`);
