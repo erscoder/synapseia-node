@@ -9,9 +9,50 @@ import {
   type ModelCategory
 } from '../model-catalog.js';
 import { parseModel, type LLMModel, type LLMConfig } from '../llm-provider.js';
-import { startWorkOrderAgent } from '../work-order-agent.js';
+import { startWorkOrderAgent, stopWorkOrderAgent, getWorkOrderAgentState } from '../work-order-agent.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import readline from 'readline';
 
 const program = new Command();
+
+// Config file path
+const CONFIG_DIR = join(homedir(), '.synapseia');
+const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
+interface Config {
+  coordinatorUrl: string;
+  defaultModel: string;
+  llmUrl?: string;
+  llmKey?: string;
+  wallet?: string;
+}
+
+function loadConfig(): Config {
+  if (existsSync(CONFIG_FILE)) {
+    try {
+      return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+    } catch {
+      return defaultConfig();
+    }
+  }
+  return defaultConfig();
+}
+
+function defaultConfig(): Config {
+  return {
+    coordinatorUrl: 'http://localhost:3001',
+    defaultModel: 'ollama/qwen2.5:0.5b',
+  };
+}
+
+function saveConfig(config: Config): void {
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+  }
+  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
 
 interface IdentityOutput {
   peerId: string;
@@ -50,45 +91,46 @@ program
     coordinator?: string;
     maxIterations?: number;
   }) => {
+    const config = loadConfig();
     const identity = await getOrCreateIdentity();
     const hardware = await detectHardware();
 
-    // LLM config for cloud providers
-    const llmConfig = {
-      apiKey: options.llmKey,
-      baseUrl: options.llmUrl,
-    };
+    // Merge config with CLI options (CLI takes precedence)
+    const coordinatorUrl = options.coordinator || config.coordinatorUrl;
+    const model = options.model || config.defaultModel;
+    const llmUrl = options.llmUrl || config.llmUrl;
+    const llmKey = options.llmKey || config.llmKey;
 
     // Determine model to use
     let selectedModel: ModelInfo | null = null;
 
-    if (options.model) {
+    if (model) {
       // User specified a model - validate it exists
-      selectedModel = getModelByName(options.model);
+      selectedModel = getModelByName(model);
       if (!selectedModel) {
-        console.error(`Error: Model '${options.model}' not found in catalog.`);
+        console.error(`Error: Model '${model}' not found in catalog.`);
         console.error('Available models:');
         const catalog = getModelCatalog();
-        catalog.forEach((model) => {
-          console.error(`  ${model.name} (${model.category}, ${model.minVram}GB VRAM)`);
+        catalog.forEach((m) => {
+          console.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
         });
         process.exit(1);
       }
 
       // Check if model is compatible with hardware (only for ollama models)
-      const isOllamaModel = options.model?.startsWith('ollama/') || (!options.model && hardware.hasOllama);
+      const isOllamaModel = model?.startsWith('ollama/') || (!model && hardware.hasOllama);
       if (isOllamaModel && hardware.tier < selectedModel.recommendedTier) {
         console.error(
-          `Error: Model '${options.model}' requires Tier ${selectedModel.recommendedTier} or higher.`
+          `Error: Model '${model}' requires Tier ${selectedModel.recommendedTier} or higher.`
         );
         console.error(`Your hardware is Tier ${hardware.tier}.`);
         process.exit(1);
       }
 
       // Check if API key is provided for cloud models
-      const isCloudModel = options.model?.startsWith('openai-compat/') || options.model?.startsWith('anthropic/') || options.model?.startsWith('kimi/') || options.model?.startsWith('minimax/');
-      if (isCloudModel && !options.llmKey) {
-        console.error(`Error: Cloud model '${options.model}' requires --llm-key`);
+      const isCloudModel = model?.startsWith('openai-compat/') || model?.startsWith('anthropic/') || model?.startsWith('kimi/') || model?.startsWith('minimax/');
+      if (isCloudModel && !llmKey) {
+        console.error(`Error: Cloud model '${model}' requires --llm-key`);
         process.exit(1);
       }
     } else {
@@ -109,14 +151,14 @@ program
     console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
     console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`);
     
-    if (options.llmUrl) {
-      console.log(`LLM URL: ${options.llmUrl}`);
+    if (llmUrl) {
+      console.log(`LLM URL: ${llmUrl}`);
     }
 
     // Parse LLM model for work order agent
-    const llmModel = parseModel(options.model || 'ollama/qwen2.5:0.5b');
+    const llmModel = parseModel(model || 'ollama/qwen2.5:0.5b');
     if (!llmModel) {
-      console.error(`Error: Invalid model format '${options.model}'`);
+      console.error(`Error: Invalid model format '${model}'`);
       process.exit(1);
     }
 
@@ -128,13 +170,13 @@ program
       : ['llm', `tier-${hardware.tier}`];
 
     await startWorkOrderAgent({
-      coordinatorUrl: options.coordinator || 'http://localhost:3001',
+      coordinatorUrl: coordinatorUrl,
       peerId: identity.peerId,
       capabilities,
       llmModel,
       llmConfig: {
-        apiKey: options.llmKey,
-        baseUrl: options.llmUrl,
+        apiKey: llmKey,
+        baseUrl: llmUrl,
       },
       intervalMs: 30000, // 30 seconds
       maxIterations: options.maxIterations,
@@ -236,6 +278,60 @@ program
     }
     console.log();
     console.log('═══════════════════════════════════════════════════');
+  });
+
+program
+  .command('stop')
+  .description('Stop the running SynapseIA node')
+  .action(() => {
+    console.log('🛑 Stopping SynapseIA node...');
+    stopWorkOrderAgent();
+    console.log('✅ Node stopped');
+  });
+
+program
+  .command('config')
+  .description('Interactive configuration wizard')
+  .option('--show', 'Show current configuration')
+  .action(async (options: { show?: boolean }) => {
+    const config = loadConfig();
+
+    if (options.show) {
+      console.log('Current configuration:');
+      console.log(JSON.stringify(config, null, 2));
+      return;
+    }
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const ask = (question: string): Promise<string> => {
+      return new Promise((resolve) => {
+        rl.question(question, (answer) => resolve(answer));
+      });
+    };
+
+    console.log('🔧 SynapseIA Configuration Wizard');
+    console.log('Press Enter to keep current value\n');
+
+    const coordinatorUrl = await ask(`Coordinator URL [${config.coordinatorUrl}]: `);
+    if (coordinatorUrl) config.coordinatorUrl = coordinatorUrl;
+
+    const defaultModel = await ask(`Default model [${config.defaultModel}]: `);
+    if (defaultModel) config.defaultModel = defaultModel;
+
+    const llmUrl = await ask(`Custom LLM URL (optional) [${config.llmUrl || ''}]: `);
+    config.llmUrl = llmUrl || undefined;
+
+    const llmKey = await ask(`LLM API key (optional) [${config.llmKey ? '***' : ''}]: `);
+    if (llmKey) config.llmKey = llmKey;
+
+    rl.close();
+
+    saveConfig(config);
+    console.log('\n✅ Configuration saved to', CONFIG_FILE);
   });
 
 function getTierName(tier: number): string {

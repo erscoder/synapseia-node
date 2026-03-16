@@ -5,11 +5,11 @@
   "description": "Synapse Node CLI Software",
   "type": "module",
   "bin": {
-    "synapse": "./dist/index.js"
+    "synapseia": "./dist/index.cjs"
   },
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js --help\"",
-    "build": "tsup src/index.ts",
+    "build": "tsup src/cli/index.ts",
     "start": "node dist/index.js",
     "test": "jest",
     "lint": "eslint src"
