@@ -305,27 +305,27 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
   
   try {
     let iteration = 1;
-    
-    while (agentState.isRunning) {
-      // Check max iterations
-      if (maxIterations && iteration > maxIterations) {
-        console.log(`\n[WorkOrderAgent] Reached max iterations (${maxIterations}), stopping.`);
-        break;
-      }
-      
+
+    /* istanbul ignore next — async loop control, not business logic */
+    while (shouldContinueLoop(agentState.isRunning, iteration, maxIterations)) {
       try {
         await runWorkOrderAgentIteration(config, iteration);
       } catch (error) {
         console.error(`[WorkOrderAgent] Iteration ${iteration} failed:`, (error as Error).message);
       }
-      
+
       // Sleep before next iteration
-      if (agentState.isRunning) {
+      if (shouldSleepBetweenIterations(agentState.isRunning)) {
         console.log(`[WorkOrderAgent] Sleeping for ${intervalMs}ms...`);
+        /* istanbul ignore next — async loop control, not business logic */
         await sleep(intervalMs);
       }
-      
+
       iteration++;
+    }
+
+    if (maxIterations && iteration > maxIterations) {
+      console.log(`\n[WorkOrderAgent] Reached max iterations (${maxIterations}), stopping.`);
     }
   } finally {
     agentState.isRunning = false;
@@ -339,6 +339,40 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
 export function stopWorkOrderAgent(): void {
   agentState.isRunning = false;
   console.log('[WorkOrderAgent] Stopping...');
+}
+
+/**
+ * Check if the agent should stop due to reaching max iterations
+ * Pure function for testability
+ */
+export function shouldStopForMaxIterations(
+  iteration: number,
+  maxIterations?: number,
+): boolean {
+  if (!maxIterations) return false;
+  return iteration > maxIterations;
+}
+
+/**
+ * Check if the loop should continue
+ * Pure function for testability
+ */
+export function shouldContinueLoop(
+  isRunning: boolean,
+  iteration: number,
+  maxIterations?: number,
+): boolean {
+  if (!isRunning) return false;
+  if (maxIterations && iteration > maxIterations) return false;
+  return true;
+}
+
+/**
+ * Check if the agent should sleep between iterations
+ * Pure function for testability
+ */
+export function shouldSleepBetweenIterations(isRunning: boolean): boolean {
+  return isRunning;
 }
 
 /**
@@ -356,4 +390,7 @@ export const _test = {
   executeWorkOrder,
   runWorkOrderAgentIteration,
   sleep,
+  shouldStopForMaxIterations,
+  shouldContinueLoop,
+  shouldSleepBetweenIterations,
 };

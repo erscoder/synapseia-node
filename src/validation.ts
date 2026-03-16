@@ -27,7 +27,7 @@ export function generateChallenge(
   roundId?: string,
   difficulty: number = 1,
 ): PulseChallenge {
-  const finalRoundId = roundId || `round-${Date.now()}`;
+  const finalRoundId = roundId || `round-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const payload = Buffer.from(randomBytes(32)).toString('hex');
 
   return {

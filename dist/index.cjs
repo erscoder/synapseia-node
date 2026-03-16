@@ -85,11 +85,11 @@ function detectHardware(cpuOnly = false, archOverride) {
   };
   if (!cpuOnly) {
     try {
-      const arch3 = archOverride || os2.arch();
-      if (arch3 === "arm64") {
+      const arch2 = archOverride || os2.arch();
+      if (arch2 === "arm64") {
         const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string").toString().trim();
         detectAppleSilicon(hardware, model);
-      } else if (arch3 === "x86") {
+      } else if (arch2 === "x86") {
         detectNvidiaGPU(hardware);
       }
     } catch {
@@ -107,11 +107,11 @@ function getTierName(tier) {
   const names = ["CPU-Only", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Tier 5"];
   return names[tier] || "Unknown";
 }
-function buildOsString(platform3, release2, arch3, osType) {
-  if (platform3 === "darwin") return `macOS ${release2} (${arch3})`;
-  if (platform3 === "linux") return `Linux ${release2} (${arch3})`;
-  if (platform3 === "win32") return `Windows ${release2} (${arch3})`;
-  return `${osType} ${release2} (${arch3})`;
+function buildOsString(platform2, release2, arch2, osType) {
+  if (platform2 === "darwin") return `macOS ${release2} (${arch2})`;
+  if (platform2 === "linux") return `Linux ${release2} (${arch2})`;
+  if (platform2 === "win32") return `Windows ${release2} (${arch2})`;
+  return `${osType} ${release2} (${arch2})`;
 }
 function estimateAppleSiliconVram(model) {
   if (model.includes("M3 Ultra")) return 192;
@@ -141,19 +141,19 @@ function parseNvidiaSmiOutput(smiOutput) {
 function getSystemInfo(archOverride) {
   const osPlatform = os2.platform();
   const osRelease = os2.release();
-  const arch3 = archOverride || os2.arch();
-  const osString = buildOsString(osPlatform, osRelease, arch3, os2.type());
+  const arch2 = archOverride || os2.arch();
+  const osString = buildOsString(osPlatform, osRelease, arch2, os2.type());
   const cpuModel = os2.cpus()[0]?.model || "Unknown CPU";
   const cpuCores = os2.cpus().length || 0;
   const memoryTotal = os2.totalmem();
   let gpuType = null;
   let gpuVram = 0;
   try {
-    if (arch3 === "arm64" && osPlatform === "darwin") {
+    if (arch2 === "arm64" && osPlatform === "darwin") {
       const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string", { encoding: "utf-8" }).trim();
       gpuType = model;
       gpuVram = estimateAppleSiliconVram(model);
-    } else if (arch3 === "x86_64" || arch3 === "x64") {
+    } else if (arch2 === "x86_64" || arch2 === "x64") {
       try {
         const smiOutput = (0, import_child_process.execSync)("nvidia-smi --query-gpu=name,memory.free --format=csv,noheader", { encoding: "utf-8" });
         const parsed = parseNvidiaSmiOutput(smiOutput);
@@ -218,11 +218,8 @@ var init_hardware = __esm({
   }
 });
 
-// src/index.ts
+// src/cli/index.ts
 var import_commander = require("commander");
-var fs = __toESM(require("fs"), 1);
-var path2 = __toESM(require("path"), 1);
-var os3 = __toESM(require("os"), 1);
 
 // src/identity.ts
 var import_fs = require("fs");
@@ -285,87 +282,229 @@ function loadIdentity(identityDir = IDENTITY_DIR) {
   }
   return identity;
 }
-function getAgentProfile(identity) {
-  return {
-    agentId: identity.agentId || identity.publicKey.slice(0, 8),
-    peerId: identity.peerId,
-    tier: identity.tier || 0,
-    mode: identity.mode || "chill",
-    status: identity.status || "idle",
-    createdAt: identity.createdAt,
-    publicKey: identity.publicKey
-  };
+function getOrCreateIdentity(identityDir = IDENTITY_DIR) {
+  try {
+    return loadIdentity(identityDir);
+  } catch {
+    return generateIdentity(identityDir);
+  }
 }
 
-// src/index.ts
+// src/cli/index.ts
 init_hardware();
 
-// src/heartbeat.ts
-var import_axios = __toESM(require("axios"), 1);
-async function sendHeartbeat(coordinatorUrl, identity, hardware) {
-  const startTime = Date.now();
-  const capabilities = determineCapabilities(hardware);
-  const payload = {
-    peerId: identity.peerId,
-    walletAddress: null,
-    // TODO: connect wallet
-    tier: hardware.tier,
-    capabilities,
-    uptime: startTime
-    // Process start time (simplified)
-  };
-  let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const client = import_axios.default.create({
-        baseURL: coordinatorUrl,
-        timeout: 5e3,
-        headers: {
-          "Content-Type": "application/json"
-        }
-      });
-      const response = await client.post("/peer/heartbeat", payload);
-      return response.data;
-    } catch (error) {
-      lastError = error;
-      console.warn(`Heartbeat attempt ${attempt + 1} failed: ${error.message}`);
-      if (attempt < 2) {
-        const delayMs = 1e3 * Math.pow(2, attempt);
-        await new Promise((resolve2) => setTimeout(resolve2, delayMs));
-      }
-    }
+// src/model-catalog.ts
+var MODEL_CATALOG = [
+  // Embedding models
+  {
+    name: "all-minilm-l6-v2",
+    minVram: 0.1,
+    recommendedTier: 0,
+    category: "embedding",
+    description: "Lightweight embedding model for vector search"
+  },
+  // General models (small)
+  {
+    name: "qwen2.5-0.5b",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "general",
+    description: "Tiny general-purpose model"
+  },
+  {
+    name: "gemma-3-1b-web",
+    minVram: 2,
+    recommendedTier: 1,
+    category: "general",
+    description: "Small web-optimized general model"
+  },
+  {
+    name: "phi-2",
+    minVram: 2,
+    recommendedTier: 1,
+    category: "general",
+    description: "Microsoft Phi-2 small model"
+  },
+  {
+    name: "tiny-vicuna-1b",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "general",
+    description: "Tiny general-purpose model"
+  },
+  {
+    name: "home-3b-v3",
+    minVram: 2,
+    recommendedTier: 1,
+    category: "general",
+    description: "Home-3B v3 small model"
+  },
+  {
+    name: "qwen2-0.5b",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "general",
+    description: "Qwen2 0.5B tiny model"
+  },
+  {
+    name: "qwen2-0.5b-instruct",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "general",
+    description: "Qwen2 0.5B instruct-tuned"
+  },
+  // Code models (small)
+  {
+    name: "qwen2.5-coder-0.5b",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "code",
+    description: "Tiny code model"
+  },
+  {
+    name: "qwen2.5-coder-1.5b",
+    minVram: 2,
+    recommendedTier: 1,
+    category: "code",
+    description: "Small code model"
+  },
+  // General models (medium)
+  {
+    name: "qwen2.5-coder-3b",
+    minVram: 3,
+    recommendedTier: 2,
+    category: "code",
+    description: "Medium code model"
+  },
+  {
+    name: "gemma-3-1b",
+    minVram: 2,
+    recommendedTier: 1,
+    category: "general",
+    description: "Google Gemma 3 1B"
+  },
+  {
+    name: "gemma-3-4b",
+    minVram: 4,
+    recommendedTier: 2,
+    category: "general",
+    description: "Google Gemma 3 4B"
+  },
+  // Code models (medium-large)
+  {
+    name: "qwen2.5-coder-7b",
+    minVram: 6,
+    recommendedTier: 2,
+    category: "code",
+    description: "7B code model"
+  },
+  {
+    name: "glm-4-9b",
+    minVram: 8,
+    recommendedTier: 2,
+    category: "general",
+    description: "GLM-4 9B general model"
+  },
+  {
+    name: "mistral-7b-instruct",
+    minVram: 6,
+    recommendedTier: 2,
+    category: "general",
+    description: "Mistral 7B instruct model"
+  },
+  // General models (large)
+  {
+    name: "gemma-3-12b",
+    minVram: 10,
+    recommendedTier: 3,
+    category: "general",
+    description: "Google Gemma 3 12B"
+  },
+  {
+    name: "llama-3.1-8b-instruct",
+    minVram: 10,
+    recommendedTier: 3,
+    category: "general",
+    description: "Meta Llama 3.1 8B instruct"
+  },
+  {
+    name: "llama-3.2-1b-instruct",
+    minVram: 1,
+    recommendedTier: 1,
+    category: "general",
+    description: "Meta Llama 3.2 1B instruct"
+  },
+  // Code models (large)
+  {
+    name: "qwen2.5-coder-14b",
+    minVram: 12,
+    recommendedTier: 3,
+    category: "code",
+    description: "14B code model"
+  },
+  // General models (very large)
+  {
+    name: "gpt-oss-20b",
+    minVram: 16,
+    recommendedTier: 4,
+    category: "general",
+    description: "20B general model"
+  },
+  {
+    name: "gemma-3-27b",
+    minVram: 20,
+    recommendedTier: 4,
+    category: "general",
+    description: "Google Gemma 3 27B"
+  },
+  // Code models (very large)
+  {
+    name: "qwen2.5-coder-32b",
+    minVram: 24,
+    recommendedTier: 4,
+    category: "code",
+    description: "32B code model (recommended)"
+  },
+  // General models (ultra-large)
+  {
+    name: "glm-4.7-flash",
+    minVram: 24,
+    recommendedTier: 4,
+    category: "general",
+    description: "GLM-4.7 Flash ultra model"
+  },
+  {
+    name: "qwen3-coder-30b-a3b",
+    minVram: 24,
+    recommendedTier: 4,
+    category: "code",
+    description: "Qwen3 Coder 30B A3B"
   }
-  throw new Error(`Failed to send heartbeat after 3 attempts: ${lastError?.message}`);
+];
+var CLOUD_MODELS = [
+  {
+    name: "gemini-2.0-flash",
+    minVram: 0,
+    recommendedTier: 0,
+    category: "general",
+    description: "Google Gemini 2.0 Flash (cloud-only)",
+    isCloud: true
+  }
+];
+var FULL_CATALOG = [...MODEL_CATALOG, ...CLOUD_MODELS];
+function getModelCatalog() {
+  return [...MODEL_CATALOG];
 }
-function determineCapabilities(hardware) {
-  const capabilities = [];
-  capabilities.push("cpu");
-  if (hardware.hasOllama) {
-    capabilities.push("inference");
-  }
-  if (hardware.hasOllama && hardware.ramGb >= 8) {
-    capabilities.push("embedding");
-  }
-  return capabilities;
-}
-function startPeriodicHeartbeat(coordinatorUrl, identity, hardware, intervalMs = 3e4) {
-  const intervalId = setInterval(async () => {
-    try {
-      await sendHeartbeat(coordinatorUrl, identity, hardware);
-      console.log("Heartbeat sent successfully");
-    } catch (error) {
-      console.error("Heartbeat failed:", error.message);
-    }
-  }, intervalMs);
-  return () => clearInterval(intervalId);
+function getModelByName(name) {
+  return MODEL_CATALOG.find((m) => m.name === name) || null;
 }
 
 // src/ollama.ts
-var import_axios2 = __toESM(require("axios"), 1);
+var import_axios = __toESM(require("axios"), 1);
 var import_ollama = require("ollama");
 async function checkOllama(url = "http://localhost:11434") {
   try {
-    const response = await import_axios2.default.get(`${url}/api/tags`, {
+    const response = await import_axios.default.get(`${url}/api/tags`, {
       timeout: 5e3
     });
     const models = response.data.models.map((m) => m.name);
@@ -433,10 +572,26 @@ async function generate(prompt, model, url = "http://localhost:11434") {
 }
 
 // src/llm-provider.ts
+var SUPPORTED_MODELS = {
+  "ollama/qwen2.5:0.5b": { provider: "ollama", providerId: "", modelId: "qwen2.5:0.5b" },
+  "ollama/qwen2.5:3b": { provider: "ollama", providerId: "", modelId: "qwen2.5:3b" },
+  "ollama/gemma3:4b": { provider: "ollama", providerId: "", modelId: "gemma3:4b" },
+  "ollama/llama3.2:3b": { provider: "ollama", providerId: "", modelId: "llama3.2:3b" },
+  "anthropic/sonnet-4.6": { provider: "cloud", providerId: "anthropic", modelId: "sonnet-4.6" },
+  "kimi/k2.5": { provider: "cloud", providerId: "moonshot", modelId: "kimi-k2.5" },
+  "minimax/MiniMax-M2.5": { provider: "cloud", providerId: "minimax", modelId: "MiniMax-M2.5" },
+  "openai-compat/asi1-mini": { provider: "cloud", providerId: "openai-compat", modelId: "asi1-mini" },
+  "openai-compat/custom": { provider: "cloud", providerId: "openai-compat", modelId: "custom" }
+};
 function getOptionalString(obj, key) {
   if (obj == null) return void 0;
   const value = obj[key];
   return typeof value === "string" ? value : void 0;
+}
+function parseModel(modelStr) {
+  const model = SUPPORTED_MODELS[modelStr];
+  if (!model) return null;
+  return model;
 }
 async function generateLLM(model, prompt, config) {
   if (model.provider === "ollama") {
@@ -462,6 +617,9 @@ async function generateCloudLLM(model, prompt, config) {
   }
   if (model.providerId === "minimax") {
     return generateMinimax(model, prompt, config.apiKey, config.baseUrl);
+  }
+  if (model.providerId === "openai-compat") {
+    return generateOpenAICompat(model, prompt, config.apiKey, config.baseUrl);
   }
   throw new Error("Unknown cloud provider");
 }
@@ -543,388 +701,183 @@ async function generateMinimax(model, prompt, apiKey, baseUrl) {
   const data = await response.json();
   return data.choices[0].message.content;
 }
-
-// src/mutation-engine.ts
-async function proposeMutation(topExperiments, bestLoss, capabilities) {
-  if (topExperiments.length === 0) {
-    return {
-      model: { provider: "ollama", providerId: "", modelId: "qwen2.5:0.5b" },
-      type: "explore",
-      baseExperimentId: null,
-      hyperparams: {
-        learningRate: 1e-3,
-        batchSize: 32,
-        hiddenDim: 128,
-        numLayers: 4,
-        numHeads: 4,
-        activation: "gelu",
-        normalization: "layernorm",
-        initScheme: "xavier",
-        warmupSteps: 100,
-        weightDecay: 0.01,
-        maxTrainSeconds: capabilities.includes("gpu") ? 300 : 120
-      },
-      reasoning: "Starting with default configuration for initial exploration"
-    };
-  }
-  const prompt = buildPrompt(topExperiments, bestLoss, capabilities);
-  const model = { provider: "ollama", providerId: "", modelId: "qwen2.5:0.5b" };
-  const response = await generateLLM(model, prompt);
-  return parseMutationResponse(response, topExperiments, bestLoss, capabilities);
-}
-function buildPrompt(topExperiments, bestLoss, capabilities) {
-  const expsJson = JSON.stringify(topExperiments.slice(0, 5), null, 2);
-  const hasGpu = capabilities.includes("gpu");
-  return `You are a machine learning researcher. Given these experiment results:
-
-${expsJson}
-
-The best loss so far is ${bestLoss.toFixed(4)}.
-
-Available hardware: ${capabilities.join(" and ")}.
-
-Propose a new hyperparameter configuration that could improve the loss.
-Reason about WHY your changes should work based on the patterns you see.
-
-Output JSON with this structure:
-{
-  "type": "explore" or "improve",
-  "baseExperimentId": null or "experiment_id_string",
-  "hyperparams": {
-    "learningRate": 0.001,
-    "batchSize": 32,
-    "hiddenDim": 128,
-    "numLayers": 4,
-    "numHeads": 4,
-    "activation": "gelu" or "silu" or "relu",
-    "normalization": "layernorm" or "rmsnorm",
-    "initScheme": "xavier" or "kaiming" or "normal",
-    "warmupSteps": 100,
-    "weightDecay": 0.01,
-    "maxTrainSeconds": ${hasGpu ? 300 : 120}
-  },
-  "reasoning": "Explanation of why this mutation should work"
-}
-
-Constraints:
-- learningRate: 0.0001 to 0.01
-- batchSize: 16, 32, 64, 128
-- hiddenDim: 64, 128, 192, 256
-- numLayers: 2 to 8
-- numHeads: 2, 4, 8
-- activation: 'gelu', 'silu', 'relu'
-- normalization: 'layernorm', 'rmsnorm'
-- initScheme: 'xavier', 'kaiming', 'normal'`;
-}
-function parseMutationResponse(response, topExperiments, bestLoss, capabilities) {
-  const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || response.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse JSON from LLM response");
-  }
-  const jsonStr = jsonMatch[1] || jsonMatch[0];
-  const parsed = JSON.parse(jsonStr);
-  const hyperparams = {
-    learningRate: clampValue(parsed.hyperparams?.learningRate ?? 1e-3, 1e-4, 0.01),
-    batchSize: clampValueToBatch(parsed.hyperparams?.batchSize ?? 32),
-    hiddenDim: clampToDimension(parsed.hyperparams?.hiddenDim ?? 128),
-    numLayers: clampValue(parsed.hyperparams?.numLayers ?? 4, 2, 8),
-    numHeads: clampToHeads(parsed.hyperparams?.numHeads ?? 4),
-    activation: validateActivation(parsed.hyperparams?.activation),
-    normalization: validateNormalization(parsed.hyperparams?.normalization),
-    initScheme: validateInitScheme(parsed.hyperparams?.initScheme),
-    warmupSteps: clampValue(parsed.hyperparams?.warmupSteps ?? 100, 0, 1e3),
-    weightDecay: clampValue(parsed.hyperparams?.weightDecay ?? 0.01, 0, 0.1),
-    maxTrainSeconds: capabilities.includes("gpu") ? clampValue(parsed.hyperparams?.maxTrainSeconds ?? 300, 120, 600) : clampValue(parsed.hyperparams?.maxTrainSeconds ?? 120, 60, 300)
-  };
-  const model = { provider: "ollama", providerId: "", modelId: "qwen2.5:0.5b" };
-  return {
-    model,
-    type: parsed.type === "explore" || parsed.type === "improve" ? parsed.type : "explore",
-    baseExperimentId: parsed.baseExperimentId || null,
-    hyperparams,
-    reasoning: parsed.reasoning || "Proposed mutation"
-  };
-}
-function clampValue(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-function clampValueToBatch(value) {
-  const validBatchSizes = [16, 32, 64, 128];
-  const closest = validBatchSizes.reduce(
-    (prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
-  );
-  return closest;
-}
-function clampToDimension(value) {
-  const validDims = [64, 128, 192, 256];
-  const closest = validDims.reduce(
-    (prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
-  );
-  return closest;
-}
-function clampToHeads(value) {
-  const validHeads = [2, 4, 8];
-  const closest = validHeads.reduce(
-    (prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
-  );
-  return closest;
-}
-function validateActivation(value) {
-  const valid = ["gelu", "silu", "relu"];
-  return valid.includes(value) ? value : "gelu";
-}
-function validateNormalization(value) {
-  const valid = ["layernorm", "rmsnorm"];
-  return valid.includes(value) ? value : "layernorm";
-}
-function validateInitScheme(value) {
-  const valid = ["xavier", "kaiming", "normal"];
-  return valid.includes(value) ? value : "xavier";
-}
-
-// src/trainer.ts
-var import_child_process2 = require("child_process");
-var import_path = require("path");
-async function trainMicroModel(options) {
-  const {
-    proposal,
-    datasetPath,
-    hardware,
-    pythonScriptPath = (0, import_path.resolve)(process.cwd(), "scripts/train_micro.py"),
-    runNumber = 1
-  } = options;
-  const startTime = Date.now();
-  const lossCurve = [];
-  const hyperparamsPayload = {
-    ...proposal.hyperparams,
-    dataPath: datasetPath,
-    hardware
-  };
-  return new Promise((resolve2, reject) => {
-    const pythonProcess = (0, import_child_process2.spawn)("python3", [pythonScriptPath], {
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    let finalResult = null;
-    pythonProcess.stdin.write(JSON.stringify(hyperparamsPayload));
-    pythonProcess.stdin.end();
-    pythonProcess.stdout.on("data", (data) => {
-      const lines = data.toString().split("\n").filter((line) => line.trim());
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.step !== void 0 && parsed.loss !== void 0) {
-            lossCurve.push(parsed.loss);
-          }
-          if (parsed.result) {
-            finalResult = {
-              finalLoss: parsed.result.finalLoss,
-              valLoss: parsed.result.valLoss
-            };
-          }
-        } catch {
+async function generateOpenAICompat(model, prompt, apiKey, baseUrl) {
+  const url = baseUrl ? `${baseUrl}/v1/chat/completions` : "https://api.openai.com/v1/chat/completions";
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model.modelId,
+      messages: [
+        {
+          role: "user",
+          content: prompt
         }
-      }
-      stdout += data.toString();
-    });
-    pythonProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-    pythonProcess.on("close", (code) => {
-      const durationMs = Date.now() - startTime;
-      if (code !== 0) {
-        reject(new Error(`Training failed with exit code ${code}: ${stderr || "Unknown error"}`));
-        return;
-      }
-      if (!finalResult) {
-        reject(new Error("Training completed but no result received from Python script"));
-        return;
-      }
-      const improvementPercent = 0;
-      const result = {
-        runNumber,
-        finalLoss: finalResult.finalLoss ?? 0,
-        valLoss: finalResult.valLoss ?? 0,
-        improvementPercent,
-        durationMs,
-        config: proposal.hyperparams,
-        lossCurve,
-        hardwareUsed: hardware
-      };
-      resolve2(result);
-    });
-    pythonProcess.on("error", (error) => {
-      reject(new Error(`Failed to spawn Python process: ${error.message}`));
-    });
+      ]
+    })
   });
-}
-function validateTrainingConfig(proposal) {
-  const { hyperparams } = proposal;
-  if (hyperparams.learningRate < 1e-4 || hyperparams.learningRate > 0.01) {
-    return { valid: false, error: "learningRate must be between 0.0001 and 0.01" };
+  if (!response.ok) {
+    const error = await response.json();
+    const errorMessage = getOptionalString(error.error, "message") ?? response.statusText;
+    throw new Error(errorMessage);
   }
-  const validBatchSizes = [16, 32, 64, 128];
-  if (!validBatchSizes.includes(hyperparams.batchSize)) {
-    return { valid: false, error: `batchSize must be one of: ${validBatchSizes.join(", ")}` };
-  }
-  const validHiddenDims = [64, 128, 192, 256];
-  if (!validHiddenDims.includes(hyperparams.hiddenDim)) {
-    return { valid: false, error: `hiddenDim must be one of: ${validHiddenDims.join(", ")}` };
-  }
-  if (hyperparams.numLayers < 2 || hyperparams.numLayers > 8) {
-    return { valid: false, error: "numLayers must be between 2 and 8" };
-  }
-  const validNumHeads = [2, 4, 8];
-  if (!validNumHeads.includes(hyperparams.numHeads)) {
-    return { valid: false, error: `numHeads must be one of: ${validNumHeads.join(", ")}` };
-  }
-  const validActivations = ["gelu", "silu", "relu"];
-  if (!validActivations.includes(hyperparams.activation)) {
-    return { valid: false, error: `activation must be one of: ${validActivations.join(", ")}` };
-  }
-  const validNormalizations = ["layernorm", "rmsnorm"];
-  if (!validNormalizations.includes(hyperparams.normalization)) {
-    return { valid: false, error: `normalization must be one of: ${validNormalizations.join(", ")}` };
-  }
-  const validInitSchemes = ["xavier", "kaiming", "normal"];
-  if (!validInitSchemes.includes(hyperparams.initScheme)) {
-    return { valid: false, error: `initScheme must be one of: ${validInitSchemes.join(", ")}` };
-  }
-  if (hyperparams.maxTrainSeconds < 10 || hyperparams.maxTrainSeconds > 600) {
-    return { valid: false, error: "maxTrainSeconds must be between 10 and 600" };
-  }
-  return { valid: true };
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
 
-// src/agent-loop.ts
-var loopState = {
+// src/work-order-agent.ts
+var agentState = {
   iteration: 0,
-  bestLoss: Infinity,
-  totalExperiments: 0,
+  totalWorkOrdersCompleted: 0,
+  totalRewardsEarned: 0n,
   isRunning: false
 };
-async function fetchTopExperiments(coordinatorUrl, limit = 5) {
+async function fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities) {
   try {
-    const response = await fetch(`${coordinatorUrl}/experiments?limit=${limit}&status=completed`);
+    const capabilitiesParam = capabilities.join(",");
+    const url = `${coordinatorUrl}/work-orders/available?peerId=${peerId}&capabilities=${capabilitiesParam}`;
+    const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to fetch experiments: ${response.statusText}`);
+      if (response.status === 404) {
+        return [];
+      }
+      throw new Error(`Failed to fetch work orders: ${response.statusText}`);
     }
     const data = await response.json();
-    return (data.experiments || []).filter((exp) => exp.valLoss !== null && exp.valLoss !== void 0).sort((a, b) => (a.valLoss ?? Infinity) - (b.valLoss ?? Infinity)).slice(0, limit);
+    return data || [];
   } catch (error) {
-    console.warn("Failed to fetch experiments:", error.message);
+    console.warn("[WorkOrderAgent] Failed to fetch work orders:", error.message);
     return [];
   }
 }
-async function createExperiment(coordinatorUrl, proposal, peerId, tier) {
+async function acceptWorkOrder(coordinatorUrl, workOrderId, peerId) {
   try {
-    const response = await fetch(`${coordinatorUrl}/experiments`, {
+    const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "micro-transformer-120k",
-        hyperparams: proposal.hyperparams,
-        tier
+        workOrderId,
+        assigneeAddress: peerId
       })
     });
     if (!response.ok) {
-      throw new Error(`Failed to create experiment: ${response.statusText}`);
+      const error = await response.text();
+      console.warn(`[WorkOrderAgent] Failed to accept work order ${workOrderId}:`, error);
+      return false;
     }
-    const data = await response.json();
-    return data.experiment.id;
+    return true;
   } catch (error) {
-    throw new Error(`Failed to create experiment: ${error.message}`);
+    console.warn("[WorkOrderAgent] Failed to accept work order:", error.message);
+    return false;
   }
 }
-async function updateExperiment(coordinatorUrl, experimentId, result) {
+async function completeWorkOrder(coordinatorUrl, workOrderId, peerId, result, success = true) {
   try {
-    const response = await fetch(`${coordinatorUrl}/experiments/${experimentId}`, {
-      method: "PATCH",
+    const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        status: "completed",
-        progress: 100,
-        valLoss: result.valLoss
+        workOrderId,
+        assigneeAddress: peerId,
+        result,
+        success
       })
     });
     if (!response.ok) {
-      throw new Error(`Failed to update experiment: ${response.statusText}`);
+      const error = await response.text();
+      console.warn(`[WorkOrderAgent] Failed to complete work order ${workOrderId}:`, error);
+      return false;
     }
+    const data = await response.json();
+    if (success && data.rewardAmount) {
+      agentState.totalRewardsEarned += BigInt(data.rewardAmount);
+    }
+    return true;
   } catch (error) {
-    console.error("Failed to update experiment:", error.message);
-    throw error;
+    console.warn("[WorkOrderAgent] Failed to complete work order:", error.message);
+    return false;
   }
 }
-async function postToFeed(coordinatorUrl, peerId, mutation, result, improved) {
+async function executeWorkOrder(workOrder, llmModel, llmConfig) {
+  console.log(`[WorkOrderAgent] Executing: ${workOrder.title}`);
   try {
-    console.log(`[FEED] ${improved ? "\u{1F389} IMPROVEMENT" : "\u{1F4DD} Result"}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
+    const prompt = buildWorkOrderPrompt(workOrder);
+    const result = await generateLLM(llmModel, prompt, llmConfig);
+    console.log(`[WorkOrderAgent] Execution complete, result length: ${result.length} chars`);
+    return { result, success: true };
   } catch (error) {
-    console.warn("Failed to post to feed:", error.message);
+    console.error("[WorkOrderAgent] Execution failed:", error.message);
+    return {
+      result: `Error: ${error.message}`,
+      success: false
+    };
   }
 }
-async function runAgentIteration(config, iteration) {
-  const { coordinatorUrl, peerId, capabilities, datasetPath } = config;
+function buildWorkOrderPrompt(workOrder) {
+  return `You are a SynapseIA network node executing a work order.
+
+Task: ${workOrder.title}
+Description: ${workOrder.description}
+
+Please provide a detailed response to complete this task. Be thorough and accurate.
+
+Response:`;
+}
+async function runWorkOrderAgentIteration(config, iteration) {
+  const { coordinatorUrl, peerId, capabilities, llmModel, llmConfig } = config;
   console.log(`
-\u{1F504} Iteration ${iteration} starting...`);
-  console.log("\u{1F4E5} Fetching top experiments...");
-  const topExperiments = await fetchTopExperiments(coordinatorUrl);
-  console.log(`   Found ${topExperiments.length} experiments`);
-  if (topExperiments.length > 0 && topExperiments[0].valLoss) {
-    loopState.bestLoss = Math.min(loopState.bestLoss, topExperiments[0].valLoss);
+[WorkOrderAgent] Iteration ${iteration} starting...`);
+  console.log("[WorkOrderAgent] Polling for available work orders...");
+  const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+  if (workOrders.length === 0) {
+    console.log("[WorkOrderAgent] No work orders available");
+    return { completed: false };
   }
-  console.log(`   Best loss so far: ${loopState.bestLoss.toFixed(4)}`);
-  console.log("\u{1F9E0} Proposing mutation via LLM...");
-  const mutation = await proposeMutation(topExperiments, loopState.bestLoss, capabilities);
-  console.log(`   Type: ${mutation.type}`);
-  console.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
-  const validation = validateTrainingConfig(mutation);
-  if (!validation.valid) {
-    throw new Error(`Invalid training config: ${validation.error}`);
+  console.log(`[WorkOrderAgent] Found ${workOrders.length} available work order(s)`);
+  const workOrder = workOrders[0];
+  console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
+  console.log("[WorkOrderAgent] Accepting work order...");
+  const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId);
+  if (!accepted) {
+    console.log("[WorkOrderAgent] Failed to accept work order, skipping");
+    return { completed: false };
   }
-  console.log("\u{1F4DD} Creating experiment...");
-  const tier = capabilities.includes("gpu") ? 2 : 0;
-  const experimentId = await createExperiment(coordinatorUrl, mutation, peerId, tier);
-  console.log(`   Experiment ID: ${experimentId}`);
-  console.log("\u{1F680} Training micro-model...");
-  const hardware = capabilities.includes("gpu") ? "gpu" : "cpu";
-  const trainingResult = await trainMicroModel({
-    proposal: mutation,
-    datasetPath,
-    hardware,
-    runNumber: iteration
-  });
-  console.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
-  console.log(`   Duration: ${trainingResult.durationMs}ms`);
-  console.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
-  console.log("\u{1F4BE} Updating experiment...");
-  await updateExperiment(coordinatorUrl, experimentId, trainingResult);
-  const improved = trainingResult.valLoss < loopState.bestLoss;
-  if (improved) {
-    loopState.bestLoss = trainingResult.valLoss;
-    console.log(`\u{1F389} New best loss: ${loopState.bestLoss.toFixed(4)}!`);
+  console.log("[WorkOrderAgent] Work order accepted");
+  agentState.currentWorkOrder = workOrder;
+  console.log("[WorkOrderAgent] Executing work order...");
+  const { result, success } = await executeWorkOrder(workOrder, llmModel, llmConfig);
+  console.log("[WorkOrderAgent] Reporting result...");
+  const completed = await completeWorkOrder(
+    coordinatorUrl,
+    workOrder.id,
+    peerId,
+    result,
+    success
+  );
+  if (completed) {
+    console.log(`[WorkOrderAgent] Work order completed! Reward: ${workOrder.rewardAmount} SYN`);
+    agentState.totalWorkOrdersCompleted++;
+  } else {
+    console.log("[WorkOrderAgent] Failed to report completion");
   }
-  await postToFeed(coordinatorUrl, peerId, mutation, trainingResult, improved);
-  loopState.iteration = iteration;
-  loopState.totalExperiments++;
-  return {
-    iteration,
-    mutation,
-    trainingResult,
-    experimentId,
-    improved
-  };
+  agentState.iteration = iteration;
+  agentState.currentWorkOrder = void 0;
+  return { workOrder, completed };
 }
-async function startAgentLoop(config) {
-  if (loopState.isRunning) {
-    throw new Error("Agent loop is already running");
+async function startWorkOrderAgent(config) {
+  if (agentState.isRunning) {
+    throw new Error("Work order agent is already running");
   }
-  loopState.isRunning = true;
+  agentState.isRunning = true;
   const { intervalMs, maxIterations } = config;
-  console.log("\u{1F680} Starting SynapseIA Agent Loop");
+  console.log("\u{1F680} Starting SynapseIA Work Order Agent");
   console.log(`   Coordinator: ${config.coordinatorUrl}`);
   console.log(`   Peer ID: ${config.peerId}`);
   console.log(`   Capabilities: ${config.capabilities.join(", ")}`);
+  console.log(`   LLM: ${config.llmModel.modelId}`);
   console.log(`   Interval: ${intervalMs}ms`);
   if (maxIterations) {
     console.log(`   Max iterations: ${maxIterations}`);
@@ -932,205 +885,400 @@ async function startAgentLoop(config) {
   console.log("");
   try {
     let iteration = 1;
-    while (loopState.isRunning) {
-      if (maxIterations && iteration > maxIterations) {
-        console.log(`
-\u2705 Reached max iterations (${maxIterations}), stopping.`);
-        break;
-      }
+    while (shouldContinueLoop(agentState.isRunning, iteration, maxIterations)) {
       try {
-        await runAgentIteration(config, iteration);
+        await runWorkOrderAgentIteration(config, iteration);
       } catch (error) {
-        console.error(`\u274C Iteration ${iteration} failed:`, error.message);
+        console.error(`[WorkOrderAgent] Iteration ${iteration} failed:`, error.message);
       }
-      if (loopState.isRunning) {
-        console.log(`\u23F3 Sleeping for ${intervalMs}ms...`);
+      if (shouldSleepBetweenIterations(agentState.isRunning)) {
+        console.log(`[WorkOrderAgent] Sleeping for ${intervalMs}ms...`);
         await sleep(intervalMs);
       }
       iteration++;
     }
+    if (maxIterations && iteration > maxIterations) {
+      console.log(`
+[WorkOrderAgent] Reached max iterations (${maxIterations}), stopping.`);
+    }
   } finally {
-    loopState.isRunning = false;
-    console.log("\n\u{1F6D1} Agent loop stopped");
+    agentState.isRunning = false;
+    console.log("\n[WorkOrderAgent] Stopped");
   }
 }
+function stopWorkOrderAgent() {
+  agentState.isRunning = false;
+  console.log("[WorkOrderAgent] Stopping...");
+}
+function shouldContinueLoop(isRunning, iteration, maxIterations) {
+  if (!isRunning) return false;
+  if (maxIterations && iteration > maxIterations) return false;
+  return true;
+}
+function shouldSleepBetweenIterations(isRunning) {
+  return isRunning;
+}
 function sleep(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// src/index.ts
-var program = new import_commander.Command();
-program.name("synapse").description("Synapse Node CLI \u2014 Join the decentralized compute network").version("0.0.1");
-program.command("start").description("Start Synapse node and begin autonomous research").option("--model <string>", "LLM model to use (e.g., ollama/qwen2.5:0.5b, anthropic/sonnet-4.6, kimi/k2.5)").option("--dataset <string>", "Path to training dataset").option("--coordinator <string>", "Coordinator URL").option("--interval <number>", "Research loop interval (ms)").option("--max-iterations <number>", "Max research iterations").option("--interval-ms <number>", "Heartbeat interval (ms)").option("--inference", "Enable inference capability (requires GPU)").option("--cpu", "Only use CPU (no GPU)").action(async (options) => {
-  console.log("\u{1F9E0} Synapse Node CLI v0.0.1");
-  console.log("");
-  const datasetPath = options.dataset || path2.join(process.cwd(), "data", "astro-sample.txt");
-  const coordinatorUrl = options.coordinator || "http://localhost:3001";
-  const interval = options.interval || 12e4;
-  const maxIterations = options.maxIterations || 0;
-  const intervalMs = options.intervalMs || 36e5;
-  let model;
-  if (options.model) {
-    const parts = options.model.split("/");
-    const provider = parts[0];
-    const modelId = parts[1] || "qwen2.5:0.5b";
-    let llmProvider;
-    let providerId = "";
-    if (provider === "anthropic") {
-      llmProvider = "cloud";
-      providerId = "anthropic";
-    } else if (provider === "kimi") {
-      llmProvider = "cloud";
-      providerId = "moonshot";
-    } else {
-      llmProvider = "ollama";
+// src/cli/index.ts
+var import_prompts = require("@inquirer/prompts");
+
+// src/config.ts
+var import_fs2 = require("fs");
+var import_path = require("path");
+var import_os = require("os");
+var CONFIG_DIR = (0, import_path.join)((0, import_os.homedir)(), ".synapseia");
+var CONFIG_FILE = (0, import_path.join)(CONFIG_DIR, "config.json");
+function defaultConfig() {
+  return {
+    coordinatorUrl: "http://localhost:3001",
+    defaultModel: "ollama/qwen2.5:0.5b"
+  };
+}
+function loadConfig() {
+  if ((0, import_fs2.existsSync)(CONFIG_FILE)) {
+    try {
+      return JSON.parse((0, import_fs2.readFileSync)(CONFIG_FILE, "utf-8"));
+    } catch {
+      return defaultConfig();
     }
-    if (llmProvider === "cloud") {
-      const apiKey = process.env.SYN_LLMAPI_KEY;
-      if (!apiKey) {
-        console.error(`\u274C Error: SYN_LLMAPI_KEY required for ${provider} models`);
-        console.log(`   export SYN_LLMAPI_KEY=your-key-here`);
+  }
+  return defaultConfig();
+}
+function saveConfig(config) {
+  if (!(0, import_fs2.existsSync)(CONFIG_DIR)) {
+    (0, import_fs2.mkdirSync)(CONFIG_DIR, { recursive: true });
+  }
+  (0, import_fs2.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+function isCloudModel(model) {
+  return model.startsWith("openai-compat/") || model.startsWith("anthropic/") || model.startsWith("kimi/") || model.startsWith("minimax/");
+}
+
+// src/cli/index.ts
+var program = new import_commander.Command();
+program.name("synapseia").description("SynapseIA Network Node CLI").version("0.1.0");
+program.command("start").description("Start SynapseIA node").option("--model <name>", "Model to use (default: recommended for hardware)").option("--llm-url <url>", "Custom LLM API base URL (for openai-compat provider)").option("--llm-key <key>", "API key for cloud LLM provider").option("--coordinator <url>", "Coordinator URL (default: http://localhost:3001)").option("--max-iterations <n>", "Maximum work order iterations (default: infinite)", parseInt).action(async (options) => {
+  const config = loadConfig();
+  const identity = await getOrCreateIdentity();
+  const hardware = await detectHardware();
+  const coordinatorUrl = options.coordinator || config.coordinatorUrl;
+  const model = options.model || config.defaultModel;
+  const llmUrl = options.llmUrl || config.llmUrl;
+  const llmKey = options.llmKey || config.llmKey;
+  let selectedModel = null;
+  if (model) {
+    const isCloudModel2 = model?.startsWith("openai-compat/") || model?.startsWith("anthropic/") || model?.startsWith("kimi/") || model?.startsWith("minimax/");
+    if (!isCloudModel2) {
+      selectedModel = getModelByName(model);
+      if (!selectedModel) {
+        console.error(`Error: Model '${model}' not found in catalog.`);
+        console.error("Available models:");
+        const catalog = getModelCatalog();
+        catalog.forEach((m) => {
+          console.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
+        });
+        process.exit(1);
+      }
+      const isOllamaModel = model?.startsWith("ollama/") || !model && hardware.hasOllama;
+      if (isOllamaModel && hardware.tier < selectedModel.recommendedTier) {
+        console.error(
+          `Error: Model '${model}' requires Tier ${selectedModel.recommendedTier} or higher.`
+        );
+        console.error(`Your hardware is Tier ${hardware.tier}.`);
         process.exit(1);
       }
     }
-    console.log(`\u{1F916} Using model: ${options.model}`);
-    model = { provider: llmProvider, providerId, modelId };
+    if (isCloudModel2 && !llmKey) {
+      console.error(`Error: Cloud model '${model}' requires --llm-key`);
+      process.exit(1);
+    }
   } else {
-    console.log("\u{1F916} No model specified. Using default: ollama/qwen2.5:0.5b");
-    model = { provider: "ollama", providerId: "", modelId: "qwen2.5:0.5b" };
+    const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
+    if (compatibleModels.length === 0) {
+      console.error("Error: No compatible models found for your hardware.");
+      console.error("Consider using cloud LLM providers with --model openai-compat/asi1-mini --llm-key <key>");
+      process.exit(1);
+    }
+    selectedModel = compatibleModels[0];
+    console.log(`Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`);
   }
-  console.log("");
-  const identityPath = path2.join(os3.homedir(), ".synapse");
-  if (!fs.existsSync(path2.join(identityPath, "identity.json"))) {
-    console.log("\u{1F511} No identity found. Generating Keypair...");
-    generateIdentity(identityPath);
-    console.log(`\u2705 Saved to: ${path2.join(identityPath, "identity.json")}`);
+  console.log("Starting SynapseIA node...");
+  console.log(`PeerID: ${identity.peerId}`);
+  console.log(`Tier: ${hardware.tier} (${getTierName2(hardware.tier)})`);
+  console.log(`Ollama: ${hardware.hasOllama ? "yes" : "no"}`);
+  if (selectedModel) {
+    console.log(`Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || "unknown"})`);
   } else {
-    console.log(`\u2705 Identity loaded from: ${identityPath}`);
+    console.log(`Model: ${model} (cloud)`);
   }
-  const identity = loadIdentity(identityPath);
-  console.log(`   Peer ID: ${identity.peerId.slice(0, 16)}...`);
-  console.log("");
-  console.log("\u{1F50D} Detecting hardware...");
-  const hardware = detectHardware(options.cpu);
-  console.log(`   CPU: ${hardware.cpuCores} cores`);
-  console.log(`   RAM: ${hardware.ramGb} GB`);
-  console.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + "GB VRAM" : "None"}`);
-  console.log(`   Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
-  const capabilities = [];
-  if (!options.cpu) capabilities.push("gpu");
-  if (hardware.hasOllama) capabilities.push("ollama");
-  console.log(`   Capabilities: ${capabilities.join(", ") || "cpu"}`);
-  console.log("");
-  if (!fs.existsSync(datasetPath)) {
-    console.warn(`\u26A0\uFE0F  Dataset not found: ${datasetPath}`);
-    console.log(`   Using embedded sample data...`);
-  } else {
-    const stats = fs.statSync(datasetPath);
-    console.log(`\u{1F4CA} Dataset: ${datasetPath} (${(stats.size / 1024).toFixed(1)}KB)`);
+  ;
+  if (llmUrl) {
+    console.log(`LLM URL: ${llmUrl}`);
   }
-  console.log("");
-  console.log("\u{1F493} Starting heartbeat loop...");
-  const heartbeatCleanup = startPeriodicHeartbeat(
-    coordinatorUrl,
-    identity,
-    hardware,
-    intervalMs
-  );
-  console.log(`   Coordinator: ${coordinatorUrl}`);
-  console.log(`   Interval: ${(intervalMs / 1e3).toFixed(0)}s`);
-  console.log("");
-  console.log("\u{1F504} Starting agent research loop...");
-  const config = {
+  const llmModel = parseModel(model || "ollama/qwen2.5:0.5b");
+  if (!llmModel) {
+    console.error(`Error: Invalid model format '${model}'`);
+    process.exit(1);
+  }
+  console.log("\n\u{1F680} Starting work order agent...");
+  const capabilities = hardware.hasOllama ? ["llm", "ollama", `tier-${hardware.tier}`] : ["llm", `tier-${hardware.tier}`];
+  await startWorkOrderAgent({
     coordinatorUrl,
     peerId: identity.peerId,
     capabilities,
-    intervalMs: interval,
-    datasetPath,
-    maxIterations
-  };
-  console.log(`   Experiment interval: ${(interval / 1e3).toFixed(0)}s`);
-  if (maxIterations > 0) {
-    console.log(`   Max iterations: ${maxIterations}`);
-  }
-  console.log("   Model:", options.model || "ollama/qwen2.5:0.5b");
-  console.log("");
-  console.log("\u{1F680} Synapse Node running. Press Ctrl+C to stop.\n");
-  startAgentLoop(config);
-  process.on("SIGINT", async () => {
-    console.log("\n\n\u{1F6D1} Shutting down...");
-    heartbeatCleanup();
-    console.log("\u2705 Goodbye!");
-    process.exit(0);
+    llmModel,
+    llmConfig: {
+      apiKey: llmKey,
+      baseUrl: llmUrl
+    },
+    intervalMs: 3e4,
+    // 30 seconds
+    maxIterations: options.maxIterations
   });
 });
-program.command("status").description("Show node status").action(() => {
-  console.log("\u{1F4CA} Synapse Node Status\n");
-  const identityPath = path2.join(os3.homedir(), ".synapse");
-  if (fs.existsSync(path2.join(identityPath, "identity.json"))) {
-    const identity = loadIdentity(identityPath);
-    console.log(`   Peer ID: ${identity.peerId}`);
-    console.log(`   Public Key: ${identity.publicKey.slice(0, 64)}...`);
+program.command("status").description("Show node status").action(async () => {
+  const identity = getOrCreateIdentity();
+  const hardware = await detectHardware();
+  const status = {
+    peerId: identity?.peerId || null,
+    tier: hardware.tier,
+    wallet: "not connected",
+    // TODO: connect wallet
+    balance: 0,
+    // TODO: fetch SYN balance
+    staked: 0,
+    // TODO: fetch staked amount
+    hasOllama: hardware.hasOllama,
+    cpuCores: hardware.cpuCores,
+    ramGb: hardware.ramGb,
+    gpuVramGb: hardware.gpuVramGb
+  };
+  console.log("Node Status:");
+  console.log(`PeerID:  ${status.peerId || "Not initialized"}`);
+  console.log(`Tier:    ${status.tier} (${getTierName2(status.tier)})`);
+  console.log(`Wallet:  ${status.wallet}`);
+  console.log(`Balance: ${status.balance} SYN`);
+  console.log(`Staked:  ${status.staked} SYN`);
+  console.log(`Hardware: ${status.cpuCores} cores, ${status.ramGb}GB RAM, ${status.gpuVramGb}GB VRAM`);
+  console.log(`Ollama:  ${status.hasOllama ? "Running" : "Not detected"}`);
+});
+program.command("stake").description("Stake SYN tokens").argument("<amount>", "Amount to stake (in SYN tokens)").action(async (amount) => {
+  console.log(`Staking ${amount} SYN...`);
+  console.log("Tx hash: <placeholder>");
+});
+program.command("unstake").description("Unstake SYN tokens").argument("<amount>", "Amount to unstake (in SYN tokens)").action(async (amount) => {
+  console.log(`Unstaking ${amount} SYN...`);
+  console.log("Tx hash: <placeholder>");
+});
+program.command("system-info").description("Show detailed system information").action(async () => {
+  const sysInfo = getSystemInfo();
+  const recommendedTier = getRecommendedTier(sysInfo.gpu.vramGb);
+  const compatibleModels = getCompatibleModels(sysInfo.gpu.vramGb);
+  console.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+  console.log("       SynapseIA Node - System Information");
+  console.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+  console.log();
+  console.log("\u{1F4CB} Operating System:");
+  console.log(`   ${sysInfo.os}`);
+  console.log();
+  console.log("\u{1F527} CPU Information:");
+  console.log(`   Model: ${sysInfo.cpu.model}`);
+  console.log(`   Cores: ${sysInfo.cpu.cores}`);
+  console.log();
+  console.log("\u{1F4BE} Memory:");
+  console.log(`   Total RAM: ${sysInfo.memory.totalGb} GB`);
+  console.log();
+  console.log("\u{1F3AE} GPU Information:");
+  if (sysInfo.gpu.type) {
+    console.log(`   Type: ${sysInfo.gpu.type}`);
+    console.log(`   VRAM: ${sysInfo.gpu.vramGb} GB`);
   } else {
-    console.log("   Status: Node not configured (run `synapse start` first)");
-    return;
+    console.log("   No GPU detected");
   }
-  const hardware = detectHardware(false);
-  console.log(`   Hardware: ${hardware.tier} (${hardware.cpuCores} cores, ${hardware.ramGb}GB RAM)`);
-  console.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + "GB" : "None"}`);
-  console.log(`   Ollama: ${hardware.hasOllama ? "\u2705 Installed" : "\u274C Not found"}`);
-  const capabilities = [];
-  if (!hardware.gpuVramGb) capabilities.push("cpu");
-  if (hardware.hasOllama) capabilities.push("ollama");
-  console.log(`   Capabilities: ${capabilities.join(", ")}`);
-  console.log(`   Uptime: ${process.uptime().toFixed(0)}s`);
-  console.log(`   Platform: ${os3.platform()} ${os3.arch()}`);
-});
-program.command("models").description("Manage local models (Ollama)").action(async () => {
-  console.log("\u{1F4E6} Synapse Models\n");
-  const hardware = detectHardware(false);
-  if (!hardware.hasOllama) {
-    console.log("\u274C Ollama not found at localhost:11434");
-    console.log("   Install: https://ollama.com/download");
-    return;
-  }
-  console.log("   Checking available models...\n");
-  console.log("   <model list from Ollama API>");
-  console.log("");
-  console.log(`Recommended for Tier ${hardware.tier}:`);
-  if (hardware.tier >= 5) {
-    console.log("   \u2022 Llama-3.3-70B (requires >48GB VRAM)");
-    console.log("   \u2022 Mixtral 8x7B (requires >32GB VRAM)");
-  } else if (hardware.tier >= 4) {
-    console.log("   \u2022 Llama-3.3-70B (requires 48GB VRAM)");
-    console.log("   \u2022 Mixtral 8x7B (requires 24GB VRAM)");
-  } else if (hardware.tier >= 3) {
-    console.log("   \u2022 Gemma-3-1B (4GB VRAM)");
-    console.log("   \u2022 Phi-3-mini (2.5GB VRAM)");
-  } else if (hardware.tier >= 2) {
-    console.log("   \u2022 Qwen2.5-1.5B (3GB VRAM)");
-    console.log("   \u2022 Llama-3-8B (16GB VRAM)");
+  console.log();
+  console.log("\u{1F3AF} Hardware Tier Assessment:");
+  const tierName = ["CPU-Only", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Tier 5"][recommendedTier] || "Unknown";
+  console.log(`   Recommended Tier: ${recommendedTier} (${tierName})`);
+  console.log();
+  console.log("\u{1F916} Compatible Models:");
+  if (compatibleModels.length > 0) {
+    console.log(`   Found ${compatibleModels.length} models compatible with ${sysInfo.gpu.vramGb}GB VRAM:`);
+    compatibleModels.forEach((model, index) => {
+      const tierName2 = ["CPU", "T1", "T2", "T3", "T4", "T5"][model.recommendedTier] || "Unknown";
+      console.log(`   ${index + 1}. ${model.name.padEnd(30)} (min ${model.minVram}GB, rec ${tierName2})`);
+    });
   } else {
-    console.log("   \u2022 Gemma-3-1B (4GB VRAM)");
-    console.log("   \u2022 Phi-3-mini (2.5GB VRAM)");
+    console.log("   No compatible models found. Consider upgrading GPU or using cloud LLM.");
   }
-  console.log("");
-  console.log("Pull with: ollama pull <model-name>");
+  console.log();
+  console.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
 });
-program.command("hive").description("Hive operations").command("whoami").description("Show agent identity information").action(() => {
-  const identityPath = path2.join(os3.homedir(), ".synapse");
-  if (!fs.existsSync(path2.join(identityPath, "identity.json"))) {
-    console.log("\u274C No identity found. Run `synapse start` first.");
+program.command("stop").description("Stop the running SynapseIA node").action(() => {
+  console.log("\u{1F6D1} Stopping SynapseIA node...");
+  stopWorkOrderAgent();
+  console.log("\u2705 Node stopped");
+});
+program.command("config").description("Interactive configuration wizard").option("--show", "Show current configuration").action(async (options) => {
+  const config = loadConfig();
+  if (options.show) {
+    console.log("Current configuration:");
+    console.log(JSON.stringify(config, null, 2));
     return;
   }
-  const identity = loadIdentity(identityPath);
-  const profile = getAgentProfile(identity);
-  console.log("\u{1F41D} Hive Agent Identity\n");
-  console.log(`   Agent ID: ${profile.agentId}`);
-  console.log(`   Peer ID:  ${profile.peerId}`);
-  console.log(`   Tier:     ${profile.tier} (${getTierName(profile.tier)})`);
-  console.log(`   Mode:     ${profile.mode.toUpperCase()}`);
-  console.log(`   Status:   ${profile.status.toUpperCase()}`);
-  console.log(`   Created:  ${new Date(profile.createdAt).toISOString()}`);
+  console.log("\u{1F527} SynapseIA Configuration Wizard\n");
+  const coordinatorUrl = await (0, import_prompts.input)({
+    message: "Coordinator URL:",
+    default: config.coordinatorUrl,
+    validate: (value) => {
+      if (!value) return "Coordinator URL is required";
+      if (!value.startsWith("http")) return "URL must start with http:// or https://";
+      return true;
+    }
+  });
+  config.coordinatorUrl = coordinatorUrl;
+  const catalog = getModelCatalog();
+  const hardware = await detectHardware();
+  const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
+  const modelChoices = [
+    { name: "Use recommended model for your hardware", value: "recommended" },
+    { name: "Select from compatible models", value: "compatible" },
+    { name: "Select from all models", value: "all" },
+    { name: "Use cloud LLM provider", value: "cloud" }
+  ];
+  const modelSelectionMode = await (0, import_prompts.select)({
+    message: "How would you like to configure your LLM model?",
+    choices: modelChoices
+  });
+  if (modelSelectionMode === "recommended") {
+    if (compatibleModels.length > 0) {
+      config.defaultModel = compatibleModels[0].name;
+      console.log(`\u2713 Selected recommended model: ${config.defaultModel}`);
+    } else {
+      console.log("\u26A0 No compatible local models found. Please select a cloud provider.");
+      const cloudModel = await (0, import_prompts.select)({
+        message: "Select cloud LLM provider:",
+        choices: [
+          { name: "ASI1 Mini (openai-compat)", value: "openai-compat/asi1-mini" },
+          { name: "ASI1 (openai-compat)", value: "openai-compat/asi1" },
+          { name: "Custom OpenAI-compatible", value: "custom" }
+        ]
+      });
+      config.defaultModel = cloudModel === "custom" ? "openai-compat/custom" : cloudModel;
+    }
+  } else if (modelSelectionMode === "compatible") {
+    if (compatibleModels.length === 0) {
+      console.log("\u26A0 No compatible models found for your hardware.");
+      const useCloud = await (0, import_prompts.confirm)({
+        message: "Would you like to use a cloud LLM provider instead?",
+        default: true
+      });
+      if (useCloud) {
+        const cloudModel = await (0, import_prompts.select)({
+          message: "Select cloud LLM provider:",
+          choices: [
+            { name: "ASI1 Mini", value: "openai-compat/asi1-mini" },
+            { name: "ASI1", value: "openai-compat/asi1" }
+          ]
+        });
+        config.defaultModel = cloudModel;
+      } else {
+        console.log("Skipping model configuration.");
+      }
+    } else {
+      const modelChoices2 = compatibleModels.map((m) => ({
+        name: `${m.name} (${m.minVram}GB VRAM, Tier ${m.recommendedTier})`,
+        value: m.name,
+        description: m.description
+      }));
+      const selectedModel = await (0, import_prompts.select)({
+        message: "Select a model:",
+        choices: modelChoices2
+      });
+      config.defaultModel = selectedModel;
+    }
+  } else if (modelSelectionMode === "all") {
+    const allModelChoices = catalog.map((m) => ({
+      name: `${m.name} (${m.category}, ${m.minVram}GB VRAM)`,
+      value: m.name,
+      description: m.description,
+      disabled: m.recommendedTier > hardware.tier ? "Requires higher tier hardware" : false
+    }));
+    const selectedModel = await (0, import_prompts.select)({
+      message: "Select a model (\u26A0 some may not work with your hardware):",
+      choices: allModelChoices
+    });
+    config.defaultModel = selectedModel;
+  } else if (modelSelectionMode === "cloud") {
+    const cloudChoices = [
+      { name: "ASI1 Mini", value: "openai-compat/asi1-mini", description: "Smaller, faster model" },
+      { name: "ASI1", value: "openai-compat/asi1", description: "Full ASI1 model" },
+      { name: "Custom OpenAI-compatible endpoint", value: "openai-compat/custom", description: "Use your own endpoint" }
+    ];
+    const cloudModel = await (0, import_prompts.select)({
+      message: "Select cloud LLM provider:",
+      choices: cloudChoices
+    });
+    config.defaultModel = cloudModel;
+  }
+  const usingCloudModel = isCloudModel(config.defaultModel);
+  if (usingCloudModel) {
+    console.log("\n\u2601\uFE0F Cloud LLM Configuration");
+    const llmUrl = await (0, import_prompts.input)({
+      message: "LLM API base URL:",
+      default: config.llmUrl || "https://api.asi1.ai",
+      validate: (value) => {
+        if (!value) return "URL is required for cloud models";
+        if (!value.startsWith("http")) return "URL must start with http:// or https://";
+        return true;
+      }
+    });
+    config.llmUrl = llmUrl;
+    const hasApiKey = await (0, import_prompts.confirm)({
+      message: "Do you have an API key?",
+      default: true
+    });
+    if (hasApiKey) {
+      const llmKey = await (0, import_prompts.password)({
+        message: "Enter your API key:",
+        mask: "*"
+      });
+      if (llmKey) config.llmKey = llmKey;
+    } else {
+      console.log("\u26A0 You will need to provide --llm-key when starting the node.");
+    }
+  } else {
+    const useCustomOllama = await (0, import_prompts.confirm)({
+      message: "Use custom Ollama URL?",
+      default: !!config.llmUrl
+    });
+    if (useCustomOllama) {
+      const ollamaUrl = await (0, import_prompts.input)({
+        message: "Ollama URL:",
+        default: config.llmUrl || "http://localhost:11434"
+      });
+      config.llmUrl = ollamaUrl;
+    } else {
+      config.llmUrl = void 0;
+    }
+  }
+  saveConfig(config);
+  console.log("\n\u2705 Configuration saved to", CONFIG_FILE);
+  console.log("\nNext steps:");
+  console.log("  synapseia start     # Start the node with your configuration");
+  console.log("  synapseia status    # Check node status");
 });
+function getTierName2(tier) {
+  const tierNames = {
+    0: "CPU",
+    1: "8GB GPU",
+    2: "16GB GPU",
+    3: "24GB GPU",
+    4: "32GB GPU",
+    5: "80GB GPU"
+  };
+  return tierNames[tier] || "Unknown";
+}
 program.parse();

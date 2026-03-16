@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/hardware.ts</title>
+    <title>Code coverage report for src/work-order-agent.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">src</a> hardware.ts</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">src</a> work-order-agent.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>156/156</span>
+                <span class='fraction'>119/119</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">96.58% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>113/117</span>
+                <span class='fraction'>24/24</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>13/13</span>
+                <span class='fraction'>15/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>113/113</span>
+                <span class='fraction'>115/115</span>
             </div>
         
             
@@ -355,12 +355,114 @@
 <a name='L290'></a><a href='#L290'>290</a>
 <a name='L291'></a><a href='#L291'>291</a>
 <a name='L292'></a><a href='#L292'>292</a>
-<a name='L293'></a><a href='#L293'>293</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -368,6 +470,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -402,7 +505,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -412,11 +515,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">39x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -427,162 +534,193 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">33x</span>
-<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-yes">20x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">15x</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">33x</span>
-<span class="cline-any cline-yes">25x</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">15x</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">27x</span>
-<span class="cline-any cline-yes">25x</span>
-<span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">18x</span>
-<span class="cline-any cline-yes">15x</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">18x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -591,29 +729,42 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -627,318 +778,479 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">55x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">32x</span>
-<span class="cline-any cline-yes">28x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">21x</span>
-<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
- * Hardware detection and tier calculation
+ * Work Order Agent - Polling loop for work order execution
+ * 
+ * Loop principal:
+ * 1. Poll /work-orders/available from coordinator
+ * 2. Accept assignable work order
+ * 3. Execute work (research, calculation, etc.)
+ * 4. Report result to coordinator
+ * 5. Sleep and repeat
  */
 &nbsp;
-import * as os from 'os';
-import { execSync } from 'child_process';
+import { generateLLM, type LLMConfig } from './llm-provider.js';
+import { parseModel, type LLMModel } from './llm-provider.js';
 &nbsp;
-import type { ModelCategory } from './model-catalog.js';
-&nbsp;
-/**
- * Model compatibility info
- */
-export interface ModelInfo {
-  name: string;
-  minVram: number; // GB
-  recommendedTier: number;
-  category?: ModelCategory; // Optional category for compatibility with model-catalog
+export interface WorkOrderAgentConfig {
+  coordinatorUrl: string;
+  peerId: string;
+  capabilities: string[];
+  llmModel: LLMModel;
+  llmConfig?: LLMConfig;
+  intervalMs: number;
+  maxIterations?: number;
 }
 &nbsp;
-/**
- * System information
- */
-export interface SystemInfo {
-  os: string;
-  cpu: {
-    model: string;
-    cores: number;
-  };
-  memory: {
-    totalGb: number;
-  };
-  gpu: {
-    type: string | null;
-    vramGb: number;
-  };
+export interface WorkOrder {
+  id: string;
+  title: string;
+  description: string;
+  requiredCapabilities: string[];
+  rewardAmount: string; // BigInt as string
+  status: 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  creatorAddress: string;
+  assigneeAddress?: string;
+  createdAt: number;
+  expiresAt?: number;
 }
 &nbsp;
-export interface Hardware {
-  cpuCores: number;
-  ramGb: number;
-  gpuVramGb: number;
-  tier: number;
-  hasOllama: boolean;
+export interface WorkOrderAgentState {
+  iteration: number;
+  totalWorkOrdersCompleted: number;
+  totalRewardsEarned: bigint;
+  isRunning: boolean;
+  currentWorkOrder?: WorkOrder;
 }
 &nbsp;
-export type HardwareTier = 0 | 1 | 2 | 3 | 4 | 5;
-&nbsp;
-const GPUS: Record&lt;string, HardwareTier&gt; = {
-  'Apple M3 Max': 5,
-  'Apple M3 Ultra': 5,
-  'Apple M3 Pro': 4,
-  'Apple M2 Ultra': 3,
-  'Apple M2 Max': 3,
-  'Apple M2 Pro': 2,
-  'Apple M1 Ultra': 2,
-  'Apple M1 Max': 2,
-  'Apple M2 / M1 Pro': 2,
-  'Apple M1 / M1 Air': 1,
-  'Apple M1 / M1 Mini': 1,
-  'Apple M3 / M3 Pro': 4,
-  'NVIDIA RTX 4090': 5,
-  'NVIDIA RTX 5090': 5,
-  'NVIDIA RTX 6000 Ada': 5,
-  'NVIDIA H100': 5,
-  'NVIDIA A100': 4,
-  'NVIDIA RTX 3090': 4,
-  'NVIDIA RTX 4080': 4,
-  'NVIDIA RTX 4070': 3,
-  'NVIDIA RTX 3080': 3,
-  'NVIDIA RTX 4060': 2,
-  'NVIDIA RTX 3070': 2,
-  'NVIDIA RTX 3060': 2,
-  'NVIDIA RTX 4080 Laptop': 2,
-  'Intel Arc': 1,
+// Global state for the work order agent
+let agentState: WorkOrderAgentState = {
+  iteration: 0,
+  totalWorkOrdersCompleted: 0,
+  totalRewardsEarned: 0n,
+  isRunning: false,
 };
 &nbsp;
 /**
- * Detect hardware capabilities
+ * Get current agent state
  */
-/** @internal exported for testing */
-export function detectAppleSilicon(hardware: Hardware, model: string): void {
-  if (model.includes('M3 Ultra')) hardware.tier = 5;
-  else if (model.includes('M3 Max') || model.includes('M3 Pro')) hardware.tier = 4;
-  else if (model.includes('M2 Ultra')) hardware.tier = 3;
-  else if (model.includes('M2 Max')) hardware.tier = 3;
-  else if (model.includes('M2 Pro') || model.includes('M1 Ultra')) hardware.tier = 2;
-  else if (model.includes('M1 Max')) hardware.tier = 2;
-  else if (model.includes('M3') || model.includes('M2') || model.includes('M1')) hardware.tier = 1;
-&nbsp;
-  // Apple Silicon GPU VRAM estimates
-  if (model.includes('Ultra')) hardware.gpuVramGb = hardware.tier === 5 ? 192 : 128;
-  else if (model.includes('Max')) hardware.gpuVramGb = 96; // Max models always set tier to 4 or 3 before this, so tier===5 never happens
-  else if (model.includes('Pro')) hardware.gpuVramGb = hardware.tier &gt;= 3 ? 48 : 18;
-  else hardware.gpuVramGb = hardware.tier === 1 ? 10 : 7;
+export function getWorkOrderAgentState(): WorkOrderAgentState {
+  return { ...agentState };
 }
 &nbsp;
-/** @internal exported for testing */
-export function detectNvidiaGPU(hardware: Hardware, smiOutput?: string): void {
-  if (!smiOutput) {
-    smiOutput = execSync('nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits', { encoding: 'utf-8' });
+/**
+ * Reset agent state
+ */
+export function resetWorkOrderAgentState(): void {
+  agentState = {
+    iteration: 0,
+    totalWorkOrdersCompleted: 0,
+    totalRewardsEarned: 0n,
+    isRunning: false,
+  };
+}
+&nbsp;
+/**
+ * Fetch available work orders from coordinator
+ */
+export async function fetchAvailableWorkOrders(
+  coordinatorUrl: string,
+  peerId: string,
+  capabilities: string[]
+): Promise&lt;WorkOrder[]&gt; {
+  try {
+    const capabilitiesParam = capabilities.join(',');
+    const url = `${coordinatorUrl}/work-orders/available?peerId=${peerId}&amp;capabilities=${capabilitiesParam}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        // Endpoint not found - coordinator may not have work orders enabled
+        return [];
+      }
+      throw new Error(`Failed to fetch work orders: ${response.statusText}`);
+    }
+    
+    const data = await response.json() as WorkOrder[];
+    return data || [];
+  } catch (error) {
+    console.warn('[WorkOrderAgent] Failed to fetch work orders:', (error as Error).message);
+    return [];
+  }
+}
+&nbsp;
+/**
+ * Accept a work order
+ */
+export async function acceptWorkOrder(
+  coordinatorUrl: string,
+  workOrderId: string,
+  peerId: string
+): Promise&lt;boolean&gt; {
+  try {
+    const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workOrderId,
+        assigneeAddress: peerId,
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.warn(`[WorkOrderAgent] Failed to accept work order ${workOrderId}:`, error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn('[WorkOrderAgent] Failed to accept work order:', (error as Error).message);
+    return false;
+  }
+}
+&nbsp;
+/**
+ * Complete a work order with result
+ */
+export async function completeWorkOrder(
+  coordinatorUrl: string,
+  workOrderId: string,
+  peerId: string,
+  result: string,
+  success: boolean = true
+): Promise&lt;boolean&gt; {
+  try {
+    const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workOrderId,
+        assigneeAddress: peerId,
+        result,
+        success,
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.warn(`[WorkOrderAgent] Failed to complete work order ${workOrderId}:`, error);
+      return false;
+    }
+    
+    const data = await response.json() as WorkOrder;
+    
+    // Track rewards
+    if (success &amp;&amp; data.rewardAmount) {
+      agentState.totalRewardsEarned += BigInt(data.rewardAmount);
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn('[WorkOrderAgent] Failed to complete work order:', (error as Error).message);
+    return false;
+  }
+}
+&nbsp;
+/**
+ * Execute a work order using LLM
+ */
+export async function executeWorkOrder(
+  workOrder: WorkOrder,
+  llmModel: LLMModel,
+  llmConfig?: LLMConfig
+): Promise&lt;{ result: string; success: boolean }&gt; {
+  console.log(`[WorkOrderAgent] Executing: ${workOrder.title}`);
+  
+  try {
+    // Build prompt from work order
+    const prompt = buildWorkOrderPrompt(workOrder);
+    
+    // Generate response using LLM
+    const result = await generateLLM(llmModel, prompt, llmConfig);
+    
+    console.log(`[WorkOrderAgent] Execution complete, result length: ${result.length} chars`);
+    
+    return { result, success: true };
+  } catch (error) {
+    console.error('[WorkOrderAgent] Execution failed:', (error as Error).message);
+    return { 
+      result: `Error: ${(error as Error).message}`, 
+      success: false 
+    };
+  }
+}
+&nbsp;
+/**
+ * Build prompt for work order execution
+ */
+function buildWorkOrderPrompt(workOrder: WorkOrder): string {
+  return `You are a SynapseIA network node executing a work order.
+&nbsp;
+Task: ${workOrder.title}
+Description: ${workOrder.description}
+&nbsp;
+Please provide a detailed response to complete this task. Be thorough and accurate.
+&nbsp;
+Response:`;
+}
+&nbsp;
+/**
+ * Run single iteration of the work order agent
+ */
+export async function runWorkOrderAgentIteration(
+  config: WorkOrderAgentConfig,
+  iteration: number
+): Promise&lt;{ workOrder?: WorkOrder; completed: boolean }&gt; {
+  const { coordinatorUrl, peerId, capabilities, llmModel, llmConfig } = config;
+  
+  console.log(`\n[WorkOrderAgent] Iteration ${iteration} starting...`);
+  
+  // 1. Fetch available work orders
+  console.log('[WorkOrderAgent] Polling for available work orders...');
+  const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+  
+  if (workOrders.length === 0) {
+    console.log('[WorkOrderAgent] No work orders available');
+    return { completed: false };
   }
   
-  if (smiOutput.includes('GiB')) {
-    const match = smiOutput.match(/(\d+)\s*GiB/);
-    if (match) hardware.gpuVramGb = parseInt(match[1]);
-  } else if (smiOutput.includes('MiB')) {
-    const match = smiOutput.match(/(\d+)\s*MiB/);
-    if (match) hardware.gpuVramGb = Math.round(parseInt(match[1]) / 1024);
+  console.log(`[WorkOrderAgent] Found ${workOrders.length} available work order(s)`);
+  
+  // 2. Select best work order (first one - already sorted by reward)
+  const workOrder = workOrders[0];
+  console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
+  
+  // 3. Accept work order
+  console.log('[WorkOrderAgent] Accepting work order...');
+  const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId);
+  
+  if (!accepted) {
+    console.log('[WorkOrderAgent] Failed to accept work order, skipping');
+    return { completed: false };
   }
-&nbsp;
-  // Determine tier based on VRAM
-  if (hardware.gpuVramGb &gt;= 80) hardware.tier = 5;
-  else if (hardware.gpuVramGb &gt;= 64) hardware.tier = 5;
-  else if (hardware.tier &lt; 5 &amp;&amp; hardware.gpuVramGb &gt;= 24) hardware.tier = 4;
-  else if (hardware.tier &lt; 4 &amp;&amp; hardware.gpuVramGb &gt;= 14) hardware.tier = 3;
-  else if (hardware.tier &lt; 3 &amp;&amp; hardware.gpuVramGb &gt;= 10) hardware.tier = 2;
-  else if (hardware.tier &lt; 2 &amp;&amp; hardware.gpuVramGb &gt;= 6) hardware.tier = 1;
-}
-&nbsp;
-export function detectHardware(cpuOnly = false, archOverride?: string): Hardware {
-  const hardware: Hardware = {
-    cpuCores: os.cpus().length || <span class="branch-1 cbranch-no" title="branch not covered" >2,</span>
-    ramGb: Math.round(os.totalmem() / (1024 ** 3)),
-    gpuVramGb: 0,
-    tier: 0,
-    hasOllama: false,
-  };
-&nbsp;
-  if (!cpuOnly) {
-    // Detect GPU
-    try {
-      const arch = archOverride || os.arch();
-      if (arch === 'arm64') {
-        const model = execSync('sysctl -n machdep.cpu.brand_string').toString().trim();
-        detectAppleSilicon(hardware, model);
-      } else if (arch === 'x86') {
-        detectNvidiaGPU(hardware);
-      }
-    } catch {
-      // nvidia-smi not available or no GPU
-    }
-&nbsp;
-    // Check for Ollama
-    try {
-      execSync('curl -s http://localhost:11434/api/tags', { stdio: 'pipe', timeout: 1000 });
-      hardware.hasOllama = true;
-    } catch {
-      hardware.hasOllama = false;
-    }
+  
+  console.log('[WorkOrderAgent] Work order accepted');
+  agentState.currentWorkOrder = workOrder;
+  
+  // 4. Execute work order
+  console.log('[WorkOrderAgent] Executing work order...');
+  const { result, success } = await executeWorkOrder(workOrder, llmModel, llmConfig);
+  
+  // 5. Complete work order
+  console.log('[WorkOrderAgent] Reporting result...');
+  const completed = await completeWorkOrder(
+    coordinatorUrl, 
+    workOrder.id, 
+    peerId, 
+    result, 
+    success
+  );
+  
+  if (completed) {
+    console.log(`[WorkOrderAgent] Work order completed! Reward: ${workOrder.rewardAmount} SYN`);
+    agentState.totalWorkOrdersCompleted++;
+  } else {
+    console.log('[WorkOrderAgent] Failed to report completion');
   }
-&nbsp;
-  return hardware;
+  
+  agentState.iteration = iteration;
+  agentState.currentWorkOrder = undefined;
+  
+  return { workOrder, completed };
 }
 &nbsp;
 /**
- * Get tier name
+ * Start the work order agent loop
  */
-export function getTierName(tier: HardwareTier): string {
-  const names = ['CPU-Only', 'Tier 1', 'Tier 2', 'Tier 3', 'Tier 4', 'Tier 5'];
-  return names[tier] || 'Unknown';
-}
-&nbsp;
-/** @internal Build OS string — exported for testing */
-export function buildOsString(platform: string, release: string, arch: string, osType: string): string {
-  if (platform === 'darwin') return `macOS ${release} (${arch})`;
-  if (platform === 'linux') return `Linux ${release} (${arch})`;
-  if (platform === 'win32') return `Windows ${release} (${arch})`;
-  return `${osType} ${release} (${arch})`;
-}
-&nbsp;
-/** @internal Estimate Apple Silicon VRAM — exported for testing */
-export function estimateAppleSiliconVram(model: string): number {
-  if (model.includes('M3 Ultra')) return 192;
-  if (model.includes('M3 Max')) return 128;
-  if (model.includes('M2 Ultra')) return 128;
-  if (model.includes('M2 Max')) return 96;
-  if (model.includes('M3 Pro')) return 48;
-  if (model.includes('M2 Pro')) return 18;
-  if (model.includes('M1 Ultra')) return 128;
-  if (model.includes('M1 Max')) return 96;
-  if (model.includes('M3') || model.includes('M2')) return 10;
-  if (model.includes('M1')) return 7;
-  return 0;
-}
-&nbsp;
-/** @internal Parse nvidia-smi CSV output — exported for testing */
-export function parseNvidiaSmiOutput(smiOutput: string): { name: string | null; vramGb: number } {
-  const lines = smiOutput.trim().split('\n');
-&nbsp;
-  const parts = lines[0]?.split(',')?.map((s) =&gt; s.trim()) || <span class="branch-1 cbranch-no" title="branch not covered" >[];</span>
-  const name = parts[0] || 'NVIDIA GPU';
-  const vramStr = parts[1] || '';
-&nbsp;
-  const match = vramStr.match(/(\d+)\s*(GiB|MiB)/);
-  if (!match) return { name, vramGb: 0 };
-&nbsp;
-  const value = parseInt(match[1]);
-  const unit = match[2];
-  const vramGb = unit === 'GiB' ? value : Math.round(value / 1024);
-  return { name, vramGb };
-}
-&nbsp;
-/**
- * Get system information
- */
-export function getSystemInfo(archOverride?: string): SystemInfo {
-  const osPlatform = os.platform();
-  const osRelease = os.release();
-  const arch = archOverride || os.arch();
-  const osString = buildOsString(osPlatform, osRelease, arch, os.type());
-&nbsp;
-  const cpuModel = os.cpus()[0]?.model || <span class="branch-1 cbranch-no" title="branch not covered" >'Unknown CPU';</span>
-  const cpuCores = os.cpus().length || <span class="branch-1 cbranch-no" title="branch not covered" >0;</span>
-  const memoryTotal = os.totalmem();
-&nbsp;
-  let gpuType: string | null = null;
-  let gpuVram = 0;
-&nbsp;
+export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise&lt;void&gt; {
+  if (agentState.isRunning) {
+    throw new Error('Work order agent is already running');
+  }
+  
+  agentState.isRunning = true;
+  const { intervalMs, maxIterations } = config;
+  
+  console.log('🚀 Starting SynapseIA Work Order Agent');
+  console.log(`   Coordinator: ${config.coordinatorUrl}`);
+  console.log(`   Peer ID: ${config.peerId}`);
+  console.log(`   Capabilities: ${config.capabilities.join(', ')}`);
+  console.log(`   LLM: ${config.llmModel.modelId}`);
+  console.log(`   Interval: ${intervalMs}ms`);
+  if (maxIterations) {
+    console.log(`   Max iterations: ${maxIterations}`);
+  }
+  console.log('');
+  
   try {
-    if (arch === 'arm64' &amp;&amp; osPlatform === 'darwin') {
-      const model = execSync('sysctl -n machdep.cpu.brand_string', { encoding: 'utf-8' }).trim();
-      gpuType = model;
-      gpuVram = estimateAppleSiliconVram(model);
-    } else if (arch === 'x86_64' || arch === 'x64') {
+    let iteration = 1;
+&nbsp;
+    /* istanbul ignore next — async loop control, not business logic */
+    while (shouldContinueLoop(agentState.isRunning, iteration, maxIterations)) {
       try {
-        const smiOutput = execSync('nvidia-smi --query-gpu=name,memory.free --format=csv,noheader', { encoding: 'utf-8' });
-        const parsed = parseNvidiaSmiOutput(smiOutput);
-        gpuType = parsed.name;
-        gpuVram = parsed.vramGb;
-      } catch {
-        // No NVIDIA GPU
+        await runWorkOrderAgentIteration(config, iteration);
+      } catch (error) {
+        console.error(`[WorkOrderAgent] Iteration ${iteration} failed:`, (error as Error).message);
       }
+&nbsp;
+      // Sleep before next iteration
+      if (shouldSleepBetweenIterations(agentState.isRunning)) {
+        console.log(`[WorkOrderAgent] Sleeping for ${intervalMs}ms...`);
+        /* istanbul ignore next — async loop control, not business logic */
+        await sleep(intervalMs);
+      }
+&nbsp;
+      iteration++;
     }
-  } catch (error) {
-    // GPU detection failed
-  }
 &nbsp;
-  return {
-    os: osString,
-    cpu: {
-      model: cpuModel,
-      cores: cpuCores,
-    },
-    memory: {
-      totalGb: Math.round(memoryTotal / (1024 ** 3)),
-    },
-    gpu: {
-      type: gpuType,
-      vramGb: gpuVram,
-    },
-  };
+    if (maxIterations &amp;&amp; iteration &gt; maxIterations) {
+      console.log(`\n[WorkOrderAgent] Reached max iterations (${maxIterations}), stopping.`);
+    }
+  } finally {
+    agentState.isRunning = false;
+    console.log('\n[WorkOrderAgent] Stopped');
+  }
 }
 &nbsp;
 /**
- * Get compatible models based on available VRAM
+ * Stop the work order agent
  */
-export function getCompatibleModels(vramGb: number, allModels: ModelInfo[] = []): ModelInfo[] {
-  if (!allModels || allModels.length === 0) {
-    // Default model catalog (subset of full catalog)
-    const defaultModels: ModelInfo[] = [
-      { name: 'qwen2.5-0.5b', minVram: 1, recommendedTier: 1 },
-      { name: 'gemma-3-1b-web', minVram: 2, recommendedTier: 1 },
-      { name: 'phi-2', minVram: 2, recommendedTier: 1 },
-      { name: 'gemma-3-4b', minVram: 4, recommendedTier: 2 },
-      { name: 'qwen2.5-coder-7b', minVram: 6, recommendedTier: 2 },
-      { name: 'llama-3.1-8b-instruct', minVram: 10, recommendedTier: 3 },
-      { name: 'gemma-3-12b', minVram: 10, recommendedTier: 3 },
-      { name: 'gpt-oss-20b', minVram: 16, recommendedTier: 4 },
-      { name: 'qwen2.5-coder-32b', minVram: 24, recommendedTier: 4 },
-      { name: 'glm-4.7-flash', minVram: 24, recommendedTier: 5 },
-      { name: 'qwen3-coder-30b-a3b', minVram: 24, recommendedTier: 5 },
-    ];
-    return defaultModels.filter((model) =&gt; model.minVram &lt;= vramGb);
-  }
-&nbsp;
-  return allModels.filter((model) =&gt; model.minVram &lt;= vramGb);
+export function stopWorkOrderAgent(): void {
+  agentState.isRunning = false;
+  console.log('[WorkOrderAgent] Stopping...');
 }
 &nbsp;
 /**
- * Get recommended tier based on VRAM
+ * Check if the agent should stop due to reaching max iterations
+ * Pure function for testability
  */
-export function getRecommendedTier(vramGb: number): number {
-  if (vramGb &gt;= 80) return 5;
-  if (vramGb &gt;= 48) return 5;
-  if (vramGb &gt;= 24) return 4;
-  if (vramGb &gt;= 16) return 4;
-  if (vramGb &gt;= 14) return 3;
-  if (vramGb &gt;= 10) return 3;
-  if (vramGb &gt;= 6) return 2;
-  if (vramGb &gt;= 1) return 1;
-  return 0;
+export function shouldStopForMaxIterations(
+  iteration: number,
+  maxIterations?: number,
+): boolean {
+  if (!maxIterations) return false;
+  return iteration &gt; maxIterations;
 }
+&nbsp;
+/**
+ * Check if the loop should continue
+ * Pure function for testability
+ */
+export function shouldContinueLoop(
+  isRunning: boolean,
+  iteration: number,
+  maxIterations?: number,
+): boolean {
+  if (!isRunning) return false;
+  if (maxIterations &amp;&amp; iteration &gt; maxIterations) return false;
+  return true;
+}
+&nbsp;
+/**
+ * Check if the agent should sleep between iterations
+ * Pure function for testability
+ */
+export function shouldSleepBetweenIterations(isRunning: boolean): boolean {
+  return isRunning;
+}
+&nbsp;
+/**
+ * Sleep utility
+ */
+function sleep(ms: number): Promise&lt;void&gt; {
+  return new Promise(resolve =&gt; setTimeout(resolve, ms));
+}
+&nbsp;
+// Export for testing
+export const _test = {
+  fetchAvailableWorkOrders,
+  acceptWorkOrder,
+  completeWorkOrder,
+  executeWorkOrder,
+  runWorkOrderAgentIteration,
+  sleep,
+  shouldStopForMaxIterations,
+  shouldContinueLoop,
+  shouldSleepBetweenIterations,
+};
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->

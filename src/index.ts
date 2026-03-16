@@ -6,10 +6,10 @@ import * as path from 'path';
 import * as os from 'os';
 
 import { generateIdentity, loadIdentity, getAgentProfile } from './identity.js';
-import { detectHardware, getTierName } from './hardware.js';
+import { detectHardware, getTierName, type HardwareTier } from './hardware.js';
 import { startPeriodicHeartbeat } from './heartbeat.js';
 import { startAgentLoop, type AgentLoopConfig } from './agent-loop.js';
-import { generateLLM, type LLMModel, type LLMProvider } from './llm-provider.js';
+import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './llm-provider.js';
 
 const program = new Command();
 
@@ -49,7 +49,7 @@ program
 
       // Map provider names to LLMProvider type
       let llmProvider: LLMProvider;
-      let providerId = '';
+      let providerId: CloudProviderId | '' = '';
       if (provider === 'anthropic') {
         llmProvider = 'cloud';
         providerId = 'anthropic';
@@ -97,7 +97,7 @@ program
     console.log(`   CPU: ${hardware.cpuCores} cores`);
     console.log(`   RAM: ${hardware.ramGb} GB`);
     console.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + 'GB VRAM' : 'None'}`);
-    console.log(`   Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
+    console.log(`   Tier: ${hardware.tier} (${getTierName(hardware.tier as HardwareTier)})`);
     const capabilities: string[] = [];
     if (!options.cpu) capabilities.push('gpu');
     if (hardware.hasOllama) capabilities.push('ollama');
