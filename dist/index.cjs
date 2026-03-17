@@ -937,6 +937,36 @@ var agentState = {
   totalRewardsEarned: 0n,
   isRunning: false
 };
+var LLM_PRICE_TABLE = {
+  // OpenAI models
+  "gpt-4o": 5e-3,
+  "gpt-4o-mini": 15e-5,
+  "gpt-4-turbo": 0.01,
+  "gpt-3.5-turbo": 5e-4,
+  // Anthropic models
+  "claude-haiku": 25e-5,
+  "claude-haiku-3": 25e-5,
+  "claude-sonnet": 3e-3,
+  "claude-opus": 0.015,
+  // Google models
+  "gemini-flash": 75e-6,
+  "gemini-pro": 35e-5,
+  // Ollama models (local, $0 cost)
+  "ollama/phi4-mini": 0,
+  "ollama/llama3": 0,
+  "ollama/mistral": 0
+};
+var DEFAULT_MODEL_PRICE = 25e-5;
+function getModelCostPer1kTokens(model) {
+  if (model in LLM_PRICE_TABLE) {
+    return LLM_PRICE_TABLE[model];
+  }
+  if (model.startsWith("ollama/")) {
+    return 0;
+  }
+  console.warn(`[WorkOrderAgent] Unknown model "${model}" \u2014 falling back to claude-haiku pricing ($${DEFAULT_MODEL_PRICE}/1K tokens)`);
+  return DEFAULT_MODEL_PRICE;
+}
 async function fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities) {
   try {
     const capabilitiesParam = capabilities.join(",");
@@ -1003,9 +1033,216 @@ async function completeWorkOrder(coordinatorUrl, workOrderId, peerId, result, su
     return false;
   }
 }
+function isResearchWorkOrder(workOrder) {
+  if (workOrder.type === "RESEARCH") return true;
+  try {
+    const payload = JSON.parse(workOrder.description);
+    return !!(payload.title && payload.abstract);
+  } catch {
+    return false;
+  }
+}
+function extractResearchPayload(workOrder) {
+  try {
+    const payload = JSON.parse(workOrder.description);
+    if (payload.title && payload.abstract) {
+      return {
+        title: payload.title,
+        abstract: payload.abstract
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+function buildResearchPrompt(payload) {
+  return `You are a research node in a decentralized AI network.
+Analyze this paper and respond in JSON:
+{
+  "summary": "2-3 sentence summary",
+  "keyInsights": ["insight1", ..., "insight5"],
+  "proposal": "how this applies to decentralized compute"
+}
+
+Title: ${payload.title}
+Abstract: ${payload.abstract}`;
+}
+async function executeResearchWorkOrder(workOrder, llmModel, llmConfig) {
+  console.log(`[WorkOrderAgent] Executing research: ${workOrder.title}`);
+  const payload = extractResearchPayload(workOrder);
+  if (!payload) {
+    throw new Error("Invalid research payload in work order");
+  }
+  const prompt = buildResearchPrompt(payload);
+  const rawResponse = await generateLLM(llmModel, prompt, llmConfig);
+  try {
+    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+    const result = JSON.parse(jsonStr);
+    if (!result.summary || !Array.isArray(result.keyInsights) || !result.proposal) {
+      throw new Error("Invalid research result structure");
+    }
+    console.log(`[WorkOrderAgent] Research complete, summary: ${result.summary.slice(0, 100)}...`);
+    return { result, rawResponse, success: true };
+  } catch (error) {
+    console.error("[WorkOrderAgent] Failed to parse research result:", error.message);
+    return {
+      result: {
+        summary: "Failed to parse LLM response",
+        keyInsights: [],
+        proposal: rawResponse.slice(0, 500)
+      },
+      rawResponse,
+      success: false
+    };
+  }
+}
+async function submitResearchResult(coordinatorUrl, workOrderId, peerId, result) {
+  try {
+    const response = await fetch(`${coordinatorUrl}/research-queue/results`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workOrderId,
+        peerId,
+        summary: result.summary,
+        keyInsights: result.keyInsights,
+        proposal: result.proposal
+      })
+    });
+    if (!response.ok) {
+      const error = await response.text();
+      console.warn(`[WorkOrderAgent] Failed to submit research result:`, error);
+      return false;
+    }
+    console.log(`[WorkOrderAgent] Research result submitted successfully`);
+    return true;
+  } catch (error) {
+    console.warn("[WorkOrderAgent] Failed to submit research result:", error.message);
+    return false;
+  }
+}
+function saveResearchToBrain(brain, workOrder, result) {
+  const journalEntry = {
+    timestamp: Date.now(),
+    action: `research:${workOrder.id}`,
+    outcome: "completed",
+    lesson: `Paper: ${workOrder.title}
+Summary: ${result.summary.slice(0, 200)}
+Proposal: ${result.proposal.slice(0, 200)}`
+  };
+  brain.journal.push(journalEntry);
+  const memoryEntry = {
+    timestamp: Date.now(),
+    type: "discovery",
+    content: `Research: ${result.summary}`,
+    importance: 0.7
+  };
+  brain.memory.push(memoryEntry);
+  if (brain.journal.length > 100) {
+    brain.journal = brain.journal.slice(-100);
+  }
+  if (brain.memory.length > 100) {
+    brain.memory = brain.memory.slice(-100);
+  }
+}
+function loadEconomicConfig() {
+  const llmModel = process.env.LLM_MODEL ?? "ollama/phi4-mini";
+  const llmType = process.env.LLM_TYPE ?? "ollama";
+  let llmCostPer1kTokens;
+  if (process.env.LLM_COST_PER_1K_TOKENS) {
+    llmCostPer1kTokens = parseFloat(process.env.LLM_COST_PER_1K_TOKENS);
+  } else if (llmType === "ollama") {
+    llmCostPer1kTokens = 0;
+  } else {
+    llmCostPer1kTokens = getModelCostPer1kTokens(llmModel);
+  }
+  return {
+    synPriceUsd: parseFloat(process.env.SYN_PRICE_USD ?? "0.01"),
+    llmType,
+    llmModel,
+    llmCostPer1kTokens,
+    minProfitRatio: parseFloat(process.env.MIN_PROFIT_RATIO ?? "1.5")
+  };
+}
+function estimateLLMCost(abstract, config) {
+  if (config.llmType === "ollama") {
+    return 0;
+  }
+  const inputTokens = Math.ceil(abstract.length / 4);
+  const outputTokens = 500;
+  const totalTokens = inputTokens + outputTokens;
+  const cost = totalTokens / 1e3 * config.llmCostPer1kTokens;
+  return cost;
+}
+function evaluateWorkOrder(workOrder, config) {
+  const bountySyn = BigInt(workOrder.rewardAmount);
+  const bountyUsd = Number(bountySyn) * config.synPriceUsd;
+  if (!isResearchWorkOrder(workOrder)) {
+    return {
+      shouldAccept: true,
+      bountySyn,
+      bountyUsd,
+      estimatedCostUsd: 0,
+      profitRatio: Infinity,
+      reason: "Non-research WO: no compute cost estimation needed"
+    };
+  }
+  const payload = extractResearchPayload(workOrder);
+  if (!payload) {
+    return {
+      shouldAccept: false,
+      bountySyn,
+      bountyUsd,
+      estimatedCostUsd: 0,
+      profitRatio: 0,
+      reason: "Invalid research payload"
+    };
+  }
+  const estimatedCostUsd = estimateLLMCost(payload.abstract, config);
+  if (config.llmType === "ollama") {
+    return {
+      shouldAccept: true,
+      bountySyn,
+      bountyUsd,
+      estimatedCostUsd: 0,
+      profitRatio: Infinity,
+      reason: "Local Ollama model: zero API cost, always accept"
+    };
+  }
+  if (estimatedCostUsd === 0) {
+    return {
+      shouldAccept: true,
+      bountySyn,
+      bountyUsd,
+      estimatedCostUsd: 0,
+      profitRatio: Infinity,
+      reason: "Zero cost estimate, accepting"
+    };
+  }
+  const profitRatio = bountyUsd / estimatedCostUsd;
+  const shouldAccept = profitRatio >= config.minProfitRatio;
+  return {
+    shouldAccept,
+    bountySyn,
+    bountyUsd,
+    estimatedCostUsd,
+    profitRatio,
+    reason: shouldAccept ? `Profitable: ratio ${profitRatio.toFixed(2)}x >= ${config.minProfitRatio}x minimum` : `Not profitable: ratio ${profitRatio.toFixed(2)}x < ${config.minProfitRatio}x minimum`
+  };
+}
 async function executeWorkOrder(workOrder, llmModel, llmConfig) {
   console.log(`[WorkOrderAgent] Executing: ${workOrder.title}`);
   try {
+    if (isResearchWorkOrder(workOrder)) {
+      const { result: result2, rawResponse, success } = await executeResearchWorkOrder(
+        workOrder,
+        llmModel,
+        llmConfig
+      );
+      return { result: rawResponse, success };
+    }
     const prompt = buildWorkOrderPrompt(workOrder);
     const result = await generateLLM(llmModel, prompt, llmConfig);
     console.log(`[WorkOrderAgent] Execution complete, result length: ${result.length} chars`);
@@ -1028,7 +1265,7 @@ Please provide a detailed response to complete this task. Be thorough and accura
 
 Response:`;
 }
-async function runWorkOrderAgentIteration(config, iteration) {
+async function runWorkOrderAgentIteration(config, iteration, brain) {
   const { coordinatorUrl, peerId, capabilities, llmModel, llmConfig } = config;
   console.log(`
 [WorkOrderAgent] Iteration ${iteration} starting...`);
@@ -1041,6 +1278,17 @@ async function runWorkOrderAgentIteration(config, iteration) {
   console.log(`[WorkOrderAgent] Found ${workOrders.length} available work order(s)`);
   const workOrder = workOrders[0];
   console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
+  const economicConfig = loadEconomicConfig();
+  const evaluation = evaluateWorkOrder(workOrder, economicConfig);
+  console.log(`[WorkOrderAgent] Economic evaluation:`);
+  console.log(`  - Bounty: ${evaluation.bountyUsd.toFixed(4)} USD (${workOrder.rewardAmount} SYN)`);
+  console.log(`  - Est. cost: ${evaluation.estimatedCostUsd.toFixed(4)} USD`);
+  console.log(`  - Profit ratio: ${evaluation.profitRatio === Infinity ? "\u221E" : evaluation.profitRatio.toFixed(2) + "x"}`);
+  console.log(`  - Decision: ${evaluation.shouldAccept ? "ACCEPT" : "SKIP"} (${evaluation.reason})`);
+  if (!evaluation.shouldAccept) {
+    console.log("[WorkOrderAgent] Skipping work order due to poor economics");
+    return { completed: false, workOrder };
+  }
   console.log("[WorkOrderAgent] Accepting work order...");
   const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId);
   if (!accepted) {
@@ -1050,7 +1298,34 @@ async function runWorkOrderAgentIteration(config, iteration) {
   console.log("[WorkOrderAgent] Work order accepted");
   agentState.currentWorkOrder = workOrder;
   console.log("[WorkOrderAgent] Executing work order...");
-  const { result, success } = await executeWorkOrder(workOrder, llmModel, llmConfig);
+  let result;
+  let success;
+  let researchResult;
+  if (isResearchWorkOrder(workOrder)) {
+    const research = await executeResearchWorkOrder(workOrder, llmModel, llmConfig);
+    result = research.rawResponse;
+    success = research.success;
+    researchResult = research.result;
+    if (brain && success) {
+      saveResearchToBrain(brain, workOrder, researchResult);
+      console.log("[WorkOrderAgent] Research saved to agent brain");
+    }
+    if (success) {
+      const submitted = await submitResearchResult(
+        coordinatorUrl,
+        workOrder.id,
+        peerId,
+        researchResult
+      );
+      if (submitted) {
+        console.log("[WorkOrderAgent] Research result submitted to research queue");
+      }
+    }
+  } else {
+    const execution = await executeWorkOrder(workOrder, llmModel, llmConfig);
+    result = execution.result;
+    success = execution.success;
+  }
   console.log("[WorkOrderAgent] Reporting result...");
   const completed = await completeWorkOrder(
     coordinatorUrl,
@@ -1067,7 +1342,7 @@ async function runWorkOrderAgentIteration(config, iteration) {
   }
   agentState.iteration = iteration;
   agentState.currentWorkOrder = void 0;
-  return { workOrder, completed };
+  return { workOrder, completed, researchResult };
 }
 async function startWorkOrderAgent(config) {
   if (agentState.isRunning) {
