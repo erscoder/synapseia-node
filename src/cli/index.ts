@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { getOrCreateIdentity } from '../identity.js';
+import { getOrCreateWallet, getWalletAddress, displayWalletCreationWarning, SolanaWallet } from '../wallet.js';
 import { detectHardware, getSystemInfo, getCompatibleModels, getRecommendedTier, type Hardware } from '../hardware.js';
 import {
   getModelCatalog,
@@ -12,6 +13,22 @@ import { parseModel, type LLMModel, type LLMConfig } from '../llm-provider.js';
 import { startWorkOrderAgent, stopWorkOrderAgent, getWorkOrderAgentState } from '../work-order-agent.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, isCloudModel, Config, CONFIG_FILE } from '../config.js';
+
+// ASCII Art Header
+const SYPNASEIA_HEADER = `
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║  ███████╗██╗   ██╗██████╗ ███╗   ██╗ █████╗ ███████╗███████╗██╗ █████╗     ║
+║  ██╔════╝╚██╗ ██╔╝██╔══██╗████╗  ██║██╔══██╗██╔════╝██╔════╝██║██╔══██╗    ║
+║  ███████╗ ╚████╔╝ ██████╔╝██╔██╗ ██║███████║███████╗█████╗  ██║███████║    ║
+║  ╚════██║  ╚██╔╝  ██╔═══╝ ██║╚██╗██║██╔══██║╚════██║██╔══╝  ██║██╔══██║    ║
+║  ███████║   ██║   ██║     ██║ ╚████║██║  ██║███████║███████╗██║██║  ██║    ║
+║  ╚══════╝   ╚═╝   ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝╚═╝  ╚═╝    ║
+║                                                                            ║
+║                    Decentralized AI Compute Network                        ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+`;
 
 const program = new Command();
 
@@ -54,7 +71,13 @@ program
   }) => {
     const config = loadConfig();
     const identity = await getOrCreateIdentity();
+    const { wallet, isNew } = await getOrCreateWallet();
     const hardware = await detectHardware();
+
+    // Show wallet creation warning if this is a new wallet
+    if (isNew) {
+      displayWalletCreationWarning(wallet);
+    }
 
     // Merge config with CLI options (CLI takes precedence)
     const coordinatorUrl = options.coordinator || config.coordinatorUrl;
@@ -110,8 +133,11 @@ program
       console.log(`Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`);
     }
 
-    console.log('Starting SynapseIA node...');
+    // Display awesome header
+    console.log(SYPNASEIA_HEADER);
+    console.log('Starting SYPNASEIA node...');
     console.log(`PeerID: ${identity.peerId}`);
+    console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
     console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
     console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
     if (selectedModel) {
@@ -159,10 +185,13 @@ program
     const identity = getOrCreateIdentity();
     const hardware = await detectHardware();
 
+    // Get wallet address (doesn't require password)
+    const walletAddress = getWalletAddress();
+
     const status: StatusOutput = {
       peerId: identity?.peerId || null,
       tier: hardware.tier,
-      wallet: 'not connected', // TODO: connect wallet
+      wallet: walletAddress,
       balance: 0, // TODO: fetch SYN balance
       staked: 0, // TODO: fetch staked amount
       hasOllama: hardware.hasOllama,
@@ -171,6 +200,7 @@ program
       gpuVramGb: hardware.gpuVramGb,
     };
 
+    console.log(SYPNASEIA_HEADER);
     console.log('Node Status:');
     console.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
     console.log(`Tier:    ${status.tier} (${getTierName(status.tier as any)})`);

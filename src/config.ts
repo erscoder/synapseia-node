@@ -3,7 +3,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 
 // Config file path
-export const CONFIG_DIR = join(homedir(), '.synapseia');
+export const CONFIG_DIR = join(homedir(), '.synapse');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 export interface Config {
