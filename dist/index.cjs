@@ -77,15 +77,15 @@ function detectNvidiaGPU(hardware, smiOutput) {
 }
 function detectHardware(cpuOnly = false, archOverride) {
   const hardware = {
-    cpuCores: os2.cpus().length || 2,
-    ramGb: Math.round(os2.totalmem() / 1024 ** 3),
+    cpuCores: os3.cpus().length || 2,
+    ramGb: Math.round(os3.totalmem() / 1024 ** 3),
     gpuVramGb: 0,
     tier: 0,
     hasOllama: false
   };
   if (!cpuOnly) {
     try {
-      const arch2 = archOverride || os2.arch();
+      const arch2 = archOverride || os3.arch();
       if (arch2 === "arm64") {
         const model = (0, import_child_process.execSync)("sysctl -n machdep.cpu.brand_string").toString().trim();
         detectAppleSilicon(hardware, model);
@@ -139,13 +139,13 @@ function parseNvidiaSmiOutput(smiOutput) {
   return { name, vramGb };
 }
 function getSystemInfo(archOverride) {
-  const osPlatform = os2.platform();
-  const osRelease = os2.release();
-  const arch2 = archOverride || os2.arch();
-  const osString = buildOsString(osPlatform, osRelease, arch2, os2.type());
-  const cpuModel = os2.cpus()[0]?.model || "Unknown CPU";
-  const cpuCores = os2.cpus().length || 0;
-  const memoryTotal = os2.totalmem();
+  const osPlatform = os3.platform();
+  const osRelease = os3.release();
+  const arch2 = archOverride || os3.arch();
+  const osString = buildOsString(osPlatform, osRelease, arch2, os3.type());
+  const cpuModel = os3.cpus()[0]?.model || "Unknown CPU";
+  const cpuCores = os3.cpus().length || 0;
+  const memoryTotal = os3.totalmem();
   let gpuType = null;
   let gpuVram = 0;
   try {
@@ -209,11 +209,11 @@ function getRecommendedTier(vramGb) {
   if (vramGb >= 1) return 1;
   return 0;
 }
-var os2, import_child_process;
+var os3, import_child_process;
 var init_hardware = __esm({
   "src/hardware.ts"() {
     "use strict";
-    os2 = __toESM(require("os"), 1);
+    os3 = __toESM(require("os"), 1);
     import_child_process = require("child_process");
   }
 });
@@ -288,6 +288,204 @@ function getOrCreateIdentity(identityDir = IDENTITY_DIR) {
   } catch {
     return generateIdentity(identityDir);
   }
+}
+
+// src/wallet.ts
+var import_fs2 = require("fs");
+var path2 = __toESM(require("path"), 1);
+var os2 = __toESM(require("os"), 1);
+var crypto2 = __toESM(require("crypto"), 1);
+var WALLET_DIR = path2.join(os2.homedir(), ".synapse");
+var WALLET_FILE = path2.join(WALLET_DIR, "wallet.json");
+var BACKUP_FILE = path2.join(WALLET_DIR, "wallet-backup.json");
+var PBKDF2_ITERATIONS = 1e5;
+var KEY_LENGTH = 32;
+var IV_LENGTH = 16;
+var SALT_LENGTH = 32;
+var AUTH_TAG_LENGTH = 16;
+function deriveKey(password2, salt) {
+  return crypto2.pbkdf2Sync(password2, salt, PBKDF2_ITERATIONS, KEY_LENGTH, "sha256");
+}
+function encryptWallet(wallet, password2) {
+  const salt = crypto2.randomBytes(SALT_LENGTH);
+  const iv = crypto2.randomBytes(IV_LENGTH);
+  const key = deriveKey(password2, salt);
+  const cipher = crypto2.createCipheriv("aes-256-gcm", key, iv);
+  const secretKeyBuffer = Buffer.from(wallet.secretKey);
+  const encrypted = Buffer.concat([
+    cipher.update(secretKeyBuffer),
+    cipher.final()
+  ]);
+  const authTag = cipher.getAuthTag();
+  const combined = Buffer.concat([salt, iv, authTag, encrypted]);
+  return {
+    version: 1,
+    publicKey: wallet.publicKey,
+    encryptedData: combined.toString("base64"),
+    salt: salt.toString("base64"),
+    kdf: "pbkdf2-sha256",
+    kdfIterations: PBKDF2_ITERATIONS,
+    createdAt: wallet.createdAt
+  };
+}
+function decryptWallet(encryptedWallet, password2) {
+  const combined = Buffer.from(encryptedWallet.encryptedData, "base64");
+  const salt = combined.subarray(0, SALT_LENGTH);
+  const iv = combined.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+  const authTag = combined.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
+  const encrypted = combined.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
+  const key = deriveKey(password2, salt);
+  const decipher = crypto2.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  try {
+    const decrypted = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]);
+    return {
+      publicKey: encryptedWallet.publicKey,
+      secretKey: Array.from(decrypted),
+      createdAt: encryptedWallet.createdAt
+    };
+  } catch (error) {
+    throw new Error("Invalid password. Wallet decryption failed.");
+  }
+}
+async function promptForPassword(message = "Enter wallet password: ") {
+  const envPassword = process.env.WALLET_PASSWORD;
+  if (envPassword) {
+    return envPassword;
+  }
+  const { password: password2 } = await import("@inquirer/prompts");
+  return password2({ message });
+}
+async function promptForNewPassword() {
+  const envPassword = process.env.WALLET_PASSWORD;
+  if (envPassword) {
+    if (envPassword.length < 8) {
+      throw new Error("WALLET_PASSWORD must be at least 8 characters");
+    }
+    return envPassword;
+  }
+  const { password: password2 } = await import("@inquirer/prompts");
+  const pass1 = await password2({
+    message: "Create wallet password (min 8 characters):",
+    validate: (input2) => {
+      if (input2.length < 8) return "Password must be at least 8 characters";
+      return true;
+    }
+  });
+  const pass2 = await password2({
+    message: "Confirm wallet password:"
+  });
+  if (pass1 !== pass2) {
+    throw new Error("Passwords do not match");
+  }
+  return pass1;
+}
+async function generateWallet(walletDir = WALLET_DIR, password2) {
+  if (!(0, import_fs2.existsSync)(walletDir)) {
+    (0, import_fs2.mkdirSync)(walletDir, { recursive: true, mode: 448 });
+  }
+  if (!password2) {
+    password2 = await promptForNewPassword();
+  }
+  try {
+    const solanaWeb3 = await import("@solana/web3.js");
+    const bip39 = await import("bip39");
+    const { Keypair } = solanaWeb3;
+    const mnemonic = bip39.generateMnemonic(128);
+    const seed = await bip39.mnemonicToSeed(mnemonic);
+    const seedBytes = new Uint8Array(seed).slice(0, 32);
+    const keypair = Keypair.fromSeed(seedBytes);
+    const wallet = {
+      publicKey: keypair.publicKey.toBase58(),
+      secretKey: Array.from(keypair.secretKey),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      mnemonic
+      // Include mnemonic for display
+    };
+    const encryptedWallet = encryptWallet(wallet, password2);
+    (0, import_fs2.writeFileSync)(
+      path2.join(walletDir, "wallet.json"),
+      JSON.stringify(encryptedWallet, null, 2),
+      { mode: 384 }
+    );
+    const backupData = {
+      version: 1,
+      publicKey: wallet.publicKey,
+      mnemonic,
+      encrypted: true,
+      encryptedSecretKey: encryptedWallet.encryptedData,
+      createdAt: wallet.createdAt,
+      warning: "IMPORTANT: Store this mnemonic in a secure location. Anyone with access to these words can control your funds."
+    };
+    (0, import_fs2.writeFileSync)(
+      BACKUP_FILE,
+      JSON.stringify(backupData, null, 2),
+      { mode: 384 }
+    );
+    return {
+      wallet: { ...wallet },
+      isNew: true
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to generate Solana wallet. Make sure @solana/web3.js and bip39 are installed. ${error}`
+    );
+  }
+}
+async function loadWallet(walletDir = WALLET_DIR, password2) {
+  const walletPath = path2.join(walletDir, "wallet.json");
+  if (!(0, import_fs2.existsSync)(walletPath)) {
+    throw new Error(`Wallet not found at ${walletPath}. Run generateWallet() first.`);
+  }
+  const content = (0, import_fs2.readFileSync)(walletPath, "utf-8");
+  const encryptedWallet = JSON.parse(content);
+  if (!encryptedWallet.encryptedData) {
+    throw new Error("Invalid wallet file structure");
+  }
+  if (!password2) {
+    password2 = await promptForPassword();
+  }
+  return decryptWallet(encryptedWallet, password2);
+}
+async function getOrCreateWallet(walletDir = WALLET_DIR, password2) {
+  try {
+    const wallet = await loadWallet(walletDir, password2);
+    return { wallet, isNew: false };
+  } catch (error) {
+    if (error.message.includes("Wallet not found")) {
+      return generateWallet(walletDir, password2);
+    }
+    throw error;
+  }
+}
+function getWalletAddress(walletDir = WALLET_DIR) {
+  try {
+    const walletPath = path2.join(walletDir, "wallet.json");
+    if (!(0, import_fs2.existsSync)(walletPath)) {
+      return "not configured";
+    }
+    const content = (0, import_fs2.readFileSync)(walletPath, "utf-8");
+    const encryptedWallet = JSON.parse(content);
+    return encryptedWallet.publicKey;
+  } catch {
+    return "not configured";
+  }
+}
+function displayWalletCreationWarning(wallet) {
+  if (!wallet.mnemonic) return;
+  console.log("\n" + "\u2550".repeat(70));
+  console.log("  \u{1F510} IMPORTANT: SAVE YOUR RECOVERY PHRASE");
+  console.log("\u2550".repeat(70));
+  console.log("\nYour Solana wallet has been created. Write down these 12 words\nand store them in a secure, offline location:");
+  console.log("\n  " + wallet.mnemonic);
+  console.log("\n\u26A0\uFE0F  Anyone with access to these words can control your funds.");
+  console.log("\u26A0\uFE0F  Never share your recovery phrase with anyone.");
+  console.log("\nA backup has also been saved to:");
+  console.log(`  ${BACKUP_FILE}`);
+  console.log("\u2550".repeat(70) + "\n");
 }
 
 // src/cli/index.ts
@@ -495,8 +693,12 @@ var FULL_CATALOG = [...MODEL_CATALOG, ...CLOUD_MODELS];
 function getModelCatalog() {
   return [...MODEL_CATALOG];
 }
+function normalizeModelName(name) {
+  return name.replace(/^ollama\//, "").replace(/:/g, "-").toLowerCase();
+}
 function getModelByName(name) {
-  return MODEL_CATALOG.find((m) => m.name === name) || null;
+  const normalized = normalizeModelName(name);
+  return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
 }
 
 // src/ollama.ts
@@ -926,10 +1128,10 @@ function sleep(ms) {
 var import_prompts = require("@inquirer/prompts");
 
 // src/config.ts
-var import_fs2 = require("fs");
+var import_fs3 = require("fs");
 var import_path = require("path");
 var import_os = require("os");
-var CONFIG_DIR = (0, import_path.join)((0, import_os.homedir)(), ".synapseia");
+var CONFIG_DIR = (0, import_path.join)((0, import_os.homedir)(), ".synapse");
 var CONFIG_FILE = (0, import_path.join)(CONFIG_DIR, "config.json");
 function defaultConfig() {
   return {
@@ -938,9 +1140,9 @@ function defaultConfig() {
   };
 }
 function loadConfig() {
-  if ((0, import_fs2.existsSync)(CONFIG_FILE)) {
+  if ((0, import_fs3.existsSync)(CONFIG_FILE)) {
     try {
-      return JSON.parse((0, import_fs2.readFileSync)(CONFIG_FILE, "utf-8"));
+      return JSON.parse((0, import_fs3.readFileSync)(CONFIG_FILE, "utf-8"));
     } catch {
       return defaultConfig();
     }
@@ -948,22 +1150,40 @@ function loadConfig() {
   return defaultConfig();
 }
 function saveConfig(config) {
-  if (!(0, import_fs2.existsSync)(CONFIG_DIR)) {
-    (0, import_fs2.mkdirSync)(CONFIG_DIR, { recursive: true });
+  if (!(0, import_fs3.existsSync)(CONFIG_DIR)) {
+    (0, import_fs3.mkdirSync)(CONFIG_DIR, { recursive: true });
   }
-  (0, import_fs2.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2));
+  (0, import_fs3.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 function isCloudModel(model) {
   return model.startsWith("openai-compat/") || model.startsWith("anthropic/") || model.startsWith("kimi/") || model.startsWith("minimax/");
 }
 
 // src/cli/index.ts
+var SYPNASEIA_HEADER = `
+\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557
+\u2551                                                                            \u2551
+\u2551  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2557   \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557     \u2551
+\u2551  \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557    \u2551
+\u2551  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u255A\u2588\u2588\u2588\u2588\u2554\u255D \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551    \u2551
+\u2551  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551  \u255A\u2588\u2588\u2554\u255D  \u2588\u2588\u2554\u2550\u2550\u2550\u255D \u2588\u2588\u2551\u255A\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551    \u2551
+\u2551  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2551     \u2588\u2588\u2551 \u255A\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551    \u2551
+\u2551  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D   \u255A\u2550\u255D     \u255A\u2550\u255D  \u255A\u2550\u2550\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D    \u2551
+\u2551                                                                            \u2551
+\u2551                    Decentralized AI Compute Network                        \u2551
+\u2551                                                                            \u2551
+\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D
+`;
 var program = new import_commander.Command();
 program.name("synapseia").description("SynapseIA Network Node CLI").version("0.1.0");
 program.command("start").description("Start SynapseIA node").option("--model <name>", "Model to use (default: recommended for hardware)").option("--llm-url <url>", "Custom LLM API base URL (for openai-compat provider)").option("--llm-key <key>", "API key for cloud LLM provider").option("--coordinator <url>", "Coordinator URL (default: http://localhost:3001)").option("--max-iterations <n>", "Maximum work order iterations (default: infinite)", parseInt).action(async (options) => {
   const config = loadConfig();
   const identity = await getOrCreateIdentity();
+  const { wallet, isNew } = await getOrCreateWallet();
   const hardware = await detectHardware();
+  if (isNew) {
+    displayWalletCreationWarning(wallet);
+  }
   const coordinatorUrl = options.coordinator || config.coordinatorUrl;
   const model = options.model || config.defaultModel;
   const llmUrl = options.llmUrl || config.llmUrl;
@@ -1005,8 +1225,10 @@ program.command("start").description("Start SynapseIA node").option("--model <na
     selectedModel = compatibleModels[0];
     console.log(`Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`);
   }
-  console.log("Starting SynapseIA node...");
+  console.log(SYPNASEIA_HEADER);
+  console.log("Starting SYPNASEIA node...");
   console.log(`PeerID: ${identity.peerId}`);
+  console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
   console.log(`Tier: ${hardware.tier} (${getTierName2(hardware.tier)})`);
   console.log(`Ollama: ${hardware.hasOllama ? "yes" : "no"}`);
   if (selectedModel) {
@@ -1042,11 +1264,11 @@ program.command("start").description("Start SynapseIA node").option("--model <na
 program.command("status").description("Show node status").action(async () => {
   const identity = getOrCreateIdentity();
   const hardware = await detectHardware();
+  const walletAddress = getWalletAddress();
   const status = {
     peerId: identity?.peerId || null,
     tier: hardware.tier,
-    wallet: "not connected",
-    // TODO: connect wallet
+    wallet: walletAddress,
     balance: 0,
     // TODO: fetch SYN balance
     staked: 0,
@@ -1056,6 +1278,7 @@ program.command("status").description("Show node status").action(async () => {
     ramGb: hardware.ramGb,
     gpuVramGb: hardware.gpuVramGb
   };
+  console.log(SYPNASEIA_HEADER);
   console.log("Node Status:");
   console.log(`PeerID:  ${status.peerId || "Not initialized"}`);
   console.log(`Tier:    ${status.tier} (${getTierName2(status.tier)})`);

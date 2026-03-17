@@ -348,9 +348,23 @@ export function getModelCatalog(): ModelInfo[] {
 }
 
 /**
- * Get model by name
+ * Normalize model name from various formats to catalog format
+ * - Removes 'ollama/' prefix
+ * - Replaces ':' with '-'
+ * - Handles other common separators
+ */
+export function normalizeModelName(name: string): string {
+  return name
+    .replace(/^ollama\//, '')
+    .replace(/:/g, '-')
+    .toLowerCase();
+}
+
+/**
+ * Get model by name (supports ollama format: ollama/qwen2.5:0.5b)
  */
 export function getModelByName(name: string): ModelInfo | null {
-  return MODEL_CATALOG.find((m) => m.name === name) || null;
+  const normalized = normalizeModelName(name);
+  return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
 }
 
