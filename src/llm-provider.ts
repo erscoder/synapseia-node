@@ -51,6 +51,7 @@ export const SUPPORTED_MODELS: Record<string, LLMModel> = {
   'anthropic/sonnet-4.6': { provider: 'cloud', providerId: 'anthropic', modelId: 'sonnet-4.6' },
   'kimi/k2.5': { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.5' },
   'minimax/MiniMax-M2.5': { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.5' },
+  'openai-compat/asi1': { provider: 'cloud', providerId: 'openai-compat', modelId: 'asi1' },
   'openai-compat/asi1-mini': { provider: 'cloud', providerId: 'openai-compat', modelId: 'asi1-mini' },
   'openai-compat/custom': { provider: 'cloud', providerId: 'openai-compat', modelId: 'custom' },
 };
@@ -66,7 +67,7 @@ export const MODEL_METADATA = {
   'sonnet-4.6': { latencyMs: 200, maxTokens: 200000, costPerCall: 0.003 },
   'kimi-k2.5': { latencyMs: 300, maxTokens: 131072, costPerCall: 0.002 },
   'MiniMax-M2.5': { latencyMs: 250, maxTokens: 131072, costPerCall: 0.0015 },
-  'asi1-mini': { latencyMs: 400, maxTokens: 8192, costPerCall: 0.001 },
+  'asi1': { latencyMs: 400, maxTokens: 8192, costPerCall: 0.001 },
   'custom': { latencyMs: 500, maxTokens: 4096 },
 };
 
@@ -84,9 +85,18 @@ export function getOptionalString<T>(obj: T | null | undefined, key: keyof T): s
  */
 export function parseModel(modelStr: string): LLMModel | null {
   const model = SUPPORTED_MODELS[modelStr];
-  if (!model) return null;
+  if (model) return model;
 
-  return model;
+  // Dynamic fallback for openai-compat/<modelId> — allows any custom model
+  // e.g. "openai-compat/asi1", "openai-compat/gpt-4o-mini", etc.
+  if (modelStr.startsWith('openai-compat/')) {
+    const modelId = modelStr.slice('openai-compat/'.length);
+    if (modelId) {
+      return { provider: 'cloud', providerId: 'openai-compat', modelId };
+    }
+  }
+
+  return null;
 }
 
 /**
