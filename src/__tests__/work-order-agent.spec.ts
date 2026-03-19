@@ -1205,68 +1205,62 @@ describe('WorkOrderAgent', () => {
 
         it('should load config from environment variables', () => {
           process.env.SYN_PRICE_USD = '0.05';
-          process.env.LLM_TYPE = 'cloud';
-          process.env.LLM_MODEL = 'gpt-4o-mini';
+          // llmType is now derived from the model name, not a separate env var
+          process.env.LLM_MODEL = 'gpt-4o-mini'; // cloud model (no ollama/ prefix)
           process.env.LLM_COST_PER_1K_TOKENS = '0.01';
           process.env.MIN_PROFIT_RATIO = '2.0';
 
           const config = loadEconomicConfig();
           expect(config.synPriceUsd).toBe(0.05);
-          expect(config.llmType).toBe('cloud');
+          expect(config.llmType).toBe('cloud'); // derived from model name
           expect(config.llmModel).toBe('gpt-4o-mini');
           expect(config.llmCostPer1kTokens).toBe(0.01);
           expect(config.minProfitRatio).toBe(2.0);
 
           // Cleanup
           delete process.env.SYN_PRICE_USD;
-          delete process.env.LLM_TYPE;
           delete process.env.LLM_MODEL;
           delete process.env.LLM_COST_PER_1K_TOKENS;
           delete process.env.MIN_PROFIT_RATIO;
         });
 
-        it('should lookup price from table when LLM_MODEL is set', () => {
-          process.env.LLM_TYPE = 'cloud';
-          process.env.LLM_MODEL = 'gpt-4o-mini';
+        it('should lookup price from table when LLM_MODEL is a cloud model', () => {
+          process.env.LLM_MODEL = 'gpt-4o-mini'; // cloud model by name
           delete process.env.LLM_COST_PER_1K_TOKENS;
 
           const config = loadEconomicConfig();
-          expect(config.llmType).toBe('cloud');
+          expect(config.llmType).toBe('cloud'); // derived from model name
           expect(config.llmModel).toBe('gpt-4o-mini');
           expect(config.llmCostPer1kTokens).toBe(0.00015); // From price table
 
           // Cleanup
-          delete process.env.LLM_TYPE;
           delete process.env.LLM_MODEL;
         });
 
-        it('should fallback to haiku price for unknown models', () => {
-          process.env.LLM_TYPE = 'cloud';
-          process.env.LLM_MODEL = 'unknown-model-xyz';
+        it('should fallback to haiku price for unknown cloud models', () => {
+          process.env.LLM_MODEL = 'openai-compat/unknown-model-xyz'; // cloud prefix, unknown name
           delete process.env.LLM_COST_PER_1K_TOKENS;
 
           const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-          
+
           const config = loadEconomicConfig();
+          expect(config.llmType).toBe('cloud');
           expect(config.llmCostPer1kTokens).toBe(0.00025); // Fallback to haiku
           expect(consoleSpy).toHaveBeenCalledWith(
             expect.stringContaining('Unknown model')
           );
 
           consoleSpy.mockRestore();
-          delete process.env.LLM_TYPE;
           delete process.env.LLM_MODEL;
         });
 
         it('should use manual override over price table', () => {
-          process.env.LLM_TYPE = 'cloud';
           process.env.LLM_MODEL = 'gpt-4o-mini';
           process.env.LLM_COST_PER_1K_TOKENS = '0.999'; // Manual override
 
           const config = loadEconomicConfig();
           expect(config.llmCostPer1kTokens).toBe(0.999); // Override, not table
 
-          delete process.env.LLM_TYPE;
           delete process.env.LLM_MODEL;
           delete process.env.LLM_COST_PER_1K_TOKENS;
         });

@@ -360,9 +360,17 @@ export async function executeResearchWorkOrder(
 
   // Parse JSON response
   try {
-    // Try to extract JSON from response (LLM may wrap it in markdown)
-    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+    // Try to extract JSON from response (LLM may wrap it in markdown code fences)
+    // 1. Strip ```json ... ``` or ``` ... ``` blocks
+    // 2. Fall back to first {...} match
+    let jsonStr = rawResponse;
+    const fenceMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    } else {
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+    }
     const result = JSON.parse(jsonStr) as ResearchResult;
 
     // Validate required fields
@@ -463,10 +471,19 @@ export function saveResearchToBrain(
  * 1. LLM_COST_PER_1K_TOKENS env var (manual override)
  * 2. Price table lookup by LLM_MODEL
  * 3. Default fallback (claude-haiku pricing)
+ * 
+ * @param runtimeModel - The actual model being used (from CLI config), takes
+ *   precedence over the LLM_MODEL env var so cloud models are detected correctly.
  */
-export function loadEconomicConfig(): EconomicConfig {
-  const llmModel = process.env.LLM_MODEL ?? 'ollama/phi4-mini';
-  const llmType = (process.env.LLM_TYPE as 'ollama' | 'cloud') ?? 'ollama';
+export function loadEconomicConfig(runtimeModel?: string): EconomicConfig {
+  // runtimeModel (from CLI) wins over env var so cloud models aren't mistaken for ollama
+  const llmModel = runtimeModel ?? process.env.LLM_MODEL ?? 'ollama/phi4-mini';
+
+  // Derive llmType from the resolved model name rather than trusting a separate env var.
+  // A model is considered local (ollama) only when it explicitly has the ollama/ prefix.
+  // Everything else (gpt-*, claude-*, openai-compat/*, anthropic/*, etc.) is cloud.
+  const isOllamaModel = llmModel.startsWith('ollama/');
+  const llmType: 'ollama' | 'cloud' = isOllamaModel ? 'ollama' : 'cloud';
   
   // Get cost from price table or fallback
   let llmCostPer1kTokens: number;
@@ -481,7 +498,7 @@ export function loadEconomicConfig(): EconomicConfig {
     // Look up in price table with fallback
     llmCostPer1kTokens = getModelCostPer1kTokens(llmModel);
   }
-  
+
   return {
     synPriceUsd: parseFloat(process.env.SYN_PRICE_USD ?? '0.01'),
     llmType,
@@ -684,7 +701,8 @@ export async function runWorkOrderAgentIteration(
   console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
   // 2.5 Evaluate economic viability (rational node behavior)
-  const economicConfig = loadEconomicConfig();
+  // Pass the runtime model so cloud models are detected correctly (not treated as Ollama)
+  const economicConfig = loadEconomicConfig(config.llmModel?.modelId);
   const evaluation = evaluateWorkOrder(workOrder, economicConfig);
 
   console.log(`[WorkOrderAgent] Economic evaluation:`);
