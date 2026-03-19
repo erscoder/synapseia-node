@@ -126,7 +126,8 @@ describe('WorkOrderAgent', () => {
       const result = await acceptWorkOrder(
         'http://localhost:3001',
         'wo_1',
-        'peer1'
+        'peer1',
+        ['llm']
       );
 
       expect(result).toBe(true);
@@ -138,6 +139,7 @@ describe('WorkOrderAgent', () => {
           body: JSON.stringify({
             workOrderId: 'wo_1',
             assigneeAddress: 'peer1',
+            nodeCapabilities: ['llm'],
           }),
         }
       );

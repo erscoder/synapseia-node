@@ -221,7 +221,8 @@ export async function fetchAvailableWorkOrders(
 export async function acceptWorkOrder(
   coordinatorUrl: string,
   workOrderId: string,
-  peerId: string
+  peerId: string,
+  nodeCapabilities: string[] = []
 ): Promise<boolean> {
   try {
     const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/accept`, {
@@ -230,6 +231,7 @@ export async function acceptWorkOrder(
       body: JSON.stringify({
         workOrderId,
         assigneeAddress: peerId,
+        nodeCapabilities,
       }),
     });
 
@@ -698,7 +700,7 @@ export async function runWorkOrderAgentIteration(
 
   // 3. Accept work order
   console.log('[WorkOrderAgent] Accepting work order...');
-  const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId);
+  const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
 
   if (!accepted) {
     console.log('[WorkOrderAgent] Failed to accept work order, skipping');
