@@ -13,6 +13,23 @@ import { generateLLM, type LLMConfig } from './llm-provider.js';
 import { parseModel, type LLMModel } from './llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
 
+/**
+ * Parse rewardAmount string to lamports BigInt.
+ * The coordinator API returns SYN as decimal string e.g. "100.000000000"
+ * (9 decimal places = lamports). BigInt() cannot handle decimals, so we
+ * strip the decimal point and convert directly.
+ */
+function parseSynToLamports(rewardStr: string): bigint {
+  if (!rewardStr) return 0n;
+  // If it already looks like a plain integer (no dot), convert directly
+  if (!rewardStr.includes('.')) return BigInt(rewardStr);
+  // "100.000000000" → integer part "100", decimal part "000000000" (9 digits)
+  const [intPart, decPart = ''] = rewardStr.split('.');
+  const decimals = 9;
+  const paddedDec = decPart.padEnd(decimals, '0').slice(0, decimals);
+  return BigInt(intPart) * 1_000_000_000n + BigInt(paddedDec);
+}
+
 export interface WorkOrderAgentConfig {
   coordinatorUrl: string;
   peerId: string;
@@ -261,7 +278,7 @@ export async function completeWorkOrder(
 
     // Track rewards
     if (success && data.rewardAmount) {
-      agentState.totalRewardsEarned += BigInt(data.rewardAmount);
+      agentState.totalRewardsEarned += parseSynToLamports(data.rewardAmount);
     }
 
     return true;
@@ -516,7 +533,7 @@ export function evaluateWorkOrder(
   workOrder: WorkOrder,
   config: EconomicConfig
 ): WorkOrderEvaluation {
-  const bountySyn = BigInt(workOrder.rewardAmount);
+  const bountySyn = parseSynToLamports(workOrder.rewardAmount);
   const bountyUsd = Number(bountySyn) * config.synPriceUsd;
 
   // Non-research work orders: always accept (no compute cost tracking yet)
