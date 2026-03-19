@@ -68,4 +68,20 @@ export async function stakeTokens(
   walletAddress: string,
   amount: string,
   coordinatorUrl: string = 'http://localhost:3001',
-): Promise<{ success: boolean; txSignature?: string; stakeAddress?: string; error?: string }
+): Promise<{ success: boolean; txSignature?: string; stakeAddress?: string; error?: string }> {
+  try {
+    const res = await fetch(`${coordinatorUrl}/stake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress, amount }),
+    });
+    if (!res.ok) {
+      const err = await res.json() as { message?: string };
+      return { success: false, error: err.message || 'Stake failed' };
+    }
+    const data = await res.json() as { txSignature?: string; stakeAddress?: string };
+    return { success: true, txSignature: data.txSignature, stakeAddress: data.stakeAddress };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
