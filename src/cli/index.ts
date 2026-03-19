@@ -14,6 +14,39 @@ import { startWorkOrderAgent, stopWorkOrderAgent, getWorkOrderAgentState } from 
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, isCloudModel, Config, CONFIG_FILE } from '../config.js';
 
+// ── Global SIGINT handler ────────────────────────────────────────────────────
+// Inquirer throws ExitPromptError on Ctrl+C — catch it globally so it never
+// surfaces as an unhandled rejection or ugly stack trace.
+function isExitError(e: unknown): boolean {
+  const err = e as { constructor?: { name?: string }; message?: string };
+  return (
+    err?.constructor?.name === 'ExitPromptError' ||
+    !!err?.message?.includes('force closed')
+  );
+}
+process.on('uncaughtException', (err: unknown) => {
+  if (isExitError(err)) { console.log('\nBye 👋'); process.exit(0); }
+  console.error(err); process.exit(1);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  if (isExitError(reason)) { console.log('\nBye 👋'); process.exit(0); }
+  console.error(reason); process.exit(1);
+});
+
+/**
+ * Wraps any @inquirer/prompts call.
+ * Returns null if the user hits Ctrl+C or ESC instead of throwing.
+ * Callers should check for null and return early (acts as "cancel/back").
+ */
+async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isExitError(err)) return null;
+    throw err;
+  }
+}
+
 // ASCII Art Header
 const SYPNASEIA_HEADER = `
 ╔════════════════════════════════════════════════════════════════════════════╗
@@ -302,24 +335,30 @@ program
     }
 
     console.log('🔧 SynapseIA Configuration Wizard\n');
+    console.log('Tip: Press Ctrl+C at any time to cancel.\n');
 
-    // Coordinator URL
-    const coordinatorUrl = await input({
-      message: 'Coordinator URL:',
-      default: config.coordinatorUrl,
-      validate: (value) => {
-        if (!value) return 'Coordinator URL is required';
-        if (!value.startsWith('http')) return 'URL must start with http:// or https://';
-        return true;
-      },
-    });
-    config.coordinatorUrl = coordinatorUrl;
-
-    // Model selection
     const catalog = getModelCatalog();
     const hardware = await detectHardware();
     const compatibleModels = getCompatibleModels(hardware.gpuVramGb || 0);
 
+    // ── Navigation constants ─────────────────────────────────────────────
+    const BACK = '__BACK__';
+    const backChoice = { name: '← Back', value: BACK };
+
+    // ── Step 1: Coordinator URL ──────────────────────────────────────────
+    const coordinatorAnswer = await safePrompt(() => input({
+      message: 'Coordinator URL:',
+      default: config.coordinatorUrl,
+      validate: (v) => {
+        if (!v) return 'Required';
+        if (!v.startsWith('http')) return 'Must start with http';
+        return true;
+      },
+    }));
+    if (coordinatorAnswer === null) { console.log('Cancelled.'); return; }
+    config.coordinatorUrl = coordinatorAnswer;
+
+    // ── Step 2: Model mode ───────────────────────────────────────────────
     const modelChoices = [
       { name: 'Use recommended model for your hardware', value: 'recommended' },
       { name: 'Select from compatible models', value: 'compatible' },
@@ -327,124 +366,143 @@ program
       { name: 'Use cloud LLM provider', value: 'cloud' },
     ];
 
-    const modelSelectionMode = await select({
+    const modelSelectionMode = await safePrompt(() => select({
       message: 'How would you like to configure your LLM model?',
-      choices: modelChoices,
-    });
+      choices: [...modelChoices, backChoice],
+    }));
+    if (modelSelectionMode === null || modelSelectionMode === BACK) { console.log('Cancelled.'); return; }
 
+    // ── Model selection sub-wizard with Back support ───────────────────
     if (modelSelectionMode === 'recommended') {
       if (compatibleModels.length > 0) {
         config.defaultModel = compatibleModels[0].name;
-        console.log(`✓ Selected recommended model: ${config.defaultModel}`);
+        console.log(`✓ Recommended: ${config.defaultModel}`);
       } else {
-        console.log('⚠ No compatible local models found. Please select a cloud provider.');
-        const cloudModel = await select({
+        console.log('⚠ No compatible local models. Select a cloud provider.');
+        const cloudModel = await safePrompt(() => select({
           message: 'Select cloud LLM provider:',
           choices: [
-            { name: 'ASI1 Mini (openai-compat)', value: 'openai-compat/asi1-mini' },
             { name: 'ASI1 (openai-compat)', value: 'openai-compat/asi1' },
-            { name: 'Custom OpenAI-compatible', value: 'custom' },
+            { name: 'ASI1 Mini (openai-compat)', value: 'openai-compat/asi1-mini' },
+            backChoice,
           ],
-        });
-        config.defaultModel = cloudModel === 'custom' ? 'openai-compat/custom' : cloudModel;
+        }));
+        if (cloudModel === null || cloudModel === BACK) { console.log('Cancelled.'); return; }
+        config.defaultModel = cloudModel;
       }
     } else if (modelSelectionMode === 'compatible') {
       if (compatibleModels.length === 0) {
         console.log('⚠ No compatible models found for your hardware.');
-        const useCloud = await confirm({
-          message: 'Would you like to use a cloud LLM provider instead?',
+        const useCloud = await safePrompt(() => confirm({
+          message: 'Use a cloud LLM provider instead?',
           default: true,
-        });
+        }));
+        if (useCloud === null) { console.log('Cancelled.'); return; }
         if (useCloud) {
-          const cloudModel = await select({
+          const cloudModel = await safePrompt(() => select({
             message: 'Select cloud LLM provider:',
             choices: [
-              { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini' },
               { name: 'ASI1', value: 'openai-compat/asi1' },
+              { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini' },
+              backChoice,
             ],
-          });
+          }));
+          if (cloudModel === null || cloudModel === BACK) { console.log('Cancelled.'); return; }
           config.defaultModel = cloudModel;
-        } else {
-          console.log('Skipping model configuration.');
         }
       } else {
-        const modelChoices = compatibleModels.map((m) => ({
-          name: `${m.name} (${m.minVram}GB VRAM, Tier ${m.recommendedTier})`,
-          value: m.name,
-          description: (m as ModelInfo).description,
-        }));
-        const selectedModel = await select({
+        const compatChoices = [
+          ...compatibleModels.map((m) => ({
+            name: `${m.name} (${m.minVram}GB VRAM, Tier ${m.recommendedTier})`,
+            value: m.name,
+            description: (m as ModelInfo).description,
+          })),
+          backChoice,
+        ];
+        const selectedModel = await safePrompt(() => select({
           message: 'Select a model:',
-          choices: modelChoices,
-        });
+          choices: compatChoices,
+        }));
+        if (selectedModel === null || selectedModel === BACK) { console.log('Cancelled.'); return; }
         config.defaultModel = selectedModel;
       }
     } else if (modelSelectionMode === 'all') {
-      const allModelChoices = catalog.map((m) => ({
-        name: `${m.name} (${m.category}, ${m.minVram}GB VRAM)`,
-        value: m.name,
-        description: (m as ModelInfo).description,
-        disabled: m.recommendedTier > hardware.tier ? 'Requires higher tier hardware' : false,
+      const allChoices = [
+        ...catalog.map((m) => ({
+          name: `${m.name} (${m.category}, ${m.minVram}GB VRAM)`,
+          value: m.name,
+          description: (m as ModelInfo).description,
+          disabled: m.recommendedTier > hardware.tier ? 'Requires higher tier' : false,
+        })),
+        backChoice,
+      ];
+      const selectedModel = await safePrompt(() => select({
+        message: 'Select a model:',
+        choices: allChoices,
       }));
-      const selectedModel = await select({
-        message: 'Select a model (⚠ some may not work with your hardware):',
-        choices: allModelChoices,
-      });
+      if (selectedModel === null || selectedModel === BACK) { console.log('Cancelled.'); return; }
       config.defaultModel = selectedModel;
     } else if (modelSelectionMode === 'cloud') {
       const cloudChoices = [
-        { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini', description: 'Smaller, faster model' },
         { name: 'ASI1', value: 'openai-compat/asi1', description: 'Full ASI1 model' },
-        { name: 'Custom OpenAI-compatible endpoint', value: 'openai-compat/custom', description: 'Use your own endpoint' },
+        { name: 'ASI1 Mini', value: 'openai-compat/asi1-mini', description: 'Smaller, faster' },
+        { name: 'Custom OpenAI-compatible endpoint', value: 'openai-compat/custom' },
+        backChoice,
       ];
-      const cloudModel = await select({
+      const cloudModel = await safePrompt(() => select({
         message: 'Select cloud LLM provider:',
         choices: cloudChoices,
-      });
+      }));
+      if (cloudModel === null || cloudModel === BACK) { console.log('Cancelled.'); return; }
       config.defaultModel = cloudModel;
     }
 
-    // Cloud LLM configuration if using cloud provider
+        // Cloud LLM configuration if using cloud provider
     const usingCloudModel = isCloudModel(config.defaultModel);
     if (usingCloudModel) {
       console.log('\n☁️ Cloud LLM Configuration');
-      
-      const llmUrl = await input({
+
+      const llmUrl = await safePrompt(() => input({
         message: 'LLM API base URL:',
         default: config.llmUrl || 'https://api.asi1.ai',
-        validate: (value) => {
-          if (!value) return 'URL is required for cloud models';
-          if (!value.startsWith('http')) return 'URL must start with http:// or https://';
+        validate: (v) => {
+          if (!v) return 'URL is required';
+          if (!v.startsWith('http')) return 'Must start with http';
           return true;
         },
-      });
+      }));
+      if (llmUrl === null) { console.log('Cancelled.'); return; }
       config.llmUrl = llmUrl;
 
-      const hasApiKey = await confirm({
+      const hasApiKey = await safePrompt(() => confirm({
         message: 'Do you have an API key?',
         default: true,
-      });
+      }));
+      if (hasApiKey === null) { console.log('Cancelled.'); return; }
 
       if (hasApiKey) {
-        const llmKey = await password({
+        const llmKey = await safePrompt(() => password({
           message: 'Enter your API key:',
           mask: '*',
-        });
+        }));
+        if (llmKey === null) { console.log('Cancelled.'); return; }
         if (llmKey) config.llmKey = llmKey;
       } else {
         console.log('⚠ You will need to provide --llm-key when starting the node.');
       }
     } else {
       // Local models - optional custom URL for Ollama
-      const useCustomOllama = await confirm({
+      const useCustomOllama = await safePrompt(() => confirm({
         message: 'Use custom Ollama URL?',
         default: !!config.llmUrl,
-      });
+      }));
+      if (useCustomOllama === null) { console.log('Cancelled.'); return; }
       if (useCustomOllama) {
-        const ollamaUrl = await input({
+        const ollamaUrl = await safePrompt(() => input({
           message: 'Ollama URL:',
           default: config.llmUrl || 'http://localhost:11434',
-        });
+        }));
+        if (ollamaUrl === null) { console.log('Cancelled.'); return; }
         config.llmUrl = ollamaUrl;
       } else {
         config.llmUrl = undefined;
