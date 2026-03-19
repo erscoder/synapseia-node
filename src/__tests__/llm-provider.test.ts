@@ -25,7 +25,7 @@ describe('LLM Provider Abstraction', () => {
   const ollamaModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
   const anthropicModel: LLMModel = { provider: 'cloud', providerId: 'anthropic', modelId: 'sonnet-4.6' };
   const kimiModel: LLMModel = { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.5' };
-  const minimaxModel: LLMModel = { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.5' };
+  const minimaxModel: LLMModel = { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.7' };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -124,7 +124,7 @@ describe('LLM Provider Abstraction', () => {
       expect(SUPPORTED_MODELS['ollama/llama3.2:3b']).toBeDefined();
       expect(SUPPORTED_MODELS['anthropic/sonnet-4.6']).toBeDefined();
       expect(SUPPORTED_MODELS['kimi/k2.5']).toBeDefined();
-      expect(SUPPORTED_MODELS['minimax/MiniMax-M2.5']).toBeDefined();
+      expect(SUPPORTED_MODELS['minimax/MiniMax-M2.7']).toBeDefined();
     });
   });
 
@@ -133,7 +133,7 @@ describe('LLM Provider Abstraction', () => {
       expect(MODEL_METADATA['qwen2.5:0.5b']).toBeDefined();
       expect(MODEL_METADATA['sonnet-4.6']).toBeDefined();
       expect(MODEL_METADATA['kimi-k2.5']).toBeDefined();
-      expect(MODEL_METADATA['MiniMax-M2.5']).toBeDefined();
+      expect(MODEL_METADATA['MiniMax-M2.7']).toBeDefined();
     });
 
     it('should have cost only for cloud models', () => {
