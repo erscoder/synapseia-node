@@ -5,7 +5,7 @@
   "description": "Synapse Node CLI Software",
   "type": "module",
   "bin": {
-    "synapseia": "./dist/index.js"
+    "synapseia": "./dist/index.cjs"
   },
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js --help\"",
@@ -39,6 +39,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.18",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.19.37",
     "eslint": "^9.0.0",
