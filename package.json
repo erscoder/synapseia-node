@@ -16,6 +16,13 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.2",
+    "@libp2p/bootstrap": "^12.0.14",
+    "@libp2p/gossipsub": "^15.0.15",
+    "@libp2p/identify": "^4.0.13",
+    "@libp2p/kad-dht": "^16.1.6",
+    "@libp2p/noise": "^1.0.1",
+    "@libp2p/tcp": "^11.0.13",
+    "@libp2p/yamux": "^8.0.1",
     "@nestjs/config": "^4.0.3",
     "@noble/ed25519": "^2.1.0",
     "@noble/hashes": "^1.8.0",
@@ -24,6 +31,7 @@
     "axios": "^1.7.2",
     "bip39": "^3.1.0",
     "commander": "^12.0.0",
+    "libp2p": "^3.1.6",
     "ollama": "^0.5.0"
   },
   "devDependencies": {
