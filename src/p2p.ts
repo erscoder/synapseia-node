@@ -8,6 +8,7 @@ import { kadDHT } from '@libp2p/kad-dht';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import type { Identity } from './identity.js';
+import { sign, canonicalPayload } from './identity.js';
 
 export const TOPICS = {
   HEARTBEAT: '/synapseia/heartbeat/1.0.0',
@@ -105,7 +106,10 @@ export class P2PNode {
   }
 
   async publishHeartbeat(data: Record<string, unknown>): Promise<void> {
-    return this.publish(TOPICS.HEARTBEAT, data);
+    const payload = { ...data };
+    const canonical = canonicalPayload(payload);
+    const signature = await sign(canonical, this.identity.privateKey);
+    return this.publish(TOPICS.HEARTBEAT, { ...payload, signature });
   }
 
   async publishSubmission(data: Record<string, unknown>): Promise<void> {

@@ -4,6 +4,20 @@ import { createLibp2p } from 'libp2p';
 import { bootstrap } from '@libp2p/bootstrap';
 import { kadDHT } from '@libp2p/kad-dht';
 
+// Mock @noble/ed25519 before importing modules that use it
+jest.mock('@noble/ed25519', () => ({
+  getPublicKey: jest.fn().mockReturnValue(Buffer.alloc(32)),
+  sign: jest.fn().mockResolvedValue(Buffer.alloc(64)),
+  verify: jest.fn().mockResolvedValue(true),
+}));
+
+// Mock identity signing functions
+jest.mock('../identity.js', () => ({
+  ...jest.requireActual('../identity.js'),
+  sign: jest.fn().mockResolvedValue('mock-signature-hex'),
+  canonicalPayload: jest.fn((data: Record<string, unknown>) => JSON.stringify(data)),
+}));
+
 const mockCreateLibp2p = createLibp2p as jest.MockedFunction<typeof createLibp2p>;
 const mockBootstrap = bootstrap as jest.MockedFunction<typeof bootstrap>;
 const mockKadDHT = kadDHT as jest.MockedFunction<typeof kadDHT>;
@@ -149,12 +163,16 @@ describe('P2PNode', () => {
     expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual(data);
   });
 
-  it('publishHeartbeat() uses HEARTBEAT topic', async () => {
+  it('publishHeartbeat() uses HEARTBEAT topic and includes signature', async () => {
     const n = new P2PNode(mockIdentity);
     await n.start();
     const spy = jest.spyOn(n, 'publish').mockResolvedValue(undefined);
-    await n.publishHeartbeat({ peerId: 'x' });
-    expect(spy).toHaveBeenCalledWith(TOPICS.HEARTBEAT, { peerId: 'x' });
+    await n.publishHeartbeat({ peerId: 'x', tier: 2 });
+    expect(spy).toHaveBeenCalledWith(TOPICS.HEARTBEAT, expect.objectContaining({
+      peerId: 'x',
+      tier: 2,
+      signature: 'mock-signature-hex',
+    }));
   });
 
   it('publishSubmission() uses SUBMISSION topic', async () => {
@@ -219,6 +237,27 @@ describe('P2PNode', () => {
     expect(h1).toHaveBeenCalledTimes(1);
     expect(h2).toHaveBeenCalledTimes(1);
   });
+
+  it('start() logs "Listening on:" when multiaddrs exist', async () => {
+    const consoleSpy = jest.spyOn(console, 'log');
+    const n = new P2PNode(mockIdentity);
+    await n.start();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[P2P] Listening on:',
+      '/ip4/127.0.0.1/tcp/4001',
+    );
+  });
+
+  it('start() does NOT log "Listening on:" when no multiaddrs', async () => {
+    const emptyMn = makeMockNode();
+    emptyMn.getMultiaddrs.mockReturnValue([]);
+    mockCreateLibp2p.mockResolvedValueOnce(emptyMn as never);
+    const consoleSpy = jest.spyOn(console, 'log');
+    const n = new P2PNode(mockIdentity);
+    await n.start();
+    const listeningCalls = consoleSpy.mock.calls.filter(c => String(c[0]).includes('Listening on'));
+    expect(listeningCalls).toHaveLength(0);
+  });
 });
 
 describe('createP2PNode()', () => {
@@ -238,5 +277,10 @@ describe('createP2PNode()', () => {
     const addr = '/ip4/9.9.9.9/tcp/9000';
     await createP2PNode(mockIdentity, [addr]);
     expect(mockBootstrap).toHaveBeenCalledWith({ list: [addr] });
+  });
+
+  it('works with no args (default empty bootstrapAddrs)', async () => {
+    const n = await createP2PNode(mockIdentity);
+    expect(n.isRunning()).toBe(true);
   });
 });
