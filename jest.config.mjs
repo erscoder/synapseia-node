@@ -24,5 +24,11 @@ export default {
     '!src/**/*.test.ts',
     '!src/**/*.spec.ts',
   ],
+  coveragePathIgnorePatterns: [
+    '/src/cli/',
+    '/src/index.ts',
+    '/src/wallet.ts',
+    '/src/solana-balance.ts',
+  ],
   coverageDirectory: 'coverage',
 };

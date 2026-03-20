@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.46% </span>
+                <span class="strong">98.07% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>46/52</span>
+                <span class='fraction'>51/52</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">55.55% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>5/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">76.47% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>13/17</span>
+                <span class='fraction'>17/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">89.13% </span>
+                <span class="strong">97.82% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>41/46</span>
+                <span class='fraction'>45/46</span>
             </div>
         
             
@@ -779,7 +779,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -789,7 +789,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -799,8 +799,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">78x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
@@ -1148,8 +1148,8 @@ export function getRecommendedModel(tier: number, category?: ModelCategory): Mod
 /**
  * Get full model catalog
  */
-export function <span class="fstat-no" title="function not covered" >getModelCatalog(</span>): ModelInfo[] {
-<span class="cstat-no" title="statement not covered" >  return [...MODEL_CATALOG];</span>
+export function getModelCatalog(): ModelInfo[] {
+  return [...MODEL_CATALOG];
 }
 &nbsp;
 /**
@@ -1158,8 +1158,8 @@ export function <span class="fstat-no" title="function not covered" >getModelCat
  * - Replaces ':' with '-'
  * - Handles other common separators
  */
-export function <span class="fstat-no" title="function not covered" >normalizeModelName(</span>name: string): string {
-<span class="cstat-no" title="statement not covered" >  return name</span>
+export function normalizeModelName(name: string): string {
+  return name
     .replace(/^ollama\//, '')
     .replace(/:/g, '-')
     .toLowerCase();
@@ -1168,9 +1168,9 @@ export function <span class="fstat-no" title="function not covered" >normalizeMo
 /**
  * Get model by name (supports ollama format: ollama/qwen2.5:0.5b)
  */
-export function <span class="fstat-no" title="function not covered" >getModelByName(</span>name: string): ModelInfo | null {
-  const normalized = <span class="cstat-no" title="statement not covered" >normalizeModelName(name);</span>
-<span class="cstat-no" title="statement not covered" >  return MODEL_CATALOG.find(<span class="fstat-no" title="function not covered" >(m</span>) =&gt; <span class="cstat-no" title="statement not covered" >m.name === normalized || m.name === name)</span> || null;</span>
+export function getModelByName(name: string): ModelInfo | null {
+  const normalized = normalizeModelName(name);
+  return MODEL_CATALOG.find((m) =&gt; m.name === normalized || m.name === name) || null;
 }
 &nbsp;
 &nbsp;</pre></td></tr></table></pre>
@@ -1180,7 +1180,7 @@ export function <span class="fstat-no" title="function not covered" >getModelByN
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-20T12:48:41.693Z
+                at 2026-03-20T16:00:06.157Z
             </div>
         <script src="../prettify.js"></script>
         <script>

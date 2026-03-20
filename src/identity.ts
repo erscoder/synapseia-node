@@ -102,15 +102,16 @@ export function loadIdentity(identityDir: string = IDENTITY_DIR): Identity {
  * @returns Hex signature (64 bytes = 128 hex chars)
  */
 export async function sign(message: string, privateKeyHex: string): Promise<string> {
-  // Use HMAC-SHA256 as a deterministic signing primitive (compatible with Jest/CJS)
-  // For real Ed25519 signing in production, use @noble/ed25519 with dynamic import
+  // Use HMAC-SHA256 for signing (CJS compatible, no ESM issues)
+  // NOTE: This is not true Ed25519. For production crypto, consider using
+  // @noble/ed25519 or a proper Ed25519 implementation.
+  // BUG-1: Coordinator uses Ed25519 for verification, which won't match.
+  // This is a known limitation documented in BUGS-SPRINT10.md.
   const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
   const messageBytes = Buffer.from(message, 'utf-8');
   const hmac = crypto.createHmac('sha256', privateKeyBytes);
   hmac.update(messageBytes);
-  const sig = hmac.digest();
-  // Return 64-byte (128 hex) signature by doubling the 32-byte HMAC
-  return Buffer.concat([sig, sig]).toString('hex');
+  return hmac.digest('hex');
 }
 
 /**
@@ -128,11 +129,15 @@ export async function verifySignature(
     const messageBytes = Buffer.from(message, 'utf-8');
     const signatureBytes = Buffer.from(signatureHex, 'hex');
     const publicKeyBytes = Buffer.from(publicKeyHex, 'hex');
-    // Re-sign and compare (matches the HMAC-based sign() above)
+
+    // Verify HMAC-SHA256 signature (for compatibility with sign())
+    // NOTE: Both sign() and verifySignature() must use the same algorithm.
+    // BUG-1: Coordinator P2PHeartbeatBridge uses Ed25519 (@noble/ed25519),
+    // which won't match HMAC-SHA256 signatures from this function.
     const hmac = crypto.createHmac('sha256', publicKeyBytes);
     hmac.update(messageBytes);
-    const expected = Buffer.concat([hmac.digest(), hmac.digest()]);
-    return signatureBytes.equals(expected);
+    const expectedSignature = hmac.digest('hex');
+    return signatureBytes.toString('hex') === expectedSignature;
   } catch {
     return false;
   }

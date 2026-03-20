@@ -229,17 +229,15 @@ var import_fs = require("fs");
 var path = __toESM(require("path"), 1);
 var os = __toESM(require("os"), 1);
 var crypto = __toESM(require("crypto"), 1);
-var import_ed25519 = require("@noble/ed25519");
 var IDENTITY_DIR = path.join(os.homedir(), ".synapse");
 var IDENTITY_FILE = path.join(IDENTITY_DIR, "identity.json");
 function generateIdentity(identityDir = IDENTITY_DIR) {
   if (!(0, import_fs.existsSync)(identityDir)) {
     (0, import_fs.mkdirSync)(identityDir, { recursive: true, mode: 448 });
   }
-  const privateKeyBytes = crypto.randomBytes(32);
-  const privateKeyHex = privateKeyBytes.toString("hex");
-  const publicKeyBytes = import_ed25519.ed25519.getPublicKey(privateKeyBytes);
-  const publicKeyHex = Buffer.from(publicKeyBytes).toString("hex");
+  const { privateKey: privKey, publicKey: pubKey } = crypto.generateKeyPairSync("ed25519");
+  const privateKeyHex = privKey.export({ type: "pkcs8", format: "der" }).slice(-32).toString("hex");
+  const publicKeyHex = pubKey.export({ type: "spki", format: "der" }).slice(-32).toString("hex");
   const peerId = publicKeyHex.slice(0, 32);
   const agentId = publicKeyHex.slice(0, 8);
   const identity = {
