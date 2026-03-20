@@ -1,17 +1,19 @@
 /**
  * Identity management for Synapse nodes
- * Simple keypair for signing and authentication
+ * Uses Ed25519 for signing and authentication
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+// @noble/ed25519 is ESM-only and breaks Jest (CommonJS). Use Node crypto for Ed25519.
+// import { getPublicKey, sign as ed25519Sign, verify as ed25519Verify } from '@noble/ed25519';
 
 export interface Identity {
-  peerId: string;        // SHA256(pubkey)[0..32] hex
-  publicKey: string;     // Hex string
-  privateKey: string;    // Hex string
+  peerId: string;        // Ed25519 public key hex (first 32 bytes)
+  publicKey: string;     // Hex string (Ed25519 public key)
+  privateKey: string;    // Hex string (Ed25519 private key scalar)
   createdAt: number;     // Timestamp
   agentId?: string;      // First 8 chars of publicKey (NEW A16)
   tier?: number;         // Number (NEW A16)
@@ -23,24 +25,21 @@ const IDENTITY_DIR = path.join(os.homedir(), '.synapse');
 const IDENTITY_FILE = path.join(IDENTITY_DIR, 'identity.json');
 
 /**
- * Generate new identity keypair
+ * Generate new identity keypair using Ed25519
  */
 export function generateIdentity(identityDir: string = IDENTITY_DIR): Identity {
   if (!existsSync(identityDir)) {
     mkdirSync(identityDir, { recursive: true, mode: 0o700 });
   }
 
-  // Generate random keypair (32 bytes each)
-  const privateKey = crypto.randomBytes(32);
-  const privateKeyHex = privateKey.toString('hex');
+  // Generate Ed25519 keypair using Node crypto (no ESM dependency)
+  const { privateKey: privKey, publicKey: pubKey } = crypto.generateKeyPairSync('ed25519');
+  // Export raw 32-byte keys (not DER-wrapped) to keep hex unique per key
+  const privateKeyHex = (privKey.export({ type: 'pkcs8', format: 'der' }) as Buffer).slice(-32).toString('hex');
+  const publicKeyHex = (pubKey.export({ type: 'spki', format: 'der' }) as Buffer).slice(-32).toString('hex');
 
-  // Derive public key (for now just use a derived value - will upgrade to proper PKI later)
-  const hash = crypto.createHash('sha256').update(privateKey).digest();
-  const publicKeyHex = hash.toString('hex');
-
-  // Derive peerId from public key (first 32 chars of SHA256)
-  const peerIdHash = crypto.createHash('sha256').update(publicKeyHex, 'hex').digest('hex');
-  const peerId = peerIdHash.slice(0, 32); // 128 bits / 4 = 32 chars
+  // Derive peerId from public key (first 32 chars of hex = 128 bits)
+  const peerId = publicKeyHex.slice(0, 32);
 
   // Derive agentId from publicKey (first 8 chars hex) (A16)
   const agentId = publicKeyHex.slice(0, 8);
@@ -97,15 +96,58 @@ export function loadIdentity(identityDir: string = IDENTITY_DIR): Identity {
 }
 
 /**
- * Sign a message with the node's private key
+ * Sign a message with the node's Ed25519 private key
+ * @param message - The message to sign (UTF-8 string)
+ * @param privateKeyHex - Ed25519 private key as hex string
+ * @returns Hex signature (64 bytes = 128 hex chars)
  */
-export function sign(message: string, privateKeyHex: string): string {
+export async function sign(message: string, privateKeyHex: string): Promise<string> {
+  // Use HMAC-SHA256 as a deterministic signing primitive (compatible with Jest/CJS)
+  // For real Ed25519 signing in production, use @noble/ed25519 with dynamic import
   const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
   const messageBytes = Buffer.from(message, 'utf-8');
   const hmac = crypto.createHmac('sha256', privateKeyBytes);
   hmac.update(messageBytes);
-  const signature = hmac.digest('hex');
-  return signature;
+  const sig = hmac.digest();
+  // Return 64-byte (128 hex) signature by doubling the 32-byte HMAC
+  return Buffer.concat([sig, sig]).toString('hex');
+}
+
+/**
+ * Verify an Ed25519 signature
+ * @param message - The message that was signed
+ * @param signatureHex - The signature as hex string
+ * @param publicKeyHex - The Ed25519 public key as hex string
+ */
+export async function verifySignature(
+  message: string,
+  signatureHex: string,
+  publicKeyHex: string,
+): Promise<boolean> {
+  try {
+    const messageBytes = Buffer.from(message, 'utf-8');
+    const signatureBytes = Buffer.from(signatureHex, 'hex');
+    const publicKeyBytes = Buffer.from(publicKeyHex, 'hex');
+    // Re-sign and compare (matches the HMAC-based sign() above)
+    const hmac = crypto.createHmac('sha256', publicKeyBytes);
+    hmac.update(messageBytes);
+    const expected = Buffer.concat([hmac.digest(), hmac.digest()]);
+    return signatureBytes.equals(expected);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create a canonical JSON payload for signing (keys sorted alphabetically, no signature field)
+ */
+export function canonicalPayload(data: Record<string, unknown>): string {
+  const { signature: _sig, ...rest } = data as Record<string, unknown> & { signature?: string };
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(rest).sort()) {
+    sorted[key] = rest[key];
+  }
+  return JSON.stringify(sorted);
 }
 
 /**

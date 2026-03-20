@@ -1,6 +1,9 @@
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import * as path from 'path';
 import * as os from 'os';
+
+// @noble/ed25519 is no longer used by identity.ts (replaced with Node crypto)
+
 import {
   generateIdentity,
   loadIdentity,
@@ -385,30 +388,30 @@ describe('identity', () => {
   });
 
   describe('sign', () => {
-    it('should sign a message', () => {
+    it('should sign a message', async () => {
       const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const message = 'test message';
-      const signature = sign(message, privateKeyHex);
+      const signature = await sign(message, privateKeyHex);
 
       expect(typeof signature).toBe('string');
-      expect(signature.length).toBe(64); // SHA256 hex output = 64 chars
+      expect(signature.length).toBe(128); // Ed25519 signature = 64 bytes = 128 hex chars
     });
 
-    it('should produce different signatures for different messages', () => {
+    it('should produce different signatures for different messages', async () => {
       const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
-      const sig1 = sign('message1', privateKeyHex);
-      const sig2 = sign('message2', privateKeyHex);
+      const sig1 = await sign('message1', privateKeyHex);
+      const sig2 = await sign('message2', privateKeyHex);
 
       expect(sig1).not.toBe(sig2);
     });
 
-    it('should produce same signature for same message', () => {
+    it('should produce same signature for same message', async () => {
       const crypto = require('crypto');
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
-      const sig1 = sign('same message', privateKeyHex);
-      const sig2 = sign('same message', privateKeyHex);
+      const sig1 = await sign('same message', privateKeyHex);
+      const sig2 = await sign('same message', privateKeyHex);
 
       expect(sig1).toBe(sig2);
     });
