@@ -27,7 +27,7 @@ describe('hardware (A13)', () => {
 
   describe('detectHardware', () => {
     it('should detect Apple Silicon hardware', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockReturnValue('Apple M3 Max');
 
       const hardware = detectHardware();
@@ -39,7 +39,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should detect GPU V-RAM for compatible GPUs', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
         if (cmd.includes('ollama')) throw new Error('Not installed');
@@ -53,7 +53,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle CPU-only mode', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = detectHardware(true);
 
@@ -63,7 +63,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle x86 arch with archOverride parameter', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
 
       // Mock nvidia-smi response
       mockExecSync.mockImplementation((cmd: string) => {
@@ -79,7 +79,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle arm64 arch with archOverride parameter', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
 
       mockExecSync.mockReturnValue('Apple M3 Max');
 
@@ -90,7 +90,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should set hasOllama false when curl fails', async () => {
-      const { detectHardware } = await import('../hardware.js');
+      const { detectHardware } = await import('../modules/hardware/helpers/hardware.js');
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
@@ -106,7 +106,7 @@ describe('hardware (A13)', () => {
 
   describe('detectNvidiaGPU', () => {
     it('should update hardware with NVIDIA metadata from GiB', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 16,
@@ -123,7 +123,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should update hardware with NVIDIA metadata from MiB', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -139,7 +139,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should call execSync when smiOutput is undefined', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockReturnValue('24 GiB');
 
       const hardware = {
@@ -157,7 +157,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle non-GiB/MiB output gracefully', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -175,7 +175,7 @@ describe('hardware (A13)', () => {
 
   describe('getRecommendedTier', () => {
     it('should recommend tier based on V-RAM', async () => {
-      const { getRecommendedTier } = await import('../hardware.js');
+      const { getRecommendedTier } = await import('../modules/hardware/helpers/hardware.js');
 
       expect(getRecommendedTier(0)).toBe(0); // No GPU
       expect(getRecommendedTier(8)).toBe(2); // 8GB V-RAM → tier 2 (≥6)
@@ -188,7 +188,7 @@ describe('hardware (A13)', () => {
 
   describe('getTierName', () => {
     it('should return correct tier names', async () => {
-      const { getTierName } = await import('../hardware.js');
+      const { getTierName } = await import('../modules/hardware/helpers/hardware.js');
 
       expect(getTierName(0)).toBe('CPU-Only');
       expect(getTierName(1)).toBe('Tier 1');
@@ -201,7 +201,7 @@ describe('hardware (A13)', () => {
 
   describe('estimateAppleSiliconVram', () => {
     it('should estimate V-RAM for Apple Silicon models', async () => {
-      const { estimateAppleSiliconVram } = await import('../hardware.js');
+      const { estimateAppleSiliconVram } = await import('../modules/hardware/helpers/hardware.js');
 
       expect(estimateAppleSiliconVram('Apple M3 Max')).toBe(128);
       expect(estimateAppleSiliconVram('Apple M3 Pro')).toBe(48);
@@ -211,7 +211,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should return 0 for unknown models', async () => {
-      const { estimateAppleSiliconVram } = await import('../hardware.js');
+      const { estimateAppleSiliconVram } = await import('../modules/hardware/helpers/hardware.js');
 
       expect(estimateAppleSiliconVram('Unknown GPU')).toBe(0);
     });
@@ -219,7 +219,7 @@ describe('hardware (A13)', () => {
 
   describe('parseNvidiaSmiOutput', () => {
     it('should parse nvidia-smi output', async () => {
-      const { parseNvidiaSmiOutput } = await import('../hardware.js');
+      const { parseNvidiaSmiOutput } = await import('../modules/hardware/helpers/hardware.js');
 
       const output = 'NVIDIA GeForce RTX 3090, 24 GiB';
       const result = parseNvidiaSmiOutput(output);
@@ -229,7 +229,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should parse MiB format', async () => {
-      const { parseNvidiaSmiOutput } = await import('../hardware.js');
+      const { parseNvidiaSmiOutput } = await import('../modules/hardware/helpers/hardware.js');
 
       const output = 'NVIDIA RTX 4070, 8192 MiB';
       const result = parseNvidiaSmiOutput(output);
@@ -241,7 +241,7 @@ describe('hardware (A13)', () => {
 
   describe('detectAppleSilicon', () => {
     it('should update hardware with Apple Silicon metadata', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 12,
@@ -258,7 +258,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle unknown models (default to M1)', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -275,7 +275,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M2 Ultra', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -292,7 +292,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M2 Max', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -309,7 +309,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M1 Ultra', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -326,7 +326,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M1 Max', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -343,7 +343,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M3 Ultra', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -360,7 +360,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M3 Pro', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -376,7 +376,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle M2 (no suffix)', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
 
       const hardware = {
         cpuCores: 8,
@@ -398,7 +398,7 @@ describe('hardware (A13)', () => {
 
   describe('getCompatibleModels', () => {
     it('should filter models by V-RAM', async () => {
-      const { getCompatibleModels } = await import('../hardware.js');
+      const { getCompatibleModels } = await import('../modules/hardware/helpers/hardware.js');
 
       const allModels = [
         { name: 'Model A', minVram: 1 },
@@ -414,7 +414,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should use default catalog if none provided', async () => {
-      const { getCompatibleModels } = await import('../hardware.js');
+      const { getCompatibleModels } = await import('../modules/hardware/helpers/hardware.js');
 
       const compatible = getCompatibleModels(999);
 
@@ -424,7 +424,7 @@ describe('hardware (A13)', () => {
 
   describe('buildOsString', () => {
     it('should build macOS string', async () => {
-      const { buildOsString } = await import('../hardware.js');
+      const { buildOsString } = await import('../modules/hardware/helpers/hardware.js');
 
       const osStr = buildOsString('darwin', '23.0.0', 'arm64', 'Darwin');
 
@@ -433,7 +433,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should build Linux string', async () => {
-      const { buildOsString } = await import('../hardware.js');
+      const { buildOsString } = await import('../modules/hardware/helpers/hardware.js');
 
       const osStr = buildOsString('linux', '5.19.0', 'x86_64', 'Linux');
 
@@ -442,7 +442,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should build Windows string', async () => {
-      const { buildOsString } = await import('../hardware.js');
+      const { buildOsString } = await import('../modules/hardware/helpers/hardware.js');
 
       const osStr = buildOsString('win32', '10.0.0', 'x64', 'WindowsNT');
 
@@ -451,7 +451,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle default OS type', async () => {
-      const { buildOsString } = await import('../hardware.js');
+      const { buildOsString } = await import('../modules/hardware/helpers/hardware.js');
 
       const osStr = buildOsString('other', '1.0.0', 'mips', 'UnknownOS');
 
@@ -462,7 +462,7 @@ describe('hardware (A13)', () => {
 
   describe('getSystemInfo', () => {
     it('should return system info', async () => {
-      const { getSystemInfo } = await import('../hardware.js');
+      const { getSystemInfo } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
         throw new Error('nvidia-smi not found');
@@ -478,7 +478,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should handle detection errors gracefully', async () => {
-      const { getSystemInfo } = await import('../hardware.js');
+      const { getSystemInfo } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockImplementation(() => {
         throw new Error('Detection failed');
       });
@@ -490,7 +490,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should detect x86_64 GPU with archOverride', async () => {
-      const { getSystemInfo } = await import('../hardware.js');
+      const { getSystemInfo } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockReturnValue('NVIDIA GeForce RTX 3090, 24 GiB');
 
       const info = getSystemInfo('x86_64');
@@ -500,7 +500,7 @@ describe('hardware (A13)', () => {
     });
 
     it('should detect x64 GPU with archOverride', async () => {
-      const { getSystemInfo } = await import('../hardware.js');
+      const { getSystemInfo } = await import('../modules/hardware/helpers/hardware.js');
       mockExecSync.mockReturnValue('NVIDIA GeForce RTX 4090, 24 GiB');
 
       const info = getSystemInfo('x64');
@@ -512,35 +512,35 @@ describe('hardware (A13)', () => {
 
   describe('detectAppleSilicon nested ternary coverage', () => {
     it('Ultra: tier===5 → 192', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Ultra');
       expect(hardware.gpuVramGb).toBe(192);
     });
 
     it('Ultra: tier!==5 → 128', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 3, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Ultra');
       expect(hardware.gpuVramGb).toBe(128);
     });
 
     it('Max: always 96 GB (tier===5 was dead code)', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Max');
       expect(hardware.gpuVramGb).toBe(96);
     });
 
     it('Pro: tier>=3 → 48', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 4, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Pro');
       expect(hardware.gpuVramGb).toBe(48);
     });
 
     it('Pro: M2 Pro (tier=2) → 18 from tier<3 branch', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Pro'); // M2 Pro sets tier=2, then tier<3 gives 18
       expect(hardware.tier).toBe(2);
@@ -548,21 +548,21 @@ describe('hardware (A13)', () => {
     });
 
     it('Pro: tier<3 → 18', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Pro');
       expect(hardware.gpuVramGb).toBe(18);
     });
 
     it('Else: tier===1 → 10', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 1, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M1');
       expect(hardware.gpuVramGb).toBe(10);
     });
 
     it('Else: tier!==1 → 7', async () => {
-      const { detectAppleSilicon } = await import('../hardware.js');
+      const { detectAppleSilicon } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple UnknownModel'); // No matches → else with tier stays 2
       expect(hardware.gpuVramGb).toBe(7);
@@ -571,49 +571,49 @@ describe('hardware (A13)', () => {
 
   describe('detectNvidiaGPU tier adjustments', () => {
     it('should set tier 5 for >=80GB VRAM', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
       detectNvidiaGPU(hardware, '81920 MiB'); // 80GB = 81920 MiB
       expect(hardware.tier).toBe(5);
     });
 
     it('should set tier 5 for >=64GB VRAM', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
       detectNvidiaGPU(hardware, '65536 MiB');
       expect(hardware.tier).toBe(5);
     });
 
     it('should set tier 4 for >=24GB VRAM when tier<5', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 4, hasOllama: false };
       detectNvidiaGPU(hardware, '24576 MiB');
       expect(hardware.tier).toBe(4);
     });
 
     it('should keep existing tier 5 when >=24GB', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
       detectNvidiaGPU(hardware, '24576 MiB');
       expect(hardware.tier).toBe(5);
     });
 
     it('should set tier 3 for >=14GB VRAM when tier<4', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 3, hasOllama: false };
       detectNvidiaGPU(hardware, '14336 MiB');
       expect(hardware.tier).toBe(3);
     });
 
     it('should set tier 2 for >=10GB VRAM when tier<3', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
       detectNvidiaGPU(hardware, '10240 MiB');
       expect(hardware.tier).toBe(2);
     });
 
     it('should set tier 1 for >=6GB VRAM when tier<2', async () => {
-      const { detectNvidiaGPU } = await import('../hardware.js');
+      const { detectNvidiaGPU } = await import('../modules/hardware/helpers/hardware.js');
       const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 1, hasOllama: false };
       detectNvidiaGPU(hardware, '6144 MiB');
       expect(hardware.tier).toBe(1);
@@ -622,7 +622,7 @@ describe('hardware (A13)', () => {
 
   describe('getTierName edge cases', () => {
     it('should return Unknown for out of range tier', async () => {
-      const { getTierName } = await import('../hardware.js');
+      const { getTierName } = await import('../modules/hardware/helpers/hardware.js');
       expect(getTierName(6 as any)).toBe('Unknown');
       expect(getTierName(-1 as any)).toBe('Unknown');
     });
@@ -633,7 +633,7 @@ describe('hardware (A13)', () => {
 
   describe('estimateAppleSiliconVram full coverage', () => {
     it('should cover all model branches', async () => {
-      const { estimateAppleSiliconVram } = await import('../hardware.js');
+      const { estimateAppleSiliconVram } = await import('../modules/hardware/helpers/hardware.js');
       expect(estimateAppleSiliconVram('Apple M3 Pro')).toBe(48);
       expect(estimateAppleSiliconVram('Apple M2 Pro')).toBe(18);
       expect(estimateAppleSiliconVram('Apple M1 Ultra')).toBe(128);
@@ -647,14 +647,14 @@ describe('hardware (A13)', () => {
 
   describe('parseNvidiaSmiOutput edge cases', () => {
     it('should handle whitespace-only input (returns default)', async () => {
-      const { parseNvidiaSmiOutput } = await import('../hardware.js');
+      const { parseNvidiaSmiOutput } = await import('../modules/hardware/helpers/hardware.js');
       const result = parseNvidiaSmiOutput('   \n  ');
       expect(result.name).toBe('NVIDIA GPU'); // Default when parsing fails
       expect(result.vramGb).toBe(0);
     });
 
     it('should handle truly empty lines', async () => {
-      const { parseNvidiaSmiOutput } = await import('../hardware.js');
+      const { parseNvidiaSmiOutput } = await import('../modules/hardware/helpers/hardware.js');
       const result = parseNvidiaSmiOutput(''); // Empty after trim/split returns empty array? NO, returns ['']
       expect(result.name).toBe('NVIDIA GPU'); // Current implementation behavior
       expect(result.vramGb).toBe(0);
@@ -665,7 +665,7 @@ describe('hardware (A13)', () => {
 
   describe('getRecommendedTier coverage', () => {
     it('should cover all VRAM thresholds', async () => {
-      const { getRecommendedTier } = await import('../hardware.js');
+      const { getRecommendedTier } = await import('../modules/hardware/helpers/hardware.js');
       expect(getRecommendedTier(80)).toBe(5);
       expect(getRecommendedTier(64)).toBe(5);
       expect(getRecommendedTier(24)).toBe(4);

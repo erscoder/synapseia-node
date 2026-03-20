@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MutationEngineHelper, type MutationProposal } from '../../mutation-engine.js';
+import { MutationEngineHelper, type MutationProposal } from './helpers/mutation-engine.js';
 import type { Experiment } from '../../types.js';
 
 @Injectable()

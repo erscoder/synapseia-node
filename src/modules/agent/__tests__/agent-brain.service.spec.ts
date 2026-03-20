@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { AgentBrainService } from '../agent-brain.service.js';
-import { AgentBrainHelper } from '../../../agent-brain.js';
+import { AgentBrainHelper } from '../helpers/agent-brain.js';
 
 const mockBrain = {
   goals: ['improve model accuracy'],

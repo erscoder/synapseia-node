@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { NodeConfigHelper } from '../../../config.js';
+import { NodeConfigHelper } from '../helpers/config.js';
 import { NodeConfigService } from '../node-config.service.js';
 
 const mockConfig = {

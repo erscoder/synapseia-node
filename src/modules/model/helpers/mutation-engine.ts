@@ -4,8 +4,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { generateLLM, type LLMModel } from './llm-provider.js';
-import type { Experiment, Hyperparams } from './types.js';
+import { generateLLM, type LLMModel } from '../../llm/helpers/llm-provider.js';
+import type { Experiment, Hyperparams } from '../../../types.js';
 
 export interface MutationProposal {
   model: LLMModel;

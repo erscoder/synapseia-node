@@ -8,8 +8,8 @@ import { kadDHT } from '@libp2p/kad-dht';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { Injectable } from '@nestjs/common';
-import type { Identity } from './identity.js';
-import { sign, canonicalPayload } from './identity.js';
+import type { Identity } from '../../identity/helpers/identity.js';
+import { sign, canonicalPayload } from '../../identity/helpers/identity.js';
 
 export const TOPICS = {
   HEARTBEAT: '/synapseia/heartbeat/1.0.0',

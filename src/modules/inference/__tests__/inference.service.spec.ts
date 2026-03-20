@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { InferenceService } from '../inference.service.js';
-import { InferenceServerHelper } from '../../../inference-server.js';
+import { InferenceServerHelper } from '../helpers/inference-server.js';
 
 describe('InferenceService', () => {
   let service: InferenceService;

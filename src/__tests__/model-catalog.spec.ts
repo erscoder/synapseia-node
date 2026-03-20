@@ -14,7 +14,7 @@ import {
   FULL_CATALOG,
   ModelInfo,
   ModelCategory,
-} from '../model-catalog';
+} from '../modules/model/helpers/model-catalog';
 import { execSync } from 'child_process';
 
 // Mock execSync for testing

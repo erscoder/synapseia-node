@@ -30,7 +30,7 @@ export async function checkOllama(url: string = 'http://localhost:11434'): Promi
     const models: string[] = response.data.models.map((m: any) => m.name);
 
     // Detect hardware to recommend appropriate model
-    const { detectHardware } = await import('./hardware.js');
+    const { detectHardware } = await import('../../hardware/helpers/hardware.js');
     const hwInfo = await detectHardware();
     const hasGPU = hwInfo.gpuVramGb > 0;
 

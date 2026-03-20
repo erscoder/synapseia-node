@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { HardwareHelper } from '../../../hardware.js';
+import { HardwareHelper } from '../helpers/hardware.js';
 import { HardwareService } from '../hardware.service.js';
 
 const mockHardware = {

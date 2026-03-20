@@ -5,7 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { STAKING_PROGRAM_ID } from './utils/idl.js';
+import { STAKING_PROGRAM_ID } from '../../../utils/idl.js';
 
 // Derive stake account inline to avoid dependency issues
 function deriveStakeAccount(peerId: string): [PublicKey, number] {

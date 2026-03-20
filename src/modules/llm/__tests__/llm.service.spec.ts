@@ -1,8 +1,8 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { LlmService } from '../llm.service.js';
-import { LlmProviderHelper } from '../../../llm-provider.js';
-import { OllamaHelper } from '../../../ollama.js';
+import { LlmProviderHelper } from '../helpers/llm-provider.js';
+import { OllamaHelper } from '../helpers/ollama.js';
 
 const mockModel = { provider: 'ollama', modelId: 'qwen2.5:0.5b' };
 

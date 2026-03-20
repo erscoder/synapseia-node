@@ -14,9 +14,9 @@ import { ModelCatalogService } from '../modules/model/model-catalog.service.js';
 import { LlmService } from '../modules/llm/llm.service.js';
 import { WorkOrderAgentService } from '../modules/agent/work-order-agent.service.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
-import { getSynBalance, getStakedAmount } from '../solana-balance.js';
-import type { ModelInfo, HardwareTier } from '../hardware.js';
-import { CONFIG_FILE } from '../config.js';
+import { getSynBalance, getStakedAmount } from '../modules/wallet/helpers/solana-balance.js';
+import type { ModelInfo, HardwareTier } from '../modules/hardware/helpers/hardware.js';
+import { CONFIG_FILE } from '../modules/config/helpers/config.js';
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {

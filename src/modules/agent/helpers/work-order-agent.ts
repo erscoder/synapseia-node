@@ -10,8 +10,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { generateLLM, type LLMConfig } from './llm-provider.js';
-import { parseModel, type LLMModel } from './llm-provider.js';
+import { generateLLM, type LLMConfig } from '../../llm/helpers/llm-provider.js';
+import { parseModel, type LLMModel } from '../../llm/helpers/llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
 
 /**

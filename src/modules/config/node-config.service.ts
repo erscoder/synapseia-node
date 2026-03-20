@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { NodeConfigHelper, type Config } from '../../config.js';
+import { NodeConfigHelper, type Config } from './helpers/config.js';
 
 @Injectable()
 export class NodeConfigService {

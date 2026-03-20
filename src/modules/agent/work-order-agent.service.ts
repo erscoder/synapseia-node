@@ -7,9 +7,9 @@ import {
   type ResearchResult,
   type EconomicConfig,
   type WorkOrderEvaluation,
-} from '../../work-order-agent.js';
-import type { AgentBrain } from '../../agent-brain.js';
-import type { LLMModel, LLMConfig } from '../../llm-provider.js';
+} from './helpers/work-order-agent.js';
+import type { AgentBrain } from './helpers/agent-brain.js';
+import type { LLMModel, LLMConfig } from '../llm/helpers/llm-provider.js';
 
 @Injectable()
 export class WorkOrderAgentService {

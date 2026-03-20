@@ -5,7 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { REWARDS_PROGRAM_ID } from './utils/idl.js';
+import { REWARDS_PROGRAM_ID } from '../../../utils/idl.js';
 import type { StakeInfo } from './staking.js';
 
 export interface RewardCalculation {

@@ -5,7 +5,7 @@ import {
   type SystemInfo,
   type HardwareTier,
   type ModelInfo,
-} from '../../hardware.js';
+} from './helpers/hardware.js';
 
 @Injectable()
 export class HardwareService {

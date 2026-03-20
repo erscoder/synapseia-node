@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { TrainerService } from '../trainer.service.js';
-import { TrainerHelper } from '../../../trainer.js';
+import { TrainerHelper } from '../helpers/trainer.js';
 
 const mockProposal = {
   mutationType: 'learning_rate',

@@ -11,7 +11,7 @@ import {
   getRecentJournal,
   type AgentBrain,
   type AgentStrategy,
-} from '../agent-brain.js';
+} from '../modules/agent/helpers/agent-brain.js';
 
 describe('initBrain', () => {
   it('should initialize brain with default goals', () => {
