@@ -31,4 +31,5 @@ export default {
     '/src/solana-balance.ts',
   ],
   coverageDirectory: 'coverage',
+  maxWorkers: 4,
 };
