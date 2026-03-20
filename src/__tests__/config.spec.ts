@@ -1,4 +1,4 @@
-import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, validateModelFormat, isCloudModel, CONFIG_FILE, CONFIG_DIR } from '../modules/config/helpers/config';
+import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, validateModelFormat, isCloudModel, CONFIG_FILE, CONFIG_DIR } from '../modules/config/config';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';

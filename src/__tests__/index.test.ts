@@ -1,4 +1,4 @@
-import { type LLMModel, type LLMProvider, type CloudProviderId } from '../modules/llm/helpers/llm-provider.js';
+import { type LLMModel, type LLMProvider, type CloudProviderId } from '../modules/llm/llm-provider.js';
 
 describe('CLI Model Parsing', () => {
   beforeEach(() => {

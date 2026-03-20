@@ -5,12 +5,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-import { generateIdentity, loadIdentity, getAgentProfile } from './modules/identity/helpers/identity.js';
-import { detectHardware, getTierName, type HardwareTier } from './modules/hardware/helpers/hardware.js';
-import { startPeriodicHeartbeat } from './modules/heartbeat/helpers/heartbeat.js';
-import { createP2PNode } from './modules/p2p/helpers/p2p.js';
-import { startAgentLoop, type AgentLoopConfig } from './modules/agent/helpers/agent-loop.js';
-import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './modules/llm/helpers/llm-provider.js';
+import { generateIdentity, loadIdentity, getAgentProfile } from './modules/identity/identity.js';
+import { detectHardware, getTierName, type HardwareTier } from './modules/hardware/hardware.js';
+import { startPeriodicHeartbeat } from './modules/heartbeat/heartbeat.js';
+import { createP2PNode } from './modules/p2p/p2p.js';
+import { startAgentLoop, type AgentLoopConfig } from './modules/agent/agent-loop.js';
+import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './modules/llm/llm-provider.js';
 
 const program = new Command();
 

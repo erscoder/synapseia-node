@@ -1,5 +1,5 @@
-import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/helpers/p2p.js';
-import type { Identity } from '../modules/identity/helpers/identity.js';
+import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/p2p.js';
+import type { Identity } from '../modules/identity/identity.js';
 import { createLibp2p } from 'libp2p';
 import { bootstrap } from '@libp2p/bootstrap';
 import { kadDHT } from '@libp2p/kad-dht';
@@ -12,8 +12,8 @@ jest.mock('@noble/ed25519', () => ({
 }));
 
 // Mock identity signing functions
-jest.mock('../modules/identity/helpers/identity.js', () => ({
-  ...jest.requireActual('../modules/identity/helpers/identity.js'),
+jest.mock('../modules/identity/identity.js', () => ({
+  ...jest.requireActual('../modules/identity/identity.js'),
   sign: jest.fn().mockResolvedValue('mock-signature-hex'),
   canonicalPayload: jest.fn((data: Record<string, unknown>) => JSON.stringify(data)),
 }));

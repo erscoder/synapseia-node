@@ -13,7 +13,7 @@ import {
   getRecentBatches,
   type RewardCalculation,
   type RewardBatch,
-} from '../modules/staking/helpers/rewards';
+} from '../modules/staking/rewards';
 
 describe('Rewards Module', () => {
   describe('calculateValidationScore', () => {
