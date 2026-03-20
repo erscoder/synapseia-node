@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/16</span>
+                <span class='fraction'>12/16</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/16</span>
+                <span class='fraction'>12/16</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -135,42 +135,32 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -180,7 +170,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -190,7 +190,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -202,32 +202,32 @@
  * Derive PDA addresses for staking, token, and escrow programs
  */
 &nbsp;
-<span class="cstat-no" title="statement not covered" >import { PublicKey } from '@solana/web3.js';</span>
+import { PublicKey } from '@solana/web3.js';
 &nbsp;
 // Program IDs (from EPIC 2 deploy)
-export const <span class="cstat-no" title="statement not covered" >STAKING_PROGRAM_ID = new PublicKey(</span>
+export const STAKING_PROGRAM_ID = new PublicKey(
   '8LhiExUHdJGCfnbmADcJacjbnoAU7cvXTqpBEdybd4Fg',
 );
-export const <span class="cstat-no" title="statement not covered" >TOKEN_PROGRAM_ID = new PublicKey(</span>
+export const TOKEN_PROGRAM_ID = new PublicKey(
   '8iFr3ciQuNeU4vkzQTp7NcWNgRr7AVhwyizNCAszaEQq',
 );
-export const <span class="cstat-no" title="statement not covered" >ESCROW_PROGRAM_ID = new PublicKey(</span>
+export const ESCROW_PROGRAM_ID = new PublicKey(
   'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK',
 );
 // Rewards will be deployed as part of EPIC 5 - use placeholder for now
-export const <span class="cstat-no" title="statement not covered" >REWARDS_PROGRAM_ID = new PublicKey(</span>
+export const REWARDS_PROGRAM_ID = new PublicKey(
   '11111111111111111111111111111111',
 );
 &nbsp;
 // Common PDA seeds
-export const <span class="cstat-no" title="statement not covered" >STAKE_SEED = 'stake';</span>
-export const <span class="cstat-no" title="statement not covered" >TOKEN_MINT_SEED = 'token_mint';</span>
-export const <span class="cstat-no" title="statement not covered" >ESCROW_SEED = 'escrow';</span>
+export const STAKE_SEED = 'stake';
+export const TOKEN_MINT_SEED = 'token_mint';
+export const ESCROW_SEED = 'escrow';
 &nbsp;
 /**
  * Derive stake account address for a peer
  */
-<span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >d</span>eriveStakeAccount(</span>peerId: string): [PublicKey, number] {
+export function <span class="fstat-no" title="function not covered" >deriveStakeAccount(</span>peerId: string): [PublicKey, number] {
 <span class="cstat-no" title="statement not covered" >  return PublicKey.findProgramAddressSync(</span>
     [Buffer.from(STAKE_SEED), Buffer.from(peerId)],
     STAKING_PROGRAM_ID,
@@ -237,7 +237,7 @@ export const <span class="cstat-no" title="statement not covered" >ESCROW_SEED =
 /**
  * Derive token mint address
  */
-<span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >d</span>eriveTokenMint(</span>): [PublicKey, number] {
+export function <span class="fstat-no" title="function not covered" >deriveTokenMint(</span>): [PublicKey, number] {
 <span class="cstat-no" title="statement not covered" >  return PublicKey.findProgramAddressSync(</span>
     [Buffer.from(TOKEN_MINT_SEED)],
     TOKEN_PROGRAM_ID,
@@ -247,7 +247,7 @@ export const <span class="cstat-no" title="statement not covered" >ESCROW_SEED =
 /**
  * Derive escrow account address
  */
-<span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >d</span>eriveEscrowAccount(</span>peerId: string): [PublicKey, number] {
+export function <span class="fstat-no" title="function not covered" >deriveEscrowAccount(</span>peerId: string): [PublicKey, number] {
 <span class="cstat-no" title="statement not covered" >  return PublicKey.findProgramAddressSync(</span>
     [Buffer.from(ESCROW_SEED), Buffer.from(peerId)],
     ESCROW_PROGRAM_ID,
@@ -257,7 +257,7 @@ export const <span class="cstat-no" title="statement not covered" >ESCROW_SEED =
 /**
  * Get all program IDs
  */
-<span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >g</span>etAllProgramIds(</span>) {
+export function <span class="fstat-no" title="function not covered" >getAllProgramIds(</span>) {
 <span class="cstat-no" title="statement not covered" >  return {</span>
     staking: STAKING_PROGRAM_ID,
     token: TOKEN_PROGRAM_ID,
@@ -271,7 +271,7 @@ export const <span class="cstat-no" title="statement not covered" >ESCROW_SEED =
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-17T17:02:34.475Z
+                at 2026-03-20T10:40:06.553Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
