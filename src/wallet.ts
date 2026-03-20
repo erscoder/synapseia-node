@@ -284,20 +284,46 @@ export async function loadWallet(
 /**
  * Get or create wallet (convenience function for CLI)
  * Returns wallet and a flag indicating if it was newly created
+ * Retries password prompt up to 3 times on invalid password
  */
 export async function getOrCreateWallet(
   walletDir: string = WALLET_DIR,
   password?: string
 ): Promise<WalletWithStatus> {
-  try {
-    const wallet = await loadWallet(walletDir, password);
-    return { wallet, isNew: false };
-  } catch (error) {
-    if ((error as Error).message.includes('Wallet not found')) {
-      return generateWallet(walletDir, password);
+  const MAX_RETRIES = 3;
+  let attempts = 0;
+
+  while (attempts < MAX_RETRIES) {
+    try {
+      const wallet = await loadWallet(walletDir, password);
+      return { wallet, isNew: false };
+    } catch (error) {
+      const errorMessage = (error as Error).message;
+
+      // Wallet doesn't exist - create new one
+      if (errorMessage.includes('Wallet not found')) {
+        return generateWallet(walletDir, password);
+      }
+
+      // Invalid password - retry
+      if (errorMessage.includes('Invalid password')) {
+        attempts++;
+        if (attempts < MAX_RETRIES) {
+          console.log('\n❌ Invalid password. Please try again.');
+          password = undefined; // Clear password to prompt again
+          continue;
+        }
+        // Max retries reached
+        console.log('\n❌ Invalid password after 3 attempts.');
+        throw new Error('Maximum password attempts exceeded. Please check your password and try again.');
+      }
+
+      // Other errors - throw immediately
+      throw error;
     }
-    throw error;
   }
+
+  throw new Error('Maximum password attempts exceeded.');
 }
 
 /**
