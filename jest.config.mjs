@@ -3,6 +3,8 @@ export default {
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^libp2p$': '<rootDir>/src/__mocks__/libp2p.ts',
+    '^@libp2p/(.*)$': '<rootDir>/src/__mocks__/@libp2p/$1.ts',
   },
   transform: {
     '^.+\\.tsx?$': [

@@ -8,6 +8,7 @@ import * as os from 'os';
 import { generateIdentity, loadIdentity, getAgentProfile } from './identity.js';
 import { detectHardware, getTierName, type HardwareTier } from './hardware.js';
 import { startPeriodicHeartbeat } from './heartbeat.js';
+import { createP2PNode } from './p2p.js';
 import { startAgentLoop, type AgentLoopConfig } from './agent-loop.js';
 import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './llm-provider.js';
 
@@ -114,6 +115,21 @@ program
     }
     console.log('');
 
+    // Start P2P node
+    console.log('🌐 Starting P2P node...');
+    let p2pNode;
+    try {
+      const bootstrapAddrs = coordinatorUrl
+        .replace(/^https?:\/\//, '')
+        .replace(/:\d+$/, '')
+        ? [`/dns4/${coordinatorUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '')}/tcp/9000`]
+        : [];
+      p2pNode = await createP2PNode(identity, bootstrapAddrs);
+      console.log(`   P2P peerId: ${p2pNode.getPeerId()}`);
+    } catch (err) {
+      console.warn('   P2P init failed, using HTTP fallback:', (err as Error).message);
+    }
+
     // Start heartbeat
     console.log('💓 Starting heartbeat loop...');
     const heartbeatCleanup = startPeriodicHeartbeat(
@@ -121,6 +137,7 @@ program
       identity,
       hardware,
       intervalMs,
+      p2pNode,
     );
     console.log(`   Coordinator: ${coordinatorUrl}`);
     console.log(`   Interval: ${(intervalMs / 1000).toFixed(0)}s`);

@@ -26,20 +26,21 @@ export class P2PNode {
   constructor(private readonly identity: Identity) {}
 
   async start(bootstrapAddrs: string[] = []): Promise<void> {
-    const svc: Record<string, unknown> = {
+    const svcBase = {
       identify: identify(),
       pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false }),
       dht: kadDHT({ clientMode: bootstrapAddrs.length === 0 }),
-    };
-    if (bootstrapAddrs.length > 0) {
-      svc.bootstrap = bootstrap({ list: bootstrapAddrs });
-    }
+    } as const;
+
+    const svc = bootstrapAddrs.length > 0
+      ? { ...svcBase, bootstrap: bootstrap({ list: bootstrapAddrs }) }
+      : svcBase;
 
     this.node = await createLibp2p({
       transports: [tcp()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
-      services: svc,
+      services: svc as any,
     });
     await this.node.start();
 
