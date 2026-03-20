@@ -6,7 +6,7 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { Injectable } from '@nestjs/common';
 
-import type { ModelCategory } from './model-catalog.js';
+import type { ModelCategory } from '../../model/helpers/model-catalog.js';
 
 /**
  * Model compatibility info

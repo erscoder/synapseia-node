@@ -27,7 +27,7 @@ describe('staking (A11)', () => {
 
   describe('verifyStake', () => {
     it('should verify existing stake account', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       // Mock 100 SYN staked (little-endian uint64)
       const stakeData = Buffer.alloc(24);
@@ -42,7 +42,7 @@ describe('staking (A11)', () => {
     });
 
     it('should verify 500 SYN stake (tier 2)', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       const stakeData = Buffer.alloc(24);
       stakeData.writeBigUInt64LE(500n, 0);
@@ -55,7 +55,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return false if stake account not found', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetAccountInfo.mockResolvedValue(null);
 
@@ -66,7 +66,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return false if account has no data', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetAccountInfo.mockResolvedValue({ data: null });
 
@@ -77,7 +77,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return false on connection error', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetAccountInfo.mockRejectedValue(new Error('RPC timeout'));
 
@@ -88,7 +88,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return error message for non-Error throws', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetAccountInfo.mockRejectedValue('string error');
 
@@ -99,7 +99,7 @@ describe('staking (A11)', () => {
     });
 
     it('should handle stakeAccount when not array', async () => {
-      const { verifyStake } = await import('../staking.js');
+      const { verifyStake } = await import('../modules/staking/helpers/staking.js');
 
       const stakeData = Buffer.alloc(24);
       stakeData.writeBigUInt64LE(100n, 0);
@@ -114,7 +114,7 @@ describe('staking (A11)', () => {
 
   describe('getMinimumStake', () => {
     it('should return correct minimum for each tier', async () => {
-      const { getMinimumStake } = await import('../staking.js');
+      const { getMinimumStake } = await import('../modules/staking/helpers/staking.js');
 
       expect(getMinimumStake(0)).toBe(0);
       expect(getMinimumStake(1)).toBe(100);
@@ -125,7 +125,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return 0 for unknown tier', async () => {
-      const { getMinimumStake } = await import('../staking.js');
+      const { getMinimumStake } = await import('../modules/staking/helpers/staking.js');
 
       expect(getMinimumStake(999)).toBe(0);
     });
@@ -133,7 +133,7 @@ describe('staking (A11)', () => {
 
   describe('computeTier', () => {
     it('should compute tier from stake amount', async () => {
-      const { computeTier } = await import('../staking.js');
+      const { computeTier } = await import('../modules/staking/helpers/staking.js');
 
       expect(computeTier(0)).toBe(0);
       expect(computeTier(50)).toBe(0); // Below tier 1
@@ -148,7 +148,7 @@ describe('staking (A11)', () => {
     });
 
     it('should handle edge cases', async () => {
-      const { computeTier } = await import('../staking.js');
+      const { computeTier } = await import('../modules/staking/helpers/staking.js');
 
       expect(computeTier(-1)).toBe(0); // Negative
       expect(computeTier(99.9)).toBe(0); // Non-integer below threshold
@@ -157,7 +157,7 @@ describe('staking (A11)', () => {
 
   describe('meetsMinimumStake', () => {
     it('should check if stake meets minimum for tier', async () => {
-      const { meetsMinimumStake } = await import('../staking.js');
+      const { meetsMinimumStake } = await import('../modules/staking/helpers/staking.js');
 
       expect(meetsMinimumStake(100, 1)).toBe(true);
       expect(meetsMinimumStake(99, 1)).toBe(false);
@@ -168,7 +168,7 @@ describe('staking (A11)', () => {
 
   describe('getAllStakesForPeer', () => {
     it('should return stakes when valid', async () => {
-      const { getAllStakesForPeer } = await import('../staking.js');
+      const { getAllStakesForPeer } = await import('../modules/staking/helpers/staking.js');
 
       const stakeData = Buffer.alloc(24);
       stakeData.writeBigUInt64LE(500n, 0);
@@ -181,7 +181,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return empty array when invalid', async () => {
-      const { getAllStakesForPeer } = await import('../staking.js');
+      const { getAllStakesForPeer } = await import('../modules/staking/helpers/staking.js');
 
       mockGetAccountInfo.mockResolvedValue(null);
 
@@ -193,7 +193,7 @@ describe('staking (A11)', () => {
 
   describe('getTotalNetworkStake', () => {
     it('should aggregate all stakes', async () => {
-      const { getTotalNetworkStake } = await import('../staking.js');
+      const { getTotalNetworkStake } = await import('../modules/staking/helpers/staking.js');
 
       const account1Data = Buffer.alloc(24);
       account1Data.writeBigUInt64LE(100n, 0);
@@ -212,7 +212,7 @@ describe('staking (A11)', () => {
     });
 
     it('should handle accounts with lockup data', async () => {
-      const { getTotalNetworkStake } = await import('../staking.js');
+      const { getTotalNetworkStake } = await import('../modules/staking/helpers/staking.js');
 
       // Account with lockup timestamp (>16 bytes)
       const accountData = Buffer.alloc(24);
@@ -229,7 +229,7 @@ describe('staking (A11)', () => {
     });
 
     it('should handle accounts without lockup data', async () => {
-      const { getTotalNetworkStake } = await import('../staking.js');
+      const { getTotalNetworkStake } = await import('../modules/staking/helpers/staking.js');
 
       // Account without lockup timestamp (<=16 bytes)
       const accountData = Buffer.alloc(16);
@@ -245,7 +245,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return 0 on error', async () => {
-      const { getTotalNetworkStake } = await import('../staking.js');
+      const { getTotalNetworkStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetProgramAccounts.mockRejectedValue(new Error('RPC error') as any);
 
@@ -255,7 +255,7 @@ describe('staking (A11)', () => {
     });
 
     it('should return 0 if all accounts malformed', async () => {
-      const { getTotalNetworkStake } = await import('../staking.js');
+      const { getTotalNetworkStake } = await import('../modules/staking/helpers/staking.js');
 
       mockGetProgramAccounts.mockResolvedValue([
         { account: { data: Buffer.from([1, 2, 3]) } as any }, // Too short

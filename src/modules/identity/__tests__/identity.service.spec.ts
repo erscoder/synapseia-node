@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { IdentityHelper } from '../../../identity.js';
+import { IdentityHelper } from '../helpers/identity.js';
 import { IdentityService } from '../identity.service.js';
 
 const mockIdentity = {

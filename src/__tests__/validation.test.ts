@@ -12,7 +12,7 @@ import {
   getMaxLatency,
   type PulseChallenge,
   type PulseResult,
-} from '../validation.js';
+} from '../shared/validation.js';
 
 describe('generateChallenge', () => {
   it('should generate a challenge with all required fields', () => {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { StakingHelper, type StakeInfo, type StakingVerificationResult } from '../../staking.js';
+import { StakingHelper, type StakeInfo, type StakingVerificationResult } from './helpers/staking.js';
 
 @Injectable()
 export class StakingService {

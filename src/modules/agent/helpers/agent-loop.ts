@@ -10,9 +10,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { proposeMutation, type MutationProposal } from './mutation-engine.js';
-import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from './trainer.js';
-import type { Experiment } from './types.js';
+import { proposeMutation, type MutationProposal } from '../../model/helpers/mutation-engine.js';
+import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from '../../model/helpers/trainer.js';
+import type { Experiment } from '../../../types.js';
 
 export interface AgentLoopConfig {
   coordinatorUrl: string;
@@ -352,7 +352,7 @@ export class AgentLoopHelper {
     return resetAgentLoopState();
   }
 
-  fetchTopExperiments(coordinatorUrl: string, limit?: number): Promise<import('./types.js').Experiment[]> {
+  fetchTopExperiments(coordinatorUrl: string, limit?: number): Promise<import('../../../types.js').Experiment[]> {
     return fetchTopExperiments(coordinatorUrl, limit);
   }
 
@@ -368,7 +368,7 @@ export class AgentLoopHelper {
   updateExperiment(
     coordinatorUrl: string,
     experimentId: string,
-    result: import('./trainer.js').TrainingResult,
+    result: import('../../model/helpers/trainer.js').TrainingResult,
   ): Promise<void> {
     return updateExperiment(coordinatorUrl, experimentId, result);
   }
@@ -377,7 +377,7 @@ export class AgentLoopHelper {
     coordinatorUrl: string,
     peerId: string,
     mutation: MutationProposal,
-    result: import('./trainer.js').TrainingResult,
+    result: import('../../model/helpers/trainer.js').TrainingResult,
     improved: boolean,
   ): Promise<void> {
     return postToFeed(coordinatorUrl, peerId, mutation, result, improved);

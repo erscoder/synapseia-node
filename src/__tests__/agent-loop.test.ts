@@ -1,19 +1,19 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
-jest.mock('../mutation-engine.js', () => ({ proposeMutation: jest.fn() }));
-jest.mock('../trainer.js', () => ({
+jest.mock('../modules/model/helpers/mutation-engine.js', () => ({ proposeMutation: jest.fn() }));
+jest.mock('../modules/model/helpers/trainer.js', () => ({
   trainMicroModel: jest.fn(),
   validateTrainingConfig: jest.fn(),
   calculateImprovement: jest.fn(),
 }));
 
-import { proposeMutation } from '../mutation-engine.js';
-import { trainMicroModel, validateTrainingConfig } from '../trainer.js';
+import { proposeMutation } from '../modules/model/helpers/mutation-engine.js';
+import { trainMicroModel, validateTrainingConfig } from '../modules/model/helpers/trainer.js';
 import {
   startAgentLoop, stopAgentLoop, getAgentLoopState, resetAgentLoopState,
   fetchTopExperiments, createExperiment, updateExperiment, postToFeed,
   runAgentIteration, _test, type AgentLoopConfig,
-} from '../agent-loop.js';
+} from '../modules/agent/helpers/agent-loop.js';
 
 // Untyped mock — avoids 'never' inference issues
 const mockFetch: any = jest.fn();

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { AgentLoopHelper, type AgentLoopConfig, type AgentLoopState, type AgentIterationResult } from '../../agent-loop.js';
-import type { MutationProposal } from '../../mutation-engine.js';
-import type { TrainingResult } from '../../trainer.js';
+import { AgentLoopHelper, type AgentLoopConfig, type AgentLoopState, type AgentIterationResult } from './helpers/agent-loop.js';
+import type { MutationProposal } from '../model/helpers/mutation-engine.js';
+import type { TrainingResult } from '../model/helpers/trainer.js';
 import type { Experiment } from '../../types.js';
 
 @Injectable()

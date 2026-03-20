@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { trainMicroModel, validateTrainingConfig, calculateImprovement, _test, type TrainingOptions } from '../trainer.js';
-import type { MutationProposal } from '../mutation-engine.js';
+import { trainMicroModel, validateTrainingConfig, calculateImprovement, _test, type TrainingOptions } from '../modules/model/helpers/trainer.js';
+import type { MutationProposal } from '../modules/model/helpers/mutation-engine.js';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 

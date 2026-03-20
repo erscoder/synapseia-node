@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { StakingHelper } from '../../../staking.js';
+import { StakingHelper } from '../helpers/staking.js';
 import { StakingService } from '../staking.service.js';
 
 describe('StakingService', () => {

@@ -4,8 +4,8 @@ import {
   type ChatCompletionRequest,
   type ChatCompletionResponse,
   type OllamaChatResponse,
-} from '../../inference-server.js';
-import { InferenceServerHelper } from '../../inference-server.js';
+} from './helpers/inference-server.js';
+import { InferenceServerHelper } from './helpers/inference-server.js';
 import type * as http from 'http';
 
 @Injectable()

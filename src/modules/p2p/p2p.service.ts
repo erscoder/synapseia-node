@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { P2pHelper, P2PNode, TOPICS } from '../../p2p.js';
-import type { Identity } from '../../identity.js';
+import { P2pHelper, P2PNode, TOPICS } from './helpers/p2p.js';
+import type { Identity } from '../identity/helpers/identity.js';
 
 @Injectable()
 export class P2pService {

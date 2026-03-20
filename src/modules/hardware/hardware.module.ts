@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { HardwareHelper } from '../../hardware.js';
+import { HardwareHelper } from './helpers/hardware.js';
 import { HardwareService } from './hardware.service.js';
 
 @Module({

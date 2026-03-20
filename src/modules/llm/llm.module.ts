@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { LlmProviderHelper } from '../../llm-provider.js';
-import { OllamaHelper } from '../../ollama.js';
+import { LlmProviderHelper } from './helpers/llm-provider.js';
+import { OllamaHelper } from './helpers/ollama.js';
 import { LlmService } from './llm.service.js';
 
 @Module({

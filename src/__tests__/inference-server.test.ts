@@ -19,7 +19,7 @@ describe('inference-server', () => {
 
   describe('parseBody', () => {
     it('should parse valid JSON body', async () => {
-      const { parseBody } = await import('../inference-server.js');
+      const { parseBody } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -36,7 +36,7 @@ describe('inference-server', () => {
     });
 
     it('should parse empty body', async () => {
-      const { parseBody } = await import('../inference-server.js');
+      const { parseBody } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -51,7 +51,7 @@ describe('inference-server', () => {
     });
 
     it('should throw on invalid JSON', async () => {
-      const { parseBody } = await import('../inference-server.js');
+      const { parseBody } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -67,7 +67,7 @@ describe('inference-server', () => {
     });
 
     it('should handle error event', async () => {
-      const { parseBody } = await import('../inference-server.js');
+      const { parseBody } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -97,7 +97,7 @@ describe('inference-server', () => {
     });
 
     it('should proxy valid request to Ollama', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -136,7 +136,7 @@ describe('inference-server', () => {
     });
 
     it('should handle request with options', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -169,7 +169,7 @@ describe('inference-server', () => {
     });
 
     it('should return 400 for missing model', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -189,7 +189,7 @@ describe('inference-server', () => {
     });
 
     it('should return 400 for missing messages', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -209,7 +209,7 @@ describe('inference-server', () => {
     });
 
     it('should return 400 for empty messages array', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -229,7 +229,7 @@ describe('inference-server', () => {
     });
 
     it('should handle Ollama API error', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -255,7 +255,7 @@ describe('inference-server', () => {
     });
 
     it('should handle Ollama connection error', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -277,7 +277,7 @@ describe('inference-server', () => {
     });
 
     it('should handle request without max_tokens', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -310,7 +310,7 @@ describe('inference-server', () => {
     });
 
     it('should handle request with only max_tokens', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -343,7 +343,7 @@ describe('inference-server', () => {
     });
 
     it('should handle JSON parse errors', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -363,7 +363,7 @@ describe('inference-server', () => {
     });
 
     it('should handle stream option', async () => {
-      const { handleChatCompletions } = await import('../inference-server.js');
+      const { handleChatCompletions } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
         on: jest.fn((event: string, handler: Function) => {
@@ -410,7 +410,7 @@ describe('inference-server', () => {
     });
 
     it('should return node state', async () => {
-      const { handleState } = await import('../inference-server.js');
+      const { handleState } = await import('../modules/inference/helpers/inference-server.js');
 
       const config: InferenceServerConfig = {
         peerId: 'test-peer-123',
@@ -429,7 +429,7 @@ describe('inference-server', () => {
     });
 
     it('should handle empty models array', async () => {
-      const { handleState } = await import('../inference-server.js');
+      const { handleState } = await import('../modules/inference/helpers/inference-server.js');
 
       const config: InferenceServerConfig = {
         peerId: 'test-peer-123',
@@ -444,7 +444,7 @@ describe('inference-server', () => {
     });
 
     it('should handle different tier values', async () => {
-      const { handleState } = await import('../inference-server.js');
+      const { handleState } = await import('../modules/inference/helpers/inference-server.js');
 
       const config: InferenceServerConfig = {
         peerId: 'test-tier-5',
@@ -474,7 +474,7 @@ describe('inference-server', () => {
     });
 
     it('should return health status with uptime', async () => {
-      const { handleHealth } = await import('../inference-server.js');
+      const { handleHealth } = await import('../modules/inference/helpers/inference-server.js');
 
       await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
 
@@ -486,7 +486,7 @@ describe('inference-server', () => {
     });
 
     it('should return valid uptime multiple times', async () => {
-      const { handleHealth } = await import('../inference-server.js');
+      const { handleHealth } = await import('../modules/inference/helpers/inference-server.js');
 
       await handleHealth({} as http.IncomingMessage, mockRes as http.ServerResponse);
       const response1 = JSON.parse(endSpy.mock.calls[endSpy.mock.calls.length - 1][0] as string);
@@ -503,7 +503,7 @@ describe('inference-server', () => {
 
   describe('transformToOpenAI', () => {
     it('should correctly transform Ollama response format', async () => {
-      const { transformToOpenAI } = await import('../inference-server.js');
+      const { transformToOpenAI } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockOllamaResponse = {
         message: { role: 'assistant', content: 'Test response' },
@@ -524,7 +524,7 @@ describe('inference-server', () => {
     });
 
     it('should handle different model names', async () => {
-      const { transformToOpenAI } = await import('../inference-server.js');
+      const { transformToOpenAI } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockOllamaResponse = {
         message: { role: 'assistant', content: 'Another response' },
@@ -542,7 +542,7 @@ describe('inference-server', () => {
 
   describe('forwardToOllama', () => {
     it('should call Ollama API with correct parameters', async () => {
-      const { forwardToOllama } = await import('../inference-server.js');
+      const { forwardToOllama } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockRequest = {
         model: 'llama2',
@@ -575,7 +575,7 @@ describe('inference-server', () => {
     });
 
     it('should throw on API error', async () => {
-      const { forwardToOllama } = await import('../inference-server.js');
+      const { forwardToOllama } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockRequest = {
         model: 'llama2',
@@ -592,7 +592,7 @@ describe('inference-server', () => {
     });
 
     it('should throw on connection error', async () => {
-      const { forwardToOllama } = await import('../inference-server.js');
+      const { forwardToOllama } = await import('../modules/inference/helpers/inference-server.js');
 
       const mockRequest = {
         model: 'llama2',
@@ -607,7 +607,7 @@ describe('inference-server', () => {
 
   describe('startInferenceServer', () => {
     it('should return object with close and server', async () => {
-      const { startInferenceServer } = await import('../inference-server.js');
+      const { startInferenceServer } = await import('../modules/inference/helpers/inference-server.js');
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       const instance = startInferenceServer({
@@ -630,7 +630,7 @@ describe('inference-server', () => {
     });
 
     it('should default to port 8080 when not specified', async () => {
-      const { startInferenceServer } = await import('../inference-server.js');
+      const { startInferenceServer } = await import('../modules/inference/helpers/inference-server.js');
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       // Use port 0 to avoid conflict but verify defaults work
@@ -651,7 +651,7 @@ describe('inference-server', () => {
     });
 
     it('should serve requests correctly', async () => {
-      const { startInferenceServer } = await import('../inference-server.js');
+      const { startInferenceServer } = await import('../modules/inference/helpers/inference-server.js');
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       // Restore real fetch for e2e tests

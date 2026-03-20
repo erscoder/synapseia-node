@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { ModelCatalogService } from '../model-catalog.service.js';
-import { ModelCatalogHelper } from '../../../model-catalog.js';
+import { ModelCatalogHelper } from '../helpers/model-catalog.js';
 
 const mockModel = { name: 'qwen2.5:0.5b', vramRequired: 1, category: 'general' };
 
