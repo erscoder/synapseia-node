@@ -3,6 +3,7 @@
  * Unifies Ollama and Cloud APIs under a common interface
  */
 
+import { Injectable } from '@nestjs/common';
 import { checkOllama, generate as generateOllama } from './ollama.js';
 
 export type LLMProvider = 'ollama' | 'cloud';
@@ -546,3 +547,26 @@ async function generateOpenAICompat(
 export const _test = {
   toErrorMessage,
 };
+
+@Injectable()
+export class LlmProviderHelper {
+  toErrorMessage(error: unknown): string {
+    return toErrorMessage(error);
+  }
+
+  getOptionalString<T>(obj: T | null | undefined, key: keyof T): string | undefined {
+    return getOptionalString(obj, key);
+  }
+
+  parseModel(modelStr: string): LLMModel | null {
+    return parseModel(modelStr);
+  }
+
+  checkLLM(model: LLMModel, config?: LLMConfig): Promise<LLMStatus> {
+    return checkLLM(model, config);
+  }
+
+  generateLLM(model: LLMModel, prompt: string, config?: LLMConfig): Promise<string> {
+    return generateLLM(model, prompt, config);
+  }
+}

@@ -1,53 +1,43 @@
 import { Injectable } from '@nestjs/common';
-import {
-  generateWallet,
-  loadWallet,
-  getOrCreateWallet,
-  getWalletAddress,
-  hasWallet,
-  displayWalletCreationWarning,
-  changeWalletPassword,
-  promptForPassword,
-  promptForNewPassword,
-  type SolanaWallet,
-  type WalletWithStatus,
-} from '../../wallet.js';
+import { WalletHelper, type SolanaWallet, type WalletWithStatus } from '../../wallet.js';
 
 @Injectable()
 export class WalletService {
+  constructor(private readonly walletHelper: WalletHelper) {}
+
   generate(walletDir?: string, password?: string): Promise<WalletWithStatus> {
-    return generateWallet(walletDir, password);
+    return this.walletHelper.generateWallet(walletDir, password);
   }
 
   load(walletDir?: string, password?: string): Promise<SolanaWallet> {
-    return loadWallet(walletDir, password);
+    return this.walletHelper.loadWallet(walletDir, password);
   }
 
   getOrCreate(walletDir?: string, password?: string): Promise<WalletWithStatus> {
-    return getOrCreateWallet(walletDir, password);
+    return this.walletHelper.getOrCreateWallet(walletDir, password);
   }
 
   getAddress(walletDir?: string): string {
-    return getWalletAddress(walletDir);
+    return this.walletHelper.getWalletAddress(walletDir);
   }
 
   has(walletDir?: string): boolean {
-    return hasWallet(walletDir);
+    return this.walletHelper.hasWallet(walletDir);
   }
 
   displayCreationWarning(wallet: SolanaWallet): void {
-    return displayWalletCreationWarning(wallet);
+    return this.walletHelper.displayWalletCreationWarning(wallet);
   }
 
   changePassword(walletDir?: string): Promise<void> {
-    return changeWalletPassword(walletDir);
+    return this.walletHelper.changeWalletPassword(walletDir);
   }
 
   promptForPassword(message?: string): Promise<string> {
-    return promptForPassword(message);
+    return this.walletHelper.promptForPassword(message);
   }
 
   promptForNewPassword(): Promise<string> {
-    return promptForNewPassword();
+    return this.walletHelper.promptForNewPassword();
   }
 }

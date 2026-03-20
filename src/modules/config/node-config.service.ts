@@ -1,37 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import {
-  loadConfig,
-  saveConfig,
-  defaultConfig,
-  validateCoordinatorUrl,
-  validateModelFormat,
-  isCloudModel,
-  type Config,
-} from '../../config.js';
+import { NodeConfigHelper, type Config } from '../../config.js';
 
 @Injectable()
 export class NodeConfigService {
+  constructor(private readonly nodeConfigHelper: NodeConfigHelper) {}
+
   load(): Config {
-    return loadConfig();
+    return this.nodeConfigHelper.loadConfig();
   }
 
   save(config: Config): void {
-    return saveConfig(config);
+    return this.nodeConfigHelper.saveConfig(config);
   }
 
   default(): Config {
-    return defaultConfig();
+    return this.nodeConfigHelper.defaultConfig();
   }
 
   validateCoordinatorUrl(url: string): boolean {
-    return validateCoordinatorUrl(url);
+    return this.nodeConfigHelper.validateCoordinatorUrl(url);
   }
 
   validateModelFormat(model: string): boolean {
-    return validateModelFormat(model);
+    return this.nodeConfigHelper.validateModelFormat(model);
   }
 
   isCloudModel(model: string): boolean {
-    return isCloudModel(model);
+    return this.nodeConfigHelper.isCloudModel(model);
   }
 }

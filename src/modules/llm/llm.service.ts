@@ -1,36 +1,39 @@
 import { Injectable } from '@nestjs/common';
 import {
-  checkLLM,
-  generateLLM,
-  parseModel,
   SUPPORTED_MODELS,
   MODEL_METADATA,
   type LLMModel,
   type LLMStatus,
   type LLMConfig,
 } from '../../llm-provider.js';
-import { checkOllama, generate as generateOllama } from '../../ollama.js';
+import { LlmProviderHelper } from '../../llm-provider.js';
+import { OllamaHelper } from '../../ollama.js';
 
 @Injectable()
 export class LlmService {
+  constructor(
+    private readonly llmProviderHelper: LlmProviderHelper,
+    private readonly ollamaHelper: OllamaHelper,
+  ) {}
+
   parse(modelStr: string): LLMModel | null {
-    return parseModel(modelStr);
+    return this.llmProviderHelper.parseModel(modelStr);
   }
 
   check(model: LLMModel, config?: LLMConfig): Promise<LLMStatus> {
-    return checkLLM(model, config);
+    return this.llmProviderHelper.checkLLM(model, config);
   }
 
   generate(model: LLMModel, prompt: string, config?: LLMConfig): Promise<string> {
-    return generateLLM(model, prompt, config);
+    return this.llmProviderHelper.generateLLM(model, prompt, config);
   }
 
   checkOllama() {
-    return checkOllama();
+    return this.ollamaHelper.checkOllama();
   }
 
   generateOllama(prompt: string, modelId: string): Promise<string> {
-    return generateOllama(prompt, modelId);
+    return this.ollamaHelper.generate(prompt, modelId);
   }
 
   get supportedModels() {

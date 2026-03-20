@@ -1,46 +1,35 @@
 import { Injectable } from '@nestjs/common';
-import {
-  startAgentLoop,
-  stopAgentLoop,
-  runAgentIteration,
-  getAgentLoopState,
-  resetAgentLoopState,
-  fetchTopExperiments,
-  createExperiment,
-  updateExperiment,
-  postToFeed,
-  type AgentLoopConfig,
-  type AgentLoopState,
-  type AgentIterationResult,
-} from '../../agent-loop.js';
+import { AgentLoopHelper, type AgentLoopConfig, type AgentLoopState, type AgentIterationResult } from '../../agent-loop.js';
 import type { MutationProposal } from '../../mutation-engine.js';
 import type { TrainingResult } from '../../trainer.js';
 import type { Experiment } from '../../types.js';
 
 @Injectable()
 export class AgentLoopService {
+  constructor(private readonly agentLoopHelper: AgentLoopHelper) {}
+
   start(config: AgentLoopConfig): Promise<void> {
-    return startAgentLoop(config);
+    return this.agentLoopHelper.startAgentLoop(config);
   }
 
   stop(): void {
-    return stopAgentLoop();
+    return this.agentLoopHelper.stopAgentLoop();
   }
 
   runIteration(config: AgentLoopConfig, iteration: number): Promise<AgentIterationResult> {
-    return runAgentIteration(config, iteration);
+    return this.agentLoopHelper.runAgentIteration(config, iteration);
   }
 
   getState(): AgentLoopState {
-    return getAgentLoopState();
+    return this.agentLoopHelper.getAgentLoopState();
   }
 
   resetState(): void {
-    return resetAgentLoopState();
+    return this.agentLoopHelper.resetAgentLoopState();
   }
 
   fetchTopExperiments(coordinatorUrl: string, limit?: number): Promise<Experiment[]> {
-    return fetchTopExperiments(coordinatorUrl, limit);
+    return this.agentLoopHelper.fetchTopExperiments(coordinatorUrl, limit);
   }
 
   createExperiment(
@@ -49,7 +38,7 @@ export class AgentLoopService {
     peerId: string,
     tier: number,
   ): Promise<string> {
-    return createExperiment(coordinatorUrl, proposal, peerId, tier);
+    return this.agentLoopHelper.createExperiment(coordinatorUrl, proposal, peerId, tier);
   }
 
   updateExperiment(
@@ -57,7 +46,7 @@ export class AgentLoopService {
     experimentId: string,
     result: TrainingResult,
   ): Promise<void> {
-    return updateExperiment(coordinatorUrl, experimentId, result);
+    return this.agentLoopHelper.updateExperiment(coordinatorUrl, experimentId, result);
   }
 
   postToFeed(
@@ -67,6 +56,6 @@ export class AgentLoopService {
     result: TrainingResult,
     improved: boolean,
   ): Promise<void> {
-    return postToFeed(coordinatorUrl, peerId, mutation, result, improved);
+    return this.agentLoopHelper.postToFeed(coordinatorUrl, peerId, mutation, result, improved);
   }
 }

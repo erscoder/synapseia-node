@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
+import { NodeConfigHelper } from '../../config.js';
 import { NodeConfigService } from './node-config.service.js';
 
 @Module({
-  providers: [NodeConfigService],
+  providers: [NodeConfigHelper, NodeConfigService],
   exports: [NodeConfigService],
 })
 export class NodeConfigModule {}

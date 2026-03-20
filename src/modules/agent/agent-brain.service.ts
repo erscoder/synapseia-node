@@ -1,30 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import {
-  initBrain,
-  updateBrain,
-  getNextAction,
-  getRecentMemories,
-  getRecentJournal,
-  type AgentBrain,
-  type MemoryEntry,
-  type JournalEntry,
-} from '../../agent-brain.js';
+import { AgentBrainHelper, type AgentBrain, type MemoryEntry, type JournalEntry } from '../../agent-brain.js';
 
 @Injectable()
 export class AgentBrainService {
+  constructor(private readonly agentBrainHelper: AgentBrainHelper) {}
+
   init(goals?: string[]): AgentBrain {
-    return initBrain(goals);
+    return this.agentBrainHelper.initBrain(goals);
   }
 
   update(
     brain: AgentBrain,
     result: { valLoss: number; improved: boolean; mutation: string; lesson?: string },
   ): AgentBrain {
-    return updateBrain(brain, result);
+    return this.agentBrainHelper.updateBrain(brain, result);
   }
 
   getNextAction(brain: AgentBrain): 'explore' | 'improve' | 'rest' {
-    return getNextAction(brain);
+    return this.agentBrainHelper.getNextAction(brain);
   }
 
   getRecentMemories(
@@ -32,10 +25,10 @@ export class AgentBrainService {
     maxEntries?: number,
     minImportance?: number,
   ): MemoryEntry[] {
-    return getRecentMemories(brain, maxEntries, minImportance);
+    return this.agentBrainHelper.getRecentMemories(brain, maxEntries, minImportance);
   }
 
   getRecentJournal(brain: AgentBrain, maxEntries?: number): JournalEntry[] {
-    return getRecentJournal(brain, maxEntries);
+    return this.agentBrainHelper.getRecentJournal(brain, maxEntries);
   }
 }

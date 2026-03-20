@@ -1,35 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import {
-  startInferenceServer,
-  parseBody,
-  forwardToOllama,
-  transformToOpenAI,
-  handleChatCompletions,
-  handleState,
-  handleHealth,
   type InferenceServerConfig,
   type ChatCompletionRequest,
   type ChatCompletionResponse,
   type OllamaChatResponse,
 } from '../../inference-server.js';
+import { InferenceServerHelper } from '../../inference-server.js';
 import type * as http from 'http';
 
 @Injectable()
 export class InferenceService {
+  constructor(
+    private readonly inferenceServerHelper: InferenceServerHelper,
+  ) {}
+
   start(config: InferenceServerConfig): { close: () => void; server: http.Server } {
-    return startInferenceServer(config);
+    return this.inferenceServerHelper.startInferenceServer(config);
   }
 
   parseBody(req: http.IncomingMessage): Promise<unknown> {
-    return parseBody(req);
+    return this.inferenceServerHelper.parseBody(req);
   }
 
   forwardToOllama(request: ChatCompletionRequest): Promise<OllamaChatResponse> {
-    return forwardToOllama(request);
+    return this.inferenceServerHelper.forwardToOllama(request);
   }
 
   transformToOpenAI(ollamaResponse: OllamaChatResponse, model: string): ChatCompletionResponse {
-    return transformToOpenAI(ollamaResponse, model);
+    return this.inferenceServerHelper.transformToOpenAI(ollamaResponse, model);
   }
 
   handleChatCompletions(
@@ -37,7 +35,7 @@ export class InferenceService {
     res: http.ServerResponse,
     peerId: string,
   ): Promise<void> {
-    return handleChatCompletions(req, res, peerId);
+    return this.inferenceServerHelper.handleChatCompletions(req, res, peerId);
   }
 
   handleState(
@@ -45,10 +43,10 @@ export class InferenceService {
     res: http.ServerResponse,
     config: InferenceServerConfig,
   ): Promise<void> {
-    return handleState(req, res, config);
+    return this.inferenceServerHelper.handleState(req, res, config);
   }
 
   handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    return handleHealth(req, res);
+    return this.inferenceServerHelper.handleHealth(req, res);
   }
 }

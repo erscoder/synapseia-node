@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
+import { IdentityHelper } from '../../identity.js';
 import { IdentityService } from './identity.service.js';
 
 @Module({
-  providers: [IdentityService],
+  providers: [IdentityHelper, IdentityService],
   exports: [IdentityService],
 })
 export class IdentityModule {}

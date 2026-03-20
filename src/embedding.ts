@@ -3,61 +3,7 @@
  * Generate embeddings, compute cosine similarity, perform similarity search
  */
 
-/**
- * Generate embedding vector from text via Ollama
- */
-export async function generateEmbedding(
-  text: string,
-  model: string = 'all-minilm-l6-v2',
-): Promise<number[]> {
-  const url = 'http://localhost:11434/api/embeddings';
-  const payload = {
-    model,
-    prompt: text,
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Ollama embeddings API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = (await response.json()) as { embedding: number[] };
-  return data.embedding;
-}
-
-/**
- * Compute cosine similarity between two vectors
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error('Vectors must have same length');
-  }
-
-  if (a.length === 0) {
-    throw new Error('Vectors must not be empty');
-  }
-
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  if (normA === 0 || normB === 0) {
-    return 0; // Zero vector similarity
-  }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
+import { Injectable } from '@nestjs/common';
 
 /**
  * Document with ID and text
@@ -76,46 +22,115 @@ export interface SimilarityResult {
   score: number;
 }
 
-/**
- * Perform similarity search across documents
- * Returns topK most similar documents sorted by score descending
- */
-export async function similaritySearch(
-  query: string,
-  documents: Document[],
-  topK: number = 5,
-  model: string = 'all-minilm-l6-v2',
-): Promise<SimilarityResult[]> {
-  if (documents.length === 0) {
-    return [];
+@Injectable()
+export class EmbeddingHelper {
+  /**
+   * Generate embedding vector from text via Ollama
+   */
+  async generateEmbedding(
+    text: string,
+    model: string = 'all-minilm-l6-v2',
+  ): Promise<number[]> {
+    const url = 'http://localhost:11434/api/embeddings';
+    const payload = {
+      model,
+      prompt: text,
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama embeddings API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { embedding: number[] };
+    return data.embedding;
   }
 
-  if (topK <= 0) {
-    return [];
+  /**
+   * Compute cosine similarity between two vectors
+   */
+  cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error('Vectors must have same length');
+    }
+
+    if (a.length === 0) {
+      throw new Error('Vectors must not be empty');
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    if (normA === 0 || normB === 0) {
+      return 0; // Zero vector similarity
+    }
+
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
-  // Generate query embedding
-  const queryEmbedding = await generateEmbedding(query, model);
+  /**
+   * Perform similarity search across documents
+   * Returns topK most similar documents sorted by score descending
+   */
+  async similaritySearch(
+    query: string,
+    documents: Document[],
+    topK: number = 5,
+    model: string = 'all-minilm-l6-v2',
+  ): Promise<SimilarityResult[]> {
+    if (documents.length === 0) {
+      return [];
+    }
 
-  // Generate embeddings for all documents and compute similarities
-  const results: Array<{
-    doc: Document;
-    score: number;
-  }> = [];
+    if (topK <= 0) {
+      return [];
+    }
 
-  for (const doc of documents) {
-    const docEmbedding = await generateEmbedding(doc.text, model);
-    const score = cosineSimilarity(queryEmbedding, docEmbedding);
-    results.push({ doc, score });
+    // Generate query embedding
+    const queryEmbedding = await this.generateEmbedding(query, model);
+
+    // Generate embeddings for all documents and compute similarities
+    const results: Array<{
+      doc: Document;
+      score: number;
+    }> = [];
+
+    for (const doc of documents) {
+      const docEmbedding = await this.generateEmbedding(doc.text, model);
+      const score = this.cosineSimilarity(queryEmbedding, docEmbedding);
+      results.push({ doc, score });
+    }
+
+    // Sort by score descending and take top K
+    results.sort((a, b) => b.score - a.score);
+    const topResults = results.slice(0, Math.min(topK, results.length));
+
+    return topResults.map((r) => ({
+      id: r.doc.id,
+      text: r.doc.text,
+      score: r.score,
+    }));
   }
-
-  // Sort by score descending and take top K
-  results.sort((a, b) => b.score - a.score);
-  const topResults = results.slice(0, Math.min(topK, results.length));
-
-  return topResults.map((r) => ({
-    id: r.doc.id,
-    text: r.doc.text,
-    score: r.score,
-  }));
 }
+
+// Backward-compatible standalone function exports
+export const generateEmbedding = (...args: Parameters<EmbeddingHelper['generateEmbedding']>) =>
+  new EmbeddingHelper().generateEmbedding(...args);
+
+export const cosineSimilarity = (...args: Parameters<EmbeddingHelper['cosineSimilarity']>) =>
+  new EmbeddingHelper().cosineSimilarity(...args);
+
+export const similaritySearch = (...args: Parameters<EmbeddingHelper['similaritySearch']>) =>
+  new EmbeddingHelper().similaritySearch(...args);

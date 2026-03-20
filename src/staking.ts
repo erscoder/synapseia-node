@@ -3,6 +3,7 @@
  * Connects to Solana staking program to verify stake amount
  */
 
+import { Injectable } from '@nestjs/common';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { STAKING_PROGRAM_ID } from './utils/idl.js';
 
@@ -26,85 +27,6 @@ export interface StakingVerificationResult {
   valid: boolean;
   stakeInfo?: StakeInfo;
   error?: string;
-}
-
-/**
- * Verify stake for a peer on the blockchain
- */
-export async function verifyStake(
-  peerId: string,
-  rpcUrl: string = 'https://api.devnet.solana.com',
-): Promise<StakingVerificationResult> {
-  try {
-    const connection = new Connection(rpcUrl);
-    const [stakeAccount] = deriveStakeAccount(peerId);
-
-    // Fetch account info
-    const accountInfo = await connection.getAccountInfo(stakeAccount);
-
-    if (!accountInfo || !accountInfo?.data) {
-      return {
-        valid: false,
-        error: 'Stake account not found',
-      };
-    }
-
-    // Parse IDL data (simplified - in production, use anchor client)
-    const stakeData = parseStakeAccountData(accountInfo.data);
-
-    const stakeInfo: StakeInfo = {
-      peerId,
-      stakedAmount: stakeData.amount,
-      tier: computeTier(stakeData.amount),
-      stakeAccount: Array.isArray(stakeAccount) ? stakeAccount[0].toBase58() : String(stakeAccount),
-      lockupEndTimestamp: stakeData.lockupEnd,
-    };
-
-    return {
-      valid: true,
-      stakeInfo,
-    };
-  } catch (error) {
-    return {
-      valid: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-}
-
-/**
- * Get minimum stake for each tier (in SYN tokens)
- */
-export function getMinimumStake(tier: number): number {
-  const minimums: Record<number, number> = {
-    0: 0, // CPU-only, no stake required
-    1: 100,
-    2: 500,
-    3: 1000,
-    4: 5000,
-    5: 10000,
-  };
-  return minimums[tier] || 0;
-}
-
-/**
- * Compute tier based on staked amount
- */
-export function computeTier(stakedAmount: number): number {
-  if (stakedAmount < 100) return 0;
-  if (stakedAmount < 500) return 1;
-  if (stakedAmount < 1000) return 2;
-  if (stakedAmount < 5000) return 3;
-  if (stakedAmount < 10000) return 4;
-  return 5;
-}
-
-/**
- * Check if stake meets minimum for tier
- */
-export function meetsMinimumStake(stakedAmount: number, tier: number): boolean {
-  const minimum = getMinimumStake(tier);
-  return stakedAmount >= minimum;
 }
 
 /**
@@ -136,44 +58,145 @@ function parseStakeAccountData(data: Buffer): {
   };
 }
 
-/**
- * Get all stakes for a peer (if multiple stake accounts exist)
- */
-export async function getAllStakesForPeer(
-  peerId: string,
-  rpcUrl: string = 'https://api.devnet.solana.com',
-): Promise<StakeInfo[]> {
-  // For now, return single stake
-  const result = await verifyStake(peerId, rpcUrl);
-  return result.valid && result.stakeInfo ? [result.stakeInfo] : [];
-}
+@Injectable()
+export class StakingHelper {
+  /**
+   * Verify stake for a peer on the blockchain
+   */
+  async verifyStake(
+    peerId: string,
+    rpcUrl: string = 'https://api.devnet.solana.com',
+  ): Promise<StakingVerificationResult> {
+    try {
+      const connection = new Connection(rpcUrl);
+      const [stakeAccount] = deriveStakeAccount(peerId);
 
-/**
- * Get total staked across network (aggregates all stake accounts)
- */
-export async function getTotalNetworkStake(
-  rpcUrl: string = 'https://api.devnet.solana.com',
-): Promise<number> {
-  try {
-    const connection = new Connection(rpcUrl);
-    const programAccounts = await connection.getProgramAccounts(
-      STAKING_PROGRAM_ID,
-      {
-        filters: [
-          // Account size filter for stake accounts
-          { dataSize: 32 }, // Simplified filter
-        ],
-      },
-    );
+      // Fetch account info
+      const accountInfo = await connection.getAccountInfo(stakeAccount);
 
-    let totalStake = 0;
-    for (const account of programAccounts) {
-      const data = parseStakeAccountData(account.account.data);
-      totalStake += data.amount;
+      if (!accountInfo || !accountInfo?.data) {
+        return {
+          valid: false,
+          error: 'Stake account not found',
+        };
+      }
+
+      // Parse IDL data (simplified - in production, use anchor client)
+      const stakeData = parseStakeAccountData(accountInfo.data);
+
+      const stakeInfo: StakeInfo = {
+        peerId,
+        stakedAmount: stakeData.amount,
+        tier: this.computeTier(stakeData.amount),
+        stakeAccount: Array.isArray(stakeAccount) ? stakeAccount[0].toBase58() : String(stakeAccount),
+        lockupEndTimestamp: stakeData.lockupEnd,
+      };
+
+      return {
+        valid: true,
+        stakeInfo,
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
+  }
 
-    return totalStake;
-  } catch (error) {
-    return 0;
+  /**
+   * Get minimum stake for each tier (in SYN tokens)
+   */
+  getMinimumStake(tier: number): number {
+    const minimums: Record<number, number> = {
+      0: 0, // CPU-only, no stake required
+      1: 100,
+      2: 500,
+      3: 1000,
+      4: 5000,
+      5: 10000,
+    };
+    return minimums[tier] || 0;
+  }
+
+  /**
+   * Compute tier based on staked amount
+   */
+  computeTier(stakedAmount: number): number {
+    if (stakedAmount < 100) return 0;
+    if (stakedAmount < 500) return 1;
+    if (stakedAmount < 1000) return 2;
+    if (stakedAmount < 5000) return 3;
+    if (stakedAmount < 10000) return 4;
+    return 5;
+  }
+
+  /**
+   * Check if stake meets minimum for tier
+   */
+  meetsMinimumStake(stakedAmount: number, tier: number): boolean {
+    const minimum = this.getMinimumStake(tier);
+    return stakedAmount >= minimum;
+  }
+
+  /**
+   * Get all stakes for a peer (if multiple stake accounts exist)
+   */
+  async getAllStakesForPeer(
+    peerId: string,
+    rpcUrl: string = 'https://api.devnet.solana.com',
+  ): Promise<StakeInfo[]> {
+    // For now, return single stake
+    const result = await this.verifyStake(peerId, rpcUrl);
+    return result.valid && result.stakeInfo ? [result.stakeInfo] : [];
+  }
+
+  /**
+   * Get total staked across network (aggregates all stake accounts)
+   */
+  async getTotalNetworkStake(
+    rpcUrl: string = 'https://api.devnet.solana.com',
+  ): Promise<number> {
+    try {
+      const connection = new Connection(rpcUrl);
+      const programAccounts = await connection.getProgramAccounts(
+        STAKING_PROGRAM_ID,
+        {
+          filters: [
+            // Account size filter for stake accounts
+            { dataSize: 32 }, // Simplified filter
+          ],
+        },
+      );
+
+      let totalStake = 0;
+      for (const account of programAccounts) {
+        const data = parseStakeAccountData(account.account.data);
+        totalStake += data.amount;
+      }
+
+      return totalStake;
+    } catch (error) {
+      return 0;
+    }
   }
 }
+
+// Backward-compatible standalone function exports (used by src/index.ts CLI)
+export const verifyStake = (...args: Parameters<StakingHelper['verifyStake']>) =>
+  new StakingHelper().verifyStake(...args);
+
+export const getMinimumStake = (...args: Parameters<StakingHelper['getMinimumStake']>) =>
+  new StakingHelper().getMinimumStake(...args);
+
+export const computeTier = (...args: Parameters<StakingHelper['computeTier']>) =>
+  new StakingHelper().computeTier(...args);
+
+export const meetsMinimumStake = (...args: Parameters<StakingHelper['meetsMinimumStake']>) =>
+  new StakingHelper().meetsMinimumStake(...args);
+
+export const getAllStakesForPeer = (...args: Parameters<StakingHelper['getAllStakesForPeer']>) =>
+  new StakingHelper().getAllStakesForPeer(...args);
+
+export const getTotalNetworkStake = (...args: Parameters<StakingHelper['getTotalNetworkStake']>) =>
+  new StakingHelper().getTotalNetworkStake(...args);

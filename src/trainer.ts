@@ -3,6 +3,7 @@
  * Executes Python training script and captures results
  */
 
+import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { resolve } from 'path';
 import type { MutationProposal } from './mutation-engine.js';
@@ -205,3 +206,21 @@ export function calculateImprovement(currentLoss: number, bestLoss: number): num
 export const _test = {
   calculateImprovement,
 };
+
+/**
+ * Injectable helper class — wraps trainer functions for NestJS DI
+ */
+@Injectable()
+export class TrainerHelper {
+  trainMicroModel(options: TrainingOptions): Promise<TrainingResult> {
+    return trainMicroModel(options);
+  }
+
+  validateTrainingConfig(proposal: MutationProposal): { valid: boolean; error?: string } {
+    return validateTrainingConfig(proposal);
+  }
+
+  calculateImprovement(currentLoss: number, bestLoss: number): number {
+    return calculateImprovement(currentLoss, bestLoss);
+  }
+}

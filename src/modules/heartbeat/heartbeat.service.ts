@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
-  sendHeartbeat,
-  startPeriodicHeartbeat,
-  determineCapabilities,
+  HeartbeatHelper,
   type HeartbeatPayload,
   type HeartbeatResponse,
 } from '../../heartbeat.js';
@@ -12,8 +10,10 @@ import type { P2PNode } from '../../p2p.js';
 
 @Injectable()
 export class HeartbeatService {
+  constructor(private readonly heartbeatHelper: HeartbeatHelper) {}
+
   send(coordinatorUrl: string, identity: Identity, hardware: Hardware): Promise<HeartbeatResponse> {
-    return sendHeartbeat(coordinatorUrl, identity, hardware);
+    return this.heartbeatHelper.sendHeartbeat(coordinatorUrl, identity, hardware);
   }
 
   startPeriodic(
@@ -23,10 +23,10 @@ export class HeartbeatService {
     intervalMs = 30000,
     p2pNode?: P2PNode,
   ): () => void {
-    return startPeriodicHeartbeat(coordinatorUrl, identity, hardware, intervalMs, p2pNode);
+    return this.heartbeatHelper.startPeriodicHeartbeat(coordinatorUrl, identity, hardware, intervalMs, p2pNode);
   }
 
   determineCapabilities(hardware: Hardware): string[] {
-    return determineCapabilities(hardware);
+    return this.heartbeatHelper.determineCapabilities(hardware);
   }
 }

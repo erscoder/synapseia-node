@@ -3,6 +3,8 @@
  * Manages memory, journaling, strategy, and learning from experiments
  */
 
+import { Injectable } from '@nestjs/common';
+
 export interface MemoryEntry {
   timestamp: number;
   type: 'experiment' | 'discovery' | 'failure';
@@ -168,4 +170,38 @@ export function getRecentMemories(
  */
 export function getRecentJournal(brain: AgentBrain, maxEntries: number = 10): JournalEntry[] {
   return brain.journal.slice(-maxEntries).reverse();
+}
+
+// ---------------------------------------------------------------------------
+// Injectable helper class — wraps the standalone functions for NestJS DI
+// ---------------------------------------------------------------------------
+
+@Injectable()
+export class AgentBrainHelper {
+  initBrain(goals?: string[]): AgentBrain {
+    return initBrain(goals);
+  }
+
+  updateBrain(
+    brain: AgentBrain,
+    result: { valLoss: number; improved: boolean; mutation: string; lesson?: string },
+  ): AgentBrain {
+    return updateBrain(brain, result);
+  }
+
+  getNextAction(brain: AgentBrain): 'explore' | 'improve' | 'rest' {
+    return getNextAction(brain);
+  }
+
+  getRecentMemories(
+    brain: AgentBrain,
+    maxEntries?: number,
+    minImportance?: number,
+  ): MemoryEntry[] {
+    return getRecentMemories(brain, maxEntries, minImportance);
+  }
+
+  getRecentJournal(brain: AgentBrain, maxEntries?: number): JournalEntry[] {
+    return getRecentJournal(brain, maxEntries);
+  }
 }

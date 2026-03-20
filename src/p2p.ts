@@ -7,6 +7,7 @@ import { gossipsub } from '@libp2p/gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
+import { Injectable } from '@nestjs/common';
 import type { Identity } from './identity.js';
 import { sign, canonicalPayload } from './identity.js';
 
@@ -119,11 +120,22 @@ export class P2PNode {
   }
 }
 
+@Injectable()
+export class P2pHelper {
+  async createP2PNode(
+    identity: Identity,
+    bootstrapAddrs: string[] = [],
+  ): Promise<P2PNode> {
+    const node = new P2PNode(identity);
+    await node.start(bootstrapAddrs);
+    return node;
+  }
+}
+
+// Backward-compatible standalone export
 export async function createP2PNode(
   identity: Identity,
   bootstrapAddrs: string[] = [],
 ): Promise<P2PNode> {
-  const node = new P2PNode(identity);
-  await node.start(bootstrapAddrs);
-  return node;
+  return new P2pHelper().createP2PNode(identity, bootstrapAddrs);
 }
