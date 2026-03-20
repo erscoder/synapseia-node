@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { getOrCreateIdentity } from '../identity.js';
 import {
   getOrCreateWallet,
@@ -111,7 +114,23 @@ interface StatusOutput {
   gpuVramGb: number;
 }
 
-program.name('synapseia').description('SynapseIA Network Node CLI').version('0.1.0');
+// Read version from package.json
+function getPackageVersion(): string {
+  try {
+    // ESM-compatible way to get __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const pkgPath = join(__dirname, '../../package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version;
+  } catch {
+    return '0.2.0';
+  }
+}
+
+const VERSION = getPackageVersion();
+
+program.name('synapseia').description('SynapseIA Network Node CLI').version(VERSION);
 
 program
   .command('start')
@@ -530,7 +549,7 @@ program
           const llmUrl = await safePrompt(() =>
             input({
               message: 'API base URL:',
-              default: config.llmUrl || 'https://api.asi1.ai',
+              default: config.llmUrl || 'https://api.asi1.ai/v1',
               validate: (v) => {
                 if (!v) return 'Required';
                 if (!v.startsWith('http')) return 'Must start with http';

@@ -9,13 +9,15 @@ COPY package.json ./
 RUN npm install
 
 # Copy built CLI
-COPY dist/ ./dist/
+COPY . .
 
 # Create synapse config directory
 RUN mkdir -p /root/.synapse
 
 # Set environment variables
 ENV NODE_ENV=production
+
+RUN npm run build
 
 # Run the SynapseIA node CLI
 ENTRYPOINT ["node", "dist/index.cjs"]
