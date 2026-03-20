@@ -59,6 +59,7 @@ describe('heartbeat', () => {
       '/peer/heartbeat',
       {
         peerId: 'test-peer-id',
+        publicKey: 'test-public-key',
         walletAddress: null,
         tier: 0,
         capabilities: ['cpu', 'inference', 'embedding'],

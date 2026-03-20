@@ -5,6 +5,7 @@ import type { P2PNode } from './p2p.js';
 
 export interface HeartbeatPayload {
   peerId: string;
+  publicKey: string;  // Full Ed25519 public key (64 hex chars = 32 bytes)
   walletAddress: string | null;
   tier: number;
   capabilities: string[];
@@ -29,10 +30,11 @@ export async function sendHeartbeat(
 
   const payload: HeartbeatPayload = {
     peerId: identity.peerId,
+    publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
     walletAddress: null, // TODO: connect wallet
     tier: hardware.tier,
     capabilities,
-    uptime: startTime, // Process start time (simplified)
+    uptime: Math.floor((Date.now() - startTime) / 1000), // Seconds since process start
   };
 
   let lastError: Error | null = null;
@@ -99,16 +101,19 @@ export function startPeriodicHeartbeat(
   intervalMs: number = 30000,
   p2pNode?: P2PNode,
 ): () => void {
+  const intervalStartTime = Date.now();
   const intervalId = setInterval(async () => {
     try {
+      const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
       if (p2pNode && p2pNode.isRunning()) {
         const capabilities = determineCapabilities(hardware);
         await p2pNode.publishHeartbeat({
           peerId: p2pNode.getPeerId(),
+          publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
           walletAddress: null,
           tier: hardware.tier,
           capabilities,
-          uptime: Date.now(),
+          uptime: uptimeSeconds,
           timestamp: Math.floor(Date.now() / 1000),
         });
         console.log('[P2P] Heartbeat published via gossipsub');

@@ -6,6 +6,9 @@ import {
   getLocalModels,
   isModelAvailable,
   getRecommendedModel,
+  getModelCatalog,
+  getModelByName,
+  normalizeModelName,
   MODEL_CATALOG,
   CLOUD_MODELS,
   FULL_CATALOG,
@@ -360,6 +363,91 @@ describe('Model Catalog', () => {
         stdio: 'pipe',
         timeout: 1000,
       });
+    });
+  });
+
+  describe('getModelCatalog', () => {
+    it('should return local models catalog (no cloud models)', () => {
+      const catalog = getModelCatalog();
+      expect(catalog).toHaveLength(25);
+      catalog.forEach((model) => {
+        expect(model.isCloud).toBeFalsy();
+      });
+    });
+
+    it('should not include cloud models', () => {
+      const catalog = getModelCatalog();
+      expect(catalog.find((m) => m.name === 'gemini-2.0-flash')).toBeUndefined();
+    });
+  });
+
+  describe('normalizeModelName', () => {
+    it('should remove ollama prefix', () => {
+      expect(normalizeModelName('ollama/qwen2.5-0.5b')).toBe('qwen2.5-0.5b');
+    });
+
+    it('should replace colons with dashes', () => {
+      expect(normalizeModelName('qwen2.5:0.5b')).toBe('qwen2.5-0.5b');
+    });
+
+    it('should lowercase the name', () => {
+      expect(normalizeModelName('QWEN2.5-0.5B')).toBe('qwen2.5-0.5b');
+    });
+
+    it('should handle ollama/ prefix with colons', () => {
+      expect(normalizeModelName('ollama/qwen2.5:0.5b')).toBe('qwen2.5-0.5b');
+    });
+
+    it('should handle already normalized names', () => {
+      expect(normalizeModelName('qwen2.5-0.5b')).toBe('qwen2.5-0.5b');
+    });
+  });
+
+  describe('getModelByName', () => {
+    it('should find model by exact name', () => {
+      const model = getModelByName('qwen2.5-0.5b');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('qwen2.5-0.5b');
+    });
+
+    it('should find model with ollama prefix', () => {
+      const model = getModelByName('ollama/qwen2.5-0.5b');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('qwen2.5-0.5b');
+    });
+
+    it('should find model with colon format', () => {
+      const model = getModelByName('qwen2.5:0.5b');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('qwen2.5-0.5b');
+    });
+
+    it('should find model with ollama/ prefix and colon', () => {
+      const model = getModelByName('ollama/qwen2.5:0.5b');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('qwen2.5-0.5b');
+    });
+
+    it('should return null for non-existent model', () => {
+      const model = getModelByName('non-existent-model');
+      expect(model).toBeNull();
+    });
+
+    it('should be case insensitive', () => {
+      const model = getModelByName('QWEN2.5-0.5B');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('qwen2.5-0.5b');
+    });
+
+    it('should not find cloud models', () => {
+      const model = getModelByName('ollama/gemini-2.0-flash');
+      expect(model).toBeNull();
+    });
+
+    it('should handle mixed format models', () => {
+      const model = getModelByName('ollama/llama-3.1-8b-instruct');
+      expect(model).not.toBeNull();
+      expect(model?.name).toBe('llama-3.1-8b-instruct');
     });
   });
 });

@@ -109,7 +109,9 @@ export class P2PNode {
     const payload = { ...data };
     const canonical = canonicalPayload(payload);
     const signature = await sign(canonical, this.identity.privateKey);
-    return this.publish(TOPICS.HEARTBEAT, { ...payload, signature });
+    // BUG-2 fix: Use full 32-byte publicKey instead of peerId (truncated 16 bytes)
+    // P2PHeartbeatBridge expects publicKey for Ed25519 verification
+    return this.publish(TOPICS.HEARTBEAT, { ...payload, signature, publicKey: this.identity.publicKey });
   }
 
   async publishSubmission(data: Record<string, unknown>): Promise<void> {
