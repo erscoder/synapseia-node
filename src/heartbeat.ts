@@ -1,6 +1,7 @@
-import axios, { type AxiosInstance } from 'axios';
+import axios from 'axios';
 import type { Identity } from './identity.js';
 import type { Hardware } from './hardware.js';
+import type { P2PNode } from './p2p.js';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -88,22 +89,37 @@ export function determineCapabilities(hardware: Hardware): string[] {
 
 /**
  * Start periodic heartbeat (every 30 seconds)
+ * If p2pNode is provided, heartbeat is published via GossipSub.
+ * Falls back to HTTP if P2P is not available.
  */
 export function startPeriodicHeartbeat(
   coordinatorUrl: string,
   identity: Identity,
   hardware: Hardware,
   intervalMs: number = 30000,
+  p2pNode?: P2PNode,
 ): () => void {
   const intervalId = setInterval(async () => {
     try {
-      await sendHeartbeat(coordinatorUrl, identity, hardware);
-      console.log('Heartbeat sent successfully');
+      if (p2pNode && p2pNode.isRunning()) {
+        const capabilities = determineCapabilities(hardware);
+        await p2pNode.publishHeartbeat({
+          peerId: p2pNode.getPeerId(),
+          walletAddress: null,
+          tier: hardware.tier,
+          capabilities,
+          uptime: Date.now(),
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+        console.log('[P2P] Heartbeat published via gossipsub');
+      } else {
+        await sendHeartbeat(coordinatorUrl, identity, hardware);
+        console.log('Heartbeat sent via HTTP (fallback)');
+      }
     } catch (error) {
       console.error('Heartbeat failed:', (error as Error).message);
     }
   }, intervalMs);
 
-  // Return cleanup function
   return () => clearInterval(intervalId);
 }
