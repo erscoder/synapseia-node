@@ -1,38 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import {
-  verifyStake,
-  getMinimumStake,
-  computeTier,
-  meetsMinimumStake,
-  getAllStakesForPeer,
-  getTotalNetworkStake,
-  type StakeInfo,
-  type StakingVerificationResult,
-} from '../../staking.js';
+import { StakingHelper, type StakeInfo, type StakingVerificationResult } from '../../staking.js';
 
 @Injectable()
 export class StakingService {
+  constructor(private readonly stakingHelper: StakingHelper) {}
+
   verify(peerId: string, rpcUrl?: string): Promise<StakingVerificationResult> {
-    return verifyStake(peerId, rpcUrl);
+    return this.stakingHelper.verifyStake(peerId, rpcUrl);
   }
 
   getMinimumStake(tier: number): number {
-    return getMinimumStake(tier);
+    return this.stakingHelper.getMinimumStake(tier);
   }
 
   computeTier(stakedAmount: number): number {
-    return computeTier(stakedAmount);
+    return this.stakingHelper.computeTier(stakedAmount);
   }
 
   meetsMinimum(stakedAmount: number, tier: number): boolean {
-    return meetsMinimumStake(stakedAmount, tier);
+    return this.stakingHelper.meetsMinimumStake(stakedAmount, tier);
   }
 
   getAllForPeer(peerId: string, rpcUrl?: string): Promise<StakeInfo[]> {
-    return getAllStakesForPeer(peerId, rpcUrl);
+    return this.stakingHelper.getAllStakesForPeer(peerId, rpcUrl);
   }
 
   getTotalNetworkStake(rpcUrl?: string): Promise<number> {
-    return getTotalNetworkStake(rpcUrl);
+    return this.stakingHelper.getTotalNetworkStake(rpcUrl);
   }
 }

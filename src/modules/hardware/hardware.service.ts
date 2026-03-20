@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
-  detectHardware,
-  getSystemInfo,
-  getCompatibleModels,
-  getRecommendedTier,
-  getTierName,
+  HardwareHelper,
   type Hardware,
   type SystemInfo,
   type HardwareTier,
@@ -13,23 +9,25 @@ import {
 
 @Injectable()
 export class HardwareService {
+  constructor(private readonly hardwareHelper: HardwareHelper) {}
+
   detect(cpuOnly = false, archOverride?: string): Hardware {
-    return detectHardware(cpuOnly, archOverride);
+    return this.hardwareHelper.detectHardware(cpuOnly, archOverride);
   }
 
   getSystemInfo(archOverride?: string): SystemInfo {
-    return getSystemInfo(archOverride);
+    return this.hardwareHelper.getSystemInfo(archOverride);
   }
 
   getCompatibleModels(vramGb: number, allModels: ModelInfo[] = []): ModelInfo[] {
-    return getCompatibleModels(vramGb, allModels);
+    return this.hardwareHelper.getCompatibleModels(vramGb, allModels);
   }
 
   getRecommendedTier(vramGb: number): number {
-    return getRecommendedTier(vramGb);
+    return this.hardwareHelper.getRecommendedTier(vramGb);
   }
 
   getTierName(tier: HardwareTier): string {
-    return getTierName(tier);
+    return this.hardwareHelper.getTierName(tier);
   }
 }

@@ -1,15 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
-  listModels,
-  getModelsForVram,
-  getModel,
-  pullModel,
-  getLocalModels,
-  isModelAvailable,
-  getRecommendedModel,
-  getModelCatalog,
-  normalizeModelName,
-  getModelByName,
+  ModelCatalogHelper,
   MODEL_CATALOG,
   CLOUD_MODELS,
   FULL_CATALOG,
@@ -19,44 +10,46 @@ import {
 
 @Injectable()
 export class ModelCatalogService {
+  constructor(private readonly modelCatalogHelper: ModelCatalogHelper) {}
+
   list(category?: ModelCategory): ModelInfo[] {
-    return listModels(category);
+    return this.modelCatalogHelper.listModels(category);
   }
 
   getForVram(vramGb: number): ModelInfo[] {
-    return getModelsForVram(vramGb);
+    return this.modelCatalogHelper.getModelsForVram(vramGb);
   }
 
   get(name: string): ModelInfo | undefined {
-    return getModel(name);
+    return this.modelCatalogHelper.getModel(name);
   }
 
   pull(name: string): Promise<boolean> {
-    return pullModel(name);
+    return this.modelCatalogHelper.pullModel(name);
   }
 
   getLocal(): string[] {
-    return getLocalModels();
+    return this.modelCatalogHelper.getLocalModels();
   }
 
   isAvailable(name: string): boolean {
-    return isModelAvailable(name);
+    return this.modelCatalogHelper.isModelAvailable(name);
   }
 
   getRecommended(tier: number, category?: ModelCategory): ModelInfo | undefined {
-    return getRecommendedModel(tier, category);
+    return this.modelCatalogHelper.getRecommendedModel(tier, category);
   }
 
   getCatalog(): ModelInfo[] {
-    return getModelCatalog();
+    return this.modelCatalogHelper.getModelCatalog();
   }
 
   normalizeName(name: string): string {
-    return normalizeModelName(name);
+    return this.modelCatalogHelper.normalizeModelName(name);
   }
 
   getByName(name: string): ModelInfo | null {
-    return getModelByName(name);
+    return this.modelCatalogHelper.getModelByName(name);
   }
 
   get catalog() {

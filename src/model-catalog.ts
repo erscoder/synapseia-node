@@ -3,6 +3,7 @@
  * Manages LLM models, compatibility, and pulling from Ollama
  */
 
+import { Injectable } from '@nestjs/common';
 import { execSync } from 'child_process';
 
 /**
@@ -366,5 +367,51 @@ export function normalizeModelName(name: string): string {
 export function getModelByName(name: string): ModelInfo | null {
   const normalized = normalizeModelName(name);
   return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
+}
+
+/**
+ * Injectable helper class — wraps all catalog functions for NestJS DI
+ */
+@Injectable()
+export class ModelCatalogHelper {
+  listModels(category?: ModelCategory): ModelInfo[] {
+    return listModels(category);
+  }
+
+  getModelsForVram(vramGb: number): ModelInfo[] {
+    return getModelsForVram(vramGb);
+  }
+
+  getModel(name: string): ModelInfo | undefined {
+    return getModel(name);
+  }
+
+  pullModel(name: string): Promise<boolean> {
+    return pullModel(name);
+  }
+
+  getLocalModels(): string[] {
+    return getLocalModels();
+  }
+
+  isModelAvailable(name: string): boolean {
+    return isModelAvailable(name);
+  }
+
+  getRecommendedModel(tier: number, category?: ModelCategory): ModelInfo | undefined {
+    return getRecommendedModel(tier, category);
+  }
+
+  getModelCatalog(): ModelInfo[] {
+    return getModelCatalog();
+  }
+
+  normalizeModelName(name: string): string {
+    return normalizeModelName(name);
+  }
+
+  getModelByName(name: string): ModelInfo | null {
+    return getModelByName(name);
+  }
 }
 

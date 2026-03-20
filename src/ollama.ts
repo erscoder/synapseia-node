@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { Ollama } from 'ollama';
 
@@ -171,5 +172,24 @@ export async function ensureModel(model: string, url: string = 'http://localhost
     await pullModel(model, url);
   } else {
     console.log(`✅ Model ${model} is available`);
+  }
+}
+
+@Injectable()
+export class OllamaHelper {
+  checkOllama(url?: string): Promise<OllamaStatus> {
+    return checkOllama(url);
+  }
+
+  pullModel(model: string, url?: string): Promise<void> {
+    return pullModel(model, url);
+  }
+
+  generate(prompt: string, model?: string, url?: string): Promise<string> {
+    return generate(prompt, model, url);
+  }
+
+  ensureModel(model: string, url?: string): Promise<void> {
+    return ensureModel(model, url);
   }
 }

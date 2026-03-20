@@ -1,14 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { proposeMutation, type MutationProposal } from '../../mutation-engine.js';
+import { MutationEngineHelper, type MutationProposal } from '../../mutation-engine.js';
 import type { Experiment } from '../../types.js';
 
 @Injectable()
 export class MutationEngineService {
+  constructor(private readonly mutationEngineHelper: MutationEngineHelper) {}
+
   propose(
     topExperiments: Experiment[],
     bestLoss: number,
     capabilities: string[],
   ): Promise<MutationProposal> {
-    return proposeMutation(topExperiments, bestLoss, capabilities);
+    return this.mutationEngineHelper.proposeMutation(topExperiments, bestLoss, capabilities);
   }
 }

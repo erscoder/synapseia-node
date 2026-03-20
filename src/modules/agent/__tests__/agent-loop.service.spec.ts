@@ -1,19 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-
-jest.mock('../../../agent-loop.js', () => ({
-  startAgentLoop: jest.fn(),
-  stopAgentLoop: jest.fn(),
-  runAgentIteration: jest.fn(),
-  getAgentLoopState: jest.fn(),
-  resetAgentLoopState: jest.fn(),
-  fetchTopExperiments: jest.fn(),
-  createExperiment: jest.fn(),
-  updateExperiment: jest.fn(),
-  postToFeed: jest.fn(),
-}));
-
-import * as loopHelper from '../../../agent-loop.js';
+import { Test } from '@nestjs/testing';
 import { AgentLoopService } from '../agent-loop.service.js';
+import { AgentLoopHelper } from '../../../agent-loop.js';
 
 const mockConfig = {
   coordinatorUrl: 'http://localhost:3001',
@@ -42,76 +30,97 @@ const mockTrainingResult = {
 
 describe('AgentLoopService', () => {
   let service: AgentLoopService;
+  let agentLoopHelper: jest.Mocked<AgentLoopHelper>;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    service = new AgentLoopService();
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        AgentLoopService,
+        {
+          provide: AgentLoopHelper,
+          useValue: {
+            startAgentLoop: jest.fn(),
+            stopAgentLoop: jest.fn(),
+            runAgentIteration: jest.fn(),
+            getAgentLoopState: jest.fn(),
+            resetAgentLoopState: jest.fn(),
+            fetchTopExperiments: jest.fn(),
+            createExperiment: jest.fn(),
+            updateExperiment: jest.fn(),
+            postToFeed: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<AgentLoopService>(AgentLoopService);
+    agentLoopHelper = module.get(AgentLoopHelper);
   });
 
-  it('start() delegates to startAgentLoop', async () => {
-    (loopHelper.startAgentLoop as jest.Mock<any>).mockResolvedValue(undefined);
+  it('start() delegates to agentLoopHelper.startAgentLoop', async () => {
+    agentLoopHelper.startAgentLoop.mockResolvedValue(undefined);
     await service.start(mockConfig as any);
-    expect(loopHelper.startAgentLoop).toHaveBeenCalledWith(mockConfig);
+    expect(agentLoopHelper.startAgentLoop).toHaveBeenCalledWith(mockConfig);
   });
 
-  it('stop() delegates to stopAgentLoop', () => {
-    (loopHelper.stopAgentLoop as jest.Mock<any>).mockReturnValue(undefined);
+  it('stop() delegates to agentLoopHelper.stopAgentLoop', () => {
+    agentLoopHelper.stopAgentLoop.mockReturnValue(undefined as any);
     service.stop();
-    expect(loopHelper.stopAgentLoop).toHaveBeenCalled();
+    expect(agentLoopHelper.stopAgentLoop).toHaveBeenCalled();
   });
 
-  it('runIteration() delegates to runAgentIteration', async () => {
+  it('runIteration() delegates to agentLoopHelper.runAgentIteration', async () => {
     const iterResult = { improved: true, loss: 0.3 };
-    (loopHelper.runAgentIteration as jest.Mock<any>).mockResolvedValue(iterResult);
+    agentLoopHelper.runAgentIteration.mockResolvedValue(iterResult as any);
     const result = await service.runIteration(mockConfig as any, 1);
-    expect(loopHelper.runAgentIteration).toHaveBeenCalledWith(mockConfig, 1);
+    expect(agentLoopHelper.runAgentIteration).toHaveBeenCalledWith(mockConfig, 1);
     expect(result).toBe(iterResult);
   });
 
-  it('getState() delegates to getAgentLoopState', () => {
-    (loopHelper.getAgentLoopState as jest.Mock<any>).mockReturnValue(mockState);
+  it('getState() delegates to agentLoopHelper.getAgentLoopState', () => {
+    agentLoopHelper.getAgentLoopState.mockReturnValue(mockState as any);
     const result = service.getState();
-    expect(loopHelper.getAgentLoopState).toHaveBeenCalled();
+    expect(agentLoopHelper.getAgentLoopState).toHaveBeenCalled();
     expect(result).toBe(mockState);
   });
 
-  it('resetState() delegates to resetAgentLoopState', () => {
-    (loopHelper.resetAgentLoopState as jest.Mock<any>).mockReturnValue(undefined);
+  it('resetState() delegates to agentLoopHelper.resetAgentLoopState', () => {
+    agentLoopHelper.resetAgentLoopState.mockReturnValue(undefined as any);
     service.resetState();
-    expect(loopHelper.resetAgentLoopState).toHaveBeenCalled();
+    expect(agentLoopHelper.resetAgentLoopState).toHaveBeenCalled();
   });
 
   it('fetchTopExperiments() delegates with defaults', async () => {
     const experiments = [{ id: 'exp-1', loss: 0.5 }];
-    (loopHelper.fetchTopExperiments as jest.Mock<any>).mockResolvedValue(experiments);
+    agentLoopHelper.fetchTopExperiments.mockResolvedValue(experiments as any);
     const result = await service.fetchTopExperiments('http://localhost:3001');
-    expect(loopHelper.fetchTopExperiments).toHaveBeenCalledWith('http://localhost:3001', undefined);
+    expect(agentLoopHelper.fetchTopExperiments).toHaveBeenCalledWith('http://localhost:3001', undefined);
     expect(result).toBe(experiments);
   });
 
   it('fetchTopExperiments() passes limit', async () => {
-    (loopHelper.fetchTopExperiments as jest.Mock<any>).mockResolvedValue([]);
+    agentLoopHelper.fetchTopExperiments.mockResolvedValue([]);
     await service.fetchTopExperiments('http://localhost:3001', 5);
-    expect(loopHelper.fetchTopExperiments).toHaveBeenCalledWith('http://localhost:3001', 5);
+    expect(agentLoopHelper.fetchTopExperiments).toHaveBeenCalledWith('http://localhost:3001', 5);
   });
 
-  it('createExperiment() delegates to createExperiment', async () => {
-    (loopHelper.createExperiment as jest.Mock<any>).mockResolvedValue('exp-new-id');
+  it('createExperiment() delegates to agentLoopHelper.createExperiment', async () => {
+    agentLoopHelper.createExperiment.mockResolvedValue('exp-new-id');
     const result = await service.createExperiment('http://localhost:3001', mockProposal as any, 'peer-1', 1);
-    expect(loopHelper.createExperiment).toHaveBeenCalledWith('http://localhost:3001', mockProposal, 'peer-1', 1);
+    expect(agentLoopHelper.createExperiment).toHaveBeenCalledWith('http://localhost:3001', mockProposal, 'peer-1', 1);
     expect(result).toBe('exp-new-id');
   });
 
-  it('updateExperiment() delegates to updateExperiment', async () => {
-    (loopHelper.updateExperiment as jest.Mock<any>).mockResolvedValue(undefined);
+  it('updateExperiment() delegates to agentLoopHelper.updateExperiment', async () => {
+    agentLoopHelper.updateExperiment.mockResolvedValue(undefined);
     await service.updateExperiment('http://localhost:3001', 'exp-1', mockTrainingResult as any);
-    expect(loopHelper.updateExperiment).toHaveBeenCalledWith('http://localhost:3001', 'exp-1', mockTrainingResult);
+    expect(agentLoopHelper.updateExperiment).toHaveBeenCalledWith('http://localhost:3001', 'exp-1', mockTrainingResult);
   });
 
-  it('postToFeed() delegates to postToFeed', async () => {
-    (loopHelper.postToFeed as jest.Mock<any>).mockResolvedValue(undefined);
+  it('postToFeed() delegates to agentLoopHelper.postToFeed', async () => {
+    agentLoopHelper.postToFeed.mockResolvedValue(undefined);
     await service.postToFeed('http://localhost:3001', 'peer-1', mockProposal as any, mockTrainingResult as any, true);
-    expect(loopHelper.postToFeed).toHaveBeenCalledWith(
+    expect(agentLoopHelper.postToFeed).toHaveBeenCalledWith(
       'http://localhost:3001',
       'peer-1',
       mockProposal,

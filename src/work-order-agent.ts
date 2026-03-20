@@ -9,6 +9,7 @@
  * 5. Sleep and repeat
  */
 
+import { Injectable } from '@nestjs/common';
 import { generateLLM, type LLMConfig } from './llm-provider.js';
 import { parseModel, type LLMModel } from './llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
@@ -913,3 +914,130 @@ export const _test = {
   evaluateWorkOrder,
   getModelCostPer1kTokens,
 };
+
+// ---------------------------------------------------------------------------
+// Injectable helper class — wraps the standalone functions for NestJS DI
+// ---------------------------------------------------------------------------
+
+@Injectable()
+export class WorkOrderAgentHelper {
+  startWorkOrderAgent(config: WorkOrderAgentConfig): Promise<void> {
+    return startWorkOrderAgent(config);
+  }
+
+  stopWorkOrderAgent(): void {
+    return stopWorkOrderAgent();
+  }
+
+  getWorkOrderAgentState(): WorkOrderAgentState {
+    return getWorkOrderAgentState();
+  }
+
+  resetWorkOrderAgentState(): void {
+    return resetWorkOrderAgentState();
+  }
+
+  runWorkOrderAgentIteration(
+    config: WorkOrderAgentConfig,
+    iteration: number,
+    brain?: AgentBrain,
+  ): Promise<{ workOrder?: WorkOrder; completed: boolean; researchResult?: ResearchResult }> {
+    return runWorkOrderAgentIteration(config, iteration, brain);
+  }
+
+  fetchAvailableWorkOrders(
+    coordinatorUrl: string,
+    peerId: string,
+    capabilities: string[],
+  ): Promise<WorkOrder[]> {
+    return fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+  }
+
+  acceptWorkOrder(
+    coordinatorUrl: string,
+    workOrderId: string,
+    peerId: string,
+    nodeCapabilities?: string[],
+  ): Promise<boolean> {
+    return acceptWorkOrder(coordinatorUrl, workOrderId, peerId, nodeCapabilities);
+  }
+
+  completeWorkOrder(
+    coordinatorUrl: string,
+    workOrderId: string,
+    peerId: string,
+    result: string,
+    success?: boolean,
+  ): Promise<boolean> {
+    return completeWorkOrder(coordinatorUrl, workOrderId, peerId, result, success);
+  }
+
+  executeWorkOrder(
+    workOrder: WorkOrder,
+    llmModel: LLMModel,
+    llmConfig?: LLMConfig,
+  ): Promise<{ result: string; success: boolean }> {
+    return executeWorkOrder(workOrder, llmModel, llmConfig);
+  }
+
+  executeResearchWorkOrder(
+    workOrder: WorkOrder,
+    llmModel: LLMModel,
+    llmConfig?: LLMConfig,
+  ): Promise<{ result: ResearchResult; rawResponse: string; success: boolean }> {
+    return executeResearchWorkOrder(workOrder, llmModel, llmConfig);
+  }
+
+  submitResearchResult(
+    coordinatorUrl: string,
+    workOrderId: string,
+    peerId: string,
+    result: ResearchResult,
+  ): Promise<boolean> {
+    return submitResearchResult(coordinatorUrl, workOrderId, peerId, result);
+  }
+
+  isResearchWorkOrder(workOrder: WorkOrder): boolean {
+    return isResearchWorkOrder(workOrder);
+  }
+
+  extractResearchPayload(workOrder: WorkOrder): ResearchPayload | null {
+    return extractResearchPayload(workOrder);
+  }
+
+  buildResearchPrompt(payload: ResearchPayload): string {
+    return buildResearchPrompt(payload);
+  }
+
+  saveResearchToBrain(brain: AgentBrain, workOrder: WorkOrder, result: ResearchResult): void {
+    return saveResearchToBrain(brain, workOrder, result);
+  }
+
+  evaluateWorkOrder(workOrder: WorkOrder, config: EconomicConfig): WorkOrderEvaluation {
+    return evaluateWorkOrder(workOrder, config);
+  }
+
+  loadEconomicConfig(runtimeModel?: string): EconomicConfig {
+    return loadEconomicConfig(runtimeModel);
+  }
+
+  estimateLLMCost(abstract: string, config: EconomicConfig): number {
+    return estimateLLMCost(abstract, config);
+  }
+
+  getModelCostPer1kTokens(model: string): number {
+    return getModelCostPer1kTokens(model);
+  }
+
+  shouldContinueLoop(isRunning: boolean, iteration: number, maxIterations?: number): boolean {
+    return shouldContinueLoop(isRunning, iteration, maxIterations);
+  }
+
+  shouldStopForMaxIterations(iteration: number, maxIterations?: number): boolean {
+    return shouldStopForMaxIterations(iteration, maxIterations);
+  }
+
+  shouldSleepBetweenIterations(isRunning: boolean): boolean {
+    return shouldSleepBetweenIterations(isRunning);
+  }
+}

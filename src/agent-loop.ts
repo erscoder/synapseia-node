@@ -1,6 +1,6 @@
 /**
  * Agent Loop - Autonomous research loop for SynapseIA
- * 
+ *
  * Loop principal:
  * 1. Fetch top experiments from coordinator
  * 2. Propose mutation via LLM
@@ -9,6 +9,7 @@
  * 5. Sleep and repeat
  */
 
+import { Injectable } from '@nestjs/common';
 import { proposeMutation, type MutationProposal } from './mutation-engine.js';
 import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from './trainer.js';
 import type { Experiment } from './types.js';
@@ -324,3 +325,61 @@ export const _test = {
   runAgentIteration,
   sleep,
 };
+
+// ---------------------------------------------------------------------------
+// Injectable helper class — wraps the standalone functions for NestJS DI
+// ---------------------------------------------------------------------------
+
+@Injectable()
+export class AgentLoopHelper {
+  startAgentLoop(config: AgentLoopConfig): Promise<void> {
+    return startAgentLoop(config);
+  }
+
+  stopAgentLoop(): void {
+    return stopAgentLoop();
+  }
+
+  runAgentIteration(config: AgentLoopConfig, iteration: number): Promise<AgentIterationResult> {
+    return runAgentIteration(config, iteration);
+  }
+
+  getAgentLoopState(): AgentLoopState {
+    return getAgentLoopState();
+  }
+
+  resetAgentLoopState(): void {
+    return resetAgentLoopState();
+  }
+
+  fetchTopExperiments(coordinatorUrl: string, limit?: number): Promise<import('./types.js').Experiment[]> {
+    return fetchTopExperiments(coordinatorUrl, limit);
+  }
+
+  createExperiment(
+    coordinatorUrl: string,
+    proposal: MutationProposal,
+    peerId: string,
+    tier: number,
+  ): Promise<string> {
+    return createExperiment(coordinatorUrl, proposal, peerId, tier);
+  }
+
+  updateExperiment(
+    coordinatorUrl: string,
+    experimentId: string,
+    result: import('./trainer.js').TrainingResult,
+  ): Promise<void> {
+    return updateExperiment(coordinatorUrl, experimentId, result);
+  }
+
+  postToFeed(
+    coordinatorUrl: string,
+    peerId: string,
+    mutation: MutationProposal,
+    result: import('./trainer.js').TrainingResult,
+    improved: boolean,
+  ): Promise<void> {
+    return postToFeed(coordinatorUrl, peerId, mutation, result, improved);
+  }
+}

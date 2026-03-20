@@ -3,6 +3,7 @@
  * The LLM proposes optimizations based on what worked in the network
  */
 
+import { Injectable } from '@nestjs/common';
 import { generateLLM, type LLMModel } from './llm-provider.js';
 import type { Experiment, Hyperparams } from './types.js';
 
@@ -205,3 +206,17 @@ export const _test = {
   clampValue,
   clampBatchSize: clampValueToBatch,
 };
+
+/**
+ * Injectable helper class — wraps mutation engine functions for NestJS DI
+ */
+@Injectable()
+export class MutationEngineHelper {
+  proposeMutation(
+    topExperiments: Experiment[],
+    bestLoss: number,
+    capabilities: string[],
+  ): Promise<MutationProposal> {
+    return proposeMutation(topExperiments, bestLoss, capabilities);
+  }
+}
