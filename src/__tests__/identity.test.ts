@@ -12,7 +12,7 @@ import {
   getOrCreateIdentity,
   sign,
   type Identity,
-} from '../modules/identity/helpers/identity.js';
+} from '../modules/identity/identity.js';
 
 describe('identity', () => {
   const testDir = path.join(os.tmpdir(), '.synapse-test-' + Date.now());
@@ -43,7 +43,7 @@ describe('identity', () => {
 
     it('should work when directory already exists', () => {
       const fs = require('fs');
-      const { generateIdentity } = require('../modules/identity/helpers/identity.js');
+      const { generateIdentity } = require('../modules/identity/identity.js');
 
       // Create directory first
       if (!fs.existsSync(testDir)) {
@@ -276,7 +276,7 @@ describe('identity', () => {
     });
 
     it('should use default directory when not specified', () => {
-      const { updateIdentity, generateIdentity } = require('../modules/identity/helpers/identity.js');
+      const { updateIdentity, generateIdentity } = require('../modules/identity/identity.js');
       const fs = require('fs');
       const os = require('os');
       const path = require('path');
@@ -502,7 +502,7 @@ describe('identity', () => {
 
   describe('getOrCreateIdentity', () => {
     it('should return existing identity if found', () => {
-      const { generateIdentity, getOrCreateIdentity } = require('../modules/identity/helpers/identity.js');
+      const { generateIdentity, getOrCreateIdentity } = require('../modules/identity/identity.js');
 
       generateIdentity(testDir);
       const identity = getOrCreateIdentity(testDir);
@@ -512,7 +512,7 @@ describe('identity', () => {
     });
 
     it('should create new identity if not found', () => {
-      const { getOrCreateIdentity } = require('../modules/identity/helpers/identity.js');
+      const { getOrCreateIdentity } = require('../modules/identity/identity.js');
 
       // Use unique temp dir to ensure no existing identity
       const newDir = path.join(testDir, 'new-identity');
@@ -525,7 +525,7 @@ describe('identity', () => {
     });
 
     it('should handle error when loading identity and create new one', () => {
-      const { getOrCreateIdentity } = require('../modules/identity/helpers/identity.js');
+      const { getOrCreateIdentity } = require('../modules/identity/identity.js');
 
       // Use test dir without existing identity - tests catch block
       const newDir = path.join(testDir, 'identity-test-2');

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import axios from 'axios';
-import { checkOllama, pullModel, generate, ensureModel } from '../modules/llm/helpers/ollama';
+import { checkOllama, pullModel, generate, ensureModel } from '../modules/llm/ollama';
 
 // Mock axios
 jest.mock('axios');
@@ -14,12 +14,12 @@ jest.mock('ollama', () => ({
 }));
 
 // Mock hardware module
-jest.mock('../modules/hardware/helpers/hardware.js', () => ({
+jest.mock('../modules/hardware/hardware.js', () => ({
   detectHardware: jest.fn(),
 }));
 
 import { Ollama } from 'ollama';
-import { detectHardware } from '../modules/hardware/helpers/hardware.js';
+import { detectHardware } from '../modules/hardware/hardware.js';
 
 const mockOllama = Ollama as jest.MockedClass<typeof Ollama>;
 

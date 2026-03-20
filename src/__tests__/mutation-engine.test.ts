@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { proposeMutation, _test } from '../modules/model/helpers/mutation-engine.js';
+import { proposeMutation, _test } from '../modules/model/mutation-engine.js';
 import type { Experiment } from '../types.js';
 
 // Mock llm-provider
-jest.mock('../modules/llm/helpers/llm-provider.js', () => ({
+jest.mock('../modules/llm/llm-provider.js', () => ({
   generateLLM: jest.fn() as any,
 }));
 
-import { generateLLM } from '../modules/llm/helpers/llm-provider.js';
+import { generateLLM } from '../modules/llm/llm-provider.js';
 
 describe('Mutation Engine', () => {
   beforeEach(() => {

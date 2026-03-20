@@ -8,10 +8,10 @@ import {
   getOptionalString,
   toErrorMessage,
   type LLMModel,
-} from '../modules/llm/helpers/llm-provider';
+} from '../modules/llm/llm-provider';
 
 // Mock ollama module
-jest.mock('../modules/llm/helpers/ollama.js', () => ({
+jest.mock('../modules/llm/ollama.js', () => ({
   checkOllama: jest.fn(),
   generate: jest.fn(),
 }));
@@ -19,7 +19,7 @@ jest.mock('../modules/llm/helpers/ollama.js', () => ({
 // Mock fetch for cloud APIs
 global.fetch = jest.fn() as any;
 
-import { checkOllama, generate as generateOllama } from '../modules/llm/helpers/ollama.js';
+import { checkOllama, generate as generateOllama } from '../modules/llm/ollama.js';
 
 describe('LLM Provider Abstraction', () => {
   const ollamaModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };

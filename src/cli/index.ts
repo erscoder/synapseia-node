@@ -6,17 +6,17 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { AppModule } from '../app.module.js';
-import { IdentityService } from '../modules/identity/identity.service.js';
-import { HardwareService } from '../modules/hardware/hardware.service.js';
-import { NodeConfigService } from '../modules/config/node-config.service.js';
-import { WalletService } from '../modules/wallet/wallet.service.js';
-import { ModelCatalogService } from '../modules/model/model-catalog.service.js';
-import { LlmService } from '../modules/llm/llm.service.js';
-import { WorkOrderAgentService } from '../modules/agent/work-order-agent.service.js';
+import { IdentityService } from '../modules/identity/services/identity.service.js';
+import { HardwareService } from '../modules/hardware/services/hardware.service.js';
+import { NodeConfigService } from '../modules/config/services/node-config.service.js';
+import { WalletService } from '../modules/wallet/services/wallet.service.js';
+import { ModelCatalogService } from '../modules/model/services/model-catalog.service.js';
+import { LlmService } from '../modules/llm/services/llm.service.js';
+import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
-import { getSynBalance, getStakedAmount } from '../modules/wallet/helpers/solana-balance.js';
-import type { ModelInfo, HardwareTier } from '../modules/hardware/helpers/hardware.js';
-import { CONFIG_FILE } from '../modules/config/helpers/config.js';
+import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance.js';
+import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware.js';
+import { CONFIG_FILE } from '../modules/config/config.js';
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {

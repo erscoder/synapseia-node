@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import axios from 'axios';
-import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../modules/heartbeat/helpers/heartbeat.js';
+import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../modules/heartbeat/heartbeat.js';
 
 // Mock axios module
 jest.mock('axios', () => ({

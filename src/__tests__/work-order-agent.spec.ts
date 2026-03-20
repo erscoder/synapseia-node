@@ -10,10 +10,10 @@ import {
   WorkOrder,
   EconomicConfig,
   _test,
-} from '../modules/agent/helpers/work-order-agent.js';
-import { initBrain } from '../modules/agent/helpers/agent-brain.js';
-import { parseModel } from '../modules/llm/helpers/llm-provider.js';
-import * as llmProvider from '../modules/llm/helpers/llm-provider.js';
+} from '../modules/agent/work-order-agent.js';
+import { initBrain } from '../modules/agent/agent-brain.js';
+import { parseModel } from '../modules/llm/llm-provider.js';
+import * as llmProvider from '../modules/llm/llm-provider.js';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -422,7 +422,7 @@ describe('WorkOrderAgent', () => {
 
     it('should throw error if agent already running', async () => {
       // First set the agent as running
-      const { startWorkOrderAgent } = await import('../modules/agent/helpers/work-order-agent.js');
+      const { startWorkOrderAgent } = await import('../modules/agent/work-order-agent.js');
       
       // Mock to avoid actual execution
       jest.spyOn(global, 'fetch').mockResolvedValue({
@@ -452,7 +452,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should stop after max iterations', async () => {
-      const { startWorkOrderAgent } = await import('../modules/agent/helpers/work-order-agent.js');
+      const { startWorkOrderAgent } = await import('../modules/agent/work-order-agent.js');
       
       jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
@@ -475,7 +475,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should run multiple iterations with maxIterations', async () => {
-      const { startWorkOrderAgent } = await import('../modules/agent/helpers/work-order-agent.js');
+      const { startWorkOrderAgent } = await import('../modules/agent/work-order-agent.js');
       
       jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
@@ -499,7 +499,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should handle iteration errors gracefully', async () => {
-      const { startWorkOrderAgent } = await import('../modules/agent/helpers/work-order-agent.js');
+      const { startWorkOrderAgent } = await import('../modules/agent/work-order-agent.js');
       
       jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error'));
 
@@ -519,7 +519,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should run with maxIterations undefined (infinite loop stopped manually)', async () => {
-      const { startWorkOrderAgent } = await import('../modules/agent/helpers/work-order-agent.js');
+      const { startWorkOrderAgent } = await import('../modules/agent/work-order-agent.js');
 
       jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
@@ -555,7 +555,7 @@ describe('WorkOrderAgent', () => {
       shouldStopForMaxIterations,
       shouldContinueLoop,
       shouldSleepBetweenIterations,
-    } = jest.requireActual('../modules/agent/helpers/work-order-agent.js');
+    } = jest.requireActual('../modules/agent/work-order-agent.js');
 
     describe('shouldStopForMaxIterations', () => {
       it('should return false when maxIterations is undefined', () => {
