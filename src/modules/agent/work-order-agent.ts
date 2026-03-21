@@ -137,6 +137,11 @@ const LLM_PRICE_TABLE: Record<string, number> = {
   // Google models
   'gemini-flash': 0.000075,
   'gemini-pro': 0.00035,
+
+  // MiniMax models — subscription $20/mo ÷ 4500 req ≈ $0.00444/req
+  // Approximated as per-token cost assuming ~2K tokens avg per request
+  'MiniMax-M2.7': 0.00222,
+  'minimax/MiniMax-M2.7': 0.00222,
   
   // Ollama models (local, $0 cost)
   'ollama/phi4-mini': 0,
@@ -465,6 +470,65 @@ export function saveResearchToBrain(
   }
 }
 
+// ---------------------------------------------------------------------------
+// SYN price resolution
+// ---------------------------------------------------------------------------
+
+/** Cached SYN price and timestamp (5 min TTL) */
+let _synPriceCache: { price: number; fetchedAt: number } | null = null;
+const SYN_PRICE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch SYN/USD price from DexScreener (mainnet only).
+ * Falls back to DEVNET default (0.01 USD) on any error or when
+ * NODE_ENV !== 'production'.
+ *
+ * Contract env var: SYN_TOKEN_ADDRESS (Solana mint address)
+ */
+export async function fetchSynPriceUsd(): Promise<number> {
+  const DEVNET_PRICE = 0.01; // 1 SYN = $0.01 on devnet
+
+  // Force devnet price in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    return DEVNET_PRICE;
+  }
+
+  // Return cached price if still fresh
+  if (_synPriceCache && Date.now() - _synPriceCache.fetchedAt < SYN_PRICE_CACHE_TTL_MS) {
+    return _synPriceCache.price;
+  }
+
+  const tokenAddress = process.env.SYN_TOKEN_ADDRESS;
+  if (!tokenAddress) {
+    console.warn('[SynPrice] SYN_TOKEN_ADDRESS not set — using fallback price $0.01');
+    return DEVNET_PRICE;
+  }
+
+  try {
+    const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`DexScreener HTTP ${response.status}`);
+
+    const data = await response.json() as {
+      pairs?: Array<{ priceUsd?: string; liquidity?: { usd?: number } }>;
+    };
+
+    // Pick the pair with highest liquidity
+    const pairs = (data.pairs ?? []).filter(p => p.priceUsd);
+    if (pairs.length === 0) throw new Error('No pairs returned');
+    pairs.sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    const price = parseFloat(pairs[0].priceUsd!);
+    if (isNaN(price) || price <= 0) throw new Error('Invalid price from DexScreener');
+
+    _synPriceCache = { price, fetchedAt: Date.now() };
+    console.log(`[SynPrice] Fetched SYN price from DexScreener: $${price}`);
+    return price;
+  } catch (err) {
+    console.warn(`[SynPrice] DexScreener fetch failed: ${(err as Error).message} — using fallback $0.01`);
+    return DEVNET_PRICE;
+  }
+}
+
 /**
  * Load economic configuration from environment or defaults
  * 
@@ -500,13 +564,31 @@ export function loadEconomicConfig(runtimeModel?: string): EconomicConfig {
     llmCostPer1kTokens = getModelCostPer1kTokens(llmModel);
   }
 
+  // SYN price: use env override, else devnet default (0.01 USD).
+  // On mainnet, callers should use loadEconomicConfigAsync() to get the live price.
+  const synPriceUsd = parseFloat(process.env.SYN_PRICE_USD ?? '0.01');
+
   return {
-    synPriceUsd: parseFloat(process.env.SYN_PRICE_USD ?? '0.01'),
+    synPriceUsd,
     llmType,
     llmModel,
     llmCostPer1kTokens,
     minProfitRatio: parseFloat(process.env.MIN_PROFIT_RATIO ?? '1.5'),
   };
+}
+
+/**
+ * Async version of loadEconomicConfig that fetches SYN price dynamically.
+ * - DEVNET / non-production: always returns 0.01 USD
+ * - MAINNET: fetches from DexScreener (cached 5 min), falls back to 0.01 USD
+ */
+export async function loadEconomicConfigAsync(runtimeModel?: string): Promise<EconomicConfig> {
+  const base = loadEconomicConfig(runtimeModel);
+  // Only override synPriceUsd if not set via env
+  if (!process.env.SYN_PRICE_USD) {
+    base.synPriceUsd = await fetchSynPriceUsd();
+  }
+  return base;
 }
 
 /**
@@ -808,6 +890,8 @@ export async function runWorkOrderAgentIteration(
     console.log('[WorkOrderAgent] Failed to report completion');
   }
 
+    agentState.iteration = iteration;
+    return { workOrder, completed, researchResult };
   } // End of for loop - tried all work orders
 
   // If we get here, no work order could be accepted
