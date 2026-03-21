@@ -27,14 +27,33 @@ export class NodeConfigHelper {
   }
 
   loadConfig(): Config {
-    if (existsSync(CONFIG_FILE)) {
-      try {
-        return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
-      } catch {
-        return this.defaultConfig();
+    const base = (() => {
+      if (existsSync(CONFIG_FILE)) {
+        try {
+          return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
+        } catch {
+          return this.defaultConfig();
+        }
       }
+      return this.defaultConfig();
+    })();
+
+    // Env vars always override saved config
+    if (process.env.LLM_CLOUD_MODEL) {
+      base.defaultModel = process.env.LLM_CLOUD_MODEL;
+      if (!base.llmUrl) base.llmUrl = process.env.LLM_CLOUD_MODEL;
     }
-    return this.defaultConfig();
+    if (process.env.LLM_CLOUD_API_KEY) {
+      base.llmKey = process.env.LLM_CLOUD_API_KEY;
+    }
+    if (process.env.LLM_CLOUD_URL) {
+      base.llmUrl = process.env.LLM_CLOUD_URL;
+    }
+    if (process.env.SYNAPSEIA_COORDINATOR_URL) {
+      base.coordinatorUrl = process.env.SYNAPSEIA_COORDINATOR_URL;
+    }
+
+    return base;
   }
 
   saveConfig(config: Config): void {
