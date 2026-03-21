@@ -5,8 +5,9 @@ import { Injectable } from '@nestjs/common';
 
 // Config file path
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
-export const CONFIG_FILE = join(CONFIG_DIR, '1config.json');
+export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
+console.log(CONFIG_FILE)
 export interface Config {
   coordinatorUrl: string;
   defaultModel: string;
@@ -38,7 +39,7 @@ export class NodeConfigHelper {
       return this.defaultConfig();
     })();
 
-    // Env vars always override saved config
+   /*  // Env vars always override saved config
     if (process.env.LLM_CLOUD_MODEL) {
       base.defaultModel = process.env.LLM_CLOUD_MODEL;
       if (!base.llmUrl) base.llmUrl = process.env.LLM_CLOUD_MODEL;
@@ -51,7 +52,7 @@ export class NodeConfigHelper {
     }
     if (process.env.SYNAPSEIA_COORDINATOR_URL) {
       base.coordinatorUrl = process.env.SYNAPSEIA_COORDINATOR_URL;
-    }
+    } */
 
     return base;
   }

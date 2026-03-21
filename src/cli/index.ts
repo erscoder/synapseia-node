@@ -162,18 +162,16 @@ async function bootstrap() {
         if (isNew) {
           walletService.displayCreationWarning(wallet);
         }
-
+console.log('config model:', config.defaultModel)
+console.log('option model:', options.model)
         const coordinatorUrl = options.coordinator || config.coordinatorUrl;
-        const model = options.model || config.defaultModel;
+        const model = config.defaultModel || options.model;
         const llmUrl = options.llmUrl || config.llmUrl;
         const llmKey = options.llmKey || config.llmKey;
 
-        console.log(options.llmUrl, config.llmUrl)
-        console.log(llmUrl)
         let selectedModel: ModelInfo | null = null;
-
+ console.log('--model:',model)
         if (model) {
-          console.log(model)
           const isCloud =
             model?.startsWith('openai-compat/') ||
             model?.startsWith('anthropic/') ||
@@ -181,7 +179,6 @@ async function bootstrap() {
             model?.startsWith('kimi/') ||
             model?.startsWith('minimax/');
 
-            console.log('isCloud: ',isCloud)
           if (!isCloud) {
             selectedModel = modelCatalogService.getByName(model);
             if (!selectedModel) {
@@ -227,8 +224,11 @@ async function bootstrap() {
         if (identity.name) console.log(`Name:   ${identity.name}`);
         console.log(`PeerID: ${identity.peerId}`);
         console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
-        console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
-        console.log(`Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
+        console.log(`Hardware: `);
+        console.log(`  CPU cores: ${hardware.cpuCores}`);
+        console.log(`  RAM: ${hardware.ramGb}`);
+        console.log(`  Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
+        console.log(`  Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
         if (selectedModel) {
           console.log(
             `Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`
@@ -537,7 +537,7 @@ async function bootstrap() {
         if (step === 'llmConfig') {
           const usingCloud = configService.isCloudModel(config.defaultModel);
           if (usingCloud) {
-            console.log('\n  ☁️  Cloud LLM configuration');
+            console.log('\n  ☁️  Cloud LLM configuration, url: ', config.llmUrl);
             const llmUrl = await safePrompt(() =>
               input({
                 message: 'API base URL:',
