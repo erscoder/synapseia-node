@@ -119,10 +119,14 @@ program
     console.log('🌐 Starting P2P node...');
     let p2pNode;
     try {
-      const bootstrapAddrs = coordinatorUrl
-        .replace(/^https?:\/\//, '')
-        .replace(/:\d+$/, '')
-        ? [`/dns4/${coordinatorUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '')}/tcp/9000`]
+      // Build bootstrap multiaddr for the coordinator's P2P port (9000)
+      // Use /ip4/127.0.0.1 for localhost to avoid DNS resolution issues with libp2p
+      const rawHost = coordinatorUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+      const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
+      const bootstrapAddrs = rawHost
+        ? [isLocalhost
+            ? `/ip4/127.0.0.1/tcp/9000`
+            : `/dns4/${rawHost}/tcp/9000`]
         : [];
       p2pNode = await createP2PNode(identity, bootstrapAddrs);
       console.log(`   P2P peerId: ${p2pNode.getPeerId()}`);
