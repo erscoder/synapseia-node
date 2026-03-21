@@ -13,6 +13,7 @@ import { Injectable } from '@nestjs/common';
 import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
 import { parseModel, type LLMModel } from '../llm/llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
+import { startRoundListener } from './round-listener.js';
 
 /**
  * Parse rewardAmount string to lamports BigInt.
@@ -912,6 +913,10 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
 
   agentState.isRunning = true;
   const { intervalMs, maxIterations } = config;
+
+  // Connect to coordinator WebSocket to receive round.closed notifications
+  const peerId = config.peerId ?? 'unknown';
+  startRoundListener(config.coordinatorUrl, peerId);
 
   // Startup summary is logged by the caller (node-runtime / CLI)
 
