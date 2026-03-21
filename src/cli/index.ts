@@ -134,7 +134,9 @@ async function bootstrap() {
       }) => {
         const config = configService.load();
         const identity = identityService.getOrCreate();
-        const { wallet, isNew } = await walletService.getOrCreate();
+        // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
+        const nodeHome = process.env.SYNAPSEIA_HOME;
+        const { wallet, isNew } = await walletService.getOrCreate(nodeHome);
         const hardware = hardwareService.detect();
 
         if (isNew) {
@@ -241,7 +243,7 @@ async function bootstrap() {
     .action(async () => {
       const identity = identityService.getOrCreate();
       const hardware = hardwareService.detect();
-      const walletAddress = walletService.getAddress();
+      const walletAddress = walletService.getAddress(process.env.SYNAPSEIA_HOME);
       const config = configService.load();
 
       const [balance, staked] = walletAddress
