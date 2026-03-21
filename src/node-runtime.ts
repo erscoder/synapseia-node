@@ -12,6 +12,7 @@
 import type { Identity } from './modules/identity/identity.js';
 import type { LLMModel, LLMConfig } from './modules/llm/llm-provider.js';
 import { P2PNode } from './modules/p2p/p2p.js';
+import { HeartbeatHelper } from './modules/heartbeat/heartbeat.js';
 
 export interface NodeRuntimeConfig {
   /** Resolved peer identity (peerId, publicKey, privateKey) */
@@ -94,7 +95,20 @@ export async function startNode(
     console.warn(`   ⚠️  P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
   }
 
-  // ── 2. Work Order Agent ───────────────────────────────────────────────────
+  // ── 2. Heartbeat ──────────────────────────────────────────────────────────
+  console.log('\n💓 Starting heartbeat loop...');
+  const heartbeatHelper = new HeartbeatHelper();
+  const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
+    config.coordinatorUrl,
+    config.identity,
+    { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama') },
+    config.intervalMs ?? 30000,
+    p2pNode ?? undefined,
+  );
+  console.log(`   Coordinator: ${config.coordinatorUrl}`);
+  console.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+
+  // ── 3. Work Order Agent ───────────────────────────────────────────────────
   console.log('\n🚀 Starting work order agent...');
   console.log(`   Coordinator: ${config.coordinatorUrl}`);
   console.log(`   Capabilities: ${config.capabilities.join(', ')}`);
@@ -121,6 +135,7 @@ export async function startNode(
     p2pNode,
     stop: async () => {
       console.log('\n🛑 Shutting down node...');
+      heartbeatCleanup();
       services.workOrderAgentService.stop();
       if (p2pNode) {
         try {

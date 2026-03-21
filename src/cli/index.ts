@@ -162,15 +162,12 @@ async function bootstrap() {
         if (isNew) {
           walletService.displayCreationWarning(wallet);
         }
-console.log('config model:', config.defaultModel)
-console.log('option model:', options.model)
         const coordinatorUrl = options.coordinator || config.coordinatorUrl;
         const model = config.defaultModel || options.model;
         const llmUrl = options.llmUrl || config.llmUrl;
         const llmKey = options.llmKey || config.llmKey;
 
         let selectedModel: ModelInfo | null = null;
- console.log('--model:',model)
         if (model) {
           const isCloud =
             model?.startsWith('openai-compat/') ||
