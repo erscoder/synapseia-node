@@ -14,6 +14,8 @@ export interface Config {
   llmUrl?: string;
   llmKey?: string;
   wallet?: string;
+  inferenceEnabled?: boolean;
+  inferenceModels?: string[];
 }
 
 @Injectable()
