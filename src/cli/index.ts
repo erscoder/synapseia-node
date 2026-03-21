@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Load .env before anything else — must be first import
+import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
