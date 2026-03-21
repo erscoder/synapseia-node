@@ -31,7 +31,9 @@ export interface EncryptedWallet {
   createdAt: string;
 }
 
-const WALLET_DIR = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+// Evaluated lazily so SYNAPSEIA_HOME set before require() is honoured
+const getWalletDir = () => process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+const WALLET_DIR = getWalletDir();
 const WALLET_FILE = path.join(WALLET_DIR, 'wallet.json');
 const BACKUP_FILE = path.join(WALLET_DIR, 'wallet-backup.json');
 
