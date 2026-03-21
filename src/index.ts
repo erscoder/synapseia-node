@@ -79,7 +79,7 @@ program
     console.log('');
 
     // Check identity
-    const identityPath = path.join(os.homedir(), '.synapse');
+    const identityPath = path.join(os.homedir(), '.synapseia');
     if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
       console.log('🔑 No identity found. Generating Keypair...');
       generateIdentity(identityPath);
@@ -177,7 +177,7 @@ program
   .description('Show node status')
   .action(() => {
     console.log('📊 Synapse Node Status\n');
-    const identityPath = path.join(os.homedir(), '.synapse');
+    const identityPath = path.join(os.homedir(), '.synapseia');
     if (fs.existsSync(path.join(identityPath, 'identity.json'))) {
       const identity = loadIdentity(identityPath);
       console.log(`   Peer ID: ${identity.peerId}`);
@@ -247,7 +247,7 @@ program
   .command('whoami')
   .description('Show agent identity information')
   .action(() => {
-    const identityPath = path.join(os.homedir(), '.synapse');
+    const identityPath = path.join(os.homedir(), '.synapseia');
     if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
       console.log('❌ No identity found. Run `synapse start` first.');
       return;

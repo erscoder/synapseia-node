@@ -22,7 +22,7 @@ export interface Identity {
   status?: 'active' | 'idle' | 'offline';  // Node status (NEW A16)
 }
 
-const IDENTITY_DIR = path.join(os.homedir(), '.synapse');
+const IDENTITY_DIR = process.env.SYNAPSE_HOME ?? path.join(os.homedir(), '.synapseia');
 const IDENTITY_FILE = path.join(IDENTITY_DIR, 'identity.json');
 
 @Injectable()

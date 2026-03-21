@@ -5,7 +5,8 @@
   "description": "Synapse Node CLI Software",
   "type": "module",
   "bin": {
-    "synapseia": "./dist/index.cjs"
+    "synapseia": "./dist/index.js",
+    "syn": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js --help\"",
