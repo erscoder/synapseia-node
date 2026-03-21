@@ -2,8 +2,10 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
+import * as path from 'path';
+import * as os from 'os';
 import { fileURLToPath } from 'url';
 import { AppModule } from '../app.module.js';
 import { IdentityService } from '../modules/identity/services/identity.service.js';
@@ -133,9 +135,22 @@ async function bootstrap() {
         maxIterations?: number;
       }) => {
         const config = configService.load();
-        const identity = identityService.getOrCreate();
         // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
         const nodeHome = process.env.SYNAPSEIA_HOME;
+
+        // Check if identity exists; if not, prompt for a name
+        let nodeName: string | undefined;
+        const identityDir = nodeHome ?? path.join(os.homedir(), '.synapseia');
+        if (!existsSync(path.join(identityDir, 'identity.json'))) {
+          const { input } = await import('@inquirer/prompts');
+          nodeName = await input({
+            message: 'Choose a name for this node (e.g. "node-alpha"):',
+            validate: (v: string) => v.trim().length > 0 || 'Name cannot be empty',
+          });
+          nodeName = nodeName.trim();
+        }
+
+        const identity = identityService.getOrCreate(nodeHome, nodeName);
         const { wallet, isNew } = await walletService.getOrCreate(nodeHome);
         const hardware = hardwareService.detect();
 
@@ -199,6 +214,7 @@ async function bootstrap() {
 
         console.log(SYPNASEIA_HEADER);
         console.log('Starting SYPNASEIA node...');
+        if (identity.name) console.log(`Name:   ${identity.name}`);
         console.log(`PeerID: ${identity.peerId}`);
         console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
         console.log(`Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
@@ -267,6 +283,7 @@ async function bootstrap() {
 
       console.log(SYPNASEIA_HEADER);
       console.log('Node Status:');
+      if (identity.name) console.log(`Name:    ${identity.name}`);
       console.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
       console.log(`Tier:    ${status.tier} (${getTierName(status.tier)})`);
       console.log(`Wallet:  ${status.wallet}`);
