@@ -248,6 +248,22 @@ export const CLOUD_MODELS: ModelInfo[] = [
     category: 'general',
     description: 'Google Gemini 2.0 Flash (cloud-only)',
     isCloud: true,
+  }, 
+  {
+    name: 'Minimax2.7',
+    minVram: 0,
+    recommendedTier: 0,
+    category: 'general',
+    description: 'Minimax2.7 (cloud-only)',
+    isCloud: true,
+  },
+  {
+    name: 'Kimi2.5',
+    minVram: 0,
+    recommendedTier: 0,
+    category: 'general',
+    description: 'Kimi2.5 (cloud-only)',
+    isCloud: true,
   },
 ];
 
@@ -366,6 +382,7 @@ export function normalizeModelName(name: string): string {
  */
 export function getModelByName(name: string): ModelInfo | null {
   const normalized = normalizeModelName(name);
+  console.log('name normalized:', normalized)
   return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
 }
 

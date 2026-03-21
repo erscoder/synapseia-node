@@ -168,15 +168,20 @@ async function bootstrap() {
         const llmUrl = options.llmUrl || config.llmUrl;
         const llmKey = options.llmKey || config.llmKey;
 
+        console.log(options.llmUrl, config.llmUrl)
+        console.log(llmUrl)
         let selectedModel: ModelInfo | null = null;
 
         if (model) {
+          console.log(model)
           const isCloud =
             model?.startsWith('openai-compat/') ||
             model?.startsWith('anthropic/') ||
+            model?.startsWith('moonshot/') ||
             model?.startsWith('kimi/') ||
             model?.startsWith('minimax/');
 
+            console.log('isCloud: ',isCloud)
           if (!isCloud) {
             selectedModel = modelCatalogService.getByName(model);
             if (!selectedModel) {

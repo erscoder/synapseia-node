@@ -21,7 +21,7 @@ export class NodeConfigHelper {
     return {
       coordinatorUrl: 'http://localhost:3001',
       defaultModel: process.env.LLM_CLOUD_MODEL ?? 'ollama/qwen2.5:0.5b',
-      llmUrl: process.env.LLM_CLOUD_MODEL,
+      llmUrl: process.env.LLM_CLOUD_BASE_URL,
       llmKey: process.env.LLM_CLOUD_API_KEY
     };
   }
