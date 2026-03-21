@@ -17,6 +17,7 @@ import { WalletService } from '../modules/wallet/services/wallet.service.js';
 import { ModelCatalogService } from '../modules/model/services/model-catalog.service.js';
 import { LlmService } from '../modules/llm/services/llm.service.js';
 import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service.js';
+import { P2pService } from '../modules/p2p/services/p2p.service.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance.js';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware.js';
@@ -114,6 +115,7 @@ async function bootstrap() {
   const modelCatalogService = app.get(ModelCatalogService);
   const llmService = app.get(LlmService);
   const workOrderAgentService = app.get(WorkOrderAgentService);
+  const p2pService = app.get(P2pService);
 
   const VERSION = getPackageVersion();
   const program = new Command();
@@ -234,6 +236,22 @@ async function bootstrap() {
         if (!llmModel) {
           console.error(`Error: Invalid model format '${model}'`);
           process.exit(1);
+        }
+
+        // ── P2P node ──────────────────────────────────────────────────────
+        console.log('\n🌐 Starting P2P node...');
+        try {
+          const rawHost = coordinatorUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+          const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
+          const bootstrapAddrs = rawHost
+            ? [isLocalhost ? `/ip4/127.0.0.1/tcp/9000` : `/dns4/${rawHost}/tcp/9000`]
+            : [];
+          const p2pNode = await p2pService.createNode(identity, bootstrapAddrs);
+          console.log(`   PeerID: ${p2pNode.getPeerId()}`);
+          const addrs = p2pNode.getMultiaddrs();
+          if (addrs.length > 0) console.log(`   Listening: ${addrs.join(', ')}`);
+        } catch (err) {
+          console.warn(`   ⚠️  P2P init failed (HTTP fallback active): ${(err as Error).message}`);
         }
 
         console.log('\n🚀 Starting work order agent...');
