@@ -31,7 +31,7 @@ export interface EncryptedWallet {
   createdAt: string;
 }
 
-const WALLET_DIR = path.join(os.homedir(), '.synapse');
+const WALLET_DIR = process.env.SYNAPSE_HOME ?? path.join(os.homedir(), '.synapseia');
 const WALLET_FILE = path.join(WALLET_DIR, 'wallet.json');
 const BACKUP_FILE = path.join(WALLET_DIR, 'wallet-backup.json');
 

@@ -409,11 +409,11 @@ export async function submitResearchResult(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        workOrderId,
+        paperId: workOrderId,
         peerId,
         summary: result.summary,
         keyInsights: result.keyInsights,
-        proposal: result.proposal,
+        applicationProposal: result.proposal,
       }),
     });
 
@@ -697,37 +697,36 @@ export async function runWorkOrderAgentIteration(
 
   console.log(`[WorkOrderAgent] Found ${workOrders.length} available work order(s)`);
 
-  // 2. Select best work order (first one - already sorted by reward)
-  const workOrder = workOrders[0];
-  console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
+  // Try each work order until one is successfully accepted
+  for (const workOrder of workOrders) {
+    console.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
-  // 2.5 Evaluate economic viability (rational node behavior)
-  // Pass the runtime model so cloud models are detected correctly (not treated as Ollama)
-  const economicConfig = loadEconomicConfig(config.llmModel?.modelId);
-  const evaluation = evaluateWorkOrder(workOrder, economicConfig);
+    // Evaluate economic viability (rational node behavior)
+    const economicConfig = loadEconomicConfig(config.llmModel?.modelId);
+    const evaluation = evaluateWorkOrder(workOrder, economicConfig);
 
-  console.log(`[WorkOrderAgent] Economic evaluation:`);
-  console.log(`  - Bounty: ${evaluation.bountyUsd.toFixed(4)} USD (${workOrder.rewardAmount} SYN)`);
-  console.log(`  - Est. cost: ${evaluation.estimatedCostUsd.toFixed(4)} USD`);
-  console.log(`  - Profit ratio: ${evaluation.profitRatio === Infinity ? '∞' : evaluation.profitRatio.toFixed(2) + 'x'}`);
-  console.log(`  - Decision: ${evaluation.shouldAccept ? 'ACCEPT' : 'SKIP'} (${evaluation.reason})`);
+    console.log(`[WorkOrderAgent] Economic evaluation:`);
+    console.log(`  - Bounty: ${evaluation.bountyUsd.toFixed(4)} USD (${workOrder.rewardAmount} SYN)`);
+    console.log(`  - Est. cost: ${evaluation.estimatedCostUsd.toFixed(4)} USD`);
+    console.log(`  - Profit ratio: ${evaluation.profitRatio === Infinity ? '∞' : evaluation.profitRatio.toFixed(2) + 'x'}`);
+    console.log(`  - Decision: ${evaluation.shouldAccept ? 'ACCEPT' : 'SKIP'} (${evaluation.reason})`);
 
-  if (!evaluation.shouldAccept) {
-    console.log('[WorkOrderAgent] Skipping work order due to poor economics');
-    return { completed: false, workOrder };
-  }
+    if (!evaluation.shouldAccept) {
+      console.log('[WorkOrderAgent] Skipping work order due to poor economics');
+      continue; // Try next work order
+    }
 
-  // 3. Accept work order
-  console.log('[WorkOrderAgent] Accepting work order...');
-  const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
+    // Try to accept work order
+    console.log('[WorkOrderAgent] Accepting work order...');
+    const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
 
-  if (!accepted) {
-    console.log('[WorkOrderAgent] Failed to accept work order, skipping');
-    return { completed: false };
-  }
+    if (!accepted) {
+      console.log('[WorkOrderAgent] Failed to accept work order (likely race condition), trying next...');
+      continue; // Try next work order
+    }
 
-  console.log('[WorkOrderAgent] Work order accepted');
-  agentState.currentWorkOrder = workOrder;
+    console.log('[WorkOrderAgent] Work order accepted');
+    agentState.currentWorkOrder = workOrder;
 
   // 4. Execute work order (handle RESEARCH specially)
   console.log('[WorkOrderAgent] Executing work order...');
@@ -751,9 +750,33 @@ export async function runWorkOrderAgentIteration(
 
     // Submit to research queue endpoint
     if (success) {
+      // Find paperId from research queue by title (workaround for missing paperId in metadata)
+      let paperId = workOrder.id.replace(/^wo_/, 'paper_'); // fallback
+      
+      const tryPaperId = async (paperTitleFragment: string): Promise<string | null> => {
+        try {
+          const resp = await fetch(`${coordinatorUrl}/research-queue/papers`);
+          if (!resp.ok) return null;
+          const data = await resp.json() as { papers?: Array<{id: string, title: string}> };
+          if (!data.papers) return null;
+          const match = data.papers.find(p => p.title === paperTitleFragment || 
+            p.title === workOrder.title ||
+            (p.title.includes(workOrder.title.substring(0, 40))));
+          if (match) return match.id;
+        } catch (e) {
+          console.warn('[WorkOrderAgent] Failed to lookup paperId:', e);
+        }
+        return null;
+      };
+
+      const foundPaperId = await tryPaperId(workOrder.title);
+      if (foundPaperId) {
+        paperId = foundPaperId;
+      }
+
       const submitted = await submitResearchResult(
         coordinatorUrl,
-        workOrder.id,
+        paperId,
         peerId,
         researchResult
       );
@@ -785,10 +808,12 @@ export async function runWorkOrderAgentIteration(
     console.log('[WorkOrderAgent] Failed to report completion');
   }
 
-  agentState.iteration = iteration;
-  agentState.currentWorkOrder = undefined;
+  } // End of for loop - tried all work orders
 
-  return { workOrder, completed, researchResult };
+  // If we get here, no work order could be accepted
+  console.log('[WorkOrderAgent] Could not accept any work order (all failed or skipped)');
+  agentState.iteration = iteration;
+  return { completed: false };
 }
 
 /**
