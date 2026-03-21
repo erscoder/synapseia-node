@@ -108,21 +108,27 @@ export class HeartbeatHelper {
     const intervalId = setInterval(async () => {
       try {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
+        // Always send HTTP heartbeat to register with coordinator
+        try {
+          await this.sendHeartbeat(coordinatorUrl, identity, hardware);
+        } catch (httpErr) {
+          console.error('HTTP heartbeat failed:', (httpErr as Error).message);
+        }
+        // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
           const capabilities = this.determineCapabilities(hardware);
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
-            publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
+            publicKey: identity.publicKey,
             walletAddress: null,
             tier: hardware.tier,
             capabilities,
             uptime: uptimeSeconds,
             timestamp: Math.floor(Date.now() / 1000),
           });
-          console.log('[P2P] Heartbeat published via gossipsub');
+          console.log('[P2P+HTTP] Heartbeat sent via both channels');
         } else {
-          await this.sendHeartbeat(coordinatorUrl, identity, hardware);
-          console.log('Heartbeat sent via HTTP (fallback)');
+          console.log('Heartbeat sent via HTTP only');
         }
       } catch (error) {
         console.error('Heartbeat failed:', (error as Error).message);
