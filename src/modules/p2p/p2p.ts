@@ -66,6 +66,20 @@ export class P2PNode {
     const addrs: string[] = this.node.getMultiaddrs().map((a: any) => a.toString() as string);
     console.log('[P2P] Node started | peerId:', peerId);
     if (addrs.length > 0) console.log('[P2P] Listening on:', addrs.join(', '));
+
+    // Log peer discovery and connection events
+    this.node.addEventListener('peer:discovery', (evt: any) => {
+      const id = evt.detail?.id?.toString() ?? 'unknown';
+      console.log('[P2P] 🔍 Peer discovered:', id);
+    });
+    this.node.addEventListener('peer:connect', (evt: any) => {
+      const id = evt.detail?.toString() ?? 'unknown';
+      console.log('[P2P] ✅ Peer connected:', id);
+    });
+    this.node.addEventListener('peer:disconnect', (evt: any) => {
+      const id = evt.detail?.toString() ?? 'unknown';
+      console.log('[P2P] ❌ Peer disconnected:', id);
+    });
   }
 
   async stop(): Promise<void> {

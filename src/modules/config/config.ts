@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { Injectable } from '@nestjs/common';
 
 // Config file path
-export const CONFIG_DIR = process.env.SYNAPSE_HOME ?? join(homedir(), '.synapseia');
+export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 export interface Config {
