@@ -18,6 +18,7 @@ import { ModelCatalogService } from '../modules/model/services/model-catalog.ser
 import { LlmService } from '../modules/llm/services/llm.service.js';
 import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service.js';
 import { P2pService } from '../modules/p2p/services/p2p.service.js';
+import { startNode } from '../node-runtime.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance.js';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware.js';
@@ -238,37 +239,34 @@ async function bootstrap() {
           process.exit(1);
         }
 
-        // ── P2P node ──────────────────────────────────────────────────────
-        console.log('\n🌐 Starting P2P node...');
-        try {
-          const rawHost = coordinatorUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-          const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
-          const bootstrapAddrs = rawHost
-            ? [isLocalhost ? `/ip4/127.0.0.1/tcp/9000` : `/dns4/${rawHost}/tcp/9000`]
-            : [];
-          const p2pNode = await p2pService.createNode(identity, bootstrapAddrs);
-          console.log(`   PeerID: ${p2pNode.getPeerId()}`);
-          const addrs = p2pNode.getMultiaddrs();
-          if (addrs.length > 0) console.log(`   Listening: ${addrs.join(', ')}`);
-        } catch (err) {
-          console.warn(`   ⚠️  P2P init failed (HTTP fallback active): ${(err as Error).message}`);
-        }
-
-        console.log('\n🚀 Starting work order agent...');
-
         const capabilities = hardware.hasOllama
           ? ['llm', 'ollama', `tier-${hardware.tier}`]
           : ['llm', `tier-${hardware.tier}`];
 
-        await workOrderAgentService.start({
-          coordinatorUrl,
-          peerId: identity.peerId,
-          capabilities,
-          llmModel,
-          llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
-          intervalMs: 30000,
-          maxIterations: options.maxIterations,
+        // ── Hand off to the node runtime ──────────────────────────────────
+        const runtime = await startNode(
+          {
+            identity,
+            name: identity.name || 'unnamed',
+            walletAddress: wallet.publicKey,
+            tier: hardware.tier,
+            coordinatorUrl,
+            capabilities,
+            llmModel,
+            llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
+            intervalMs: 30000,
+            maxIterations: options.maxIterations,
+          },
+          { p2pService, workOrderAgentService },
+        );
+
+        process.on('SIGINT', async () => {
+          await runtime.stop();
+          process.exit(0);
         });
+
+        // Keep alive — startNode fires the agent loop in the background
+        await new Promise<void>(() => {});
       }
     );
 
