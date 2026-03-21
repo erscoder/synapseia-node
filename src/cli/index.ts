@@ -131,6 +131,8 @@ async function bootstrap() {
     .option('--llm-key <key>', 'API key for cloud LLM provider')
     .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3001)')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
+    .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
+    .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')
     .action(
       async (options: {
         model?: string;
@@ -138,6 +140,8 @@ async function bootstrap() {
         llmKey?: string;
         coordinator?: string;
         maxIterations?: number;
+        inference?: boolean;
+        inferenceModels?: string;
       }) => {
         const config = configService.load();
         // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
@@ -164,6 +168,10 @@ async function bootstrap() {
         }
         const coordinatorUrl = options.coordinator || config.coordinatorUrl;
         const model = config.defaultModel || options.model;
+        const inferenceEnabled = options.inference ?? config.inferenceEnabled ?? false;
+        const inferenceModels = options.inferenceModels
+          ? options.inferenceModels.split(',')
+          : (config.inferenceModels ?? []);
         const llmUrl = options.llmUrl || config.llmUrl;
         const llmKey = options.llmKey || config.llmKey;
 
@@ -218,6 +226,7 @@ async function bootstrap() {
 
         console.log(SYPNASEIA_HEADER);
         console.log('Starting SYPNASEIA node...');
+        console.log(`Version: ${VERSION}`);
         if (identity.name) console.log(`Name:   ${identity.name}`);
         console.log(`PeerID: ${identity.peerId}`);
         console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
@@ -234,6 +243,10 @@ async function bootstrap() {
           console.log(`Model: ${model} (cloud)`);
         }
         if (llmUrl) console.log(`LLM URL: ${llmUrl}`);
+        if (inferenceEnabled) {
+          const modelsStr = inferenceModels.length > 0 ? inferenceModels.join(', ') : 'auto-detect from Ollama';
+          console.log(`Inference: ENABLED  models: ${modelsStr}`);
+        }
 
         const llmModel = llmService.parse(model || 'ollama/qwen2.5:0.5b');
         if (!llmModel) {
@@ -244,6 +257,7 @@ async function bootstrap() {
         const capabilities = hardware.hasOllama
           ? ['llm', 'ollama', `tier-${hardware.tier}`]
           : ['llm', `tier-${hardware.tier}`];
+        if (inferenceEnabled) capabilities.push('inference');
 
         // ── Hand off to the node runtime ──────────────────────────────────
         const runtime = await startNode(
@@ -422,7 +436,7 @@ async function bootstrap() {
 
       const BACK = '__BACK__';
 
-      type Step = 'coordinator' | 'modelMode' | 'modelPick' | 'llmConfig' | 'done';
+      type Step = 'coordinator' | 'modelMode' | 'modelPick' | 'llmConfig' | 'inference' | 'done';
       let step: Step = 'coordinator';
       let modelMode: string | null = null;
 
@@ -582,6 +596,32 @@ async function bootstrap() {
             } else {
               config.llmUrl = undefined;
             }
+          }
+          step = 'inference';
+        }
+
+        if (step === 'inference') {
+          const enableInference = await safePrompt(() =>
+            confirm({
+              message: 'Enable inference mode? (expose GPU as AI inference provider — earns extra SYN)',
+              default: config.inferenceEnabled ?? false,
+            })
+          );
+          if (enableInference === null) { console.log('\nCancelled.'); return; }
+          config.inferenceEnabled = enableInference;
+          if (enableInference) {
+            const modelsInput = await safePrompt(() =>
+              input({
+                message: 'Models to serve (comma-separated, empty = auto-detect from Ollama):',
+                default: (config.inferenceModels ?? []).join(','),
+              })
+            );
+            if (modelsInput === null) { console.log('\nCancelled.'); return; }
+            config.inferenceModels = modelsInput ? modelsInput.split(',').map((s: string) => s.trim()) : [];
+            console.log('  ✓ Inference mode enabled. Start with: synapseia start');
+            console.log('    (or use --inference flag to override per-run)');
+          } else {
+            config.inferenceModels = [];
           }
           step = 'done';
         }
