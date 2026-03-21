@@ -1072,6 +1072,7 @@ describe('WorkOrderAgent', () => {
         (fetch as jest.Mock)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] }) // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers (paperId lookup)
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // submitResearchResult
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
@@ -1103,10 +1104,11 @@ describe('WorkOrderAgent', () => {
         };
 
         (fetch as jest.Mock)
-          .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })
-          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-          .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) });
+          .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
+          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers
+          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // submitResearchResult
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
         jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({
           summary: 'Summary', keyInsights: ['i'], proposal: 'P'
@@ -1138,10 +1140,11 @@ describe('WorkOrderAgent', () => {
         };
 
         (fetch as jest.Mock)
-          .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })
-          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-          .mockResolvedValueOnce({ ok: false, text: async () => 'Error' })
-          .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) });
+          .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
+          .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers
+          .mockResolvedValueOnce({ ok: false, text: async () => 'Error' })          // submitResearchResult (fails)
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
         jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({
           summary: 'Summary', keyInsights: ['i'], proposal: 'P'
