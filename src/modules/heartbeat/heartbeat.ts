@@ -31,8 +31,9 @@ export class HeartbeatHelper {
     const startTime = Date.now();
     const capabilities = this.determineCapabilities(hardware);
 
-    const payload: HeartbeatPayload = {
+    const payload: HeartbeatPayload & { name?: string } = {
       peerId: identity.peerId,
+      name: identity.name,
       publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
       walletAddress: null, // TODO: connect wallet
       tier: hardware.tier,
@@ -119,6 +120,7 @@ export class HeartbeatHelper {
           const capabilities = this.determineCapabilities(hardware);
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
+            name: identity.name,
             publicKey: identity.publicKey,
             walletAddress: null,
             tier: hardware.tier,
