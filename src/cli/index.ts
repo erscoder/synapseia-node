@@ -140,6 +140,16 @@ async function bootstrap() {
         const hardware = hardwareService.detect();
 
         if (isNew) {
+          console.log('');
+          console.log('╔══════════════════════════════════════════════════════════╗');
+          console.log('║   🎉  Welcome to Synapseia Network!                      ║');
+          console.log('║                                                          ║');
+          console.log('║   Your node identity and wallet have been created.       ║');
+          console.log('║   You are now part of the decentralized AI network.      ║');
+          console.log('║                                                          ║');
+          console.log('║   ⚠️  Keep your password safe — it cannot be recovered.  ║');
+          console.log('╚══════════════════════════════════════════════════════════╝');
+          console.log('');
           walletService.displayCreationWarning(wallet);
         }
 

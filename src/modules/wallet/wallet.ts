@@ -159,23 +159,26 @@ export class WalletHelper {
 
     const { password } = await import('@inquirer/prompts');
 
-    const pass1 = await password({
-      message: 'Create wallet password (min 8 characters):',
-      validate: (input: string) => {
-        if (input.length < 8) return 'Password must be at least 8 characters';
-        return true;
+    // Retry loop until passwords match
+    while (true) {
+      const pass1 = await password({
+        message: 'Create wallet password (min 8 characters):',
+        validate: (input: string) => {
+          if (input.length < 8) return 'Password must be at least 8 characters';
+          return true;
+        }
+      });
+
+      const pass2 = await password({
+        message: 'Confirm wallet password:'
+      });
+
+      if (pass1 === pass2) {
+        return pass1;
       }
-    });
 
-    const pass2 = await password({
-      message: 'Confirm wallet password:'
-    });
-
-    if (pass1 !== pass2) {
-      throw new Error('Passwords do not match');
+      console.log('\n❌ Passwords do not match. Please try again.\n');
     }
-
-    return pass1;
   }
 
   /**
