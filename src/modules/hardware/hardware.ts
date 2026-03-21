@@ -16,6 +16,7 @@ export interface ModelInfo {
   minVram: number; // GB
   recommendedTier: number;
   category?: ModelCategory; // Optional category for compatibility with model-catalog
+  description?: string;
 }
 
 /**

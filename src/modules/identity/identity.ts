@@ -16,6 +16,7 @@ export interface Identity {
   publicKey: string;     // Hex string (Ed25519 public key)
   privateKey: string;    // Hex string (Ed25519 private key scalar)
   createdAt: number;     // Timestamp
+  name?: string;         // Human-friendly node name
   agentId?: string;      // First 8 chars of publicKey (NEW A16)
   tier?: number;         // Number (NEW A16)
   mode?: 'power' | 'chill';  // Operating mode (NEW A16)
@@ -30,7 +31,7 @@ export class IdentityHelper {
   /**
    * Generate new identity keypair using Ed25519
    */
-  generateIdentity(identityDir: string = IDENTITY_DIR): Identity {
+  generateIdentity(identityDir: string = IDENTITY_DIR, nodeName?: string): Identity {
     if (!existsSync(identityDir)) {
       mkdirSync(identityDir, { recursive: true, mode: 0o700 });
     }
@@ -52,6 +53,7 @@ export class IdentityHelper {
       publicKey: publicKeyHex,
       privateKey: privateKeyHex,
       createdAt: Date.now(),
+      name: nodeName,
       agentId,          // A16
       tier: 0,          // A16 - default tier
       mode: 'chill',    // A16 - default mode
@@ -161,11 +163,11 @@ export class IdentityHelper {
   /**
    * Get or create identity (convenience function for CLI)
    */
-  getOrCreateIdentity(identityDir: string = IDENTITY_DIR): Identity {
+  getOrCreateIdentity(identityDir: string = IDENTITY_DIR, nodeName?: string): Identity {
     try {
       return this.loadIdentity(identityDir);
     } catch {
-      return this.generateIdentity(identityDir);
+      return this.generateIdentity(identityDir, nodeName);
     }
   }
 
@@ -173,11 +175,14 @@ export class IdentityHelper {
    * Update identity fields (A16)
    */
   updateIdentity(
-    updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status'>>,
+    updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status' | 'name'>>,
     identityDir: string = IDENTITY_DIR,
   ): Identity {
     const identity = this.loadIdentity(identityDir);
 
+    if (updates.name !== undefined) {
+      identity.name = updates.name;
+    }
     if (updates.tier !== undefined) {
       identity.tier = updates.tier;
     }
@@ -217,8 +222,8 @@ export class IdentityHelper {
 }
 
 // Backward-compatible standalone exports
-export const generateIdentity = (identityDir?: string): Identity =>
-  new IdentityHelper().generateIdentity(identityDir ?? IDENTITY_DIR);
+export const generateIdentity = (identityDir?: string, nodeName?: string): Identity =>
+  new IdentityHelper().generateIdentity(identityDir ?? IDENTITY_DIR, nodeName);
 export const loadIdentity = (identityDir?: string): Identity =>
   new IdentityHelper().loadIdentity(identityDir ?? IDENTITY_DIR);
 export const sign = (message: string, privateKeyHex: string): Promise<string> =>
@@ -231,10 +236,10 @@ export const verifySignature = (
   new IdentityHelper().verifySignature(message, signatureHex, publicKeyHex);
 export const canonicalPayload = (data: Record<string, unknown>): string =>
   new IdentityHelper().canonicalPayload(data);
-export const getOrCreateIdentity = (identityDir?: string): Identity =>
-  new IdentityHelper().getOrCreateIdentity(identityDir ?? IDENTITY_DIR);
+export const getOrCreateIdentity = (identityDir?: string, nodeName?: string): Identity =>
+  new IdentityHelper().getOrCreateIdentity(identityDir ?? IDENTITY_DIR, nodeName);
 export const updateIdentity = (
-  updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status'>>,
+  updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status' | 'name'>>,
   identityDir?: string,
 ): Identity =>
   new IdentityHelper().updateIdentity(updates, identityDir ?? IDENTITY_DIR);

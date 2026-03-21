@@ -16,12 +16,12 @@ export class IdentityService {
     return this.identityHelper.loadIdentity(dir);
   }
 
-  getOrCreate(dir?: string): Identity {
-    return this.identityHelper.getOrCreateIdentity(dir);
+  getOrCreate(dir?: string, nodeName?: string): Identity {
+    return this.identityHelper.getOrCreateIdentity(dir, nodeName);
   }
 
   update(
-    updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status'>>,
+    updates: Partial<Pick<Identity, 'tier' | 'mode' | 'status' | 'name'>>,
     dir?: string,
   ): Identity {
     return this.identityHelper.updateIdentity(updates, dir);
