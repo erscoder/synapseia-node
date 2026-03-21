@@ -885,7 +885,8 @@ export async function runWorkOrderAgentIteration(
   );
 
   if (completed) {
-    console.log(`[WorkOrderAgent] Work order completed! Reward: ${workOrder.rewardAmount} SYN`);
+    console.log(`[WorkOrderAgent] Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
+    console.log(`[WorkOrderAgent] Waiting for round to close to determine final reward...`);
     agentState.totalWorkOrdersCompleted++;
   } else {
     console.log('[WorkOrderAgent] Failed to report completion');
