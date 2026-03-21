@@ -827,16 +827,7 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
   agentState.isRunning = true;
   const { intervalMs, maxIterations } = config;
 
-  console.log('🚀 Starting SynapseIA Work Order Agent');
-  console.log(`   Coordinator: ${config.coordinatorUrl}`);
-  console.log(`   Peer ID: ${config.peerId}`);
-  console.log(`   Capabilities: ${config.capabilities.join(', ')}`);
-  console.log(`   LLM: ${config.llmModel.modelId}`);
-  console.log(`   Interval: ${intervalMs}ms`);
-  if (maxIterations) {
-    console.log(`   Max iterations: ${maxIterations}`);
-  }
-  console.log('');
+  // Startup summary is logged by the caller (node-runtime / CLI)
 
   try {
     let iteration = 1;

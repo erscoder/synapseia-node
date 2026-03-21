@@ -7,6 +7,7 @@ import { gossipsub } from '@libp2p/gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
+import { ping } from '@libp2p/ping';
 import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity.js';
 import { sign, canonicalPayload } from '../identity/identity.js';
@@ -30,6 +31,7 @@ export class P2PNode {
   async start(bootstrapAddrs: string[] = []): Promise<void> {
     const svcBase = {
       identify: identify(),
+      ping: ping(),
       pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false }),
       dht: kadDHT({ clientMode: bootstrapAddrs.length === 0 }),
     } as const;
