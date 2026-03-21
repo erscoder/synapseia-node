@@ -95,6 +95,18 @@ export function parseModel(modelStr: string): LLMModel | null {
       return { provider: 'cloud', providerId: 'openai-compat', modelId };
     }
   }
+  if (modelStr.startsWith('minimax/')) {
+    const modelId = modelStr.slice('minimax/'.length);
+    if (modelId) {
+      return { provider: 'cloud', providerId: 'minimax', modelId };
+    }
+  }
+  if (modelStr.startsWith('kimi/') || modelStr.startsWith('moonshot/')) {
+    const modelId = modelStr.split('/')[0];
+    if (modelId) {
+      return { provider: 'cloud', providerId: 'moonshot', modelId };
+    }
+  }
 
   return null;
 }
@@ -436,7 +448,7 @@ async function generateMinimax(
   apiKey: string,
   baseUrl?: string
 ): Promise<string> {
-  const url = baseUrl ?? 'https://api.minimax.chat/v1/text/chatcompletion_v2';
+  const url = baseUrl ?? 'https://api.minimax.io/v1/chat/completions';
 
   const response = await fetch(url, {
     method: 'POST',
