@@ -118,6 +118,8 @@ export function parseModel(modelStr: string): LLMModel | null {
  * @returns LLMStatus object
  */
 export async function checkLLM(model: LLMModel, config?: LLMConfig): Promise<LLMStatus> {
+  console.log('checkLLM: ',model) 
+  console.log('checkLLM: ',config) 
   if (model.provider === 'ollama') {
     return checkOllamaLLM(model);
   }
@@ -481,6 +483,7 @@ async function generateMinimax(
 
 async function checkOpenAICompat(model: LLMModel, apiKey: string, baseUrl?: string): Promise<LLMStatus> {
   try {
+    console.log('checkOpenAICompat', baseUrl, model )
     const modelMetadata = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
     const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
 

@@ -636,7 +636,8 @@ export function evaluateWorkOrder(
   config: EconomicConfig
 ): WorkOrderEvaluation {
   const bountySyn = parseSynToLamports(workOrder.rewardAmount);
-  const bountyUsd = Number(bountySyn) * config.synPriceUsd;
+  // bountySyn is in lamports (1e9 per SYN) — convert to SYN before USD calc
+  const bountyUsd = (Number(bountySyn) / 1e9) * config.synPriceUsd;
 
   // Non-research work orders: always accept (no compute cost tracking yet)
   if (!isResearchWorkOrder(workOrder)) {
