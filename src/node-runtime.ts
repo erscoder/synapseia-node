@@ -116,7 +116,6 @@ export async function startNode(
       console.error('❌ Work order agent crashed:', err.message);
     });
 
-  console.log('\n✅ Node is running. Press Ctrl+C to stop.\n');
 
   return {
     p2pNode,
