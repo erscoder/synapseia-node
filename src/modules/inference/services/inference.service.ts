@@ -34,8 +34,9 @@ export class InferenceService {
     req: http.IncomingMessage,
     res: http.ServerResponse,
     peerId: string,
+    coordinatorUrl?: string,
   ): Promise<void> {
-    return this.inferenceServerHelper.handleChatCompletions(req, res, peerId);
+    return this.inferenceServerHelper.handleChatCompletions(req, res, peerId, coordinatorUrl);
   }
 
   handleState(

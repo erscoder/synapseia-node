@@ -15,6 +15,7 @@ export interface InferenceServerConfig {
   peerId: string;
   tier: number;
   models: string[];
+  coordinatorUrl?: string;
 }
 
 export interface ChatCompletionRequest {
@@ -142,6 +143,20 @@ export function transformToOpenAI(ollamaResponse: OllamaChatResponse, model: str
 }
 
 /**
+ * Notify coordinator of a successful inference request (fire-and-forget)
+ */
+async function notifyCoordinatorInferenceRequest(coordinatorUrl: string, peerId: string): Promise<void> {
+  try {
+    await fetch(`${coordinatorUrl}/peers/${encodeURIComponent(peerId)}/inference-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch {
+    // Fire-and-forget: do not fail inference if coordinator is unreachable
+  }
+}
+
+/**
  * Handle POST /v1/chat/completions
  * Exported for testing
  */
@@ -149,6 +164,7 @@ export async function handleChatCompletions(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   peerId: string,
+  coordinatorUrl?: string,
 ): Promise<void> {
   try {
     const body = await parseBody(req) as ChatCompletionRequest;
@@ -169,6 +185,11 @@ export async function handleChatCompletions(
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(openaiResponse));
+
+    // Notify coordinator (fire-and-forget) after successful inference
+    if (coordinatorUrl) {
+      void notifyCoordinatorInferenceRequest(coordinatorUrl, peerId);
+    }
   } catch (error: any) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -249,7 +270,7 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
 
     try {
       if (req.method === 'POST' && url === '/v1/chat/completions') {
-        await handleChatCompletions(req, res, config.peerId);
+        await handleChatCompletions(req, res, config.peerId, config.coordinatorUrl);
       } else if (req.method === 'GET' && url === '/api/v1/state') {
         await handleState(req, res, config);
       } else if (req.method === 'GET' && url === '/health') {
@@ -303,8 +324,9 @@ export class InferenceServerHelper {
     req: http.IncomingMessage,
     res: http.ServerResponse,
     peerId: string,
+    coordinatorUrl?: string,
   ): Promise<void> {
-    return handleChatCompletions(req, res, peerId);
+    return handleChatCompletions(req, res, peerId, coordinatorUrl);
   }
 
   handleState(
