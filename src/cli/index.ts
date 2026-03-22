@@ -133,6 +133,8 @@ async function bootstrap() {
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
     .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
     .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')
+    .option('--lat <lat>', 'Latitude for geo-location (optional)')
+    .option('--lng <lng>', 'Longitude for geo-location (optional)')
     .action(
       async (options: {
         model?: string;
@@ -142,6 +144,8 @@ async function bootstrap() {
         maxIterations?: number;
         inference?: boolean;
         inferenceModels?: string;
+        lat?: string;
+        lng?: string;
       }) => {
         const config = configService.load();
         // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
@@ -227,7 +231,8 @@ async function bootstrap() {
         console.log(SYPNASEIA_HEADER);
         console.log('Starting SYPNASEIA node...');
         console.log(`Version: ${VERSION}`);
-        if (identity.name) console.log(`Name:   ${identity.name}`);
+        const nodeName = config.name || identity.name || 'unnamed';
+        if (nodeName !== 'unnamed') console.log(`Name:   ${nodeName}`);
         console.log(`PeerID: ${identity.peerId}`);
         console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
         console.log(`Hardware: `);
@@ -263,7 +268,7 @@ async function bootstrap() {
         const runtime = await startNode(
           {
             identity,
-            name: identity.name || 'unnamed',
+            name: config.name || identity.name || 'unnamed',
             walletAddress: wallet.publicKey,
             tier: hardware.tier,
             coordinatorUrl,
@@ -272,6 +277,8 @@ async function bootstrap() {
             llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
             intervalMs: 30000,
             maxIterations: options.maxIterations,
+            lat: config.lat,
+            lng: config.lng,
           },
           { p2pService, workOrderAgentService },
         );
@@ -418,12 +425,21 @@ async function bootstrap() {
     .command('config')
     .description('Interactive configuration wizard')
     .option('--show', 'Show current configuration')
-    .action(async (options: { show?: boolean }) => {
+    .option('--set-name <name>', 'Set node name')
+    .action(async (options: { show?: boolean; setName?: string }) => {
       const config = configService.load();
 
       if (options.show) {
         console.log('Current configuration:');
         console.log(JSON.stringify(config, null, 2));
+        return;
+      }
+
+      const configService = app.get(NodeConfigService);
+      if (options.setName) {
+        config.name = options.setName;
+        configService.save(config);
+        console.log(`✅ Node name set to: ${options.setName}`);
         return;
       }
 

@@ -35,6 +35,10 @@ export interface NodeRuntimeConfig {
   intervalMs?: number;
   /** Max iterations (0 = unlimited) */
   maxIterations?: number;
+  /** Latitude for geo-location (optional) */
+  lat?: number;
+  /** Longitude for geo-location (optional) */
+  lng?: number;
 }
 
 export interface NodeRuntime {
@@ -104,6 +108,8 @@ export async function startNode(
     { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama') },
     config.intervalMs ?? 30000,
     p2pNode ?? undefined,
+    config.lat,
+    config.lng,
   );
   console.log(`   Coordinator: ${config.coordinatorUrl}`);
   console.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);

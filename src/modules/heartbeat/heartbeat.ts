@@ -11,6 +11,9 @@ export interface HeartbeatPayload {
   tier: number;
   capabilities: string[];
   uptime: number;
+  name?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface HeartbeatResponse {
@@ -27,11 +30,13 @@ export class HeartbeatHelper {
     coordinatorUrl: string,
     identity: Identity,
     hardware: Hardware,
+    lat?: number,
+    lng?: number,
   ): Promise<HeartbeatResponse> {
     const startTime = Date.now();
     const capabilities = this.determineCapabilities(hardware);
 
-    const payload: HeartbeatPayload & { name?: string } = {
+    const payload: HeartbeatPayload = {
       peerId: identity.peerId,
       name: identity.name,
       publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
@@ -39,6 +44,8 @@ export class HeartbeatHelper {
       tier: hardware.tier,
       capabilities,
       uptime: Math.floor((Date.now() - startTime) / 1000), // Seconds since process start
+      lat,
+      lng,
     };
 
     let lastError: Error | null = null;
@@ -104,6 +111,8 @@ export class HeartbeatHelper {
     hardware: Hardware,
     intervalMs: number = 30000,
     p2pNode?: P2PNode,
+    lat?: number,
+    lng?: number,
   ): () => void {
     const intervalStartTime = Date.now();
     const intervalId = setInterval(async () => {
@@ -111,7 +120,7 @@ export class HeartbeatHelper {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
         // Always send HTTP heartbeat to register with coordinator
         try {
-          await this.sendHeartbeat(coordinatorUrl, identity, hardware);
+          await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng);
         } catch (httpErr) {
           console.error('HTTP heartbeat failed:', (httpErr as Error).message);
         }
