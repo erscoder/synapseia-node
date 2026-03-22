@@ -11,6 +11,9 @@ console.log(CONFIG_FILE)
 export interface Config {
   coordinatorUrl: string;
   defaultModel: string;
+  name?: string; // Node name (display name)
+  lat?: number; // Latitude for geo-location (dev/testing)
+  lng?: number; // Longitude for geo-location (dev/testing)
   llmUrl?: string;
   llmKey?: string;
   wallet?: string;
