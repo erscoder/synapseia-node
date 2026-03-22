@@ -135,6 +135,7 @@ async function bootstrap() {
     .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')
     .option('--lat <lat>', 'Latitude for geo-location (optional)')
     .option('--lng <lng>', 'Longitude for geo-location (optional)')
+    .option('--set-name', 'New node name (optional)')
     .action(
       async (options: {
         model?: string;
@@ -231,8 +232,8 @@ async function bootstrap() {
         console.log(SYPNASEIA_HEADER);
         console.log('Starting SYPNASEIA node...');
         console.log(`Version: ${VERSION}`);
-        const nodeName = config.name || identity.name || 'unnamed';
-        if (nodeName !== 'unnamed') console.log(`Name:   ${nodeName}`);
+        const displayName = config.name || identity.name || 'unnamed';
+        if (displayName !== 'unnamed') console.log(`Name:   ${displayName}`);
         console.log(`PeerID: ${identity.peerId}`);
         console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
         console.log(`Hardware: `);
