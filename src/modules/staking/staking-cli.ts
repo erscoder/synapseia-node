@@ -12,7 +12,7 @@ import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
 
 // IDs from .env
-const STAKING_PROGRAM_ID = new PublicKey('646K4f4Pn9TrB6ACZuWZy1H1KS1T2qRMFDWsTvbDg2h7');
+const STAKING_PROGRAM_ID = new PublicKey(process.env.STAKING_PROGRAM_ID || '8LhiExUHdJGCfnbmADcJacjbnoAU7cvXTqpBEdybd4Fg');
 const SYN_MINT = new PublicKey('DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8');
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://rpc.ankr.com/solana_devnet';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
