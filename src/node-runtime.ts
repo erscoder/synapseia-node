@@ -10,6 +10,7 @@
  */
 
 import type { Identity } from './modules/identity/identity.js';
+import logger from './utils/logger.js';
 import type { LLMModel, LLMConfig } from './modules/llm/llm-provider.js';
 import { P2PNode } from './modules/p2p/p2p.js';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat.js';
@@ -78,7 +79,7 @@ export async function startNode(
   },
 ): Promise<NodeRuntime> {
   // ── 1. P2P ────────────────────────────────────────────────────────────────
-  console.log('\n🌐 Starting P2P layer...');
+  logger.log('\n🌐 Starting P2P layer...');
   let p2pNode: P2PNode | null = null;
   try {
     const rawHost = config.coordinatorUrl
@@ -90,17 +91,17 @@ export async function startNode(
       : [];
 
     p2pNode = await services.p2pService.createNode(config.identity, bootstrapAddrs);
-    console.log(`   ✅ PeerID: ${p2pNode.getPeerId()}`);
+    logger.log(`   ✅ PeerID: ${p2pNode.getPeerId()}`);
     const addrs = p2pNode.getMultiaddrs();
     if (addrs.length > 0) {
-      console.log(`   Listening on: ${addrs.join(', ')}`);
+      logger.log(`   Listening on: ${addrs.join(', ')}`);
     }
   } catch (err) {
-    console.warn(`   ⚠️  P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
+    logger.warn(`   ⚠️  P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
   }
 
   // ── 2. Heartbeat ──────────────────────────────────────────────────────────
-  console.log('\n💓 Starting heartbeat loop...');
+  logger.log('\n💓 Starting heartbeat loop...');
   const heartbeatHelper = new HeartbeatHelper();
   const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
     config.coordinatorUrl,
@@ -111,15 +112,15 @@ export async function startNode(
     config.lat,
     config.lng,
   );
-  console.log(`   Coordinator: ${config.coordinatorUrl}`);
-  console.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+  logger.log(`   Coordinator: ${config.coordinatorUrl}`);
+  logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
 
   // ── 3. Work Order Agent ───────────────────────────────────────────────────
-  console.log('\n🚀 Starting work order agent...');
-  console.log(`   Coordinator: ${config.coordinatorUrl}`);
-  console.log(`   Capabilities: ${config.capabilities.join(', ')}`);
-  console.log(`   Model: ${config.llmModel.providerId ? config.llmModel.providerId + '/' : ''}${config.llmModel.modelId}`);
-  console.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+  logger.log('\n🚀 Starting work order agent...');
+  logger.log(`   Coordinator: ${config.coordinatorUrl}`);
+  logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
+  logger.log(`   Model: ${config.llmModel.providerId ? config.llmModel.providerId + '/' : ''}${config.llmModel.modelId}`);
+  logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
 
   // Fire and forget — the agent loop runs indefinitely
   services.workOrderAgentService
@@ -133,14 +134,14 @@ export async function startNode(
       maxIterations: config.maxIterations,
     })
     .catch((err: Error) => {
-      console.error('❌ Work order agent crashed:', err.message);
+      logger.error('❌ Work order agent crashed:', err.message);
     });
 
 
   return {
     p2pNode,
     stop: async () => {
-      console.log('\n🛑 Shutting down node...');
+      logger.log('\n🛑 Shutting down node...');
       heartbeatCleanup();
       services.workOrderAgentService.stop();
       if (p2pNode) {
@@ -150,7 +151,7 @@ export async function startNode(
           // ignore
         }
       }
-      console.log('✅ Node stopped.');
+      logger.log('✅ Node stopped.');
     },
   };
 }

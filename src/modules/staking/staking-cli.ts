@@ -4,6 +4,7 @@
  */
 
 import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import logger from '../../utils/logger.js';
 import { getAssociatedTokenAddress, transfer, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction } from '@solana/spl-token';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -146,12 +147,12 @@ function createClaimRewardsInstructionData(): Buffer {
 
 // Stake SYN tokens
 export async function stakeTokens(amount: number): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   // Get or create stake account
   const stakeAccountAddress = await findStakeAccount(connection, wallet.publicKey);
@@ -160,7 +161,7 @@ export async function stakeTokens(amount: number): Promise<string> {
   let stakeAccountPubkey: PublicKey;
   
   if (!stakeAccountAddress) {
-    console.log(`📝 Creating new stake account...`);
+    logger.log(`📝 Creating new stake account...`);
     stakeAccount = Keypair.generate();
     stakeAccountPubkey = stakeAccount.publicKey;
     
@@ -179,7 +180,7 @@ export async function stakeTokens(amount: number): Promise<string> {
       skipPreflight: false
     });
     
-    console.log(`   Stake account created: ${initSig}`);
+    logger.log(`   Stake account created: ${initSig}`);
   } else {
     stakeAccountPubkey = new PublicKey(stakeAccountAddress);
   }
@@ -189,7 +190,7 @@ export async function stakeTokens(amount: number): Promise<string> {
   const stakeVault = await getStakeVaultATA(connection);
   const [vaultAuthority] = getVaultAuthorityPDA();
   
-  console.log(`\n📤 Staking ${amount} SYN tokens...`);
+  logger.log(`\n📤 Staking ${amount} SYN tokens...`);
   
   const stakeIx = new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
@@ -210,20 +211,20 @@ export async function stakeTokens(amount: number): Promise<string> {
     skipPreflight: false
   });
   
-  console.log(`✅ Stake successful!`);
-  console.log(`   Transaction: ${tx}`);
+  logger.log(`✅ Stake successful!`);
+  logger.log(`   Transaction: ${tx}`);
   
   return tx;
 }
 
 // Unstake SYN tokens
 export async function unstakeTokens(amount: number): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   // Find stake account
   const stakeAccountAddress = await findStakeAccount(connection, wallet.publicKey);
@@ -239,7 +240,7 @@ export async function unstakeTokens(amount: number): Promise<string> {
   const stakeVault = await getStakeVaultATA(connection);
   const [vaultAuthority] = getVaultAuthorityPDA();
   
-  console.log(`\n📥 Unstaking ${amount} SYN tokens...`);
+  logger.log(`\n📥 Unstaking ${amount} SYN tokens...`);
   
   const unstakeIx = new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
@@ -260,20 +261,20 @@ export async function unstakeTokens(amount: number): Promise<string> {
     skipPreflight: false
   });
   
-  console.log(`✅ Unstake successful!`);
-  console.log(`   Transaction: ${tx}`);
+  logger.log(`✅ Unstake successful!`);
+  logger.log(`   Transaction: ${tx}`);
   
   return tx;
 }
 
 // Claim rewards
 export async function claimStakingRewards(): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   // Find stake account
   const stakeAccountAddress = await findStakeAccount(connection, wallet.publicKey);
@@ -293,11 +294,11 @@ export async function claimStakingRewards(): Promise<string> {
   const rewards = Number(rewardsPending) / 1_000_000_000;
   
   if (rewards <= 0) {
-    console.log(`ℹ️ No pending rewards to claim.`);
+    logger.log(`ℹ️ No pending rewards to claim.`);
     return '';
   }
   
-  console.log(`\n💰 Claiming ${rewards} SYN in rewards...`);
+  logger.log(`\n💰 Claiming ${rewards} SYN in rewards...`);
   
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   const [treasuryAuthority] = getTreasuryAuthorityPDA();
@@ -322,59 +323,59 @@ export async function claimStakingRewards(): Promise<string> {
     skipPreflight: false
   });
   
-  console.log(`✅ Rewards claimed!`);
-  console.log(`   Transaction: ${tx}`);
+  logger.log(`✅ Rewards claimed!`);
+  logger.log(`   Transaction: ${tx}`);
   
   return tx;
 }
 
 // Deposit SOL (airdrop for devnet)
 export async function depositSol(amount: number): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   // Request airdrop on devnet
   const airdropAmount = Math.floor(amount * 1_000_000_000);
-  console.log(`\n💸 Requesting ${amount} SOL airdrop...`);
+  logger.log(`\n💸 Requesting ${amount} SOL airdrop...`);
   
   try {
     const airdropSig = await connection.requestAirdrop(wallet.publicKey, airdropAmount);
     await connection.confirmTransaction(airdropSig);
     
-    console.log(`✅ Airdrop successful!`);
-    console.log(`   Transaction: ${airdropSig}`);
+    logger.log(`✅ Airdrop successful!`);
+    logger.log(`   Transaction: ${airdropSig}`);
     return airdropSig;
   } catch (e) {
     // If airdrop not available, show address for manual transfer
-    console.log(`⚠️ Airdrop not available on this network`);
-    console.log(`   Send SOL to: ${wallet.publicKey.toBase58()}`);
+    logger.log(`⚠️ Airdrop not available on this network`);
+    logger.log(`   Send SOL to: ${wallet.publicKey.toBase58()}`);
     throw e;
   }
 }
 
 // Deposit SYN (transfer from another wallet)
 export async function depositSyn(amount: number): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   
-  console.log(`\n📥 To deposit SYN, send tokens to your token account:`);
-  console.log(`   Address: ${userTokenAccount.toBase58()}`);
-  console.log(`   (This is your ATA - Associated Token Account for SYN)`);
+  logger.log(`\n📥 To deposit SYN, send tokens to your token account:`);
+  logger.log(`   Address: ${userTokenAccount.toBase58()}`);
+  logger.log(`   (This is your ATA - Associated Token Account for SYN)`);
   
   // Check balance
   const balance = await connection.getTokenAccountBalance(userTokenAccount).catch(() => null);
   if (balance) {
-    console.log(`   Current balance: ${Number(balance.value.uiAmountString)} SYN`);
+    logger.log(`   Current balance: ${Number(balance.value.uiAmountString)} SYN`);
   }
   
   return '';
@@ -382,12 +383,12 @@ export async function depositSyn(amount: number): Promise<string> {
 
 // Withdraw SOL
 export async function withdrawSol(amount: number, destinationAddress: string): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   const destination = new PublicKey(destinationAddress);
   const amountLamports = Math.floor(amount * 1_000_000_000);
@@ -400,7 +401,7 @@ export async function withdrawSol(amount: number, destinationAddress: string): P
     throw new Error(`Cannot withdraw ${amount} SOL. Need to keep ~0.01 SOL for rent.`);
   }
   
-  console.log(`\n📤 Withdrawing ${amount} SOL to ${destinationAddress}...`);
+  logger.log(`\n📤 Withdrawing ${amount} SOL to ${destinationAddress}...`);
   
   const tx = new Transaction().add(
     SystemProgram.transfer({
@@ -414,20 +415,20 @@ export async function withdrawSol(amount: number, destinationAddress: string): P
     skipPreflight: false
   });
   
-  console.log(`✅ Withdraw successful!`);
-  console.log(`   Transaction: ${signature}`);
+  logger.log(`✅ Withdraw successful!`);
+  logger.log(`   Transaction: ${signature}`);
   
   return signature;
 }
 
 // Withdraw SYN
 export async function withdrawSyn(amount: number, destinationAddress: string): Promise<string> {
-  console.log(`\n🔄 Connecting to Solana...`);
+  logger.log(`\n🔄 Connecting to Solana...`);
   
   const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
   const wallet = await loadWalletWithPassword();
   
-  console.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
+  logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
   
   const destination = new PublicKey(destinationAddress);
   
@@ -443,7 +444,7 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
     const destAccountInfo = await connection.getAccountInfo(destTokenAccount);
     if (!destAccountInfo) {
       // Need to create ATA - add instruction
-      console.log(`\n📝 Creating destination token account...`);
+      logger.log(`\n📝 Creating destination token account...`);
     }
   } catch (e) {
     // Will create ATA inline
@@ -452,7 +453,7 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
   
   const amountLamports = Math.floor(amount * 1_000_000_000);
   
-  console.log(`\n📤 Withdrawing ${amount} SYN to ${destinationAddress}...`);
+  logger.log(`\n📤 Withdrawing ${amount} SYN to ${destinationAddress}...`);
   
   const transferIx = createTransferInstruction(
     sourceTokenAccount,
@@ -466,8 +467,8 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
     skipPreflight: false
   });
   
-  console.log(`✅ Withdraw successful!`);
-  console.log(`   Transaction: ${signature}`);
+  logger.log(`✅ Withdraw successful!`);
+  logger.log(`   Transaction: ${signature}`);
   
   return signature;
 }
@@ -508,7 +509,7 @@ export async function getStakeInfo(): Promise<{
       lockedUntil
     };
   } catch (e) {
-    console.error('Error fetching stake info:', e);
+    logger.error('Error fetching stake info:', e);
     return null;
   }
 }
@@ -554,7 +555,7 @@ async function findStakeAccount(connection: Connection, owner: PublicKey): Promi
       return accounts[0].pubkey.toBase58();
     }
   } catch (e) {
-    console.warn('Failed to search stake accounts:', e);
+    logger.warn('Failed to search stake accounts:', e);
   }
   
   return null;

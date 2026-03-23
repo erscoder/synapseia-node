@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createLibp2p } from 'libp2p';
+import logger from '../../utils/logger.js';
 import { tcp } from '@libp2p/tcp';
 import { noise } from '@libp2p/noise';
 import { yamux } from '@libp2p/yamux';
@@ -66,21 +67,21 @@ export class P2PNode {
 
     const peerId: string = this.node.peerId.toString();
     const addrs: string[] = this.node.getMultiaddrs().map((a: any) => a.toString() as string);
-    console.log('[P2P] Node started | peerId:', peerId);
-    if (addrs.length > 0) console.log('[P2P] Listening on:', addrs.join(', '));
+    logger.log('[P2P] Node started | peerId:', peerId);
+    if (addrs.length > 0) logger.log('[P2P] Listening on:', addrs.join(', '));
 
     // Log peer discovery and connection events
     this.node.addEventListener('peer:discovery', (evt: any) => {
       const id = evt.detail?.id?.toString() ?? 'unknown';
-      console.log('[P2P] 🔍 Peer discovered:', id);
+      logger.log('[P2P] 🔍 Peer discovered:', id);
     });
     this.node.addEventListener('peer:connect', (evt: any) => {
       const id = evt.detail?.toString() ?? 'unknown';
-      console.log('[P2P] ✅ Peer connected:', id);
+      logger.log('[P2P] ✅ Peer connected:', id);
     });
     this.node.addEventListener('peer:disconnect', (evt: any) => {
       const id = evt.detail?.toString() ?? 'unknown';
-      console.log('[P2P] ❌ Peer disconnected:', id);
+      logger.log('[P2P] ❌ Peer disconnected:', id);
     });
   }
 
@@ -88,7 +89,7 @@ export class P2PNode {
     if (this.node) {
       await this.node.stop();
       this.node = null;
-      console.log('[P2P] Node stopped');
+      logger.log('[P2P] Node stopped');
     }
   }
 
