@@ -170,7 +170,7 @@ export function getModelCostPer1kTokens(model: string): number {
   }
   
   // Log warning and fallback to haiku price
-  logger.warn(`[WorkOrderAgent] Unknown model "${model}" — falling back to claude-haiku pricing ($${DEFAULT_MODEL_PRICE}/1K tokens)`);
+  logger.warn(`Unknown model "${model}" — falling back to claude-haiku pricing ($${DEFAULT_MODEL_PRICE}/1K tokens)`);
   return DEFAULT_MODEL_PRICE;
 }
 
@@ -218,7 +218,7 @@ export async function fetchAvailableWorkOrders(
     const data = await response.json() as WorkOrder[];
     return data || [];
   } catch (error) {
-    logger.warn('[WorkOrderAgent] Failed to fetch work orders:', (error as Error).message);
+    logger.warn(' Failed to fetch work orders:', (error as Error).message);
     return [];
   }
 }
@@ -245,13 +245,13 @@ export async function acceptWorkOrder(
 
     if (!response.ok) {
       const error = await response.text();
-      logger.warn(`[WorkOrderAgent] Failed to accept work order ${workOrderId}:`, error);
+      logger.warn(` Failed to accept work order ${workOrderId}:`, error);
       return false;
     }
 
     return true;
   } catch (error) {
-    logger.warn('[WorkOrderAgent] Failed to accept work order:', (error as Error).message);
+    logger.warn(' Failed to accept work order:', (error as Error).message);
     return false;
   }
 }
@@ -280,7 +280,7 @@ export async function completeWorkOrder(
 
     if (!response.ok) {
       const error = await response.text();
-      logger.warn(`[WorkOrderAgent] Failed to complete work order ${workOrderId}:`, error);
+      logger.warn(` Failed to complete work order ${workOrderId}:`, error);
       return false;
     }
 
@@ -293,7 +293,7 @@ export async function completeWorkOrder(
 
     return true;
   } catch (error) {
-    logger.warn('[WorkOrderAgent] Failed to complete work order:', (error as Error).message);
+    logger.warn(' Failed to complete work order:', (error as Error).message);
     return false;
   }
 }
@@ -356,7 +356,7 @@ export async function executeResearchWorkOrder(
   llmModel: LLMModel,
   llmConfig?: LLMConfig
 ): Promise<{ result: ResearchResult; rawResponse: string; success: boolean }> {
-  logger.log(`[WorkOrderAgent] Executing research: ${workOrder.title}`);
+  logger.log(` Executing research: ${workOrder.title}`);
 
   const payload = extractResearchPayload(workOrder);
   if (!payload) {
@@ -386,10 +386,10 @@ export async function executeResearchWorkOrder(
       throw new Error('Invalid research result structure');
     }
 
-    logger.log(`[WorkOrderAgent] Research complete, summary: ${result.summary.slice(0, 100)}...`);
+    logger.log(` Research complete, summary: ${result.summary.slice(0, 100)}...`);
     return { result, rawResponse, success: true };
   } catch (error) {
-    logger.error('[WorkOrderAgent] Failed to parse research result:', (error as Error).message);
+    logger.error(' Failed to parse research result:', (error as Error).message);
     return {
       result: {
         summary: 'Failed to parse LLM response',
@@ -426,14 +426,14 @@ export async function submitResearchResult(
 
     if (!response.ok) {
       const error = await response.text();
-      logger.warn(`[WorkOrderAgent] Failed to submit research result:`, error);
+      logger.warn(` Failed to submit research result:`, error);
       return false;
     }
 
-    logger.log(`[WorkOrderAgent] Research result submitted successfully`);
+    logger.log(` Research result submitted successfully`);
     return true;
   } catch (error) {
-    logger.warn('[WorkOrderAgent] Failed to submit research result:', (error as Error).message);
+    logger.warn(' Failed to submit research result:', (error as Error).message);
     return false;
   }
 }
@@ -716,7 +716,7 @@ export async function executeWorkOrder(
   llmModel: LLMModel,
   llmConfig?: LLMConfig
 ): Promise<{ result: string; success: boolean }> {
-  logger.log(`[WorkOrderAgent] Executing: ${workOrder.title}`);
+  logger.log(` Executing: ${workOrder.title}`);
 
   try {
     // Check if this is a research work order
@@ -733,11 +733,11 @@ export async function executeWorkOrder(
     const prompt = buildWorkOrderPrompt(workOrder);
     const result = await generateLLM(llmModel, prompt, llmConfig);
 
-    logger.log(`[WorkOrderAgent] Execution complete, result length: ${result.length} chars`);
+    logger.log(` Execution complete, result length: ${result.length} chars`);
 
     return { result, success: true };
   } catch (error) {
-    logger.error('[WorkOrderAgent] Execution failed:', (error as Error).message);
+    logger.error(' Execution failed:', (error as Error).message);
     return {
       result: `Error: ${(error as Error).message}`,
       success: false
@@ -769,52 +769,53 @@ export async function runWorkOrderAgentIteration(
 ): Promise<{ workOrder?: WorkOrder; completed: boolean; researchResult?: ResearchResult }> {
   const { coordinatorUrl, peerId, capabilities, llmModel, llmConfig } = config;
 
-  logger.log(`\n[WorkOrderAgent] Iteration ${iteration} starting...`);
+  logger.log(`..............................`);
+  logger.log(`Iteration ${iteration} starting...`);
 
   // 1. Fetch available work orders
-  logger.log('[WorkOrderAgent] Polling for available work orders...');
+  logger.log(' Polling for available work orders...');
   const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
 
   if (workOrders.length === 0) {
-    logger.log('[WorkOrderAgent] No work orders available');
+    logger.log(' No work orders available');
     return { completed: false };
   }
 
-  logger.log(`[WorkOrderAgent] Found ${workOrders.length} available work order(s)`);
+  logger.log(` Found ${workOrders.length} available work order(s)`);
 
   // Try each work order until one is successfully accepted
   for (const workOrder of workOrders) {
-    logger.log(`[WorkOrderAgent] Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
+    logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
     // Evaluate economic viability (rational node behavior)
     const economicConfig = loadEconomicConfig(config.llmModel?.modelId);
     const evaluation = evaluateWorkOrder(workOrder, economicConfig);
 
-    logger.log(`[WorkOrderAgent] Economic evaluation:`);
+    logger.log(` Economic evaluation:`);
     logger.log(`  - Bounty: ${evaluation.bountyUsd.toFixed(4)} USD (${workOrder.rewardAmount} SYN)`);
     logger.log(`  - Est. cost: ${evaluation.estimatedCostUsd.toFixed(4)} USD`);
     logger.log(`  - Profit ratio: ${evaluation.profitRatio === Infinity ? '∞' : evaluation.profitRatio.toFixed(2) + 'x'}`);
     logger.log(`  - Decision: ${evaluation.shouldAccept ? 'ACCEPT' : 'SKIP'} (${evaluation.reason})`);
 
     if (!evaluation.shouldAccept) {
-      logger.log('[WorkOrderAgent] Skipping work order due to poor economics');
+      logger.log(' Skipping work order due to poor economics');
       continue; // Try next work order
     }
 
     // Try to accept work order
-    logger.log('[WorkOrderAgent] Accepting work order...');
+    logger.log(' Accepting work order...');
     const accepted = await acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
 
     if (!accepted) {
-      logger.log('[WorkOrderAgent] Failed to accept work order (likely race condition), trying next...');
+      logger.log(' Failed to accept work order (likely race condition), trying next...');
       continue; // Try next work order
     }
 
-    logger.log('[WorkOrderAgent] Work order accepted');
+    logger.log(' Work order accepted');
     agentState.currentWorkOrder = workOrder;
 
   // 4. Execute work order (handle RESEARCH specially)
-  logger.log('[WorkOrderAgent] Executing work order...');
+  logger.log(' Executing work order...');
 
   let result: string;
   let success: boolean;
@@ -830,7 +831,7 @@ export async function runWorkOrderAgentIteration(
     // Save to agent brain if provided
     if (brain && success) {
       saveResearchToBrain(brain, workOrder, researchResult);
-      logger.log('[WorkOrderAgent] Research saved to agent brain');
+      logger.log(' Research saved to agent brain');
     }
 
     // Submit to research queue endpoint
@@ -849,7 +850,7 @@ export async function runWorkOrderAgentIteration(
             (p.title.includes(workOrder.title.substring(0, 40))));
           if (match) return match.id;
         } catch (e) {
-          logger.warn('[WorkOrderAgent] Failed to lookup paperId:', e);
+          logger.warn(' Failed to lookup paperId:', e);
         }
         return null;
       };
@@ -866,7 +867,7 @@ export async function runWorkOrderAgentIteration(
         researchResult
       );
       if (submitted) {
-        logger.log('[WorkOrderAgent] Research result submitted to research queue');
+        logger.log(' Research result submitted to research queue');
       }
     }
   } else {
@@ -877,7 +878,7 @@ export async function runWorkOrderAgentIteration(
   }
 
   // 5. Complete work order
-  logger.log('[WorkOrderAgent] Reporting result...');
+  logger.log(' Reporting result...');
   const completed = await completeWorkOrder(
     coordinatorUrl,
     workOrder.id,
@@ -887,11 +888,11 @@ export async function runWorkOrderAgentIteration(
   );
 
   if (completed) {
-    logger.log(`[WorkOrderAgent] Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
-    logger.log(`[WorkOrderAgent] Waiting for round to close to determine final reward...`);
+    logger.log(` Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
+    logger.log(` Waiting for round to close to determine final reward...`);
     agentState.totalWorkOrdersCompleted++;
   } else {
-    logger.log('[WorkOrderAgent] Failed to report completion');
+    logger.log(' Failed to report completion');
   }
 
     agentState.iteration = iteration;
@@ -899,7 +900,7 @@ export async function runWorkOrderAgentIteration(
   } // End of for loop - tried all work orders
 
   // If we get here, no work order could be accepted
-  logger.log('[WorkOrderAgent] Could not accept any work order (all failed or skipped)');
+  logger.log(' Could not accept any work order (all failed or skipped)');
   agentState.iteration = iteration;
   return { completed: false };
 }
@@ -929,12 +930,12 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
       try {
         await runWorkOrderAgentIteration(config, iteration);
       } catch (error) {
-        logger.error(`[WorkOrderAgent] Iteration ${iteration} failed:`, (error as Error).message);
+        logger.error(` Iteration ${iteration} failed:`, (error as Error).message);
       }
 
       // Sleep before next iteration
       if (shouldSleepBetweenIterations(agentState.isRunning)) {
-        logger.log(`[WorkOrderAgent] Sleeping for ${intervalMs}ms...`);
+        logger.log(` Sleeping for ${intervalMs}ms...`);
         /* istanbul ignore next - async loop control, not business logic */
         await sleep(intervalMs);
       }
@@ -943,11 +944,11 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
     }
 
     if (maxIterations && iteration > maxIterations) {
-      logger.log(`\n[WorkOrderAgent] Reached max iterations (${maxIterations}), stopping.`);
+      logger.log(`\n Reached max iterations (${maxIterations}), stopping.`);
     }
   } finally {
     agentState.isRunning = false;
-    logger.log('\n[WorkOrderAgent] Stopped');
+    logger.log('\n Stopped');
   }
 }
 
@@ -956,7 +957,7 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
  */
 export function stopWorkOrderAgent(): void {
   agentState.isRunning = false;
-  logger.log('[WorkOrderAgent] Stopping...');
+  logger.log(' Stopping...');
 }
 
 /**

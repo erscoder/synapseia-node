@@ -79,7 +79,7 @@ export async function startNode(
   },
 ): Promise<NodeRuntime> {
   // ── 1. P2P ────────────────────────────────────────────────────────────────
-  logger.log('\n🌐 Starting P2P layer...');
+  logger.log(' Starting P2P layer...');
   let p2pNode: P2PNode | null = null;
   try {
     const rawHost = config.coordinatorUrl
@@ -91,17 +91,17 @@ export async function startNode(
       : [];
 
     p2pNode = await services.p2pService.createNode(config.identity, bootstrapAddrs);
-    logger.log(`   ✅ PeerID: ${p2pNode.getPeerId()}`);
+    logger.log(`PeerID: ${p2pNode.getPeerId()}`);
     const addrs = p2pNode.getMultiaddrs();
     if (addrs.length > 0) {
       logger.log(`   Listening on: ${addrs.join(', ')}`);
     }
   } catch (err) {
-    logger.warn(`   ⚠️  P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
+    logger.warn(`⚠️P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
   }
 
   // ── 2. Heartbeat ──────────────────────────────────────────────────────────
-  logger.log('\n💓 Starting heartbeat loop...');
+  logger.log('💓 Starting heartbeat loop...');
   const heartbeatHelper = new HeartbeatHelper();
   const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
     config.coordinatorUrl,
@@ -116,7 +116,8 @@ export async function startNode(
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
 
   // ── 3. Work Order Agent ───────────────────────────────────────────────────
-  logger.log('\n🚀 Starting work order agent...');
+  logger.log('..............................');
+  logger.log('🚀 Starting work order agent...');
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
   logger.log(`   Model: ${config.llmModel.providerId ? config.llmModel.providerId + '/' : ''}${config.llmModel.modelId}`);
@@ -141,7 +142,7 @@ export async function startNode(
   return {
     p2pNode,
     stop: async () => {
-      logger.log('\n🛑 Shutting down node...');
+      logger.log('🛑 Shutting down node...');
       heartbeatCleanup();
       services.workOrderAgentService.stop();
       if (p2pNode) {

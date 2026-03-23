@@ -232,7 +232,7 @@ async function bootstrap() {
         }
 
         logger.log(SYPNASEIA_HEADER);
-        logger.log('Starting SYPNASEIA node...');
+        logger.log('Starting Sypnaseia node...');
         logger.log(`Version: ${VERSION}`);
         const displayName = config.name || identity.name || 'unnamed';
         if (displayName !== 'unnamed') logger.log(`Name:   ${displayName}`);
