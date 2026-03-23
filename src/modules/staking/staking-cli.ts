@@ -302,7 +302,7 @@ export async function claimStakingRewards(): Promise<string> {
   }
   
   const data = accountInfo.data;
-  const rewardsPending = data.readBigUInt64LE(40);
+  const rewardsPending = data.readBigUInt64LE(98); // offset: 8 disc + 32 owner + 32 coord_auth + 8 amount + 1 tier + 8 lm + 1 strikes + 8 locked_until = 98
   const rewards = Number(rewardsPending) / 1_000_000_000;
   
   if (rewards <= 0) {
@@ -509,10 +509,20 @@ export async function getStakeInfo(): Promise<{
     
     const data = accountInfo.data;
     
-    const amount = Number(data.readBigUInt64LE(40)) / 1_000_000_000;
-    const tier = data.readUInt8(48);
-    const rewardsPending = Number(data.readBigUInt64LE(66)) / 1_000_000_000;
-    const lockedUntil = Number(data.readBigUInt64LE(58));
+    // StakeAccount layout (after 8-byte Anchor discriminator):
+    // [8-39]   owner: Pubkey (32)
+    // [40-71]  coordinator_authority: Pubkey (32)
+    // [72-79]  amount: u64 (8)
+    // [80]     tier: u8 (1)
+    // [81-88]  lm: u64 (8)
+    // [89]     strikes: u8 (1)
+    // [90-97]  locked_until: i64 (8)
+    // [98-105] rewards_pending: u64 (8)
+    // [106-113] last_claim_at: i64 (8)
+    const amount = Number(data.readBigUInt64LE(72)) / 1_000_000_000;
+    const tier = data.readUInt8(80);
+    const lockedUntil = Number(data.readBigInt64LE(90));
+    const rewardsPending = Number(data.readBigUInt64LE(98)) / 1_000_000_000;
     
     return {
       amount,
