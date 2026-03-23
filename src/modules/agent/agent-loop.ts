@@ -10,6 +10,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import logger from '../../utils/logger.js';
 import { proposeMutation, type MutationProposal } from '../model/mutation-engine.js';
 import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from '../model/trainer.js';
 import type { Experiment } from '../../types.js';
@@ -87,7 +88,7 @@ export async function fetchTopExperiments(
       .sort((a: Experiment, b: Experiment) => (a.valLoss ?? Infinity) - (b.valLoss ?? Infinity))
       .slice(0, limit);
   } catch (error) {
-    console.warn('Failed to fetch experiments:', (error as Error).message);
+    logger.warn('Failed to fetch experiments:', (error as Error).message);
     return [];
   }
 }
@@ -146,7 +147,7 @@ export async function updateExperiment(
       throw new Error(`Failed to update experiment: ${response.statusText}`);
     }
   } catch (error) {
-    console.error('Failed to update experiment:', (error as Error).message);
+    logger.error('Failed to update experiment:', (error as Error).message);
     throw error;
   }
 }
@@ -164,9 +165,9 @@ export async function postToFeed(
   try {
     // Note: Feed endpoint needs to be implemented in coordinator
     // This is a placeholder for the feed integration
-    console.log(`[FEED] ${improved ? '🎉 IMPROVEMENT' : '📝 Result'}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
+    logger.log(`[FEED] ${improved ? '🎉 IMPROVEMENT' : '📝 Result'}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
   } catch (error) {
-    console.warn('Failed to post to feed:', (error as Error).message);
+    logger.warn('Failed to post to feed:', (error as Error).message);
   }
 }
 
@@ -179,24 +180,24 @@ export async function runAgentIteration(
 ): Promise<AgentIterationResult> {
   const { coordinatorUrl, peerId, capabilities, datasetPath } = config;
   
-  console.log(`\n🔄 Iteration ${iteration} starting...`);
+  logger.log(`\n🔄 Iteration ${iteration} starting...`);
   
   // 1. Fetch top experiments
-  console.log('📥 Fetching top experiments...');
+  logger.log('📥 Fetching top experiments...');
   const topExperiments = await fetchTopExperiments(coordinatorUrl);
-  console.log(`   Found ${topExperiments.length} experiments`);
+  logger.log(`   Found ${topExperiments.length} experiments`);
   
   // Update best loss
   if (topExperiments.length > 0 && topExperiments[0].valLoss) {
     loopState.bestLoss = Math.min(loopState.bestLoss, topExperiments[0].valLoss);
   }
-  console.log(`   Best loss so far: ${loopState.bestLoss.toFixed(4)}`);
+  logger.log(`   Best loss so far: ${loopState.bestLoss.toFixed(4)}`);
   
   // 2. Propose mutation
-  console.log('🧠 Proposing mutation via LLM...');
+  logger.log('🧠 Proposing mutation via LLM...');
   const mutation = await proposeMutation(topExperiments, loopState.bestLoss, capabilities);
-  console.log(`   Type: ${mutation.type}`);
-  console.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
+  logger.log(`   Type: ${mutation.type}`);
+  logger.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
   
   // Validate configuration
   const validation = validateTrainingConfig(mutation);
@@ -205,13 +206,13 @@ export async function runAgentIteration(
   }
   
   // 3. Create experiment in coordinator
-  console.log('📝 Creating experiment...');
+  logger.log('📝 Creating experiment...');
   const tier = capabilities.includes('gpu') ? 2 : 0;
   const experimentId = await createExperiment(coordinatorUrl, mutation, peerId, tier);
-  console.log(`   Experiment ID: ${experimentId}`);
+  logger.log(`   Experiment ID: ${experimentId}`);
   
   // 4. Train micro-model
-  console.log('🚀 Training micro-model...');
+  logger.log('🚀 Training micro-model...');
   const hardware = capabilities.includes('gpu') ? 'gpu' : 'cpu';
   const trainingResult = await trainMicroModel({
     proposal: mutation,
@@ -220,19 +221,19 @@ export async function runAgentIteration(
     runNumber: iteration,
   });
   
-  console.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
-  console.log(`   Duration: ${trainingResult.durationMs}ms`);
-  console.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
+  logger.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
+  logger.log(`   Duration: ${trainingResult.durationMs}ms`);
+  logger.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
   
   // 5. Update experiment with results
-  console.log('💾 Updating experiment...');
+  logger.log('💾 Updating experiment...');
   await updateExperiment(coordinatorUrl, experimentId, trainingResult);
   
   // 6. Check if improved
   const improved = trainingResult.valLoss < loopState.bestLoss;
   if (improved) {
     loopState.bestLoss = trainingResult.valLoss;
-    console.log(`🎉 New best loss: ${loopState.bestLoss.toFixed(4)}!`);
+    logger.log(`🎉 New best loss: ${loopState.bestLoss.toFixed(4)}!`);
   }
   
   // 7. Post to feed
@@ -261,15 +262,15 @@ export async function startAgentLoop(config: AgentLoopConfig): Promise<void> {
   loopState.isRunning = true;
   const { intervalMs, maxIterations } = config;
   
-  console.log('🚀 Starting SynapseIA Agent Loop');
-  console.log(`   Coordinator: ${config.coordinatorUrl}`);
-  console.log(`   Peer ID: ${config.peerId}`);
-  console.log(`   Capabilities: ${config.capabilities.join(', ')}`);
-  console.log(`   Interval: ${intervalMs}ms`);
+  logger.log('🚀 Starting SynapseIA Agent Loop');
+  logger.log(`   Coordinator: ${config.coordinatorUrl}`);
+  logger.log(`   Peer ID: ${config.peerId}`);
+  logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
+  logger.log(`   Interval: ${intervalMs}ms`);
   if (maxIterations) {
-    console.log(`   Max iterations: ${maxIterations}`);
+    logger.log(`   Max iterations: ${maxIterations}`);
   }
-  console.log('');
+  logger.log('');
   
   try {
     let iteration = 1;
@@ -277,19 +278,19 @@ export async function startAgentLoop(config: AgentLoopConfig): Promise<void> {
     while (loopState.isRunning) {
       // Check max iterations
       if (maxIterations && iteration > maxIterations) {
-        console.log(`\n✅ Reached max iterations (${maxIterations}), stopping.`);
+        logger.log(`\n✅ Reached max iterations (${maxIterations}), stopping.`);
         break;
       }
       
       try {
         await runAgentIteration(config, iteration);
       } catch (error) {
-        console.error(`❌ Iteration ${iteration} failed:`, (error as Error).message);
+        logger.error(`❌ Iteration ${iteration} failed:`, (error as Error).message);
       }
       
       // Sleep before next iteration
       if (loopState.isRunning) {
-        console.log(`⏳ Sleeping for ${intervalMs}ms...`);
+        logger.log(`⏳ Sleeping for ${intervalMs}ms...`);
         await sleep(intervalMs);
       }
       
@@ -297,7 +298,7 @@ export async function startAgentLoop(config: AgentLoopConfig): Promise<void> {
     }
   } finally {
     loopState.isRunning = false;
-    console.log('\n🛑 Agent loop stopped');
+    logger.log('\n🛑 Agent loop stopped');
   }
 }
 
@@ -306,7 +307,7 @@ export async function startAgentLoop(config: AgentLoopConfig): Promise<void> {
  */
 export function stopAgentLoop(): void {
   loopState.isRunning = false;
-  console.log('🛑 Stopping agent loop...');
+  logger.log('🛑 Stopping agent loop...');
 }
 
 /**

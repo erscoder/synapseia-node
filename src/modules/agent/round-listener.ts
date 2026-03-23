@@ -5,6 +5,7 @@
  */
 
 import { io, Socket } from 'socket.io-client';
+import logger from '../../utils/logger.js';
 
 interface RoundWinner {
   rank: number;
@@ -38,15 +39,15 @@ export function startRoundListener(coordinatorUrl: string, peerId: string): void
   });
 
   _socket.on('connect', () => {
-    console.log(`[RoundListener] Connected to coordinator WS (${coordinatorUrl})`);
+    logger.log(`[RoundListener] Connected to coordinator WS (${coordinatorUrl})`);
   });
 
   _socket.on('disconnect', (reason) => {
-    console.log(`[RoundListener] Disconnected from coordinator WS: ${reason}`);
+    logger.log(`[RoundListener] Disconnected from coordinator WS: ${reason}`);
   });
 
   _socket.on('round.closed', (event: RoundClosedEvent) => {
-    console.log(`[RoundListener] Round closed: ${event.roundId} (workOrder: ${event.workOrderId})`);
+    logger.log(`[RoundListener] Round closed: ${event.roundId} (workOrder: ${event.workOrderId})`);
 
     const myResult = event.winners.find(w => w.nodeId === peerId);
     const lamportsToSyn = (lamports: string) =>
@@ -54,25 +55,25 @@ export function startRoundListener(coordinatorUrl: string, peerId: string): void
 
     if (myResult) {
       const rankEmoji = myResult.rank === 1 ? '🥇' : myResult.rank === 2 ? '🥈' : '🥉';
-      console.log(
+      logger.log(
         `[RoundListener] ${rankEmoji} YOU WON rank #${myResult.rank}! ` +
         `Reward: ${lamportsToSyn(myResult.rewardAmount)} SYN ` +
         `(submission: ${myResult.submissionId})`
       );
     } else if (event.winners.length > 0) {
       const winner = event.winners[0];
-      console.log(
+      logger.log(
         `[RoundListener] Round ended — you did not place. ` +
         `Winner: ${winner.nodeId.slice(0, 8)}... ` +
         `(${lamportsToSyn(winner.rewardAmount)} SYN)`
       );
     } else {
-      console.log(`[RoundListener] Round ended with no winners (no submissions).`);
+      logger.log(`[RoundListener] Round ended with no winners (no submissions).`);
     }
   });
 
   _socket.on('connect_error', (err) => {
-    console.warn(`[RoundListener] WS connect error: ${err.message} — retrying...`);
+    logger.warn(`[RoundListener] WS connect error: ${err.message} — retrying...`);
   });
 }
 

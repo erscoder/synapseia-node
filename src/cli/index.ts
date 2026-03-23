@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Load .env before anything else — must be first import
 import 'dotenv/config';
+import logger from '../utils/logger.js';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
@@ -32,18 +33,18 @@ function isExitError(e: unknown): boolean {
 }
 process.on('uncaughtException', (err: unknown) => {
   if (isExitError(err)) {
-    console.log('\nBye 👋');
+    logger.log('\nBye 👋');
     process.exit(0);
   }
-  console.error(err);
+  logger.error(err);
   process.exit(1);
 });
 process.on('unhandledRejection', (reason: unknown) => {
   if (isExitError(reason)) {
-    console.log('\nBye 👋');
+    logger.log('\nBye 👋');
     process.exit(0);
   }
-  console.error(reason);
+  logger.error(reason);
   process.exit(1);
 });
 
@@ -193,71 +194,71 @@ async function bootstrap() {
           if (!isCloud) {
             selectedModel = modelCatalogService.getByName(model);
             if (!selectedModel) {
-              console.error(`Error: Model '${model}' not found in catalog.`);
-              console.error('Available models:');
+              logger.error(`Error: Model '${model}' not found in catalog.`);
+              logger.error('Available models:');
               modelCatalogService.getCatalog().forEach((m) => {
-                console.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
+                logger.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
               });
               process.exit(1);
             }
 
             const isOllamaModel = model?.startsWith('ollama/') || (!model && hardware.hasOllama);
             if (isOllamaModel && hardware.tier < (selectedModel?.recommendedTier ?? 0)) {
-              console.error(
+              logger.error(
                 `Error: Model '${model}' requires Tier ${selectedModel?.recommendedTier} or higher.`
               );
-              console.error(`Your hardware is Tier ${hardware.tier}.`);
+              logger.error(`Your hardware is Tier ${hardware.tier}.`);
               process.exit(1);
             }
           }
 
           if (isCloud && !llmKey) {
-            console.error(`Error: Cloud model '${model}' requires --llm-key`);
+            logger.error(`Error: Cloud model '${model}' requires --llm-key`);
             process.exit(1);
           }
         } else {
           const compatibleModels = hardwareService.getCompatibleModels(hardware.gpuVramGb || 0);
           if (compatibleModels.length === 0) {
-            console.error('Error: No compatible models found for your hardware.');
-            console.error(
+            logger.error('Error: No compatible models found for your hardware.');
+            logger.error(
               'Consider using cloud LLM providers with --model openai-compat/asi1-mini --llm-key <key>'
             );
             process.exit(1);
           }
           selectedModel = compatibleModels[0];
-          console.log(
+          logger.log(
             `Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`
           );
         }
 
-        console.log(SYPNASEIA_HEADER);
-        console.log('Starting SYPNASEIA node...');
-        console.log(`Version: ${VERSION}`);
+        logger.log(SYPNASEIA_HEADER);
+        logger.log('Starting SYPNASEIA node...');
+        logger.log(`Version: ${VERSION}`);
         const displayName = config.name || identity.name || 'unnamed';
-        if (displayName !== 'unnamed') console.log(`Name:   ${displayName}`);
-        console.log(`PeerID: ${identity.peerId}`);
-        console.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
-        console.log(`Hardware: `);
-        console.log(`  CPU cores: ${hardware.cpuCores}`);
-        console.log(`  RAM: ${hardware.ramGb}`);
-        console.log(`  Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
-        console.log(`  Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
+        if (displayName !== 'unnamed') logger.log(`Name:   ${displayName}`);
+        logger.log(`PeerID: ${identity.peerId}`);
+        logger.log(`Wallet: ${wallet.publicKey} (Solana devnet)`);
+        logger.log(`Hardware: `);
+        logger.log(`  CPU cores: ${hardware.cpuCores}`);
+        logger.log(`  RAM: ${hardware.ramGb}`);
+        logger.log(`  Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
+        logger.log(`  Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
         if (selectedModel) {
-          console.log(
+          logger.log(
             `Model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM, ${selectedModel.category || 'unknown'})`
           );
         } else {
-          console.log(`Model: ${model} (cloud)`);
+          logger.log(`Model: ${model} (cloud)`);
         }
-        if (llmUrl) console.log(`LLM URL: ${llmUrl}`);
+        if (llmUrl) logger.log(`LLM URL: ${llmUrl}`);
         if (inferenceEnabled) {
           const modelsStr = inferenceModels.length > 0 ? inferenceModels.join(', ') : 'auto-detect from Ollama';
-          console.log(`Inference: ENABLED  models: ${modelsStr}`);
+          logger.log(`Inference: ENABLED  models: ${modelsStr}`);
         }
 
         const llmModel = llmService.parse(model || 'ollama/qwen2.5:0.5b');
         if (!llmModel) {
-          console.error(`Error: Invalid model format '${model}'`);
+          logger.error(`Error: Invalid model format '${model}'`);
           process.exit(1);
         }
 
@@ -324,18 +325,18 @@ async function bootstrap() {
         gpuVramGb: hardware.gpuVramGb,
       };
 
-      console.log(SYPNASEIA_HEADER);
-      console.log('Node Status:');
-      if (identity.name) console.log(`Name:    ${identity.name}`);
-      console.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
-      console.log(`Tier:    ${status.tier} (${getTierName(status.tier)})`);
-      console.log(`Wallet:  ${status.wallet}`);
-      console.log(`Balance: ${status.balance} SYN`);
-      console.log(`Staked:  ${status.staked} SYN`);
-      console.log(
+      logger.log(SYPNASEIA_HEADER);
+      logger.log('Node Status:');
+      if (identity.name) logger.log(`Name:    ${identity.name}`);
+      logger.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
+      logger.log(`Tier:    ${status.tier} (${getTierName(status.tier)})`);
+      logger.log(`Wallet:  ${status.wallet}`);
+      logger.log(`Balance: ${status.balance} SYN`);
+      logger.log(`Staked:  ${status.staked} SYN`);
+      logger.log(
         `Hardware: ${status.cpuCores} cores, ${status.ramGb}GB RAM, ${status.gpuVramGb}GB VRAM`
       );
-      console.log(`Ollama:  ${status.hasOllama ? 'Running' : 'Not detected'}`);
+      logger.log(`Ollama:  ${status.hasOllama ? 'Running' : 'Not detected'}`);
     });
 
   // ── stake ──────────────────────────────────────────────────────────────────
@@ -346,13 +347,13 @@ async function bootstrap() {
     .action(async (amount: string) => {
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.error('❌ Invalid amount. Please provide a positive number.');
+        logger.error('❌ Invalid amount. Please provide a positive number.');
         process.exit(1);
       }
       try {
         await stakeTokens(parsedAmount);
       } catch (error) {
-        console.error('❌ Stake failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Stake failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -364,13 +365,13 @@ async function bootstrap() {
     .action(async (amount: string) => {
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.error('❌ Invalid amount. Please provide a positive number.');
+        logger.error('❌ Invalid amount. Please provide a positive number.');
         process.exit(1);
       }
       try {
         await unstakeTokens(parsedAmount);
       } catch (error) {
-        console.error('❌ Unstake failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Unstake failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -383,7 +384,7 @@ async function bootstrap() {
       try {
         await claimStakingRewards();
       } catch (error) {
-        console.error('❌ Claim failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Claim failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -396,19 +397,19 @@ async function bootstrap() {
       try {
         const info = await getStakeInfo();
         if (!info) {
-          console.log('ℹ️ No stake account found. Stake some SYN tokens first.');
+          logger.log('ℹ️ No stake account found. Stake some SYN tokens first.');
           return;
         }
-        console.log('\n📊 Stake Information:');
-        console.log(`   Staked: ${info.amount} SYN`);
-        console.log(`   Tier: ${info.tier}`);
-        console.log(`   Pending Rewards: ${info.rewardsPending} SYN`);
+        logger.log('\n📊 Stake Information:');
+        logger.log(`   Staked: ${info.amount} SYN`);
+        logger.log(`   Tier: ${info.tier}`);
+        logger.log(`   Pending Rewards: ${info.rewardsPending} SYN`);
         if (info.lockedUntil > 0) {
           const unlockDate = new Date(info.lockedUntil * 1000);
-          console.log(`   Locked Until: ${unlockDate.toLocaleString()}`);
+          logger.log(`   Locked Until: ${unlockDate.toLocaleString()}`);
         }
       } catch (error) {
-        console.error('❌ Failed to get stake info:', error instanceof Error ? error.message : error);
+        logger.error('❌ Failed to get stake info:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -420,11 +421,11 @@ async function bootstrap() {
     .action(async () => {
       try {
         const balance = await getWalletBalance();
-        console.log('\n💰 Wallet Balance:');
-        console.log(`   SOL: ${balance.sol.toFixed(4)}`);
-        console.log(`   SYN: ${balance.syn.toFixed(4)}`);
+        logger.log('\n💰 Wallet Balance:');
+        logger.log(`   SOL: ${balance.sol.toFixed(4)}`);
+        logger.log(`   SYN: ${balance.syn.toFixed(4)}`);
       } catch (error) {
-        console.error('❌ Failed to get balance:', error instanceof Error ? error.message : error);
+        logger.error('❌ Failed to get balance:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -437,13 +438,13 @@ async function bootstrap() {
     .action(async (amount: string) => {
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.error('❌ Invalid amount. Please provide a positive number.');
+        logger.error('❌ Invalid amount. Please provide a positive number.');
         process.exit(1);
       }
       try {
         await depositSol(parsedAmount);
       } catch (error) {
-        console.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -456,7 +457,7 @@ async function bootstrap() {
       try {
         await depositSyn(amount ? parseFloat(amount) : 0);
       } catch (error) {
-        console.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -470,13 +471,13 @@ async function bootstrap() {
     .action(async (amount: string, destination: string) => {
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.error('❌ Invalid amount. Please provide a positive number.');
+        logger.error('❌ Invalid amount. Please provide a positive number.');
         process.exit(1);
       }
       try {
         await withdrawSol(parsedAmount, destination);
       } catch (error) {
-        console.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -489,13 +490,13 @@ async function bootstrap() {
     .action(async (amount: string, destination: string) => {
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.error('❌ Invalid amount. Please provide a positive number.');
+        logger.error('❌ Invalid amount. Please provide a positive number.');
         process.exit(1);
       }
       try {
         await withdrawSyn(parsedAmount, destination);
       } catch (error) {
-        console.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
+        logger.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });
@@ -509,50 +510,50 @@ async function bootstrap() {
       const recommendedTier = hardwareService.getRecommendedTier(sysInfo.gpu.vramGb);
       const compatibleModels = hardwareService.getCompatibleModels(sysInfo.gpu.vramGb);
 
-      console.log('═══════════════════════════════════════════════════');
-      console.log('       SynapseIA Node - System Information');
-      console.log('═══════════════════════════════════════════════════');
-      console.log();
-      console.log('📋 Operating System:');
-      console.log(`   ${sysInfo.os}`);
-      console.log();
-      console.log('🔧 CPU Information:');
-      console.log(`   Model: ${sysInfo.cpu.model}`);
-      console.log(`   Cores: ${sysInfo.cpu.cores}`);
-      console.log();
-      console.log('💾 Memory:');
-      console.log(`   Total RAM: ${sysInfo.memory.totalGb} GB`);
-      console.log();
-      console.log('🎮 GPU Information:');
+      logger.log('═══════════════════════════════════════════════════');
+      logger.log('       SynapseIA Node - System Information');
+      logger.log('═══════════════════════════════════════════════════');
+      logger.log();
+      logger.log('📋 Operating System:');
+      logger.log(`   ${sysInfo.os}`);
+      logger.log();
+      logger.log('🔧 CPU Information:');
+      logger.log(`   Model: ${sysInfo.cpu.model}`);
+      logger.log(`   Cores: ${sysInfo.cpu.cores}`);
+      logger.log();
+      logger.log('💾 Memory:');
+      logger.log(`   Total RAM: ${sysInfo.memory.totalGb} GB`);
+      logger.log();
+      logger.log('🎮 GPU Information:');
       if (sysInfo.gpu.type) {
-        console.log(`   Type: ${sysInfo.gpu.type}`);
-        console.log(`   VRAM: ${sysInfo.gpu.vramGb} GB`);
+        logger.log(`   Type: ${sysInfo.gpu.type}`);
+        logger.log(`   VRAM: ${sysInfo.gpu.vramGb} GB`);
       } else {
-        console.log('   No GPU detected');
+        logger.log('   No GPU detected');
       }
-      console.log();
-      console.log('🎯 Hardware Tier Assessment:');
+      logger.log();
+      logger.log('🎯 Hardware Tier Assessment:');
       const tierName =
         ['CPU-Only', 'Tier 1', 'Tier 2', 'Tier 3', 'Tier 4', 'Tier 5'][recommendedTier] ||
         'Unknown';
-      console.log(`   Recommended Tier: ${recommendedTier} (${tierName})`);
-      console.log();
-      console.log('🤖 Compatible Models:');
+      logger.log(`   Recommended Tier: ${recommendedTier} (${tierName})`);
+      logger.log();
+      logger.log('🤖 Compatible Models:');
       if (compatibleModels.length > 0) {
-        console.log(
+        logger.log(
           `   Found ${compatibleModels.length} models compatible with ${sysInfo.gpu.vramGb}GB VRAM:`
         );
         compatibleModels.forEach((model, index) => {
           const tName = ['CPU', 'T1', 'T2', 'T3', 'T4', 'T5'][model.recommendedTier] || 'Unknown';
-          console.log(
+          logger.log(
             `   ${index + 1}. ${model.name.padEnd(30)} (min ${model.minVram}GB, rec ${tName})`
           );
         });
       } else {
-        console.log('   No compatible models found. Consider upgrading GPU or using cloud LLM.');
+        logger.log('   No compatible models found. Consider upgrading GPU or using cloud LLM.');
       }
-      console.log();
-      console.log('═══════════════════════════════════════════════════');
+      logger.log();
+      logger.log('═══════════════════════════════════════════════════');
     });
 
   // ── stop ───────────────────────────────────────────────────────────────────
@@ -560,9 +561,9 @@ async function bootstrap() {
     .command('stop')
     .description('Stop the running SynapseIA node')
     .action(() => {
-      console.log('🛑 Stopping SynapseIA node...');
+      logger.log('🛑 Stopping SynapseIA node...');
       workOrderAgentService.stop();
-      console.log('✅ Node stopped');
+      logger.log('✅ Node stopped');
     });
 
   // ── config ─────────────────────────────────────────────────────────────────
@@ -576,20 +577,20 @@ async function bootstrap() {
       
       const config = configService.load();
       if (options.show) {
-        console.log('Current configuration:');
-        console.log(JSON.stringify(config, null, 2));
+        logger.log('Current configuration:');
+        logger.log(JSON.stringify(config, null, 2));
         return;
       }
 
       if (options.setName) {
         config.name = options.setName;
         configService.save(config);
-        console.log(`✅ Node name set to: ${options.setName}`);
+        logger.log(`✅ Node name set to: ${options.setName}`);
         return;
       }
 
-      console.log('\n🔧 SynapseIA Configuration Wizard');
-      console.log('   Use ↑↓ to navigate, Enter to select, Ctrl+C to cancel.\n');
+      logger.log('\n🔧 SynapseIA Configuration Wizard');
+      logger.log('   Use ↑↓ to navigate, Enter to select, Ctrl+C to cancel.\n');
 
       const catalog = modelCatalogService.getCatalog();
       const hardware = hardwareService.detect();
@@ -614,7 +615,7 @@ async function bootstrap() {
               },
             })
           );
-          if (ans === null) { console.log('\nCancelled.'); return; }
+          if (ans === null) { logger.log('\nCancelled.'); return; }
           config.coordinatorUrl = ans;
           step = 'modelMode';
           continue;
@@ -632,16 +633,16 @@ async function bootstrap() {
               ],
             })
           );
-          if (ans === null) { console.log('\nCancelled.'); return; }
+          if (ans === null) { logger.log('\nCancelled.'); return; }
           modelMode = ans;
 
           if (modelMode === 'recommended') {
             if (compatibleModels.length > 0) {
               config.defaultModel = compatibleModels[0].name;
-              console.log(`  ✓ Recommended model: ${config.defaultModel}`);
+              logger.log(`  ✓ Recommended model: ${config.defaultModel}`);
               step = 'llmConfig';
             } else {
-              console.log('  ⚠ No compatible local models — switching to cloud picker.');
+              logger.log('  ⚠ No compatible local models — switching to cloud picker.');
               modelMode = 'cloud';
               step = 'modelPick';
             }
@@ -661,7 +662,7 @@ async function bootstrap() {
 
           if (modelMode === 'compatible') {
             if (compatibleModels.length === 0) {
-              console.log('  ⚠ No compatible models for your hardware — showing cloud options.');
+              logger.log('  ⚠ No compatible models for your hardware — showing cloud options.');
               modelMode = 'cloud';
             } else {
               choices = compatibleModels.map((m) => ({
@@ -699,7 +700,7 @@ async function bootstrap() {
               choices: [...choices, { name: '← Back  (change model type)', value: BACK }],
             })
           );
-          if (ans === null) { console.log('\nCancelled.'); return; }
+          if (ans === null) { logger.log('\nCancelled.'); return; }
           if (ans === BACK) { step = 'modelMode'; continue; }
           config.defaultModel = ans;
           step = 'llmConfig';
@@ -709,7 +710,7 @@ async function bootstrap() {
         if (step === 'llmConfig') {
           const usingCloud = configService.isCloudModel(config.defaultModel);
           if (usingCloud) {
-            console.log('\n  ☁️  Cloud LLM configuration, url: ', config.llmUrl);
+            logger.log('\n  ☁️  Cloud LLM configuration, url: ', config.llmUrl);
             const llmUrl = await safePrompt(() =>
               input({
                 message: 'API base URL:',
@@ -721,21 +722,21 @@ async function bootstrap() {
                 },
               })
             );
-            if (llmUrl === null) { console.log('\nCancelled.'); return; }
+            if (llmUrl === null) { logger.log('\nCancelled.'); return; }
             config.llmUrl = llmUrl;
 
             const hasKey = await safePrompt(() =>
               confirm({ message: 'Do you have an API key?', default: true })
             );
-            if (hasKey === null) { console.log('\nCancelled.'); return; }
+            if (hasKey === null) { logger.log('\nCancelled.'); return; }
             if (hasKey) {
               const llmKey = await safePrompt(() =>
                 password({ message: 'Enter your API key:', mask: '*' })
               );
-              if (llmKey === null) { console.log('\nCancelled.'); return; }
+              if (llmKey === null) { logger.log('\nCancelled.'); return; }
               if (llmKey) config.llmKey = llmKey;
             } else {
-              console.log('  ⚠ Provide --llm-key when starting the node.');
+              logger.log('  ⚠ Provide --llm-key when starting the node.');
             }
           } else {
             const useCustom = await safePrompt(() =>
@@ -744,7 +745,7 @@ async function bootstrap() {
                 default: !!config.llmUrl,
               })
             );
-            if (useCustom === null) { console.log('\nCancelled.'); return; }
+            if (useCustom === null) { logger.log('\nCancelled.'); return; }
             if (useCustom) {
               const ollamaUrl = await safePrompt(() =>
                 input({
@@ -752,7 +753,7 @@ async function bootstrap() {
                   default: config.llmUrl || 'http://localhost:11434',
                 })
               );
-              if (ollamaUrl === null) { console.log('\nCancelled.'); return; }
+              if (ollamaUrl === null) { logger.log('\nCancelled.'); return; }
               config.llmUrl = ollamaUrl;
             } else {
               config.llmUrl = undefined;
@@ -768,7 +769,7 @@ async function bootstrap() {
               default: config.inferenceEnabled ?? false,
             })
           );
-          if (enableInference === null) { console.log('\nCancelled.'); return; }
+          if (enableInference === null) { logger.log('\nCancelled.'); return; }
           config.inferenceEnabled = enableInference;
           if (enableInference) {
             const modelsInput = await safePrompt(() =>
@@ -777,10 +778,10 @@ async function bootstrap() {
                 default: (config.inferenceModels ?? []).join(','),
               })
             );
-            if (modelsInput === null) { console.log('\nCancelled.'); return; }
+            if (modelsInput === null) { logger.log('\nCancelled.'); return; }
             config.inferenceModels = modelsInput ? modelsInput.split(',').map((s: string) => s.trim()) : [];
-            console.log('  ✓ Inference mode enabled. Start with: synapseia start');
-            console.log('    (or use --inference flag to override per-run)');
+            logger.log('  ✓ Inference mode enabled. Start with: synapseia start');
+            logger.log('    (or use --inference flag to override per-run)');
           } else {
             config.inferenceModels = [];
           }
@@ -789,16 +790,16 @@ async function bootstrap() {
       }
 
       configService.save(config);
-      console.log('\n  ✅  Configuration saved to', CONFIG_FILE);
-      console.log('\n  Next steps:');
-      console.log('    synapseia start    # Start the node');
-      console.log('    synapseia status   # Check node status');
+      logger.log('\n  ✅  Configuration saved to', CONFIG_FILE);
+      logger.log('\n  Next steps:');
+      logger.log('    synapseia start    # Start the node');
+      logger.log('    synapseia status   # Check node status');
     });
 
   program.parse();
 }
 
 bootstrap().catch((err) => {
-  console.error(err);
+  logger.error(err);
   process.exit(1);
 });

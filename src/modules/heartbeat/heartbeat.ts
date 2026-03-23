@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity.js';
 import type { Hardware } from '../hardware/hardware.js';
@@ -65,7 +66,7 @@ export class HeartbeatHelper {
         return response.data;
       } catch (error) {
         lastError = error as Error;
-        console.warn(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
+        logger.warn(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
 
         if (attempt < 2) {
           // Wait before retry: 1s, 2s
@@ -122,7 +123,7 @@ export class HeartbeatHelper {
         try {
           await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng);
         } catch (httpErr) {
-          console.error('HTTP heartbeat failed:', (httpErr as Error).message);
+          logger.error('HTTP heartbeat failed:', (httpErr as Error).message);
         }
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
@@ -137,12 +138,12 @@ export class HeartbeatHelper {
             uptime: uptimeSeconds,
             timestamp: Math.floor(Date.now() / 1000),
           });
-          console.log('[P2P+HTTP] Heartbeat sent via both channels');
+          logger.log('[P2P+HTTP] Heartbeat sent via both channels');
         } else {
-          console.log('Heartbeat sent via HTTP only');
+          logger.log('Heartbeat sent via HTTP only');
         }
       } catch (error) {
-        console.error('Heartbeat failed:', (error as Error).message);
+        logger.error('Heartbeat failed:', (error as Error).message);
       }
     }, intervalMs);
 
