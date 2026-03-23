@@ -21,6 +21,7 @@ import { P2pService } from '../modules/p2p/services/p2p.service.js';
 import { startNode } from '../node-runtime.js';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance.js';
+import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli.js';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware.js';
 import { CONFIG_FILE } from '../modules/config/config.js';
 
@@ -343,8 +344,17 @@ async function bootstrap() {
     .description('Stake SYN tokens')
     .argument('<amount>', 'Amount to stake (in SYN tokens)')
     .action(async (amount: string) => {
-      console.log(`Staking ${amount} SYN...`);
-      console.log('Tx hash: <placeholder>');
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        console.error('❌ Invalid amount. Please provide a positive number.');
+        process.exit(1);
+      }
+      try {
+        await stakeTokens(parsedAmount);
+      } catch (error) {
+        console.error('❌ Stake failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
     });
 
   program
@@ -352,8 +362,142 @@ async function bootstrap() {
     .description('Unstake SYN tokens')
     .argument('<amount>', 'Amount to unstake (in SYN tokens)')
     .action(async (amount: string) => {
-      console.log(`Unstaking ${amount} SYN...`);
-      console.log('Tx hash: <placeholder>');
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        console.error('❌ Invalid amount. Please provide a positive number.');
+        process.exit(1);
+      }
+      try {
+        await unstakeTokens(parsedAmount);
+      } catch (error) {
+        console.error('❌ Unstake failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── claim rewards ─────────────────────────────────────────────────────────
+  program
+    .command('claim-rewards')
+    .description('Claim pending staking rewards')
+    .action(async () => {
+      try {
+        await claimStakingRewards();
+      } catch (error) {
+        console.error('❌ Claim failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── stake info ────────────────────────────────────────────────────────────
+  program
+    .command('stake-info')
+    .description('Show current stake information')
+    .action(async () => {
+      try {
+        const info = await getStakeInfo();
+        if (!info) {
+          console.log('ℹ️ No stake account found. Stake some SYN tokens first.');
+          return;
+        }
+        console.log('\n📊 Stake Information:');
+        console.log(`   Staked: ${info.amount} SYN`);
+        console.log(`   Tier: ${info.tier}`);
+        console.log(`   Pending Rewards: ${info.rewardsPending} SYN`);
+        if (info.lockedUntil > 0) {
+          const unlockDate = new Date(info.lockedUntil * 1000);
+          console.log(`   Locked Until: ${unlockDate.toLocaleString()}`);
+        }
+      } catch (error) {
+        console.error('❌ Failed to get stake info:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── wallet balance ───────────────────────────────────────────────────────
+  program
+    .command('balance')
+    .description('Show wallet balance (SOL and SYN)')
+    .action(async () => {
+      try {
+        const balance = await getWalletBalance();
+        console.log('\n💰 Wallet Balance:');
+        console.log(`   SOL: ${balance.sol.toFixed(4)}`);
+        console.log(`   SYN: ${balance.syn.toFixed(4)}`);
+      } catch (error) {
+        console.error('❌ Failed to get balance:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── deposit ───────────────────────────────────────────────────────────────
+  program
+    .command('deposit-sol')
+    .description('Request SOL airdrop (devnet only)')
+    .argument('<amount>', 'Amount of SOL to request')
+    .action(async (amount: string) => {
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        console.error('❌ Invalid amount. Please provide a positive number.');
+        process.exit(1);
+      }
+      try {
+        await depositSol(parsedAmount);
+      } catch (error) {
+        console.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('deposit-syn')
+    .description('Show token account address for depositing SYN')
+    .argument('[amount]', 'Amount of SYN (optional, for info)')
+    .action(async (amount: string) => {
+      try {
+        await depositSyn(amount ? parseFloat(amount) : 0);
+      } catch (error) {
+        console.error('❌ Deposit failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── withdraw ─────────────────────────────────────────────────────────────
+  program
+    .command('withdraw-sol')
+    .description('Withdraw SOL to another wallet')
+    .argument('<amount>', 'Amount of SOL to withdraw')
+    .argument('<destination>', 'Destination wallet address')
+    .action(async (amount: string, destination: string) => {
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        console.error('❌ Invalid amount. Please provide a positive number.');
+        process.exit(1);
+      }
+      try {
+        await withdrawSol(parsedAmount, destination);
+      } catch (error) {
+        console.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('withdraw-syn')
+    .description('Withdraw SYN to another wallet')
+    .argument('<amount>', 'Amount of SYN to withdraw')
+    .argument('<destination>', 'Destination wallet address')
+    .action(async (amount: string, destination: string) => {
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        console.error('❌ Invalid amount. Please provide a positive number.');
+        process.exit(1);
+      }
+      try {
+        await withdrawSyn(parsedAmount, destination);
+      } catch (error) {
+        console.error('❌ Withdraw failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
     });
 
   // ── system-info ────────────────────────────────────────────────────────────
@@ -428,15 +572,15 @@ async function bootstrap() {
     .option('--show', 'Show current configuration')
     .option('--set-name <name>', 'Set node name')
     .action(async (options: { show?: boolean; setName?: string }) => {
+      const configService = app.get(NodeConfigService);
+      
       const config = configService.load();
-
       if (options.show) {
         console.log('Current configuration:');
         console.log(JSON.stringify(config, null, 2));
         return;
       }
 
-      const configService = app.get(NodeConfigService);
       if (options.setName) {
         config.name = options.setName;
         configService.save(config);
