@@ -5,20 +5,18 @@
 
 import { PublicKey } from '@solana/web3.js';
 
-// Program IDs (from EPIC 2 deploy)
-export const STAKING_PROGRAM_ID = new PublicKey(
-  '8LhiExUHdJGCfnbmADcJacjbnoAU7cvXTqpBEdybd4Fg',
-);
-export const TOKEN_PROGRAM_ID = new PublicKey(
-  '8iFr3ciQuNeU4vkzQTp7NcWNgRr7AVhwyizNCAszaEQq',
-);
-export const ESCROW_PROGRAM_ID = new PublicKey(
-  'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK',
-);
+function requireEnv(key: string): string {
+  const val = process.env[key];
+  if (!val) throw new Error(`${key} not informed`);
+  return val;
+}
+
+// Program IDs — must be set via environment variables, no hardcoded fallbacks
+export const STAKING_PROGRAM_ID = new PublicKey(requireEnv('STAKING_PROGRAM_ID'));
+export const TOKEN_PROGRAM_ID   = new PublicKey(requireEnv('TOKEN_PROGRAM_ID'));
+export const ESCROW_PROGRAM_ID  = new PublicKey(requireEnv('ESCROW_PROGRAM_ID'));
 // Rewards will be deployed as part of EPIC 5 - use placeholder for now
-export const REWARDS_PROGRAM_ID = new PublicKey(
-  '11111111111111111111111111111111',
-);
+export const REWARDS_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 
 // Common PDA seeds
 export const STAKE_SEED = 'stake';
