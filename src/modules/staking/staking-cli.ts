@@ -177,7 +177,7 @@ export async function stakeTokens(amount: number): Promise<string> {
 
     const initIx = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
-      data: createInitializeStakeInstructionData(0),
+      data: createInitializeStakeInstructionData(1), // tier 1 = minimum valid (contract requires 1-5)
       keys: [
         { pubkey: stakeAccount.publicKey, isSigner: true, isWritable: true },
         { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
