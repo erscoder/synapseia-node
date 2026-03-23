@@ -30,6 +30,7 @@
     "@nestjs/core": "^11.1.16",
     "@noble/ed25519": "^2.1.0",
     "@noble/hashes": "^1.8.0",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@types/bip39": "^3.0.4",
     "axios": "^1.7.2",
