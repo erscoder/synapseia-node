@@ -11,6 +11,7 @@ import { startPeriodicHeartbeat } from './modules/heartbeat/heartbeat.js';
 import { createP2PNode } from './modules/p2p/p2p.js';
 import { startAgentLoop, type AgentLoopConfig } from './modules/agent/agent-loop.js';
 import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './modules/llm/llm-provider.js';
+import logger from './utils/logger.js';
 
 const program = new Command();
 
@@ -31,8 +32,8 @@ program
   .option('--inference', 'Enable inference capability (requires GPU)')
   .option('--cpu', 'Only use CPU (no GPU)')
   .action(async (options) => {
-    console.log('🧠 Synapse Node CLI v0.0.1');
-    console.log('');
+    logger.log('🧠 Synapse Node CLI');
+    logger.log('');
 
     // Set defaults
     const datasetPath = options.dataset || path.join(process.cwd(), 'data', 'astro-sample.txt');
@@ -64,59 +65,59 @@ program
       if (llmProvider === 'cloud') {
         const apiKey = process.env.SYN_LLMAPI_KEY;
         if (!apiKey) {
-          console.error(`❌ Error: SYN_LLMAPI_KEY required for ${provider} models`);
-          console.log(`   export SYN_LLMAPI_KEY=your-key-here`);
+          logger.error(`❌ Error: SYN_LLMAPI_KEY required for ${provider} models`);
+          logger.log(`   export SYN_LLMAPI_KEY=your-key-here`);
           process.exit(1);
         }
       }
 
-      console.log(`🤖 Using model: ${options.model}`);
+      logger.log(`🤖 Using model: ${options.model}`);
       model = { provider: llmProvider, providerId, modelId };
     } else {
-      console.log('🤖 No model specified. Using default: ollama/qwen2.5:0.5b');
+      logger.log('🤖 No model specified. Using default: ollama/qwen2.5:0.5b');
       model = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
     }
-    console.log('');
+    logger.log('');
 
     // Check identity
     const identityPath = path.join(os.homedir(), '.synapseia');
     if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
-      console.log('🔑 No identity found. Generating Keypair...');
+      logger.log('🔑 No identity found. Generating Keypair...');
       generateIdentity(identityPath);
-      console.log(`✅ Saved to: ${path.join(identityPath, 'identity.json')}`);
+      logger.log(`✅ Saved to: ${path.join(identityPath, 'identity.json')}`);
     } else {
-      console.log(`✅ Identity loaded from: ${identityPath}`);
+      logger.log(`✅ Identity loaded from: ${identityPath}`);
     }
 
     const identity = loadIdentity(identityPath);
-    console.log(`   Peer ID: ${identity.peerId.slice(0, 16)}...`);
-    console.log('');
+    logger.log(`   Peer ID: ${identity.peerId.slice(0, 16)}...`);
+    logger.log('');
 
     // Check hardware
-    console.log('🔍 Detecting hardware...');
+    logger.log('🔍 Detecting hardware...');
     const hardware = detectHardware(options.cpu);
-    console.log(`   CPU: ${hardware.cpuCores} cores`);
-    console.log(`   RAM: ${hardware.ramGb} GB`);
-    console.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + 'GB VRAM' : 'None'}`);
-    console.log(`   Tier: ${hardware.tier} (${getTierName(hardware.tier as HardwareTier)})`);
+    logger.log(`   CPU: ${hardware.cpuCores} cores`);
+    logger.log(`   RAM: ${hardware.ramGb} GB`);
+    logger.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + 'GB VRAM' : 'None'}`);
+    logger.log(`   Tier: ${hardware.tier} (${getTierName(hardware.tier as HardwareTier)})`);
     const capabilities: string[] = [];
     if (!options.cpu) capabilities.push('gpu');
     if (hardware.hasOllama) capabilities.push('ollama');
-    console.log(`   Capabilities: ${capabilities.join(', ') || 'cpu'}`);
-    console.log('');
+    logger.log(`   Capabilities: ${capabilities.join(', ') || 'cpu'}`);
+    logger.log('');
 
     // Check dataset
     if (!fs.existsSync(datasetPath)) {
-      console.warn(`⚠️  Dataset not found: ${datasetPath}`);
-      console.log(`   Using embedded sample data...`);
+      logger.warn(`⚠️  Dataset not found: ${datasetPath}`);
+      logger.log(`   Using embedded sample data...`);
     } else {
       const stats = fs.statSync(datasetPath);
-      console.log(`📊 Dataset: ${datasetPath} (${(stats.size / 1024).toFixed(1)}KB)`);
+      logger.log(`📊 Dataset: ${datasetPath} (${(stats.size / 1024).toFixed(1)}KB)`);
     }
-    console.log('');
+    logger.log('');
 
     // Start P2P node
-    console.log('🌐 Starting P2P node...');
+    logger.log('🌐 Starting P2P node...');
     let p2pNode;
     try {
       // Build bootstrap multiaddr for the coordinator's P2P port (9000)
@@ -129,13 +130,13 @@ program
             : `/dns4/${rawHost}/tcp/9000`]
         : [];
       p2pNode = await createP2PNode(identity, bootstrapAddrs);
-      console.log(`   P2P peerId: ${p2pNode.getPeerId()}`);
+      logger.log(`   P2P peerId: ${p2pNode.getPeerId()}`);
     } catch (err) {
-      console.warn('   P2P init failed, using HTTP fallback:', (err as Error).message);
+      logger.warn('   P2P init failed, using HTTP fallback:', (err as Error).message);
     }
 
     // Start heartbeat
-    console.log('💓 Starting heartbeat loop...');
+    logger.log('💓 Starting heartbeat loop...');
     const heartbeatCleanup = startPeriodicHeartbeat(
       coordinatorUrl,
       identity,
@@ -143,12 +144,12 @@ program
       intervalMs,
       p2pNode,
     );
-    console.log(`   Coordinator: ${coordinatorUrl}`);
-    console.log(`   Interval: ${(intervalMs / 1000).toFixed(0)}s`);
-    console.log('');
+    logger.log(`   Coordinator: ${coordinatorUrl}`);
+    logger.log(`   Interval: ${(intervalMs / 1000).toFixed(0)}s`);
+    logger.log('');
 
     // Start agent research loop
-    console.log('🔄 Starting agent research loop...');
+    logger.log('🔄 Starting agent research loop...');
     const config: AgentLoopConfig = {
       coordinatorUrl: coordinatorUrl,
       peerId: identity.peerId,
@@ -157,21 +158,21 @@ program
       datasetPath: datasetPath,
       maxIterations: maxIterations,
     };
-    console.log(`   Experiment interval: ${(interval / 1000).toFixed(0)}s`);
+    logger.log(`   Experiment interval: ${(interval / 1000).toFixed(0)}s`);
     if (maxIterations > 0) {
-      console.log(`   Max iterations: ${maxIterations}`);
+      logger.log(`   Max iterations: ${maxIterations}`);
     }
-    console.log('   Model:', options.model || 'ollama/qwen2.5:0.5b');
-    console.log('');
-    console.log('🚀 Synapse Node running. Press Ctrl+C to stop.\n');
+    logger.log('   Model:', options.model || 'ollama/qwen2.5:0.5b');
+    logger.log('');
+    logger.log('🚀 Synapse Node running. Press Ctrl+C to stop.\n');
 
     startAgentLoop(config);
 
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
-      console.log('\n\n🛑 Shutting down...');
+      logger.log('\n\n🛑 Shutting down...');
       heartbeatCleanup();
-      console.log('✅ Goodbye!');
+      logger.log('✅ Goodbye!');
       process.exit(0);
     });
   });
@@ -180,69 +181,69 @@ program
   .command('status')
   .description('Show node status')
   .action(() => {
-    console.log('📊 Synapse Node Status\n');
+    logger.log('📊 Synapse Node Status\n');
     const identityPath = path.join(os.homedir(), '.synapseia');
     if (fs.existsSync(path.join(identityPath, 'identity.json'))) {
       const identity = loadIdentity(identityPath);
-      console.log(`   Peer ID: ${identity.peerId}`);
-      console.log(`   Public Key: ${identity.publicKey.slice(0, 64)}...`);
+      logger.log(`   Peer ID: ${identity.peerId}`);
+      logger.log(`   Public Key: ${identity.publicKey.slice(0, 64)}...`);
     } else {
-      console.log('   Status: Node not configured (run `synapse start` first)');
+      logger.log('   Status: Node not configured (run `synapse start` first)');
       return;
     }
 
     const hardware = detectHardware(false);
-    console.log(`   Hardware: ${hardware.tier} (${hardware.cpuCores} cores, ${hardware.ramGb}GB RAM)`);
-    console.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + 'GB' : 'None'}`);
-    console.log(`   Ollama: ${hardware.hasOllama ? '✅ Installed' : '❌ Not found'}`);
+    logger.log(`   Hardware: ${hardware.tier} (${hardware.cpuCores} cores, ${hardware.ramGb}GB RAM)`);
+    logger.log(`   GPU: ${hardware.gpuVramGb > 0 ? hardware.gpuVramGb + 'GB' : 'None'}`);
+    logger.log(`   Ollama: ${hardware.hasOllama ? '✅ Installed' : '❌ Not found'}`);
 
     const capabilities: string[] = [];
     if (!hardware.gpuVramGb) capabilities.push('cpu');
     if (hardware.hasOllama) capabilities.push('ollama');
-    console.log(`   Capabilities: ${capabilities.join(', ')}`);
+    logger.log(`   Capabilities: ${capabilities.join(', ')}`);
 
-    console.log(`   Uptime: ${process.uptime().toFixed(0)}s`);
-    console.log(`   Platform: ${os.platform()} ${os.arch()}`);
+    logger.log(`   Uptime: ${process.uptime().toFixed(0)}s`);
+    logger.log(`   Platform: ${os.platform()} ${os.arch()}`);
   });
 
 program
   .command('models')
   .description('Manage local models (Ollama)')
   .action(async () => {
-    console.log('📦 Synapse Models\n');
+    logger.log('📦 Synapse Models\n');
 
     const hardware = detectHardware(false);
     
     if (!hardware.hasOllama) {
-      console.log('❌ Ollama not found at localhost:11434');
-      console.log('   Install: https://ollama.com/download');
+      logger.log('❌ Ollama not found at localhost:11434');
+      logger.log('   Install: https://ollama.com/download');
       return;
     }
 
-    console.log('   Checking available models...\n');
+    logger.log('   Checking available models...\n');
     // TODO: fetch ollama API
-    console.log('   <model list from Ollama API>');
-    console.log('');
+    logger.log('   <model list from Ollama API>');
+    logger.log('');
 
-    console.log(`Recommended for Tier ${hardware.tier}:`);
+    logger.log(`Recommended for Tier ${hardware.tier}:`);
     if (hardware.tier >= 5) {
-      console.log('   • Llama-3.3-70B (requires >48GB VRAM)');
-      console.log('   • Mixtral 8x7B (requires >32GB VRAM)');
+      logger.log('   • Llama-3.3-70B (requires >48GB VRAM)');
+      logger.log('   • Mixtral 8x7B (requires >32GB VRAM)');
     } else if (hardware.tier >= 4) {
-      console.log('   • Llama-3.3-70B (requires 48GB VRAM)');
-      console.log('   • Mixtral 8x7B (requires 24GB VRAM)');
+      logger.log('   • Llama-3.3-70B (requires 48GB VRAM)');
+      logger.log('   • Mixtral 8x7B (requires 24GB VRAM)');
     } else if (hardware.tier >= 3) {
-      console.log('   • Gemma-3-1B (4GB VRAM)');
-      console.log('   • Phi-3-mini (2.5GB VRAM)');
+      logger.log('   • Gemma-3-1B (4GB VRAM)');
+      logger.log('   • Phi-3-mini (2.5GB VRAM)');
     } else if (hardware.tier >= 2) {
-      console.log('   • Qwen2.5-1.5B (3GB VRAM)');
-      console.log('   • Llama-3-8B (16GB VRAM)');
+      logger.log('   • Qwen2.5-1.5B (3GB VRAM)');
+      logger.log('   • Llama-3-8B (16GB VRAM)');
     } else {
-      console.log('   • Gemma-3-1B (4GB VRAM)');
-      console.log('   • Phi-3-mini (2.5GB VRAM)');
+      logger.log('   • Gemma-3-1B (4GB VRAM)');
+      logger.log('   • Phi-3-mini (2.5GB VRAM)');
     }
-    console.log('');
-    console.log('Pull with: ollama pull <model-name>');
+    logger.log('');
+    logger.log('Pull with: ollama pull <model-name>');
   });
 
 program
@@ -253,20 +254,20 @@ program
   .action(() => {
     const identityPath = path.join(os.homedir(), '.synapseia');
     if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
-      console.log('❌ No identity found. Run `synapse start` first.');
+      logger.log('❌ No identity found. Run `synapse start` first.');
       return;
     }
 
     const identity = loadIdentity(identityPath);
     const profile = getAgentProfile(identity);
 
-    console.log('🐝 Hive Agent Identity\n');
-    console.log(`   Agent ID: ${profile.agentId}`);
-    console.log(`   Peer ID:  ${profile.peerId}`);
-    console.log(`   Tier:     ${profile.tier} (${getTierName(profile.tier as any)})`);
-    console.log(`   Mode:     ${profile.mode.toUpperCase()}`);
-    console.log(`   Status:   ${profile.status.toUpperCase()}`);
-    console.log(`   Created:  ${new Date(profile.createdAt).toISOString()}`);
+    logger.log('🐝 Hive Agent Identity\n');
+    logger.log(`   Agent ID: ${profile.agentId}`);
+    logger.log(`   Peer ID:  ${profile.peerId}`);
+    logger.log(`   Tier:     ${profile.tier} (${getTierName(profile.tier as any)})`);
+    logger.log(`   Mode:     ${profile.mode.toUpperCase()}`);
+    logger.log(`   Status:   ${profile.status.toUpperCase()}`);
+    logger.log(`   Created:  ${new Date(profile.createdAt).toISOString()}`);
   });
 
 program.parse();
