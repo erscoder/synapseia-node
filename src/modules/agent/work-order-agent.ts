@@ -74,6 +74,8 @@ export interface WorkOrderAgentState {
   totalRewardsEarned: bigint;
   isRunning: boolean;
   currentWorkOrder?: WorkOrder;
+  /** Work order IDs already submitted by this node in this session */
+  completedWorkOrderIds: Set<string>;
 }
 
 /**
@@ -117,6 +119,7 @@ let agentState: WorkOrderAgentState = {
   totalWorkOrdersCompleted: 0,
   totalRewardsEarned: 0n,
   isRunning: false,
+  completedWorkOrderIds: new Set<string>(),
 };
 
 /**
@@ -190,6 +193,7 @@ export function resetWorkOrderAgentState(): void {
     totalWorkOrdersCompleted: 0,
     totalRewardsEarned: 0n,
     isRunning: false,
+    completedWorkOrderIds: new Set<string>(),
   };
 }
 
@@ -783,8 +787,18 @@ export async function runWorkOrderAgentIteration(
 
   logger.log(` Found ${workOrders.length} available work order(s)`);
 
+  // Filter out WOs already completed in this session (prevents re-submitting same WO)
+  const pendingWorkOrders = workOrders.filter(wo => !agentState.completedWorkOrderIds.has(wo.id));
+  if (pendingWorkOrders.length < workOrders.length) {
+    logger.log(` Skipping ${workOrders.length - pendingWorkOrders.length} already-completed WO(s) — ${pendingWorkOrders.length} remaining`);
+  }
+  if (pendingWorkOrders.length === 0) {
+    logger.log(' All available work orders already completed — waiting for new ones');
+    return { completed: false };
+  }
+
   // Try each work order until one is successfully accepted
-  for (const workOrder of workOrders) {
+  for (const workOrder of pendingWorkOrders) {
     logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
     // Evaluate economic viability (rational node behavior)
@@ -891,6 +905,7 @@ export async function runWorkOrderAgentIteration(
     logger.log(` Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
     logger.log(` Waiting for round to close to determine final reward...`);
     agentState.totalWorkOrdersCompleted++;
+    agentState.completedWorkOrderIds.add(workOrder.id);
   } else {
     logger.log(' Failed to report completion');
   }
