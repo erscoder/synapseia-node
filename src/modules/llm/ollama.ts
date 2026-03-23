@@ -115,10 +115,17 @@ export async function pullModel(model: string, url: string = 'http://localhost:1
  * @param url - Ollama API URL
  * @returns Generated text
  */
+export interface GenerateOptions {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+}
+
 export async function generate(
   prompt: string,
   model?: string,
-  url: string = 'http://localhost:11434'
+  url: string = 'http://localhost:11434',
+  options?: GenerateOptions
 ): Promise<string> {
   try {
     // Get recommended model if none specified
@@ -137,13 +144,13 @@ export async function generate(
 
     const response = await ollamaClient.chat({
       model: targetModel,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      messages: [{ role: 'user', content: prompt }],
       stream: false,
+      options: {
+        ...(options?.temperature !== undefined && { temperature: options.temperature }),
+        ...(options?.maxTokens !== undefined && { num_predict: options.maxTokens }),
+        ...(options?.topP !== undefined && { top_p: options.topP }),
+      },
     });
 
     return response.message.content.trim();

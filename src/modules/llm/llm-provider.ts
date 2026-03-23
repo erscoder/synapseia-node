@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { checkOllama, generate as generateOllama } from './ollama.js';
+import { checkOllama, generate as generateOllama, GenerateOptions } from './ollama.js';
 
 export type LLMProvider = 'ollama' | 'cloud';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
@@ -145,13 +145,14 @@ export async function checkLLM(model: LLMModel, config?: LLMConfig): Promise<LLM
 export async function generateLLM(
   model: LLMModel,
   prompt: string,
-  config?: LLMConfig
+  config?: LLMConfig,
+  hyperparams?: GenerateOptions
 ): Promise<string> {
   if (model.provider === 'ollama') {
-    return generateOllamaLLM(model, prompt);
+    return generateOllamaLLM(model, prompt, hyperparams);
   }
   if (model.provider === 'cloud') {
-    return generateCloudLLM(model, prompt, config);
+    return generateCloudLLM(model, prompt, config, hyperparams);
   }
 
   throw new Error('Unknown provider');
@@ -200,8 +201,8 @@ async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
   }
 }
 
-async function generateOllamaLLM(model: LLMModel, prompt: string): Promise<string> {
-  return generateOllama(prompt, model.modelId);
+async function generateOllamaLLM(model: LLMModel, prompt: string, hyperparams?: GenerateOptions): Promise<string> {
+  return generateOllama(prompt, model.modelId, undefined, hyperparams);
 }
 
 // --- Private: Cloud API implementations ---
@@ -237,16 +238,16 @@ async function checkCloudLLM(model: LLMModel, config?: LLMConfig): Promise<LLMSt
   };
 }
 
-async function generateCloudLLM(model: LLMModel, prompt: string, config?: LLMConfig): Promise<string> {
+async function generateCloudLLM(model: LLMModel, prompt: string, config?: LLMConfig, hyperparams?: GenerateOptions): Promise<string> {
   if (!config?.apiKey) {
     throw new Error('API key required for cloud provider');
   }
 
   if (model.providerId === 'anthropic') {
-    return generateAnthropic(model, prompt, config.apiKey);
+    return generateAnthropic(model, prompt, config.apiKey, hyperparams);
   }
   if (model.providerId === 'moonshot') {
-    return generateMoonshot(model, prompt, config.apiKey);
+    return generateMoonshot(model, prompt, config.apiKey, hyperparams);
   }
   if (model.providerId === 'minimax') {
     return generateMinimax(model, prompt, config.apiKey, config.baseUrl);
@@ -302,7 +303,7 @@ async function checkAnthropic(model: LLMModel, apiKey: string): Promise<LLMStatu
   }
 }
 
-async function generateAnthropic(model: LLMModel, prompt: string, apiKey: string): Promise<string> {
+async function generateAnthropic(model: LLMModel, prompt: string, apiKey: string, hyperparams?: GenerateOptions): Promise<string> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -312,13 +313,9 @@ async function generateAnthropic(model: LLMModel, prompt: string, apiKey: string
     },
     body: JSON.stringify({
       model: model.modelId,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      max_tokens: hyperparams?.maxTokens ?? 4096,
+      ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
+      messages: [{ role: 'user', content: prompt }],
     }),
   });
 
@@ -374,7 +371,7 @@ async function checkMoonshot(model: LLMModel, apiKey: string): Promise<LLMStatus
   }
 }
 
-async function generateMoonshot(model: LLMModel, prompt: string, apiKey: string): Promise<string> {
+async function generateMoonshot(model: LLMModel, prompt: string, apiKey: string, hyperparams?: GenerateOptions): Promise<string> {
   const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -383,12 +380,9 @@ async function generateMoonshot(model: LLMModel, prompt: string, apiKey: string)
     },
     body: JSON.stringify({
       model: model.modelId,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      messages: [{ role: 'user', content: prompt }],
+      ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
+      ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
     }),
   });
 
