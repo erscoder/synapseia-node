@@ -15,8 +15,10 @@ import { input, password } from '@inquirer/prompts';
 // IDs from .env
 if (!process.env.STAKING_PROGRAM_ID) throw new Error('STAKING_PROGRAM_ID not informed');
 const STAKING_PROGRAM_ID = new PublicKey(process.env.STAKING_PROGRAM_ID);
-const SYN_MINT = new PublicKey('DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8');
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://rpc.ankr.com/solana_devnet';
+if (!process.env.SYN_TOKEN_MINT) throw new Error('SYN_TOKEN_MINT not informed');
+const SYN_MINT = new PublicKey(process.env.SYN_TOKEN_MINT);
+if (!process.env.SOLANA_RPC_URL) throw new Error('SOLANA_RPC_URL not informed');
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // Derive vault authority PDA
