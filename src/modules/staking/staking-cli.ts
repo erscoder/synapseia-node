@@ -174,7 +174,7 @@ export async function stakeTokens(amount: number): Promise<string> {
     const { blockhash } = await connection.getLatestBlockhash();
 
     // Fetch coordinator authority pubkey from coordinator
-    const coordInfoRes = await fetch(`${COORDINATOR_URL}/stake/coordinator-authority`);
+    const coordInfoRes = await fetch(`${COORDINATOR_URL}/stake/info/coordinator-authority`);
     if (!coordInfoRes.ok) throw new Error(`Failed to get coordinator authority: ${coordInfoRes.status}`);
     const { coordinatorAuthority } = await coordInfoRes.json() as { coordinatorAuthority: string };
 
