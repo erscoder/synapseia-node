@@ -13,7 +13,8 @@ import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
 
 // IDs from .env
-const STAKING_PROGRAM_ID = new PublicKey(process.env.STAKING_PROGRAM_ID || '8LhiExUHdJGCfnbmADcJacjbnoAU7cvXTqpBEdybd4Fg');
+if (!process.env.STAKING_PROGRAM_ID) throw new Error('STAKING_PROGRAM_ID not informed');
+const STAKING_PROGRAM_ID = new PublicKey(process.env.STAKING_PROGRAM_ID);
 const SYN_MINT = new PublicKey('DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8');
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://rpc.ankr.com/solana_devnet';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
