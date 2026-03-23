@@ -355,10 +355,50 @@ Abstract: ${payload.abstract}`;
 /**
  * Execute research work order
  */
+export async function fetchHyperparamConfig(coordinatorUrl: string): Promise<{
+  config: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string };
+  strategy: 'exploit' | 'explore';
+} | null> {
+  try {
+    const res = await fetch(`${coordinatorUrl}/hyperparams/suggest`);
+    if (!res.ok) return null;
+    return await res.json() as any;
+  } catch {
+    return null;
+  }
+}
+
+export async function reportHyperparamExperiment(
+  coordinatorUrl: string,
+  peerId: string,
+  config: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string; chunkSize?: number },
+  qualityScore: number,
+  latencyMs: number
+): Promise<void> {
+  try {
+    await fetch(`${coordinatorUrl}/hyperparams/experiments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        peerId,
+        config: { ...config, chunkSize: config.chunkSize ?? 512 },
+        qualityScore,
+        latencyMs,
+        tokenCost: 0,
+        papersTested: 1,
+      }),
+    });
+  } catch {
+    // Non-critical — don't fail the research
+  }
+}
+
 export async function executeResearchWorkOrder(
   workOrder: WorkOrder,
   llmModel: LLMModel,
-  llmConfig?: LLMConfig
+  llmConfig?: LLMConfig,
+  coordinatorUrl?: string,
+  peerId?: string
 ): Promise<{ result: ResearchResult; rawResponse: string; success: boolean }> {
   logger.log(` Executing research: ${workOrder.title}`);
 
@@ -367,8 +407,25 @@ export async function executeResearchWorkOrder(
     throw new Error('Invalid research payload in work order');
   }
 
+  // Fetch hyperparameter config from coordinator (exploit best or explore new)
+  let hyperConfig: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string } | null = null;
+  let strategy: 'exploit' | 'explore' = 'explore';
+  if (coordinatorUrl) {
+    const suggestion = await fetchHyperparamConfig(coordinatorUrl);
+    if (suggestion) {
+      hyperConfig = suggestion.config;
+      strategy = suggestion.strategy;
+      logger.log(` Hyperparam config [${strategy}]: temp=${hyperConfig.temperature}, maxTokens=${hyperConfig.maxTokens}, depth=${hyperConfig.analysisDepth}`);
+    }
+  }
+
   const prompt = buildResearchPrompt(payload);
-  const rawResponse = await generateLLM(llmModel, prompt, llmConfig);
+  const startMs = Date.now();
+  const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? {
+    temperature: hyperConfig.temperature,
+    maxTokens: hyperConfig.maxTokens,
+  } : undefined);
+  const latencyMs = Date.now() - startMs;
 
   // Parse JSON response
   try {
@@ -391,6 +448,18 @@ export async function executeResearchWorkOrder(
     }
 
     logger.log(` Research complete, summary: ${result.summary.slice(0, 100)}...`);
+
+    // Report hyperparam experiment quality to coordinator
+    if (hyperConfig && coordinatorUrl && peerId) {
+      const qualityScore = Math.min(10, Math.max(0,
+        (result.keyInsights.length >= 3 ? 3 : result.keyInsights.length) +
+        (result.summary.length > 200 ? 3 : 1) +
+        (result.proposal.length > 100 ? 3 : 1)
+      ));
+      await reportHyperparamExperiment(coordinatorUrl, peerId, hyperConfig, qualityScore, latencyMs);
+      logger.log(` Reported experiment quality: ${qualityScore}/10 (strategy: ${strategy})`);
+    }
+
     return { result, rawResponse, success: true };
   } catch (error) {
     logger.error(' Failed to parse research result:', (error as Error).message);
@@ -837,7 +906,7 @@ export async function runWorkOrderAgentIteration(
 
   if (isResearchWorkOrder(workOrder)) {
     // Execute research work order
-    const research = await executeResearchWorkOrder(workOrder, llmModel, llmConfig);
+    const research = await executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
     result = research.rawResponse;
     success = research.success;
     researchResult = research.result;
