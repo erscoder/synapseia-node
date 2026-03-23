@@ -19,6 +19,7 @@ if (!process.env.SYN_TOKEN_MINT) throw new Error('SYN_TOKEN_MINT not informed');
 const SYN_MINT = new PublicKey(process.env.SYN_TOKEN_MINT);
 if (!process.env.SOLANA_RPC_URL) throw new Error('SOLANA_RPC_URL not informed');
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
+const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3001';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // Derive vault authority PDA
@@ -167,22 +168,48 @@ export async function stakeTokens(amount: number): Promise<string> {
     logger.log(`📝 Creating new stake account...`);
     stakeAccount = Keypair.generate();
     stakeAccountPubkey = stakeAccount.publicKey;
-    
+
+    // initialize_stake requires coordinator_authority co-signature.
+    // We build the tx, sign with wallet + stake_account, then ask the coordinator to add its sig.
+    const { blockhash } = await connection.getLatestBlockhash();
+
+    // Fetch coordinator authority pubkey from coordinator
+    const coordInfoRes = await fetch(`${COORDINATOR_URL}/stake/coordinator-authority`);
+    if (!coordInfoRes.ok) throw new Error(`Failed to get coordinator authority: ${coordInfoRes.status}`);
+    const { coordinatorAuthority } = await coordInfoRes.json() as { coordinatorAuthority: string };
+
     const initIx = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
       data: createInitializeStakeInstructionData(0),
       keys: [
         { pubkey: stakeAccount.publicKey, isSigner: true, isWritable: true },
         { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+        { pubkey: new PublicKey(coordinatorAuthority), isSigner: true, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ]
     });
-    
-    const initTx = new Transaction().add(initIx);
-    const initSig = await connection.sendTransaction(initTx, [wallet, stakeAccount], {
-      skipPreflight: false
+
+    const initTx = new Transaction({ recentBlockhash: blockhash, feePayer: wallet.publicKey }).add(initIx);
+    // User + stake account sign first
+    initTx.partialSign(wallet, stakeAccount);
+
+    // Send to coordinator for co-signature
+    const partialSerialized = initTx.serialize({ requireAllSignatures: false }).toString('base64');
+    const signRes = await fetch(`${COORDINATOR_URL}/stake/sign-initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transaction: partialSerialized }),
     });
-    
+    if (!signRes.ok) {
+      const err = await signRes.json().catch(() => ({}));
+      throw new Error(`Coordinator refused to co-sign: ${JSON.stringify(err)}`);
+    }
+    const { transaction: fullySigned } = await signRes.json() as { transaction: string };
+
+    const rawTx = Buffer.from(fullySigned, 'base64');
+    const initSig = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+    await connection.confirmTransaction(initSig, 'confirmed');
+
     logger.log(`   Stake account created: ${initSig}`);
   } else {
     stakeAccountPubkey = new PublicKey(stakeAccountAddress);
