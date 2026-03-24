@@ -117,16 +117,16 @@ export interface WorkOrderEvaluation {
 
 // Global state for the work order agent
 /** Cooldown for re-analyzing a research paper (ms) — allows hyperparams diversity */
-const RESEARCH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10); // default 5 min, override via env
 
-let agentState: WorkOrderAgentState = {
+let agentState: WorkOrderAgentState  = {
   iteration: 0,
   totalWorkOrdersCompleted: 0,
   totalRewardsEarned: 0n,
   isRunning: false,
   completedWorkOrderIds: new Set<string>(),
   researchCooldowns: new Map<string, number>(),
-};
+} ;
 
 /**
  * Static price table for cloud LLM models
@@ -998,7 +998,7 @@ export async function runWorkOrderAgentIteration(
   // 5. Complete work order — skip if research failed to parse
   if (isResearchWorkOrder(workOrder) && !success) {
     logger.warn(' Research parse failed — skipping result submission to avoid polluting rewards');
-    agentState.currentWorkOrder = null;
+    agentState.currentWorkOrder = undefined;
     continue;
   }
 
