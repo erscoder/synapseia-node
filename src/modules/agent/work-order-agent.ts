@@ -399,7 +399,7 @@ export async function executeResearchWorkOrder(
   llmConfig?: LLMConfig,
   coordinatorUrl?: string,
   peerId?: string
-): Promise<{ result: ResearchResult; rawResponse: string; success: boolean }> {
+): Promise<{ result: ResearchResult; rawResponse: string; success: boolean; hyperparams?: Record<string, unknown> }> {
   logger.log(` Executing research: ${workOrder.title}`);
 
   const payload = extractResearchPayload(workOrder);
@@ -460,7 +460,7 @@ export async function executeResearchWorkOrder(
       logger.log(` Reported experiment quality: ${qualityScore}/10 (strategy: ${strategy})`);
     }
 
-    return { result, rawResponse, success: true };
+    return { result, rawResponse, success: true, hyperparams: hyperConfig ?? undefined };
   } catch (error) {
     logger.error(' Failed to parse research result:', (error as Error).message);
     return {
@@ -471,6 +471,7 @@ export async function executeResearchWorkOrder(
       },
       rawResponse,
       success: false,
+      hyperparams: hyperConfig ?? undefined,
     };
   }
 }
@@ -482,7 +483,8 @@ export async function submitResearchResult(
   coordinatorUrl: string,
   workOrderId: string,
   peerId: string,
-  result: ResearchResult
+  result: ResearchResult,
+  hyperparams?: Record<string, unknown>
 ): Promise<boolean> {
   try {
     const response = await fetch(`${coordinatorUrl}/research-queue/results`, {
@@ -494,6 +496,7 @@ export async function submitResearchResult(
         summary: result.summary,
         keyInsights: result.keyInsights,
         applicationProposal: result.proposal,
+        ...(hyperparams ? { hyperparams } : {}),
       }),
     });
 
@@ -910,6 +913,7 @@ export async function runWorkOrderAgentIteration(
     result = research.rawResponse;
     success = research.success;
     researchResult = research.result;
+    const researchHyperparams = research.hyperparams;
 
     // Save to agent brain if provided
     if (brain && success) {
@@ -947,7 +951,8 @@ export async function runWorkOrderAgentIteration(
         coordinatorUrl,
         paperId,
         peerId,
-        researchResult
+        researchResult,
+        researchHyperparams
       );
       if (submitted) {
         logger.log(' Research result submitted to research queue');
