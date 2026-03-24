@@ -436,16 +436,20 @@ export async function executeResearchWorkOrder(
 
   // Parse JSON response
   try {
-    // Try to extract JSON from response (LLM may wrap it in markdown code fences)
-    // 1. Strip ```json ... ``` or ``` ... ``` blocks
-    // 2. Fall back to first {...} match
-    let jsonStr = rawResponse;
-    const fenceMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+    // Try to extract JSON from response (LLM may wrap it in markdown code fences
+    // or prepend <think>...</think> reasoning blocks)
+    // 1. Strip <think>...</think> blocks (reasoning models like DeepSeek, Kimi)
+    // 2. Strip ```json ... ``` or ``` ... ``` blocks
+    // 3. Fall back to first {...} match
+    let jsonStr = rawResponse
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .trim();
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenceMatch) {
       jsonStr = fenceMatch[1].trim();
     } else {
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-      jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
     }
     const result = JSON.parse(jsonStr) as ResearchResult;
 
