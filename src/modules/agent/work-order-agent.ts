@@ -432,9 +432,11 @@ export async function executeResearchWorkOrder(
 
   const prompt = buildResearchPrompt(payload);
   const startMs = Date.now();
+  // Note: we use hyperConfig.temperature for experimentation but NOT maxTokens —
+  // capping output tokens truncates the JSON object and causes parse failures.
+  // The node decides output length; coordinator experiments with temperature/depth only.
   const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? {
     temperature: hyperConfig.temperature,
-    maxTokens: hyperConfig.maxTokens,
   } : undefined);
   const latencyMs = Date.now() - startMs;
 
