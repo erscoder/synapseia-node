@@ -348,12 +348,10 @@ export function extractResearchPayload(workOrder: WorkOrder): ResearchPayload | 
  */
 export function buildResearchPrompt(payload: ResearchPayload): string {
   return `You are a research node in a decentralized AI network.
-Analyze this paper and respond in JSON:
-{
-  "summary": "2-3 sentence summary",
-  "keyInsights": ["insight1", ..., "insight5"],
-  "proposal": "how this applies to decentralized compute"
-}
+Analyze this paper and respond with ONLY a raw JSON object — no markdown, no code fences, no explanation. Start your response with { and end with }.
+
+Required format:
+{"summary":"2-3 sentence summary","keyInsights":["insight1","insight2","insight3","insight4","insight5"],"proposal":"how this applies to decentralized compute"}
 
 Title: ${payload.title}
 Abstract: ${payload.abstract}`;
