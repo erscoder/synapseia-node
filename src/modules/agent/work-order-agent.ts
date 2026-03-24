@@ -444,13 +444,15 @@ export async function executeResearchWorkOrder(
     let jsonStr = rawResponse
       .replace(/<think>[\s\S]*?<\/think>/gi, '')
       .trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    // Handle truncated responses (maxTokens cutoff may remove closing fence)
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+                       jsonStr.match(/```(?:json)?\s*([\s\S]*)/);
     if (fenceMatch) {
       jsonStr = fenceMatch[1].trim();
-    } else {
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
     }
+    // Always try to extract first complete {...} block (handles truncation)
+    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+    jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
     const result = JSON.parse(jsonStr) as ResearchResult;
 
     // Validate required fields
