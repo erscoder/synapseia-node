@@ -367,7 +367,7 @@ Abstract: ${payload.abstract}`;
  * Execute research work order
  */
 export async function fetchHyperparamConfig(coordinatorUrl: string): Promise<{
-  config: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string };
+  config: { id: string; temperature: number; promptTemplate: string; analysisDepth: string; chunkSize?: number };
   strategy: 'exploit' | 'explore';
 } | null> {
   try {
@@ -382,7 +382,7 @@ export async function fetchHyperparamConfig(coordinatorUrl: string): Promise<{
 export async function reportHyperparamExperiment(
   coordinatorUrl: string,
   peerId: string,
-  config: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string; chunkSize?: number },
+  config: { id: string; temperature: number; promptTemplate: string; analysisDepth: string; chunkSize?: number },
   qualityScore: number,
   latencyMs: number
 ): Promise<void> {
@@ -419,22 +419,19 @@ export async function executeResearchWorkOrder(
   }
 
   // Fetch hyperparameter config from coordinator (exploit best or explore new)
-  let hyperConfig: { id: string; temperature: number; maxTokens: number; promptTemplate: string; analysisDepth: string } | null = null;
+  let hyperConfig: { id: string; temperature: number; promptTemplate: string; analysisDepth: string; chunkSize?: number } | null = null;
   let strategy: 'exploit' | 'explore' = 'explore';
   if (coordinatorUrl) {
     const suggestion = await fetchHyperparamConfig(coordinatorUrl);
     if (suggestion) {
       hyperConfig = suggestion.config;
       strategy = suggestion.strategy;
-      logger.log(` Hyperparam config [${strategy}]: temp=${hyperConfig.temperature}, maxTokens=${hyperConfig.maxTokens}, depth=${hyperConfig.analysisDepth}`);
+      logger.log(` Hyperparam config [${strategy}]: temp=${hyperConfig.temperature}, depth=${hyperConfig.analysisDepth}`);
     }
   }
 
   const prompt = buildResearchPrompt(payload);
   const startMs = Date.now();
-  // Note: we use hyperConfig.temperature for experimentation but NOT maxTokens —
-  // capping output tokens truncates the JSON object and causes parse failures.
-  // The node decides output length; coordinator experiments with temperature/depth only.
   const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? {
     temperature: hyperConfig.temperature,
   } : undefined);
