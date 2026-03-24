@@ -74,8 +74,10 @@ export interface WorkOrderAgentState {
   totalRewardsEarned: bigint;
   isRunning: boolean;
   currentWorkOrder?: WorkOrder;
-  /** Work order IDs already submitted by this node in this session */
+  /** Work order IDs already submitted by this node in this session (non-research only) */
   completedWorkOrderIds: Set<string>;
+  /** Research WO cooldowns: workOrderId → timestamp when it can be retried */
+  researchCooldowns: Map<string, number>;
 }
 
 /**
@@ -114,12 +116,16 @@ export interface WorkOrderEvaluation {
 }
 
 // Global state for the work order agent
+/** Cooldown for re-analyzing a research paper (ms) — allows hyperparams diversity */
+const RESEARCH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
 let agentState: WorkOrderAgentState = {
   iteration: 0,
   totalWorkOrdersCompleted: 0,
   totalRewardsEarned: 0n,
   isRunning: false,
   completedWorkOrderIds: new Set<string>(),
+  researchCooldowns: new Map<string, number>(),
 };
 
 /**
@@ -194,6 +200,7 @@ export function resetWorkOrderAgentState(): void {
     totalRewardsEarned: 0n,
     isRunning: false,
     completedWorkOrderIds: new Set<string>(),
+    researchCooldowns: new Map<string, number>(),
   };
 }
 
@@ -859,13 +866,27 @@ export async function runWorkOrderAgentIteration(
 
   logger.log(` Found ${workOrders.length} available work order(s)`);
 
-  // Filter out WOs already completed in this session (prevents re-submitting same WO)
-  const pendingWorkOrders = workOrders.filter(wo => !agentState.completedWorkOrderIds.has(wo.id));
+  // Filter work orders:
+  // - Non-research: skip permanently once completed this session
+  // - Research: skip only during cooldown period (allows re-analysis with different hyperparams)
+  const now = Date.now();
+  const pendingWorkOrders = workOrders.filter(wo => {
+    if (isResearchWorkOrder(wo)) {
+      const cooldownUntil = agentState.researchCooldowns.get(wo.id);
+      if (cooldownUntil && now < cooldownUntil) {
+        const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
+        logger.log(` Research WO "${wo.title}" on cooldown — ${remainingSec}s remaining`);
+        return false;
+      }
+      return true; // Ready to re-analyze with new hyperparams
+    }
+    return !agentState.completedWorkOrderIds.has(wo.id);
+  });
   if (pendingWorkOrders.length < workOrders.length) {
-    logger.log(` Skipping ${workOrders.length - pendingWorkOrders.length} already-completed WO(s) — ${pendingWorkOrders.length} remaining`);
+    logger.log(` Skipping ${workOrders.length - pendingWorkOrders.length} WO(s) (completed/cooldown) — ${pendingWorkOrders.length} remaining`);
   }
   if (pendingWorkOrders.length === 0) {
-    logger.log(' All available work orders already completed — waiting for new ones');
+    logger.log(' All work orders completed or on cooldown — waiting');
     return { completed: false };
   }
 
@@ -979,7 +1000,13 @@ export async function runWorkOrderAgentIteration(
     logger.log(` Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
     logger.log(` Waiting for round to close to determine final reward...`);
     agentState.totalWorkOrdersCompleted++;
-    agentState.completedWorkOrderIds.add(workOrder.id);
+    if (isResearchWorkOrder(workOrder)) {
+      // Research papers can be re-analyzed after cooldown (different hyperparams = more diversity)
+      agentState.researchCooldowns.set(workOrder.id, Date.now() + RESEARCH_COOLDOWN_MS);
+      logger.log(` Research paper will be available for re-analysis in ${RESEARCH_COOLDOWN_MS / 1000}s`);
+    } else {
+      agentState.completedWorkOrderIds.add(workOrder.id);
+    }
   } else {
     logger.log(' Failed to report completion');
   }
