@@ -250,10 +250,10 @@ async function generateCloudLLM(model: LLMModel, prompt: string, config?: LLMCon
     return generateMoonshot(model, prompt, config.apiKey, hyperparams);
   }
   if (model.providerId === 'minimax') {
-    return generateMinimax(model, prompt, config.apiKey, config.baseUrl);
+    return generateMinimax(model, prompt, config.apiKey, config.baseUrl, hyperparams);
   }
   if (model.providerId === 'openai-compat') {
-    return generateOpenAICompat(model, prompt, config.apiKey, config.baseUrl);
+    return generateOpenAICompat(model, prompt, config.apiKey, config.baseUrl, hyperparams);
   }
 
   throw new Error('Unknown cloud provider');
@@ -442,7 +442,8 @@ async function generateMinimax(
   model: LLMModel,
   prompt: string,
   apiKey: string,
-  baseUrl?: string
+  baseUrl?: string,
+  hyperparams?: GenerateOptions
 ): Promise<string> {
   const url = baseUrl ?? 'https://api.minimax.io/v1/chat/completions';
 
@@ -460,6 +461,8 @@ async function generateMinimax(
           content: prompt,
         },
       ],
+      ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
+      ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
     }),
   });
 
@@ -521,7 +524,8 @@ async function generateOpenAICompat(
   model: LLMModel,
   prompt: string,
   apiKey: string,
-  baseUrl?: string
+  baseUrl?: string,
+  hyperparams?: GenerateOptions
 ): Promise<string> {
   const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
 
@@ -539,6 +543,8 @@ async function generateOpenAICompat(
           content: prompt,
         },
       ],
+      ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
+      ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
     }),
   });
 
