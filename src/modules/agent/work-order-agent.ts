@@ -10,6 +10,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import logger from '../../utils/logger.js';
 import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
 import { parseModel, type LLMModel } from '../llm/llm-provider.js';
@@ -485,6 +488,99 @@ export async function submitTrainingToExperiments(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Dataset download + caching (B4)
+// ---------------------------------------------------------------------------
+
+/** Base directory for locally cached datasets */
+export function getDatasetCacheDir(): string {
+  return path.join(os.homedir(), '.synapseia', 'datasets');
+}
+
+/**
+ * Download the training corpus for a domain from the coordinator.
+ *
+ * Uses ETag / Last-Modified headers to avoid re-downloading when unchanged.
+ * Caches locally at ~/.synapseia/datasets/{domain}/corpus.txt.
+ *
+ * @returns The local path to the cached corpus file.
+ */
+export async function downloadDataset(coordinatorUrl: string, domain: string): Promise<string> {
+  const cacheDir = path.join(getDatasetCacheDir(), domain);
+  const corpusPath = path.join(cacheDir, 'corpus.txt');
+  const metaPath = path.join(cacheDir, 'cache-meta.json');
+
+  // Ensure cache directory exists
+  if (!fs.existsSync(cacheDir)) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+  }
+
+  // Load existing cache metadata (ETag / Last-Modified)
+  let cachedEtag: string | undefined;
+  let cachedLastModified: string | undefined;
+  if (fs.existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as {
+        etag?: string;
+        lastModified?: string;
+      };
+      cachedEtag = meta.etag;
+      cachedLastModified = meta.lastModified;
+    } catch {
+      // Ignore corrupt metadata
+    }
+  }
+
+  const url = `${coordinatorUrl}/datasets/${domain}/corpus`;
+  const headers: Record<string, string> = {};
+  if (cachedEtag) {
+    headers['If-None-Match'] = cachedEtag;
+  } else if (cachedLastModified) {
+    headers['If-Modified-Since'] = cachedLastModified;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers });
+  } catch (error) {
+    // Network error — return cached file if available
+    if (fs.existsSync(corpusPath)) {
+      logger.warn(`[Dataset] Network error fetching '${domain}' corpus; using cached version`);
+      return corpusPath;
+    }
+    throw new Error(`Failed to download dataset for '${domain}': ${(error as Error).message}`);
+  }
+
+  if (response.status === 304) {
+    // Not modified — cached version is up to date
+    logger.log(`[Dataset] '${domain}' corpus unchanged (304 Not Modified)`);
+    return corpusPath;
+  }
+
+  if (!response.ok) {
+    if (fs.existsSync(corpusPath)) {
+      logger.warn(`[Dataset] Coordinator returned ${response.status} for '${domain}'; using cached version`);
+      return corpusPath;
+    }
+    throw new Error(`Coordinator returned ${response.status} for dataset '${domain}'`);
+  }
+
+  // Write new corpus
+  const content = await response.text();
+  fs.writeFileSync(corpusPath, content, 'utf-8');
+
+  // Persist cache metadata
+  const newMeta: { etag?: string; lastModified?: string } = {};
+  const newEtag = response.headers.get('etag');
+  const newLastModified = response.headers.get('last-modified');
+  if (newEtag) newMeta.etag = newEtag;
+  if (newLastModified) newMeta.lastModified = newLastModified;
+  fs.writeFileSync(metaPath, JSON.stringify(newMeta), 'utf-8');
+
+  logger.log(`[Dataset] '${domain}' corpus downloaded → ${corpusPath} (${content.length} chars)`);
+  return corpusPath;
+}
+
 /**
  * Execute a TRAINING work order by running train_micro.py
  */
@@ -518,12 +614,21 @@ export async function executeTrainingWorkOrder(
     };
   }
 
+  // B4: Download domain-specific dataset from coordinator (with ETag caching)
+  let datasetPath = payload.datasetId;
+  try {
+    datasetPath = await downloadDataset(coordinatorUrl, payload.domain);
+    logger.log(` Using domain dataset: ${datasetPath}`);
+  } catch (err) {
+    logger.warn(` Could not download dataset for '${payload.domain}': ${(err as Error).message}. Falling back to datasetId.`);
+  }
+
   // Run actual training via train_micro.py
   let trainingResult;
   try {
     trainingResult = await trainMicroModel({
       proposal: mutation,
-      datasetPath: payload.datasetId,
+      datasetPath,
       hardware: capabilities.includes('gpu') ? 'gpu' : 'cpu',
       runNumber: iteration,
     });
@@ -1443,6 +1548,8 @@ export const _test = {
   estimateLLMCost,
   evaluateWorkOrder,
   getModelCostPer1kTokens,
+  downloadDataset,
+  getDatasetCacheDir,
 };
 
 // ---------------------------------------------------------------------------
@@ -1569,5 +1676,13 @@ export class WorkOrderAgentHelper {
 
   shouldSleepBetweenIterations(isRunning: boolean): boolean {
     return shouldSleepBetweenIterations(isRunning);
+  }
+
+  downloadDataset(coordinatorUrl: string, domain: string): Promise<string> {
+    return downloadDataset(coordinatorUrl, domain);
+  }
+
+  getDatasetCacheDir(): string {
+    return getDatasetCacheDir();
   }
 }
