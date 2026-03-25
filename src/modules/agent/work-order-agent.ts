@@ -347,16 +347,21 @@ export function extractResearchPayload(workOrder: WorkOrder): ResearchPayload | 
  * Build research prompt for LLM
  */
 export function buildResearchPrompt(payload: ResearchPayload): string {
-  return `You are a research node in a decentralized AI network.
+  return `You are an expert research analyst in a decentralized AI compute network. Your job is NOT to summarize the paper — it is to critically analyze it and generate original insights.
 
-Analyze the paper below and output a structured object. Your entire response must be a single object starting with { and ending with }. Do not include any other text, words, symbols, backticks, or formatting — only the object itself.
+Read the paper carefully and produce a rigorous analysis. Your entire response must be a single JSON object starting with { and ending with }. Do not include any other text, backticks, or formatting.
 
-The object must have exactly these three fields:
-- summary: a string with 2-3 sentences describing the paper
-- keyInsights: an array of exactly 5 strings, each a key insight
-- proposal: a string explaining how this applies to decentralized compute
+Required fields:
+- summary: 3-4 sentences covering (1) the core problem the paper solves, (2) the methodology used, (3) the main result or finding, and (4) its significance. Do NOT simply paraphrase the abstract.
+- keyInsights: array of exactly 5 strings. Each insight must be a NON-OBVIOUS finding that required reading the paper to discover. Avoid restating the abstract. Focus on: unexpected results, limitations the authors acknowledge, comparisons to prior work, technical tradeoffs, and open questions left unsolved.
+- proposal: a concrete, specific application proposal for decentralized compute networks. Must include: (1) which specific technical mechanism from the paper to adopt, (2) how it would be implemented in a peer-to-peer context, (3) expected challenges, and (4) measurable success criteria.
 
-Example output (copy this format exactly, replace the values):
+Critical evaluation standards:
+- If the paper makes extraordinary claims, note what evidence supports them and what is missing
+- Identify the weakest assumption in the methodology
+- Flag any reproducibility concerns (missing code, proprietary data, etc.)
+
+Output format (replace values):
 {"summary":"...","keyInsights":["...","...","...","...","..."],"proposal":"..."}
 
 Title: ${payload.title}
