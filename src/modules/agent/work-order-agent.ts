@@ -15,6 +15,9 @@ import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
 import { parseModel, type LLMModel } from '../llm/llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
 import { startRoundListener } from './round-listener.js';
+import { trainMicroModel } from '../model/trainer.js';
+import { proposeMutation } from '../model/mutation-engine.js';
+import type { Experiment } from '../../types.js';
 
 /**
  * Parse rewardAmount string to lamports BigInt.
@@ -352,6 +355,218 @@ export async function completeWorkOrder(
     logger.warn(' Failed to complete work order:', (error as Error).message);
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Training Work Order support
+// ---------------------------------------------------------------------------
+
+/** Local copy of the coordinator TrainingWorkOrderPayload shape */
+export interface TrainingWorkOrderPayload {
+  domain: 'medical' | 'trading' | 'ai' | 'crypto' | 'astrophysics';
+  datasetId: string;
+  baseConfig?: Partial<{
+    learningRate: number;
+    batchSize: number;
+    hiddenDim: number;
+    numLayers: number;
+    numHeads: number;
+    activation: 'gelu' | 'silu' | 'relu';
+    normalization: 'layernorm' | 'rmsnorm';
+    initScheme: 'xavier' | 'kaiming' | 'normal';
+    warmupSteps: number;
+    weightDecay: number;
+    maxTrainSeconds: number;
+  }>;
+  maxTrainSeconds: number;
+  currentBestLoss: number;
+}
+
+/**
+ * Detect if work order is of type TRAINING
+ */
+export function isTrainingWorkOrder(workOrder: WorkOrder): boolean {
+  if (workOrder.type === 'TRAINING') return true;
+
+  // Try to parse description as JSON with training payload
+  try {
+    const payload = JSON.parse(workOrder.description) as Partial<TrainingWorkOrderPayload>;
+    return !!(payload.domain && payload.datasetId !== undefined && payload.currentBestLoss !== undefined);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch top experiments from coordinator for mutation-engine input
+ */
+export async function fetchTopExperiments(coordinatorUrl: string): Promise<Experiment[]> {
+  try {
+    const res = await fetch(`${coordinatorUrl}/hyperparams/leaderboard`);
+    if (!res.ok) return [];
+    const data = await res.json() as { entries?: Array<{ config?: { id?: string }; bestScore?: number }> };
+    // Map leaderboard entries to Experiment shape
+    const entries = (data.entries ?? []).slice(0, 5);
+    return entries.map(entry => ({
+      id: entry.config?.id ?? '',
+      model: '',
+      hyperparams: (entry.config ?? {}) as Experiment['hyperparams'],
+      valLoss: entry.bestScore ?? 999,
+      status: 'completed' as const,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Submit training experiment to coordinator hyperparam leaderboard
+ */
+export async function submitTrainingExperiment(
+  coordinatorUrl: string,
+  peerId: string,
+  config: TrainingWorkOrderPayload['baseConfig'] & { id?: string },
+  valLoss: number,
+  durationMs: number,
+): Promise<void> {
+  try {
+    await fetch(`${coordinatorUrl}/hyperparams/experiments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        peerId,
+        config: {
+          id: config?.id ?? `train_${Date.now()}`,
+          temperature: 0,
+          promptTemplate: 'training',
+          analysisDepth: 'training',
+          chunkSize: 512,
+          ...config,
+        },
+        qualityScore: Math.max(0, Math.min(10, 10 * Math.exp(-valLoss))),
+        latencyMs: durationMs,
+        tokenCost: 0,
+        papersTested: 1,
+      }),
+    });
+  } catch {
+    // Non-critical — don't fail the training
+  }
+}
+
+/**
+ * Submit training result to the /experiments endpoint
+ */
+export async function submitTrainingToExperiments(
+  coordinatorUrl: string,
+  peerId: string,
+  payload: TrainingWorkOrderPayload,
+  valLoss: number,
+  finalLoss: number,
+  durationMs: number,
+): Promise<void> {
+  try {
+    await fetch(`${coordinatorUrl}/experiments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        peerId,
+        domain: payload.domain,
+        datasetId: payload.datasetId,
+        valLoss,
+        finalLoss,
+        durationMs,
+        improved: valLoss < payload.currentBestLoss,
+        createdAt: Date.now(),
+      }),
+    });
+  } catch {
+    // Non-critical — /experiments endpoint may not be deployed yet
+  }
+}
+
+/**
+ * Execute a TRAINING work order by running train_micro.py
+ */
+export async function executeTrainingWorkOrder(
+  workOrder: WorkOrder,
+  coordinatorUrl: string,
+  peerId: string,
+  capabilities: string[],
+  iteration: number,
+): Promise<{ result: string; success: boolean }> {
+  logger.log(` Executing TRAINING: ${workOrder.title}`);
+
+  let payload: TrainingWorkOrderPayload;
+  try {
+    payload = JSON.parse(workOrder.description) as TrainingWorkOrderPayload;
+  } catch {
+    return { result: 'Invalid training payload', success: false };
+  }
+
+  // Fetch top experiments for mutation engine
+  const topExperiments = await fetchTopExperiments(coordinatorUrl);
+
+  // Propose hyperparams via mutation engine
+  let mutation = await proposeMutation(topExperiments, payload.currentBestLoss, capabilities);
+
+  // Override with base config if provided
+  if (payload.baseConfig) {
+    mutation = {
+      ...mutation,
+      hyperparams: { ...mutation.hyperparams, ...payload.baseConfig },
+    };
+  }
+
+  // Run actual training via train_micro.py
+  let trainingResult;
+  try {
+    trainingResult = await trainMicroModel({
+      proposal: mutation,
+      datasetPath: payload.datasetId,
+      hardware: capabilities.includes('gpu') ? 'gpu' : 'cpu',
+      runNumber: iteration,
+    });
+  } catch (err) {
+    logger.error(' Training failed:', (err as Error).message);
+    return { result: `Training failed: ${(err as Error).message}`, success: false };
+  }
+
+  const improved = trainingResult.valLoss < payload.currentBestLoss;
+
+  // A7: Submit results to both endpoints
+  await submitTrainingExperiment(
+    coordinatorUrl,
+    peerId,
+    mutation.hyperparams,
+    trainingResult.valLoss,
+    trainingResult.durationMs,
+  );
+
+  await submitTrainingToExperiments(
+    coordinatorUrl,
+    peerId,
+    payload,
+    trainingResult.valLoss,
+    trainingResult.finalLoss,
+    trainingResult.durationMs,
+  );
+
+  const result = JSON.stringify({
+    valLoss: trainingResult.valLoss,
+    finalLoss: trainingResult.finalLoss,
+    config: trainingResult.config,
+    durationMs: trainingResult.durationMs,
+    lossCurve: trainingResult.lossCurve,
+    hardwareUsed: trainingResult.hardwareUsed,
+    improved,
+    metricType: 'val_loss',
+    metricValue: trainingResult.valLoss,
+  });
+
+  logger.log(` Training complete — valLoss=${trainingResult.valLoss.toFixed(4)}, improved=${improved}`);
+
+  return { result, success: true };
 }
 
 /**
@@ -987,7 +1202,18 @@ export async function runWorkOrderAgentIteration(
   let success: boolean;
   let researchResult: ResearchResult | undefined;
 
-  if (isResearchWorkOrder(workOrder)) {
+  if (isTrainingWorkOrder(workOrder)) {
+    // Execute TRAINING work order (runs train_micro.py)
+    const training = await executeTrainingWorkOrder(
+      workOrder,
+      coordinatorUrl,
+      peerId,
+      capabilities,
+      iteration,
+    );
+    result = training.result;
+    success = training.success;
+  } else if (isResearchWorkOrder(workOrder)) {
     // Execute research work order
     const research = await executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
     // Use the parsed result as the submitted result (not the raw LLM response with <think> blocks)
@@ -1054,9 +1280,9 @@ export async function runWorkOrderAgentIteration(
     success = execution.success;
   }
 
-  // 5. Complete work order — skip if research failed to parse
-  if (isResearchWorkOrder(workOrder) && !success) {
-    logger.warn(' Research parse failed — skipping result submission to avoid polluting rewards');
+  // 5. Complete work order — skip if research or training failed
+  if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder)) && !success) {
+    logger.warn(' Work order execution failed — skipping result submission to avoid polluting rewards');
     agentState.currentWorkOrder = undefined;
     continue;
   }
@@ -1203,9 +1429,14 @@ export const _test = {
   shouldContinueLoop,
   shouldSleepBetweenIterations,
   isResearchWorkOrder,
+  isTrainingWorkOrder,
   extractResearchPayload,
   buildResearchPrompt,
   executeResearchWorkOrder,
+  executeTrainingWorkOrder,
+  fetchTopExperiments,
+  submitTrainingExperiment,
+  submitTrainingToExperiments,
   submitResearchResult,
   saveResearchToBrain,
   loadEconomicConfig,

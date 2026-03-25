@@ -3,7 +3,7 @@
  */
 
 import * as os from 'os';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { Injectable } from '@nestjs/common';
 
 import type { ModelCategory } from '../model/model-catalog.js';
@@ -294,6 +294,39 @@ export class HardwareHelper {
     if (vramGb >= 1) return 1;
     return 0;
   }
+
+  /**
+   * Detect if this node can run micro-transformer training.
+   *
+   * Requirements:
+   * - python3 is available in PATH
+   * - torch is importable (PyTorch installed)
+   *
+   * Returns true when both are satisfied.
+   */
+  canTrain(): boolean {
+    // 1. Check python3 exists
+    const python = spawnSync('python3', ['--version'], { stdio: 'pipe' });
+    if (python.status !== 0 || python.error) {
+      return false;
+    }
+
+    // 2. Check torch is importable
+    const torchCheck = spawnSync('python3', ['-c', 'import torch'], { stdio: 'pipe' });
+    return torchCheck.status === 0 && !torchCheck.error;
+  }
+
+  /**
+   * Build capabilities list from hardware.
+   * Includes 'training' if Python + torch are available.
+   */
+  buildCapabilities(hardware: Hardware): string[] {
+    const caps: string[] = [];
+    if (hardware.cpuCores > 0) caps.push('cpu');
+    if (hardware.gpuVramGb > 0) caps.push('gpu');
+    if (this.canTrain()) caps.push('training');
+    return caps;
+  }
 }
 
 // Backward-compatible standalone exports
@@ -317,3 +350,7 @@ export const getCompatibleModels = (vramGb: number, allModels?: ModelInfo[]): Mo
   new HardwareHelper().getCompatibleModels(vramGb, allModels ?? []);
 export const getRecommendedTier = (vramGb: number): number =>
   new HardwareHelper().getRecommendedTier(vramGb);
+export const canTrain = (): boolean =>
+  new HardwareHelper().canTrain();
+export const buildCapabilities = (hardware: Hardware): string[] =>
+  new HardwareHelper().buildCapabilities(hardware);
