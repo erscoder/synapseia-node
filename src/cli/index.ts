@@ -131,7 +131,7 @@ async function bootstrap() {
     .option('--model <name>', 'Model to use (default: recommended for hardware)')
     .option('--llm-url <url>', 'Custom LLM API base URL (for openai-compat provider)')
     .option('--llm-key <key>', 'API key for cloud LLM provider')
-    .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3001)')
+    .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3701)')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
     .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
     .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')

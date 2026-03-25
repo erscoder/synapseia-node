@@ -84,7 +84,7 @@ async function loadOrCreateWallet(peerId) {
 }
 
 // Configuration
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3001';
+const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TIER = parseInt(process.env.PEER_TIER || '1', 10);
 const PEER_ID = process.env.PEER_ID || `sim-${crypto.randomBytes(8).toString('hex')}`;
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL || '30000', 10);

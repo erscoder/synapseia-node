@@ -940,7 +940,16 @@ export async function runWorkOrderAgentIteration(
   if (isResearchWorkOrder(workOrder)) {
     // Execute research work order
     const research = await executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
-    result = research.rawResponse;
+    // Use the parsed result as the submitted result (not the raw LLM response with <think> blocks)
+    result = JSON.stringify({
+      summary: research.result.summary,
+      keyInsights: research.result.keyInsights,
+      proposal: research.result.proposal,
+      hypothesis: research.result.summary,
+      metricType: 'coherence',
+      metricValue: research.success ? 1.0 : 0.0,
+      proof: research.result.proposal,
+    });
     success = research.success;
     researchResult = research.result;
     const researchHyperparams = research.hyperparams;

@@ -25,14 +25,14 @@ let _socket: Socket | null = null;
 
 /**
  * Connect to coordinator WS and start listening for round.closed events.
- * @param coordinatorUrl  e.g. http://localhost:3001
+ * @param coordinatorUrl  e.g. http://localhost:3701
  * @param peerId          This node's identity (used to check if it won)
  */
 export function startRoundListener(coordinatorUrl: string, peerId: string): void {
   if (_socket) return; // already connected
 
   _socket = io(coordinatorUrl, {
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionDelay: 5000,
     reconnectionAttempts: Infinity,
