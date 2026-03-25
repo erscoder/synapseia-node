@@ -68,6 +68,51 @@ export interface ResearchResult {
   proposal: string;
 }
 
+/**
+ * Scores a ResearchResult for coherence quality (0.0 – 1.0).
+ *
+ * Criteria (each up to some fraction of the total):
+ *  - summary:    length ≥ 80 chars → 0.3, < 20 → 0.0, linear in between
+ *  - keyInsights: ≥ 3 insights → 0.3, each insight avg length ≥ 30 chars → extra 0.1
+ *  - proposal:   length ≥ 100 chars → 0.3, < 20 → 0.0, linear in between
+ *
+ * Total max = 1.0. Rounded to 2 decimal places.
+ */
+export function scoreResearchResult(result: ResearchResult): number {
+  let score = 0;
+
+  // --- summary (0–0.3) ---
+  const summaryLen = (result.summary ?? '').trim().length;
+  if (summaryLen >= 80) {
+    score += 0.3;
+  } else if (summaryLen > 20) {
+    score += 0.3 * ((summaryLen - 20) / 60);
+  }
+
+  // --- keyInsights (0–0.4): count + avg length bonus ---
+  const insights = Array.isArray(result.keyInsights) ? result.keyInsights : [];
+  const insightCount = insights.length;
+  if (insightCount >= 3) {
+    score += 0.3;
+  } else if (insightCount > 0) {
+    score += 0.3 * (insightCount / 3);
+  }
+  if (insightCount > 0) {
+    const avgLen = insights.reduce((sum, s) => sum + (s ?? '').trim().length, 0) / insightCount;
+    if (avgLen >= 30) score += 0.1;
+  }
+
+  // --- proposal (0–0.3) ---
+  const proposalLen = (result.proposal ?? '').trim().length;
+  if (proposalLen >= 100) {
+    score += 0.3;
+  } else if (proposalLen > 20) {
+    score += 0.3 * ((proposalLen - 20) / 80);
+  }
+
+  return Math.round(Math.min(score, 1.0) * 100) / 100;
+}
+
 export interface WorkOrderAgentState {
   iteration: number;
   totalWorkOrdersCompleted: number;
@@ -952,7 +997,7 @@ export async function runWorkOrderAgentIteration(
       proposal: research.result.proposal,
       hypothesis: research.result.summary,
       metricType: 'coherence',
-      metricValue: research.success ? 1.0 : 0.0,
+      metricValue: research.success ? scoreResearchResult(research.result) : 0.0,
       proof: research.result.proposal,
     });
     success = research.success;

@@ -9,6 +9,8 @@ import {
   stopWorkOrderAgent,
   WorkOrder,
   EconomicConfig,
+  ResearchResult,
+  scoreResearchResult,
   _test,
 } from '../modules/agent/work-order-agent.js';
 import { initBrain } from '../modules/agent/agent-brain.js';
@@ -1529,6 +1531,75 @@ describe('WorkOrderAgent', () => {
           expect(evaluation.profitRatio).toBeGreaterThan(1.5);
         });
       });
+    });
+  });
+
+  describe('scoreResearchResult', () => {
+    const makeResult = (overrides: Partial<ResearchResult> = {}): ResearchResult => ({
+      summary: 'Default summary text that is long enough to score well and exceed eighty characters total.',
+      keyInsights: [
+        'First insight with enough detail to pass the average length threshold of thirty characters.',
+        'Second insight equally detailed and sufficiently long for a good score.',
+        'Third insight that ensures we hit the three-insight threshold for maximum count score.',
+      ],
+      proposal: 'A detailed proposal that exceeds one hundred characters and describes a concrete implementation plan for the research idea presented.',
+      ...overrides,
+    });
+
+    it('should return 1.0 for a full-quality result', () => {
+      const result = makeResult();
+      expect(scoreResearchResult(result)).toBe(1.0);
+    });
+
+    it('should return 0.0 for empty fields', () => {
+      const result = makeResult({ summary: '', keyInsights: [], proposal: '' });
+      expect(scoreResearchResult(result)).toBe(0);
+    });
+
+    it('should return partial score when only summary is good', () => {
+      const result = makeResult({ keyInsights: [], proposal: '' });
+      const score = scoreResearchResult(result);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(1.0);
+    });
+
+    it('should return partial score when only proposal is good', () => {
+      const result = makeResult({ summary: '', keyInsights: [] });
+      const score = scoreResearchResult(result);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(1.0);
+    });
+
+    it('should give lower score for fewer insights', () => {
+      const scoreThree = scoreResearchResult(makeResult());
+      const scoreOne = scoreResearchResult(makeResult({ keyInsights: ['Only one insight here with enough chars for length bonus.'] }));
+      expect(scoreThree).toBeGreaterThan(scoreOne);
+    });
+
+    it('should give length bonus for insights averaging ≥30 chars', () => {
+      const withLongInsights = makeResult({
+        keyInsights: ['Short', 'Short', 'Short'],
+      });
+      const withShortInsights = makeResult({
+        keyInsights: [
+          'Long insight with more than thirty characters total.',
+          'Another long insight exceeding thirty characters.',
+          'Third long insight also over thirty characters long.',
+        ],
+      });
+      expect(scoreResearchResult(withShortInsights)).toBeGreaterThan(scoreResearchResult(withLongInsights));
+    });
+
+    it('should cap score at 1.0', () => {
+      const result = makeResult();
+      expect(scoreResearchResult(result)).toBeLessThanOrEqual(1.0);
+    });
+
+    it('should return value between 0 and 1', () => {
+      const result = makeResult({ summary: 'Mid length summary text here.' });
+      const score = scoreResearchResult(result);
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(1.0);
     });
   });
 });
