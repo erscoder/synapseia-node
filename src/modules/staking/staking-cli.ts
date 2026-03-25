@@ -19,7 +19,7 @@ if (!process.env.SYN_TOKEN_MINT) throw new Error('SYN_TOKEN_MINT not informed');
 const SYN_MINT = new PublicKey(process.env.SYN_TOKEN_MINT);
 if (!process.env.SOLANA_RPC_URL) throw new Error('SOLANA_RPC_URL not informed');
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3001';
+const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // Derive vault authority PDA

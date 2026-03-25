@@ -37,7 +37,7 @@ program
 
     // Set defaults
     const datasetPath = options.dataset || path.join(process.cwd(), 'data', 'astro-sample.txt');
-    const coordinatorUrl = options.coordinator || 'http://localhost:3001';
+    const coordinatorUrl = options.coordinator || 'http://localhost:3701';
     const interval = options.interval || 120000;
     const maxIterations = options.maxIterations || 0;
     const intervalMs = options.intervalMs || 3600000;

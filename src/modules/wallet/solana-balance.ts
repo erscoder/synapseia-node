@@ -52,7 +52,7 @@ export class SolanaBalanceHelper {
    */
   async getStakedAmount(
     walletAddress: string,
-    coordinatorUrl: string = 'http://localhost:3001',
+    coordinatorUrl: string = 'http://localhost:3701',
   ): Promise<number> {
     try {
       const res = await fetch(`${coordinatorUrl}/stake/staker/${encodeURIComponent(walletAddress)}`);
@@ -70,7 +70,7 @@ export class SolanaBalanceHelper {
   async stakeTokens(
     walletAddress: string,
     amount: string,
-    coordinatorUrl: string = 'http://localhost:3001',
+    coordinatorUrl: string = 'http://localhost:3701',
   ): Promise<{ success: boolean; txSignature?: string; stakeAddress?: string; error?: string }> {
     try {
       const res = await fetch(`${coordinatorUrl}/stake`, {
