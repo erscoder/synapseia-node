@@ -20,6 +20,8 @@ import type { AgentBrain } from './agent-brain.js';
 import { startRoundListener } from './round-listener.js';
 import { trainMicroModel } from '../model/trainer.js';
 import { proposeMutation } from '../model/mutation-engine.js';
+import { runDiLoCoInnerLoop } from '../model/diloco-trainer.js';
+import { downloadAdapter } from '../model/model-downloader.js';
 import type { Experiment } from '../../types.js';
 
 /**
@@ -383,6 +385,188 @@ export interface TrainingWorkOrderPayload {
   }>;
   maxTrainSeconds: number;
   currentBestLoss: number;
+}
+
+// ---------------------------------------------------------------------------
+// DiLoCo Training Work Order support (E8)
+// ---------------------------------------------------------------------------
+
+/** Local copy of the coordinator DiLoCoWorkOrderPayload shape */
+export interface DiLoCoWorkOrderPayload {
+  domain: string;
+  modelId: string;
+  outerRound: number;
+  innerSteps: number;
+  datasetId: string;
+  currentAdapterUrl?: string;
+  hyperparams: {
+    learningRate?: number;
+    batchSize?: number;
+  };
+  deadline: number;
+}
+
+/**
+ * Detect if a work order is of type DILOCO_TRAINING
+ */
+export function isDiLoCoWorkOrder(workOrder: WorkOrder): boolean {
+  if ((workOrder.type as string) === 'DILOCO_TRAINING') return true;
+  try {
+    const payload = JSON.parse(workOrder.description) as Partial<DiLoCoWorkOrderPayload>;
+    return !!(
+      payload.domain !== undefined &&
+      payload.modelId !== undefined &&
+      payload.outerRound !== undefined &&
+      payload.innerSteps !== undefined &&
+      payload.deadline !== undefined
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Upload compressed gradients to the coordinator DiLoCo endpoint
+ */
+export async function uploadGradients(
+  coordinatorUrl: string,
+  domain: string,
+  peerId: string,
+  gradientBuffer: Buffer,
+): Promise<boolean> {
+  try {
+    const formData = new FormData();
+    formData.append('peerId', peerId);
+    formData.append(
+      'gradients',
+      new Blob([gradientBuffer], { type: 'application/octet-stream' }),
+      'gradients.pt',
+    );
+
+    const response = await fetch(
+      `${coordinatorUrl}/diloco/${domain}/gradients`,
+      { method: 'POST', body: formData },
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      logger.warn(`[DiLoCo] Failed to upload gradients: ${err}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn(`[DiLoCo] Upload error: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/**
+ * Execute a DILOCO_TRAINING work order:
+ * 1. Download current adapter (if URL provided)
+ * 2. Download domain dataset (cached)
+ * 3. Run DiLoCo inner loop
+ * 4. Upload compressed gradients to coordinator
+ */
+export async function executeDiLoCoWorkOrder(
+  workOrder: WorkOrder,
+  coordinatorUrl: string,
+  peerId: string,
+  capabilities: string[],
+): Promise<{ result: string; success: boolean }> {
+  logger.log(` Executing DILOCO_TRAINING: ${workOrder.title}`);
+
+  let payload: DiLoCoWorkOrderPayload;
+  try {
+    payload = JSON.parse(workOrder.description) as DiLoCoWorkOrderPayload;
+  } catch {
+    return { result: 'Invalid DiLoCo payload', success: false };
+  }
+
+  // 1. Download current LoRA adapter (if not round 0)
+  let localAdapterPath: string | undefined;
+  if (payload.currentAdapterUrl) {
+    localAdapterPath = path.join(
+      os.homedir(),
+      '.synapseia',
+      'adapters',
+      payload.domain,
+      `round_${payload.outerRound - 1}`,
+    );
+    try {
+      await downloadAdapter(payload.currentAdapterUrl, localAdapterPath);
+      logger.log(`[DiLoCo] Downloaded adapter to ${localAdapterPath}`);
+    } catch (err) {
+      logger.warn(`[DiLoCo] Could not download adapter: ${(err as Error).message}`);
+      localAdapterPath = undefined;
+    }
+  }
+
+  // 2. Download domain dataset (with caching)
+  let datasetPath = payload.datasetId;
+  try {
+    datasetPath = await downloadDataset(coordinatorUrl, payload.domain);
+    logger.log(`[DiLoCo] Using dataset: ${datasetPath}`);
+  } catch (err) {
+    logger.warn(`[DiLoCo] Could not download dataset: ${(err as Error).message}. Using datasetId.`);
+  }
+
+  // 3. Run DiLoCo inner loop
+  const hardware = capabilities.includes('cuda')
+    ? 'cuda'
+    : capabilities.includes('mps')
+    ? 'mps'
+    : 'cpu';
+
+  let dilocoResult;
+  try {
+    dilocoResult = await runDiLoCoInnerLoop({
+      modelId: payload.modelId,
+      adapterPath: localAdapterPath,
+      datasetPath,
+      innerSteps: payload.innerSteps,
+      hyperparams: payload.hyperparams,
+      hardware: hardware as 'cpu' | 'mps' | 'cuda',
+      testMode: process.env.NODE_ENV === 'test',
+    });
+  } catch (err) {
+    logger.error(`[DiLoCo] Inner loop failed: ${(err as Error).message}`);
+    return { result: `DiLoCo training failed: ${(err as Error).message}`, success: false };
+  }
+
+  // 4. Upload compressed gradients to coordinator
+  try {
+    const gradientBuffer = await import('fs').then((fsm) =>
+      fsm.promises.readFile(dilocoResult.gradientPath),
+    );
+    const uploaded = await uploadGradients(
+      coordinatorUrl,
+      payload.domain,
+      peerId,
+      gradientBuffer,
+    );
+    if (!uploaded) {
+      logger.warn('[DiLoCo] Failed to upload gradients to coordinator');
+    }
+  } catch (err) {
+    logger.warn(`[DiLoCo] Could not read/upload gradient file: ${(err as Error).message}`);
+  }
+
+  const result = JSON.stringify({
+    valLoss: dilocoResult.valLoss,
+    finalLoss: dilocoResult.finalLoss,
+    innerSteps: dilocoResult.innerSteps,
+    durationMs: dilocoResult.durationMs,
+    gradientSizeBytes: dilocoResult.gradientSizeBytes,
+    metricType: 'val_loss',
+    metricValue: dilocoResult.valLoss,
+  });
+
+  logger.log(
+    `[DiLoCo] Inner loop complete — valLoss=${dilocoResult.valLoss.toFixed(4)}, ` +
+      `gradients=${dilocoResult.gradientSizeBytes} bytes`,
+  );
+
+  return { result, success: true };
 }
 
 /**
@@ -1307,7 +1491,17 @@ export async function runWorkOrderAgentIteration(
   let success: boolean;
   let researchResult: ResearchResult | undefined;
 
-  if (isTrainingWorkOrder(workOrder)) {
+  if (isDiLoCoWorkOrder(workOrder)) {
+    // Execute DILOCO_TRAINING work order (runs diloco_train.py)
+    const diloco = await executeDiLoCoWorkOrder(
+      workOrder,
+      coordinatorUrl,
+      peerId,
+      capabilities,
+    );
+    result = diloco.result;
+    success = diloco.success;
+  } else if (isTrainingWorkOrder(workOrder)) {
     // Execute TRAINING work order (runs train_micro.py)
     const training = await executeTrainingWorkOrder(
       workOrder,
@@ -1386,7 +1580,7 @@ export async function runWorkOrderAgentIteration(
   }
 
   // 5. Complete work order — skip if research or training failed
-  if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder)) && !success) {
+  if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder) || isDiLoCoWorkOrder(workOrder)) && !success) {
     logger.warn(' Work order execution failed — skipping result submission to avoid polluting rewards');
     agentState.currentWorkOrder = undefined;
     continue;
@@ -1550,6 +1744,9 @@ export const _test = {
   getModelCostPer1kTokens,
   downloadDataset,
   getDatasetCacheDir,
+  isDiLoCoWorkOrder,
+  executeDiLoCoWorkOrder,
+  uploadGradients,
 };
 
 // ---------------------------------------------------------------------------

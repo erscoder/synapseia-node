@@ -317,14 +317,54 @@ export class HardwareHelper {
   }
 
   /**
+   * Detect if this node can participate in DiLoCo distributed training.
+   *
+   * Requirements:
+   * - GPU or MPS available (gpuVramGb > 0)
+   * - python3 available
+   * - torch importable
+   * - peft importable (LoRA adapters)
+   *
+   * Returns true when all conditions are met.
+   */
+  canDiLoCo(hardware?: Hardware): boolean {
+    // Check GPU availability
+    const hw = hardware ?? this.detectHardware(false);
+    if (hw.gpuVramGb <= 0) {
+      return false;
+    }
+
+    // Check python3
+    const python = spawnSync('python3', ['--version'], { stdio: 'pipe' });
+    if (python.status !== 0 || python.error) {
+      return false;
+    }
+
+    // Check torch
+    const torchCheck = spawnSync('python3', ['-c', 'import torch'], { stdio: 'pipe' });
+    if (torchCheck.status !== 0 || torchCheck.error) {
+      return false;
+    }
+
+    // Check peft
+    const peftCheck = spawnSync('python3', ['-c', 'import peft'], { stdio: 'pipe' });
+    return peftCheck.status === 0 && !peftCheck.error;
+  }
+
+  /**
    * Build capabilities list from hardware.
    * Includes 'training' if Python + torch are available.
+   * Includes 'diloco' and 'gpu' if canDiLoCo() returns true.
    */
   buildCapabilities(hardware: Hardware): string[] {
     const caps: string[] = [];
     if (hardware.cpuCores > 0) caps.push('cpu');
     if (hardware.gpuVramGb > 0) caps.push('gpu');
     if (this.canTrain()) caps.push('training');
+    if (this.canDiLoCo(hardware)) {
+      if (!caps.includes('diloco')) caps.push('diloco');
+      if (!caps.includes('gpu')) caps.push('gpu');
+    }
     return caps;
   }
 }
@@ -352,5 +392,7 @@ export const getRecommendedTier = (vramGb: number): number =>
   new HardwareHelper().getRecommendedTier(vramGb);
 export const canTrain = (): boolean =>
   new HardwareHelper().canTrain();
+export const canDiLoCo = (hardware?: Hardware): boolean =>
+  new HardwareHelper().canDiLoCo(hardware);
 export const buildCapabilities = (hardware: Hardware): string[] =>
   new HardwareHelper().buildCapabilities(hardware);

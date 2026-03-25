@@ -4,9 +4,11 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { statSync } from 'fs';
+
+export type SpawnFn = (cmd: string, args: string[], options: Record<string, unknown>) => ChildProcess;
 
 export interface DiLoCoHyperparams {
   learningRate?: number;
@@ -63,9 +65,13 @@ export interface DiLoCoResult {
  *
  * Emits JSON progress lines while training, then a final result line.
  */
+export type StatFn = (path: string) => { size: number };
+
 export async function runDiLoCoInnerLoop(
   config: DiLoCoConfig,
   onProgress?: (update: DiLoCoProgressUpdate) => void,
+  spawnFn: SpawnFn = spawn as unknown as SpawnFn,
+  statFn: StatFn = (p) => statSync(p) as { size: number },
 ): Promise<DiLoCoResult> {
   const scriptPath =
     config.pythonScriptPath ??
@@ -84,7 +90,7 @@ export async function runDiLoCoInnerLoop(
   };
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('python3', [scriptPath], {
+    const proc = spawnFn('python3', [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -122,7 +128,7 @@ export async function runDiLoCoInnerLoop(
 
             let gradientSizeBytes = 0;
             try {
-              gradientSizeBytes = statSync(gradientPath).size;
+              gradientSizeBytes = statFn(gradientPath).size;
             } catch {
               gradientSizeBytes = 0;
             }
@@ -178,8 +184,10 @@ export class DiLoCoTrainerHelper {
   runDiLoCoInnerLoop(
     config: DiLoCoConfig,
     onProgress?: (update: DiLoCoProgressUpdate) => void,
+    spawnFn?: SpawnFn,
+    statFn?: StatFn,
   ): Promise<DiLoCoResult> {
-    return runDiLoCoInnerLoop(config, onProgress);
+    return runDiLoCoInnerLoop(config, onProgress, spawnFn, statFn);
   }
 }
 
