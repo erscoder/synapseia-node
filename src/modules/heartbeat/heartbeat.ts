@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity.js';
 import type { Hardware } from '../hardware/hardware.js';
 import type { P2PNode } from '../p2p/p2p.js';
+import { ModelDiscovery } from '../discovery/model-discovery.js';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -116,6 +117,7 @@ export class HeartbeatHelper {
     lng?: number,
   ): () => void {
     const intervalStartTime = Date.now();
+    const modelDiscovery = new ModelDiscovery();
     const intervalId = setInterval(async () => {
       try {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
@@ -124,6 +126,12 @@ export class HeartbeatHelper {
           await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng);
         } catch (httpErr) {
           logger.error('HTTP heartbeat failed:', (httpErr as Error).message);
+        }
+        // Sprint D: Discovery feedback — register available models with coordinator
+        try {
+          await modelDiscovery.registerModels(coordinatorUrl, identity.peerId, hardware);
+        } catch (discErr) {
+          logger.warn('Model discovery registration failed:', (discErr as Error).message);
         }
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
