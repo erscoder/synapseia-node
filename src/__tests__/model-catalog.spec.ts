@@ -30,16 +30,16 @@ describe('Model Catalog', () => {
   });
 
   describe('Catalog Constants', () => {
-    it('should have 25 local models in MODEL_CATALOG', () => {
-      expect(MODEL_CATALOG.length).toBe(25);
+    it('should have 28 local models in MODEL_CATALOG', () => {
+      expect(MODEL_CATALOG.length).toBe(28);
     });
 
-    it('should have 1 cloud models in CLOUD_MODELS', () => {
-      expect(CLOUD_MODELS.length).toBe(1);
+    it('should have 3 cloud models in CLOUD_MODELS', () => {
+      expect(CLOUD_MODELS.length).toBe(3);
     });
 
-    it('should have 26 models in FULL_CATALOG', () => {
-      expect(FULL_CATALOG.length).toBe(26);
+    it('should have 31 models in FULL_CATALOG', () => {
+      expect(FULL_CATALOG.length).toBe(31);
     });
 
     it('should have required models from specification', () => {
@@ -89,7 +89,7 @@ describe('Model Catalog', () => {
   describe('listModels', () => {
     it('should return all models when no category specified', () => {
       const models = listModels();
-      expect(models).toHaveLength(26);
+      expect(models).toHaveLength(31);
     });
 
     it('should filter by embedding category', () => {

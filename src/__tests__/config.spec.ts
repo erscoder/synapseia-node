@@ -20,7 +20,7 @@ describe('Config Module', () => {
     it('should return default configuration', () => {
       const config = defaultConfig();
 
-      expect(config.coordinatorUrl).toBe('http://localhost:3001');
+      expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
       expect(config.llmUrl).toBeUndefined();
       expect(config.llmKey).toBeUndefined();
@@ -34,7 +34,7 @@ describe('Config Module', () => {
 
       const config = loadConfig();
 
-      expect(config.coordinatorUrl).toBe('http://localhost:3001');
+      expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(existsSync).toHaveBeenCalledWith(CONFIG_FILE);
     });
 
@@ -62,7 +62,7 @@ describe('Config Module', () => {
 
       const config = loadConfig();
 
-      expect(config.coordinatorUrl).toBe('http://localhost:3001');
+      expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
     });
   });
