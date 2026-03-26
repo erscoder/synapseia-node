@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { proposeMutation, _test } from '../modules/model/mutation-engine.js';
 import type { Experiment } from '../types.js';
 
