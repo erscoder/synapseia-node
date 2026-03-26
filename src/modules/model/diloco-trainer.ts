@@ -98,10 +98,10 @@ export async function runDiLoCoInnerLoop(
     let finalResult: DiLoCoResult | null = null;
 
     // Send config via stdin
-    proc.stdin.write(JSON.stringify(payload));
-    proc.stdin.end();
+    proc.stdin!.write(JSON.stringify(payload));
+    proc.stdin!.end();
 
-    proc.stdout.on('data', (data: Buffer) => {
+    proc.stdout!.on('data', (data: Buffer) => {
       const lines = data.toString().split('\n').filter((l) => l.trim());
       for (const line of lines) {
         try {
@@ -148,7 +148,7 @@ export async function runDiLoCoInnerLoop(
       }
     });
 
-    proc.stderr.on('data', (data: Buffer) => {
+    proc.stderr!.on('data', (data: Buffer) => {
       stderr += data.toString();
     });
 

@@ -75,11 +75,11 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return undefined when object is null', () => {
-      expect(getOptionalString(null, 'message')).toBeUndefined();
+      expect(getOptionalString(null as { message?: string } | null, 'message')).toBeUndefined();
     });
 
     it('should return undefined when object is undefined', () => {
-      expect(getOptionalString(undefined, 'message')).toBeUndefined();
+      expect(getOptionalString(undefined as { message?: string } | undefined, 'message')).toBeUndefined();
     });
 
     it('should return undefined when property is not a string', () => {

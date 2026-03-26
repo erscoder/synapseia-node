@@ -40,7 +40,7 @@ describe('hardware (A13)', () => {
 
     it('should detect GPU V-RAM for compatible GPUs', async () => {
       const { detectHardware } = await import('../modules/hardware/hardware.js');
-      mockExecSync.mockImplementation((cmd: string) => {
+      mockExecSync.mockImplementation((cmd: any) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
         if (cmd.includes('ollama')) throw new Error('Not installed');
       });
@@ -66,7 +66,7 @@ describe('hardware (A13)', () => {
       const { detectHardware } = await import('../modules/hardware/hardware.js');
 
       // Mock nvidia-smi response
-      mockExecSync.mockImplementation((cmd: string) => {
+      mockExecSync.mockImplementation((cmd: any) => {
         if (cmd.includes('nvidia-smi')) return '24 GiB';
         if (cmd.includes('ollama')) throw new Error('Not installed');
         return '';
@@ -92,7 +92,7 @@ describe('hardware (A13)', () => {
     it('should set hasOllama false when curl fails', async () => {
       const { detectHardware } = await import('../modules/hardware/hardware.js');
 
-      mockExecSync.mockImplementation((cmd: string) => {
+      mockExecSync.mockImplementation((cmd: any) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
         if (cmd.includes('curl')) throw new Error('Not installed');
         return '';
@@ -463,7 +463,7 @@ describe('hardware (A13)', () => {
   describe('getSystemInfo', () => {
     it('should return system info', async () => {
       const { getSystemInfo } = await import('../modules/hardware/hardware.js');
-      mockExecSync.mockImplementation((cmd: string) => {
+      mockExecSync.mockImplementation((cmd: any) => {
         if (cmd.includes('sysctl')) return 'Apple M3 Max';
         throw new Error('nvidia-smi not found');
       });
