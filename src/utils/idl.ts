@@ -1,6 +1,10 @@
 /**
  * IDL helpers for Solana programs
  * Derive PDA addresses for staking, token, and escrow programs
+ *
+ * NOTE: Program IDs are resolved lazily (on first access) so that importing
+ * this module does NOT throw when staking env vars are absent — e.g. when
+ * the CLI runs `--help` or non-staking commands.
  */
 
 import { PublicKey } from '@solana/web3.js';
@@ -11,10 +15,30 @@ function requireEnv(key: string): string {
   return val;
 }
 
-// Program IDs — must be set via environment variables, no hardcoded fallbacks
-export const STAKING_PROGRAM_ID = new PublicKey(requireEnv('STAKING_PROGRAM_ID'));
-export const TOKEN_PROGRAM_ID   = new PublicKey(requireEnv('TOKEN_PROGRAM_ID'));
-export const ESCROW_PROGRAM_ID  = new PublicKey(requireEnv('ESCROW_PROGRAM_ID'));
+function lazyPublicKey(envKey: string): () => PublicKey {
+  let cached: PublicKey | undefined;
+  return () => {
+    if (!cached) cached = new PublicKey(requireEnv(envKey));
+    return cached;
+  };
+}
+
+// Lazy getters — no error at import time
+const getStakingProgramId  = lazyPublicKey('STAKING_PROGRAM_ID');
+const getTokenProgramId    = lazyPublicKey('TOKEN_PROGRAM_ID');
+const getEscrowProgramId   = lazyPublicKey('ESCROW_PROGRAM_ID');
+
+// Re-export as getters so callers keep the same `STAKING_PROGRAM_ID` name
+export const STAKING_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
+  get: (_t, prop) => Reflect.get(getStakingProgramId(), prop),
+});
+export const TOKEN_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
+  get: (_t, prop) => Reflect.get(getTokenProgramId(), prop),
+});
+export const ESCROW_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
+  get: (_t, prop) => Reflect.get(getEscrowProgramId(), prop),
+});
+
 // Rewards will be deployed as part of EPIC 5 - use placeholder for now
 export const REWARDS_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 
@@ -29,7 +53,7 @@ export const ESCROW_SEED = 'escrow';
 export function deriveStakeAccount(peerId: string): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(STAKE_SEED), Buffer.from(peerId)],
-    STAKING_PROGRAM_ID,
+    getStakingProgramId(),
   );
 }
 
@@ -39,7 +63,7 @@ export function deriveStakeAccount(peerId: string): [PublicKey, number] {
 export function deriveTokenMint(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(TOKEN_MINT_SEED)],
-    TOKEN_PROGRAM_ID,
+    getTokenProgramId(),
   );
 }
 
@@ -49,7 +73,7 @@ export function deriveTokenMint(): [PublicKey, number] {
 export function deriveEscrowAccount(peerId: string): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ESCROW_SEED), Buffer.from(peerId)],
-    ESCROW_PROGRAM_ID,
+    getEscrowProgramId(),
   );
 }
 
@@ -58,8 +82,8 @@ export function deriveEscrowAccount(peerId: string): [PublicKey, number] {
  */
 export function getAllProgramIds() {
   return {
-    staking: STAKING_PROGRAM_ID,
-    token: TOKEN_PROGRAM_ID,
-    escrow: ESCROW_PROGRAM_ID,
+    staking: getStakingProgramId(),
+    token: getTokenProgramId(),
+    escrow: getEscrowProgramId(),
   };
 }
