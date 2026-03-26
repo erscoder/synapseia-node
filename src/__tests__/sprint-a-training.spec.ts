@@ -110,19 +110,19 @@ describe('A5 — fetchTopExperiments', () => {
   });
 
   it('should return empty array when fetch throws', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+    global.fetch = (jest.fn() as any).mockRejectedValue(new Error('network error'));
     const result = await fetchTopExperiments('http://localhost:3000');
     expect(result).toEqual([]);
   });
 
   it('should return empty array when response is not ok', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: false, json: async () => ({}) });
     const result = await fetchTopExperiments('http://localhost:3000');
     expect(result).toEqual([]);
   });
 
   it('should map leaderboard entries to Experiment shape', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = (jest.fn() as any).mockResolvedValue({
       ok: true,
       json: async () => ({
         entries: [
@@ -144,7 +144,7 @@ describe('A5 — fetchTopExperiments', () => {
       config: { id: `cfg_${i}` },
       bestScore: i,
     }));
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = (jest.fn() as any).mockResolvedValue({
       ok: true,
       json: async () => ({ entries }),
     });
@@ -154,7 +154,7 @@ describe('A5 — fetchTopExperiments', () => {
   });
 
   it('should handle missing entries field gracefully', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = (jest.fn() as any).mockResolvedValue({
       ok: true,
       json: async () => ({}),
     });
@@ -176,8 +176,8 @@ describe('A7 — submitTrainingExperiment', () => {
   });
 
   it('should POST to /hyperparams/experiments', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    global.fetch = mockFetch;
+    const mockFetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = mockFetch as any;
 
     await submitTrainingExperiment(
       'http://localhost:3000',
@@ -199,15 +199,15 @@ describe('A7 — submitTrainingExperiment', () => {
   });
 
   it('should not throw if fetch fails', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+    global.fetch = (jest.fn() as any).mockRejectedValue(new Error('network error'));
     await expect(
       submitTrainingExperiment('http://localhost:3000', 'p', {}, 2.5, 1000),
     ).resolves.not.toThrow();
   });
 
   it('should compute higher qualityScore for lower valLoss', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    global.fetch = mockFetch;
+    const mockFetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = mockFetch as any;
 
     await submitTrainingExperiment('http://x', 'p', {}, 0.1, 1000);
     const bodyLow = JSON.parse(mockFetch.mock.calls[0][1].body as string);
@@ -240,8 +240,8 @@ describe('A7 — submitTrainingToExperiments', () => {
   };
 
   it('should POST to /experiments', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    global.fetch = mockFetch;
+    const mockFetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = mockFetch as any;
 
     await submitTrainingToExperiments('http://localhost:3000', 'peer_1', payload, 2.4, 2.3, 45000);
 
@@ -257,7 +257,7 @@ describe('A7 — submitTrainingToExperiments', () => {
   });
 
   it('should set improved=false when valLoss >= currentBestLoss', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true });
 
     await submitTrainingToExperiments('http://localhost:3000', 'p', payload, 3.5, 3.4, 10000);
 
@@ -266,7 +266,7 @@ describe('A7 — submitTrainingToExperiments', () => {
   });
 
   it('should not throw if fetch fails', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+    global.fetch = (jest.fn() as any).mockRejectedValue(new Error('network error'));
     await expect(
       submitTrainingToExperiments('http://x', 'p', payload, 2.0, 1.9, 1000),
     ).resolves.not.toThrow();
@@ -287,7 +287,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
   it('should return failure for invalid JSON description', async () => {
     const wo = makeTrainingWO({ description: 'bad json' });
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({}) });
 
     const result = await executeTrainingWorkOrder(wo, 'http://localhost', 'peer', ['cpu'], 1);
     expect(result.success).toBe(false);
@@ -296,7 +296,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
   it('should return failure when trainMicroModel throws', async () => {
     const wo = makeTrainingWO();
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
     // Spy on trainer
     const trainerModule = await import('../modules/model/trainer.js');
@@ -330,7 +330,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
   it('should return success with JSON result when training succeeds', async () => {
     const wo = makeTrainingWO();
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
     const trainerModule = await import('../modules/model/trainer.js');
     jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
@@ -390,7 +390,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
   it('should use GPU hardware when capabilities include gpu', async () => {
     const wo = makeTrainingWO();
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
     const trainerModule = await import('../modules/model/trainer.js');
     const trainSpy = jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
@@ -449,7 +449,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
       baseConfig: { learningRate: 0.0001, batchSize: 64 },
     };
     const wo = makeTrainingWO({ description: JSON.stringify(payload) });
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
+    global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
     const trainerModule = await import('../modules/model/trainer.js');
     const trainSpy = jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
@@ -509,8 +509,8 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
   it('should submit results to both endpoints after training', async () => {
     const wo = makeTrainingWO();
-    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
-    global.fetch = mockFetch;
+    const mockFetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
+    global.fetch = mockFetch as any;
 
     const trainerModule = await import('../modules/model/trainer.js');
     jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({

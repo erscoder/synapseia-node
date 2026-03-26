@@ -11,9 +11,10 @@ import * as os from 'os';
 import { downloadDataset, getDatasetCacheDir } from '../modules/agent/work-order-agent.js';
 
 // Mock fetch globally
-global.fetch = jest.fn();
+global.fetch = jest.fn() as any;
 
-const mockFetch = global.fetch as jest.Mock;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockFetch = global.fetch as any;
 
 describe('B4 - downloadDataset', () => {
   let tmpDir: string;
