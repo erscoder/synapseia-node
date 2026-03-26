@@ -1,3 +1,7 @@
+process.env.STAKING_PROGRAM_ID = '8LhiExUHdJGCfnbmADcJacjbnoAU7cvXTqpBEdybd4Fg';
+process.env.TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+process.env.ESCROW_PROGRAM_ID = 'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK';
+
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { StakingHelper } from '../../staking.js';

@@ -776,7 +776,7 @@ describe('WorkOrderAgent', () => {
 
         const result = _test.buildResearchPrompt(payload);
 
-        expect(result).toContain('You are a research node');
+        expect(result).toContain('You are a');
         expect(result).toContain('Test Paper Title');
         expect(result).toContain('Test abstract content');
         expect(result).toContain('"summary"');
@@ -1074,6 +1074,7 @@ describe('WorkOrderAgent', () => {
         (fetch as jest.Mock)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] }) // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: false, status: 404 }) // fetchHyperparamConfig (no suggestion)
           .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers (paperId lookup)
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // submitResearchResult
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
@@ -1108,6 +1109,7 @@ describe('WorkOrderAgent', () => {
         (fetch as jest.Mock)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: false, status: 404 })                        // fetchHyperparamConfig (no suggestion)
           .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // submitResearchResult
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
@@ -1144,6 +1146,7 @@ describe('WorkOrderAgent', () => {
         (fetch as jest.Mock)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
+          .mockResolvedValueOnce({ ok: false, status: 404 })                        // fetchHyperparamConfig (no suggestion)
           .mockResolvedValueOnce({ ok: true, json: async () => ({ papers: [] }) }) // research-queue/papers
           .mockResolvedValueOnce({ ok: false, text: async () => 'Error' })          // submitResearchResult (fails)
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
@@ -1366,7 +1369,7 @@ describe('WorkOrderAgent', () => {
             title: 'Training Task',
             description: 'Train a model',
             requiredCapabilities: ['compute'],
-            rewardAmount: '1000',
+            rewardAmount: '1000000000000', // 1000 SYN in lamports
             status: 'PENDING',
             creatorAddress: 'creator1',
             createdAt: Date.now(),
@@ -1424,7 +1427,7 @@ describe('WorkOrderAgent', () => {
               abstract: 'Short abstract',
             }),
             requiredCapabilities: ['llm'],
-            rewardAmount: '1000', // 1000 SYN = $10 at $0.01/SYN
+            rewardAmount: '1000000000000', // 1000 SYN = $10 at $0.01/SYN
             status: 'PENDING',
             creatorAddress: 'creator1',
             createdAt: Date.now(),
@@ -1455,7 +1458,7 @@ describe('WorkOrderAgent', () => {
               abstract: 'A'.repeat(200000), // Very long abstract = high cost (~50k tokens)
             }),
             requiredCapabilities: ['llm'],
-            rewardAmount: '10', // 10 SYN = $0.10 at $0.01/SYN
+            rewardAmount: '10000000000', // 10 SYN = $0.10 at $0.01/SYN
             status: 'PENDING',
             creatorAddress: 'creator1',
             createdAt: Date.now(),

@@ -66,7 +66,7 @@ describe('IdentityService', () => {
   it('getOrCreate() delegates to identityHelper.getOrCreateIdentity', () => {
     (identityHelper.getOrCreateIdentity as jest.Mock<any>).mockReturnValue(mockIdentity);
     const result = service.getOrCreate('/tmp/test');
-    expect(identityHelper.getOrCreateIdentity).toHaveBeenCalledWith('/tmp/test');
+    expect(identityHelper.getOrCreateIdentity).toHaveBeenCalledWith('/tmp/test', undefined);
     expect(result).toBe(mockIdentity);
   });
 
