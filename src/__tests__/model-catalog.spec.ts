@@ -30,7 +30,7 @@ describe('Model Catalog', () => {
   });
 
   describe('Catalog Constants', () => {
-    it('should have 28 local models in MODEL_CATALOG', () => {
+    it('should have 25 local models in MODEL_CATALOG', () => {
       expect(MODEL_CATALOG.length).toBe(25);
     });
 
@@ -38,7 +38,7 @@ describe('Model Catalog', () => {
       expect(CLOUD_MODELS.length).toBe(3);
     });
 
-    it('should have 31 models in FULL_CATALOG', () => {
+    it('should have 28 models in FULL_CATALOG', () => {
       expect(FULL_CATALOG.length).toBe(28);
     });
 

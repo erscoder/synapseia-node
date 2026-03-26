@@ -171,7 +171,8 @@ describe('Agent Loop', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation(() => { throw new Error('log failed'); });
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       await postToFeed('', '', mockMutation, mockResult, true);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to post to feed:'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.any(String)); // Logger wraps message with timestamp/color
+      expect(warnSpy.mock.calls[0][0]).toContain('Failed to post to feed:');
       logSpy.mockRestore();
       warnSpy.mockRestore();
     });
