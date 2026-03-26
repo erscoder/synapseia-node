@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/p2p.js';
 import type { Identity } from '../modules/identity/identity.js';
 import { createLibp2p } from 'libp2p';

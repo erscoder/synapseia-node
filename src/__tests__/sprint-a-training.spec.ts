@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 /**
  * Sprint A Tests — Node side
  * Covers: A5 (isTrainingWorkOrder + routing), A6 (canTrain), A7 (submit results)
@@ -260,7 +261,7 @@ describe('A7 — submitTrainingToExperiments', () => {
 
     await submitTrainingToExperiments('http://localhost:3000', 'p', payload, 3.5, 3.4, 10000);
 
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body as string);
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body as string);
     expect(body.improved).toBe(false);
   });
 
