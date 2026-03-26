@@ -238,7 +238,7 @@ describe('LLM Provider Abstraction', () => {
       const result = await generateLLM(ollamaModel, 'Test prompt');
 
       expect(result).toBe('Generated response');
-      expect(generateOllama).toHaveBeenCalledWith('Test prompt', 'qwen2.5:0.5b');
+      expect(generateOllama).toHaveBeenCalledWith('Test prompt', 'qwen2.5:0.5b', undefined, undefined);
     });
 
     it('should throw error when Ollama generation fails', async () => {
@@ -504,7 +504,7 @@ describe('LLM Provider Abstraction', () => {
 
       expect(result).toBe('Minimax response');
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.minimax.chat/v1/text/chatcompletion_v2',
+        'https://api.minimax.io/v1/chat/completions',
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test-key',

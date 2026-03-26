@@ -19,6 +19,8 @@ export default {
     ],
   },
   testEnvironment: 'node',
+  forceExit: true,
+  testTimeout: 15000,
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.test.ts',

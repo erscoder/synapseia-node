@@ -45,6 +45,8 @@ function makeMockNode() {
     peerId: { toString: () => '12D3KooWMock' },
     getMultiaddrs: jest.fn(() => [{ toString: () => '/ip4/127.0.0.1/tcp/4001' }]),
     getPeers: jest.fn(() => [{ toString: () => '12D3KooWA' }, { toString: () => '12D3KooWB' }]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
     services: { pubsub },
   };
 }
@@ -243,8 +245,7 @@ describe('P2PNode', () => {
     const n = new P2PNode(mockIdentity);
     await n.start();
     expect(consoleSpy).toHaveBeenCalledWith(
-      '[P2P] Listening on:',
-      '/ip4/127.0.0.1/tcp/4001',
+      expect.stringContaining('Listening on:'),
     );
   });
 

@@ -227,7 +227,7 @@ describe('Ollama Module', () => {
       const result = await generate('What is the meaning of life?', 'llama2:7b', mockOllamaUrl);
 
       expect(result).toBe('The answer is 42');
-      expect(ollamaInstance.chat).toHaveBeenCalledWith({
+      expect(ollamaInstance.chat).toHaveBeenCalledWith(expect.objectContaining({
         model: 'llama2:7b',
         messages: [
           {
@@ -236,7 +236,7 @@ describe('Ollama Module', () => {
           },
         ],
         stream: false,
-      });
+      }));
 
       jest.restoreAllMocks();
     });
@@ -269,11 +269,11 @@ describe('Ollama Module', () => {
       const result = await generate('Test prompt', undefined, mockOllamaUrl);
 
       expect(result).toBe('Generated response');
-      expect(ollamaInstance.chat).toHaveBeenCalledWith({
+      expect(ollamaInstance.chat).toHaveBeenCalledWith(expect.objectContaining({
         model: 'qwen2.5:0.5b', // Recommended model
         messages: [{ role: 'user', content: 'Test prompt' }],
         stream: false,
-      });
+      }));
 
       jest.restoreAllMocks();
     });

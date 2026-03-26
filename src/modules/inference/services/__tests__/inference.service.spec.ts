@@ -71,7 +71,7 @@ describe('InferenceService', () => {
     const res = {} as any;
     inferenceServerHelper.handleChatCompletions.mockResolvedValue(undefined);
     await service.handleChatCompletions(req, res, 'peer-1');
-    expect(inferenceServerHelper.handleChatCompletions).toHaveBeenCalledWith(req, res, 'peer-1');
+    expect(inferenceServerHelper.handleChatCompletions).toHaveBeenCalledWith(req, res, 'peer-1', undefined);
   });
 
   it('handleState() delegates to handleState', async () => {
