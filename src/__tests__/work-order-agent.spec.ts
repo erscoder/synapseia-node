@@ -14,8 +14,15 @@ import {
   _test,
 } from '../modules/agent/work-order-agent.js';
 import { initBrain } from '../modules/agent/agent-brain.js';
-import { parseModel } from '../modules/llm/llm-provider.js';
+import { parseModel, type LLMModel } from '../modules/llm/llm-provider.js';
 import * as llmProvider from '../modules/llm/llm-provider.js';
+
+/** Helper: parseModel that asserts non-null for test convenience */
+function testParseModel(modelStr: string): LLMModel {
+  const model = parseModel(modelStr);
+  if (!model) throw new Error(`parseModel returned null for "${modelStr}"`);
+  return model;
+}
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -815,7 +822,7 @@ describe('WorkOrderAgent', () => {
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
-          parseModel('ollama:phi4-mini'),
+          testParseModel('ollama/qwen2.5:0.5b'),
           {}
         );
 
@@ -846,7 +853,7 @@ describe('WorkOrderAgent', () => {
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
-          parseModel('ollama:phi4-mini'),
+          testParseModel('ollama/qwen2.5:0.5b'),
           {}
         );
 
@@ -873,7 +880,7 @@ describe('WorkOrderAgent', () => {
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
-          parseModel('ollama:phi4-mini'),
+          testParseModel('ollama/qwen2.5:0.5b'),
           {}
         );
 
@@ -900,7 +907,7 @@ describe('WorkOrderAgent', () => {
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
-          parseModel('ollama:phi4-mini'),
+          testParseModel('ollama/qwen2.5:0.5b'),
           {}
         );
 
@@ -920,7 +927,7 @@ describe('WorkOrderAgent', () => {
         };
 
         await expect(
-          _test.executeResearchWorkOrder(workOrder, parseModel('ollama:phi4-mini'), {})
+          _test.executeResearchWorkOrder(workOrder, testParseModel('ollama/qwen2.5:0.5b'), {})
         ).rejects.toThrow('Invalid research payload');
       });
     });
@@ -1087,7 +1094,7 @@ describe('WorkOrderAgent', () => {
           coordinatorUrl: 'http://localhost:3001',
           peerId: 'peer1',
           capabilities: ['llm'],
-          llmModel: parseModel('ollama:phi4-mini'),
+          llmModel: testParseModel('ollama/qwen2.5:0.5b'),
           intervalMs: 1000,
         }, 1);
 
@@ -1123,7 +1130,7 @@ describe('WorkOrderAgent', () => {
           coordinatorUrl: 'http://localhost:3001',
           peerId: 'peer1',
           capabilities: ['llm'],
-          llmModel: parseModel('ollama:phi4-mini'),
+          llmModel: testParseModel('ollama/qwen2.5:0.5b'),
           intervalMs: 1000,
         }, 1, brain);
 
@@ -1159,7 +1166,7 @@ describe('WorkOrderAgent', () => {
           coordinatorUrl: 'http://localhost:3001',
           peerId: 'peer1',
           capabilities: ['llm'],
-          llmModel: parseModel('ollama:phi4-mini'),
+          llmModel: testParseModel('ollama/qwen2.5:0.5b'),
           intervalMs: 1000,
         }, 1);
 
@@ -1189,7 +1196,7 @@ describe('WorkOrderAgent', () => {
           coordinatorUrl: 'http://localhost:3001',
           peerId: 'peer1',
           capabilities: ['compute'],
-          llmModel: parseModel('ollama:phi4-mini'),
+          llmModel: testParseModel('ollama/qwen2.5:0.5b'),
           intervalMs: 1000,
         }, 1);
 

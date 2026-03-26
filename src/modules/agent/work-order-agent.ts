@@ -1567,7 +1567,16 @@ export async function runWorkOrderAgentIteration(
     logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
     // Evaluate economic viability (rational node behavior)
-    const economicConfig = loadEconomicConfig(config.llmModel?.modelId);
+    // Build full model identifier (e.g. "ollama/qwen2.5:0.5b") so loadEconomicConfig
+    // can correctly detect local vs cloud models via the "ollama/" prefix.
+    const fullModelId = config.llmModel
+      ? config.llmModel.provider === 'ollama'
+        ? `ollama/${config.llmModel.modelId}`
+        : config.llmModel.providerId
+          ? `${config.llmModel.providerId}/${config.llmModel.modelId}`
+          : config.llmModel.modelId
+      : undefined;
+    const economicConfig = loadEconomicConfig(fullModelId);
     const evaluation = evaluateWorkOrder(workOrder, economicConfig);
 
     logger.log(` Economic evaluation:`);
