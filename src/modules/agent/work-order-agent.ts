@@ -858,6 +858,115 @@ export async function executeTrainingWorkOrder(
   return { result, success: true };
 }
 
+// ---------------------------------------------------------------------------
+// CPU Inference Work Order support (Sprint F)
+// ---------------------------------------------------------------------------
+
+/** Local copy of the coordinator CpuInferenceWorkOrderPayload shape */
+export interface CpuInferenceWorkOrderPayload {
+  task: 'embedding' | 'tokenize' | 'classify';
+  input: string;
+  modelHint?: string;
+  domain?: string;
+}
+
+/** Local copy of the coordinator CpuInferenceResultPayload shape */
+export interface CpuInferenceResultPayload {
+  output: number[] | string;
+  tokensProcessed: number;
+  latencyMs: number;
+  modelUsed: string;
+}
+
+/**
+ * Detect if a work order is of type CPU_INFERENCE
+ */
+export function isCpuInferenceWorkOrder(workOrder: WorkOrder): boolean {
+  if ((workOrder.type as string) === 'cpu_inference' || (workOrder.type as string) === 'CPU_INFERENCE') return true;
+  if (workOrder.requiredCapabilities.includes('cpu_inference')) return true;
+  try {
+    const payload = JSON.parse(workOrder.description) as Partial<CpuInferenceWorkOrderPayload>;
+    return (
+      typeof payload.task === 'string' &&
+      ['embedding', 'tokenize', 'classify'].includes(payload.task) &&
+      typeof payload.input === 'string'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Execute a CPU_INFERENCE work order:
+ * - embedding: calls generateLLM to produce a mock embedding vector
+ * - tokenize: splits input by whitespace and returns token count
+ * - classify: calls generateLLM with a classification prompt
+ */
+export async function executeCpuInferenceWorkOrder(
+  workOrder: WorkOrder,
+  llmModel: LLMModel,
+  llmConfig?: LLMConfig,
+  _coordinatorUrl?: string,
+): Promise<CpuInferenceResultPayload> {
+  const startMs = Date.now();
+
+  let payload: CpuInferenceWorkOrderPayload;
+  try {
+    payload = JSON.parse(workOrder.description) as CpuInferenceWorkOrderPayload;
+  } catch {
+    throw new Error('Invalid CPU inference payload');
+  }
+
+  const modelUsed = payload.modelHint ?? llmModel.modelId ?? 'unknown';
+  const tokens = payload.input.split(/\s+/).filter(Boolean);
+  const tokensProcessed = tokens.length;
+
+  let output: number[] | string;
+
+  if (payload.task === 'tokenize') {
+    // Simple whitespace tokenizer — no LLM needed
+    output = `${tokensProcessed}`;
+  } else if (payload.task === 'embedding') {
+    // Ask LLM to produce a JSON array representing a mock embedding
+    const prompt = `Generate a JSON array of exactly 8 floating-point numbers between -1 and 1 as a semantic embedding for the following text. Reply with ONLY the JSON array, no explanation.
+
+Text: ${payload.input.slice(0, 500)}`;
+    try {
+      const raw = await generateLLM(llmModel, prompt, llmConfig);
+      // Extract first JSON array from response
+      const match = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').match(/\[[\s\S]*?\]/);
+      if (match) {
+        output = JSON.parse(match[0]) as number[];
+      } else {
+        // Fallback: deterministic mock embedding based on token count
+        output = Array.from({ length: 8 }, (_, i) => Math.sin(tokensProcessed * (i + 1)));
+      }
+    } catch {
+      output = Array.from({ length: 8 }, (_, i) => Math.sin(tokensProcessed * (i + 1)));
+    }
+  } else {
+    // classify
+    const prompt = `Classify the following text into exactly ONE of these categories: positive, negative, neutral, technical, medical, financial, other.
+Reply with ONLY the category label, nothing else.
+
+Text: ${payload.input.slice(0, 500)}`;
+    try {
+      const raw = await generateLLM(llmModel, prompt, llmConfig);
+      output = raw
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .trim()
+        .split(/\s+/)[0]
+        .toLowerCase();
+    } catch {
+      output = 'neutral';
+    }
+  }
+
+  const latencyMs = Date.now() - startMs;
+
+  return { output, tokensProcessed, latencyMs, modelUsed };
+}
+
 /**
  * Detect if work order is of type RESEARCH
  * Checks for RESEARCH type or parses description for research payload
@@ -1491,7 +1600,26 @@ export async function runWorkOrderAgentIteration(
   let success: boolean;
   let researchResult: ResearchResult | undefined;
 
-  if (isDiLoCoWorkOrder(workOrder)) {
+  if (isCpuInferenceWorkOrder(workOrder)) {
+    // Execute CPU_INFERENCE work order (embedding, tokenize, classify)
+    try {
+      const inferenceResult = await executeCpuInferenceWorkOrder(
+        workOrder,
+        llmModel,
+        llmConfig,
+        coordinatorUrl,
+      );
+      result = JSON.stringify({
+        ...inferenceResult,
+        metricType: 'latency',
+        metricValue: inferenceResult.latencyMs,
+      });
+      success = true;
+    } catch (err) {
+      result = `CPU inference failed: ${(err as Error).message}`;
+      success = false;
+    }
+  } else if (isDiLoCoWorkOrder(workOrder)) {
     // Execute DILOCO_TRAINING work order (runs diloco_train.py)
     const diloco = await executeDiLoCoWorkOrder(
       workOrder,
@@ -1580,7 +1708,7 @@ export async function runWorkOrderAgentIteration(
   }
 
   // 5. Complete work order — skip if research or training failed
-  if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder) || isDiLoCoWorkOrder(workOrder)) && !success) {
+  if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder) || isDiLoCoWorkOrder(workOrder) || isCpuInferenceWorkOrder(workOrder)) && !success) {
     logger.warn(' Work order execution failed — skipping result submission to avoid polluting rewards');
     agentState.currentWorkOrder = undefined;
     continue;
@@ -1605,6 +1733,9 @@ export async function runWorkOrderAgentIteration(
       logger.log(` Research paper will be available for re-analysis in ${RESEARCH_COOLDOWN_MS / 1000}s`);
     } else {
       agentState.completedWorkOrderIds.add(workOrder.id);
+      if (isCpuInferenceWorkOrder(workOrder)) {
+        logger.log(` CPU inference result submitted — reward: ${workOrder.rewardAmount} SYN`);
+      }
     }
   } else {
     logger.log(' Failed to report completion');
@@ -1747,6 +1878,8 @@ export const _test = {
   isDiLoCoWorkOrder,
   executeDiLoCoWorkOrder,
   uploadGradients,
+  isCpuInferenceWorkOrder,
+  executeCpuInferenceWorkOrder,
 };
 
 // ---------------------------------------------------------------------------

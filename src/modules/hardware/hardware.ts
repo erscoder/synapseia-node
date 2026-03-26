@@ -296,6 +296,20 @@ export class HardwareHelper {
   }
 
   /**
+   * Detect if this node can participate in CPU inference tasks.
+   *
+   * Requirements:
+   * - At least 2 CPU cores
+   * - At least 4 GB RAM
+   *
+   * Returns true when both conditions are met.
+   */
+  canInference(): boolean {
+    const hw = this.detectHardware(true);
+    return hw.cpuCores >= 2 && hw.ramGb >= 4;
+  }
+
+  /**
    * Detect if this node can run micro-transformer training.
    *
    * Requirements:
@@ -365,6 +379,7 @@ export class HardwareHelper {
       if (!caps.includes('diloco')) caps.push('diloco');
       if (!caps.includes('gpu')) caps.push('gpu');
     }
+    if (this.canInference()) caps.push('cpu_inference');
     return caps;
   }
 }
@@ -394,5 +409,7 @@ export const canTrain = (): boolean =>
   new HardwareHelper().canTrain();
 export const canDiLoCo = (hardware?: Hardware): boolean =>
   new HardwareHelper().canDiLoCo(hardware);
+export const canInference = (): boolean =>
+  new HardwareHelper().canInference();
 export const buildCapabilities = (hardware: Hardware): string[] =>
   new HardwareHelper().buildCapabilities(hardware);
