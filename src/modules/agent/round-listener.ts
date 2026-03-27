@@ -1,11 +1,18 @@
 /**
  * RoundListener — subscribes to the coordinator WebSocket and listens for
- * 'round.closed' events. When a round closes, it checks if this node won
- * and logs the result accordingly.
+ * 'round.closed', 'round.evaluating', and 'evaluation.assigned' events.
+ * When a round closes, it checks if this node won.
+ * When a round enters evaluation, it starts the peer review loop.
  */
 
 import { io, Socket } from 'socket.io-client';
 import logger from '../../utils/logger.js';
+import {
+  startReviewLoop,
+  stopReviewLoop,
+  isReviewLoopRunning,
+  type LLMReviewConfig,
+} from './review-agent.js';
 
 interface RoundWinner {
   rank: number;
@@ -21,14 +28,30 @@ interface RoundClosedEvent {
   closedAt: string;
 }
 
+interface RoundEvaluatingEvent {
+  roundId: string;
+  submissionCount: number;
+}
+
+interface EvaluationAssignedEvent {
+  submissionId: string;
+  evaluatorNodeId: string;
+  roundId: string;
+}
+
 let _socket: Socket | null = null;
 
 /**
- * Connect to coordinator WS and start listening for round.closed events.
+ * Connect to coordinator WS and start listening for round events.
  * @param coordinatorUrl  e.g. http://localhost:3701
  * @param peerId          This node's identity (used to check if it won)
+ * @param llmConfig       LLM configuration for the peer review loop (optional)
  */
-export function startRoundListener(coordinatorUrl: string, peerId: string): void {
+export function startRoundListener(
+  coordinatorUrl: string,
+  peerId: string,
+  llmConfig?: LLMReviewConfig,
+): void {
   if (_socket) return; // already connected
 
   _socket = io(coordinatorUrl, {
@@ -72,6 +95,30 @@ export function startRoundListener(coordinatorUrl: string, peerId: string): void
     }
   });
 
+  _socket.on('round.evaluating', (event: RoundEvaluatingEvent) => {
+    logger.log(
+      `[RoundListener] Round ${event.roundId} entered EVALUATING phase ` +
+      `(${event.submissionCount} submissions). Starting peer review loop...`
+    );
+    if (llmConfig) {
+      startReviewLoop(coordinatorUrl, peerId, llmConfig);
+    } else {
+      logger.warn('[RoundListener] No LLM config provided — skipping peer review loop');
+    }
+  });
+
+  _socket.on('evaluation.assigned', (event: EvaluationAssignedEvent) => {
+    if (event.evaluatorNodeId !== peerId) return; // not for us
+    logger.log(`[RoundListener] Evaluation assignment received for submission ${event.submissionId}`);
+    // Trigger immediate poll if not already running
+    if (llmConfig && !isReviewLoopRunning()) {
+      startReviewLoop(coordinatorUrl, peerId, llmConfig);
+    } else if (llmConfig) {
+      // Already running — the next cycle will pick up the assignment
+      logger.log('[RoundListener] Review loop already running — assignment will be picked up next cycle');
+    }
+  });
+
   _socket.on('connect_error', (err) => {
     logger.warn(`[RoundListener] WS connect error: ${err.message} — retrying...`);
   });
@@ -82,4 +129,7 @@ export function stopRoundListener(): void {
     _socket.disconnect();
     _socket = null;
   }
+  stopReviewLoop();
 }
+
+export { startReviewLoop, stopReviewLoop, isReviewLoopRunning };

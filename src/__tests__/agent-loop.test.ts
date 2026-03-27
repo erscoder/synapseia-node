@@ -211,16 +211,16 @@ describe('Agent Loop', () => {
     it('logs improvement', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      await postToFeed('http://localhost:3701', 'exp-1', 0.5, 0.3);
+      await postToFeed('http://localhost:3701', 'peer-1', mockMutation, mockResult, true);
 
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
 
-    it('logs result', async () => {
+    it('logs result (no improvement)', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      await postToFeed('http://localhost:3701', 'exp-1', 0.5, 0.5);
+      await postToFeed('http://localhost:3701', 'peer-1', mockMutation, mockResult, false);
 
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
@@ -231,7 +231,7 @@ describe('Agent Loop', () => {
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
       // Should not throw
-      await expect(postToFeed('http://localhost:3701', 'exp-1', 0.5, 0.3)).resolves.not.toThrow();
+      await expect(postToFeed('http://localhost:3701', 'peer-1', mockMutation, mockResult, false)).resolves.not.toThrow();
 
       consoleSpy.mockRestore();
     });
@@ -244,7 +244,7 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      await expect(runAgentIteration('http://localhost:3701', mockConfig, 'medical')).resolves.not.toThrow();
+      await expect(runAgentIteration(mockConfig, 1)).resolves.not.toThrow();
     });
 
     it('marks improved when valLoss < bestLoss', async () => {
@@ -253,7 +253,7 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      await runAgentIteration('http://localhost:3701', mockConfig, 'medical');
+      await runAgentIteration(mockConfig, 1);
 
       const state = getAgentLoopState();
       expect(state.bestLoss).toBe(1.0);
@@ -265,7 +265,7 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      await runAgentIteration('http://localhost:3701', mockConfig, 'medical');
+      await runAgentIteration(mockConfig, 1);
 
       // bestLoss should still be 2.0
       const state = getAgentLoopState();
@@ -278,8 +278,8 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      const gpuConfig = { ...mockConfig, capabilities: ['cuda'] };
-      await runAgentIteration('http://localhost:3701', gpuConfig, 'medical');
+      const gpuConfig: AgentLoopConfig = { ...mockConfig, capabilities: ['cuda'] };
+      await runAgentIteration(gpuConfig, 1);
 
       expect(mockTrainMicroModel).toHaveBeenCalledWith(
         expect.objectContaining({ hardwareUsed: 'cuda' })
@@ -292,8 +292,8 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      const gpuConfig = { ...mockConfig, capabilities: ['cuda'] };
-      await runAgentIteration('http://localhost:3701', gpuConfig, 'medical');
+      const gpuConfig: AgentLoopConfig = { ...mockConfig, capabilities: ['cuda'] };
+      await runAgentIteration(gpuConfig, 1);
 
       expect(mockTrainMicroModel).toHaveBeenCalledWith(
         expect.objectContaining({ hardwareUsed: 'cuda' })
@@ -303,7 +303,7 @@ describe('Agent Loop', () => {
     it('throws on invalid config', async () => {
       mockValidateTrainingConfig.mockReturnValue({ valid: false, error: 'Invalid config' });
 
-      await expect(runAgentIteration('http://localhost:3701', mockConfig, 'medical')).rejects.toThrow();
+      await expect(runAgentIteration(mockConfig, 1)).rejects.toThrow();
     });
 
     it('increments totalExperiments', async () => {
@@ -312,7 +312,7 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      await runAgentIteration('http://localhost:3701', mockConfig, 'medical');
+      await runAgentIteration(mockConfig, 1);
 
       const state = getAgentLoopState();
       expect(state.totalExperiments).toBe(1);
@@ -334,8 +334,8 @@ describe('Agent Loop', () => {
         .mockResolvedValue(okResp({ id: 'new-exp' }))
         .mockResolvedValue(okResp({ success: true }));
 
-      const shortConfig = { ...mockConfig, intervalMs: 10, maxIterations: 2 };
-      startAgentLoop('http://localhost:3701', shortConfig, 'medical');
+      const shortConfig: AgentLoopConfig = { ...mockConfig, intervalMs: 10, maxIterations: 2 };
+      startAgentLoop(shortConfig);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -351,8 +351,8 @@ describe('Agent Loop', () => {
         .mockResolvedValueOnce(okResp({ id: 'new-exp' }))
         .mockResolvedValueOnce(okResp({ success: true }));
 
-      const errorConfig = { ...mockConfig, intervalMs: 10 };
-      startAgentLoop('http://localhost:3701', errorConfig, 'medical');
+      const errorConfig: AgentLoopConfig = { ...mockConfig, intervalMs: 10 };
+      startAgentLoop(errorConfig);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 

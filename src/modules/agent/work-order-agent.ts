@@ -1172,6 +1172,7 @@ export async function submitResearchResult(
       body: JSON.stringify({
         paperId: workOrderId,
         peerId,
+        nodeId: peerId, // alias so EvaluationService can always find the submitter
         summary: result.summary,
         keyInsights: result.keyInsights,
         applicationProposal: result.proposal,
