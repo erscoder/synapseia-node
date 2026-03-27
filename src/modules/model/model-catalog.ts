@@ -43,7 +43,7 @@ interface OllamaTagsResponse {
 export const MODEL_CATALOG: ModelInfo[] = [
   // Embedding models
   {
-    name: 'all-minilm-l6-v2',
+    name: 'locusai/all-minilm-l6-v2',
     minVram: 0.1,
     recommendedTier: 0,
     category: 'embedding',

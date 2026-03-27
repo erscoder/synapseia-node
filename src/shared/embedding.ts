@@ -40,7 +40,7 @@ export class EmbeddingHelper {
    */
   async generateEmbedding(
     text: string,
-    model: string = 'all-minilm-l6-v2',
+    model: string = 'locusai/all-minilm-l6-v2',
   ): Promise<number[]> {
     const url = `${this.ollamaBaseUrl}/api/embeddings`;
     const payload = {
@@ -121,7 +121,7 @@ export class EmbeddingHelper {
     query: string,
     documents: Document[],
     topK: number = 5,
-    model: string = 'all-minilm-l6-v2',
+    model: string = 'locusai/all-minilm-l6-v2',
   ): Promise<SimilarityResult[]> {
     if (documents.length === 0) {
       return [];
