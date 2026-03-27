@@ -18,6 +18,7 @@ import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
 import { parseModel, type LLMModel } from '../llm/llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
 import { startRoundListener } from './round-listener.js';
+import { EmbeddingHelper } from '../../shared/embedding.js';
 import { trainMicroModel } from '../model/trainer.js';
 import { proposeMutation } from '../model/mutation-engine.js';
 import { runDiLoCoInnerLoop } from '../model/diloco-trainer.js';
@@ -898,10 +899,17 @@ export function isCpuInferenceWorkOrder(workOrder: WorkOrder): boolean {
 
 /**
  * Execute a CPU_INFERENCE work order:
- * - embedding: calls generateLLM to produce a mock embedding vector
- * - tokenize: splits input by whitespace and returns token count
- * - classify: calls generateLLM with a classification prompt
+ * - embedding: uses Ollama all-minilm-l6-v2 (real 384-dim vectors, no mocks)
+ * - tokenize: splits input by whitespace and returns token count (no LLM needed)
+ * - classify: calls the configured LLM with a classification prompt
+ *
+ * IMPORTANT: embedding task requires Ollama running locally with all-minilm-l6-v2.
+ * If Ollama is not available, the work order fails with a clear error — no silent fallbacks.
+ * To set up: `ollama pull all-minilm-l6-v2`
  */
+export const EMBEDDING_MODEL = 'all-minilm-l6-v2';
+const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+
 export async function executeCpuInferenceWorkOrder(
   workOrder: WorkOrder,
   llmModel: LLMModel,
@@ -917,52 +925,47 @@ export async function executeCpuInferenceWorkOrder(
     throw new Error('Invalid CPU inference payload');
   }
 
-  const modelUsed = payload.modelHint ?? llmModel.modelId ?? 'unknown';
   const tokens = payload.input.split(/\s+/).filter(Boolean);
   const tokensProcessed = tokens.length;
 
   let output: number[] | string;
+  let modelUsed: string;
 
   if (payload.task === 'tokenize') {
-    // Simple whitespace tokenizer — no LLM needed
+    // Simple whitespace tokenizer — no external model needed
     output = `${tokensProcessed}`;
-  } else if (payload.task === 'embedding') {
-    // Ask LLM to produce a JSON array representing a mock embedding
-    const prompt = `Generate a JSON array of exactly 8 floating-point numbers between -1 and 1 as a semantic embedding for the following text. Reply with ONLY the JSON array, no explanation.
+    modelUsed = 'whitespace-tokenizer';
 
-Text: ${payload.input.slice(0, 500)}`;
-    try {
-      const raw = await generateLLM(llmModel, prompt, llmConfig);
-      // Extract first JSON array from response
-      const match = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').match(/\[[\s\S]*?\]/);
-      if (match) {
-        output = JSON.parse(match[0]) as number[];
-      } else {
-        // Fallback: deterministic mock embedding based on token count
-        output = Array.from({ length: 8 }, (_, i) => Math.sin(tokensProcessed * (i + 1)));
-      }
-    } catch {
-      output = Array.from({ length: 8 }, (_, i) => Math.sin(tokensProcessed * (i + 1)));
-    }
+  } else if (payload.task === 'embedding') {
+    // Real embeddings via Ollama all-minilm-l6-v2 (384-dim vectors)
+    // No LLM mock fallbacks — if Ollama is not running, this fails loudly
+    const embeddingHelper = new EmbeddingHelper();
+    const resolvedModel = payload.modelHint ?? EMBEDDING_MODEL;
+    modelUsed = `ollama/${resolvedModel}`;
+    logger.log(`[CpuInference] Generating embedding with ${resolvedModel} via Ollama at ${OLLAMA_EMBEDDING_URL}`);
+
+    output = await embeddingHelper.generateEmbedding(payload.input.slice(0, 2000), resolvedModel);
+    logger.log(`[CpuInference] Embedding generated: ${(output as number[]).length} dimensions`);
+
   } else {
-    // classify
+    // classify — use the configured LLM (cloud or ollama)
+    modelUsed = llmModel.modelId ?? 'unknown';
     const prompt = `Classify the following text into exactly ONE of these categories: positive, negative, neutral, technical, medical, financial, other.
 Reply with ONLY the category label, nothing else.
 
 Text: ${payload.input.slice(0, 500)}`;
-    try {
-      const raw = await generateLLM(llmModel, prompt, llmConfig);
-      output = raw
-        .replace(/<think>[\s\S]*?<\/think>/gi, '')
-        .trim()
-        .split(/\s+/)[0]
-        .toLowerCase();
-    } catch {
-      output = 'neutral';
-    }
+
+    const raw = await generateLLM(llmModel, prompt, llmConfig);
+    output = raw
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .trim()
+      .split(/\s+/)[0]
+      .toLowerCase();
+    logger.log(`[CpuInference] Classification result: "${output}"`);
   }
 
   const latencyMs = Date.now() - startMs;
+  logger.log(`[CpuInference] task=${payload.task} done in ${latencyMs}ms, tokens=${tokensProcessed}`);
 
   return { output, tokensProcessed, latencyMs, modelUsed };
 }
