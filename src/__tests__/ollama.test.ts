@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import axios from 'axios';
-import { checkOllama, pullModel, generate, ensureModel } from '../modules/llm/ollama';
+import { OllamaHelper } from '../modules/llm/ollama';
 
 // Mock axios
 jest.mock('axios');
@@ -13,21 +13,28 @@ jest.mock('ollama', () => ({
   })),
 }));
 
-// Mock hardware module
+// Mock hardware module — OllamaHelper uses HardwareHelper internally
 jest.mock('../modules/hardware/hardware.js', () => ({
-  detectHardware: jest.fn(),
+  HardwareHelper: jest.fn().mockImplementation(() => ({
+    detectHardware: jest.fn(),
+  })),
 }));
 
 import { Ollama } from 'ollama';
-import { detectHardware } from '../modules/hardware/hardware.js';
+import { HardwareHelper } from '../modules/hardware/hardware.js';
 
 const mockOllama = Ollama as jest.MockedClass<typeof Ollama>;
+let helper: OllamaHelper;
+let mockHardwareHelper: { detectHardware: jest.Mock };
 
 describe('Ollama Module', () => {
   const mockOllamaUrl = 'http://localhost:11434';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHardwareHelper = { detectHardware: jest.fn() };
+    (HardwareHelper as jest.MockedClass<typeof HardwareHelper>).mockImplementation(() => mockHardwareHelper as any);
+    helper = new OllamaHelper();
   });
 
   afterEach(() => {
@@ -46,7 +53,7 @@ describe('Ollama Module', () => {
         data: { models: mockModels },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -54,7 +61,7 @@ describe('Ollama Module', () => {
         hasOllama: true,
       });
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(true);
       expect(status.url).toBe(mockOllamaUrl);
@@ -68,7 +75,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 24,
@@ -76,7 +83,7 @@ describe('Ollama Module', () => {
         hasOllama: true,
       });
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.recommendedModel).toBe('qwen2.5:3b'); // GPU detected
     });
@@ -85,7 +92,7 @@ describe('Ollama Module', () => {
       const axiosError = { message: 'ECONNREFUSED', isAxiosError: true } as any;
       (axios.get as jest.Mock).mockRejectedValue(axiosError);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.url).toBe(mockOllamaUrl);
@@ -97,7 +104,7 @@ describe('Ollama Module', () => {
     it('should timeout after 5 seconds', async () => {
       (axios.get as jest.Mock).mockRejectedValue(new Error('timeout of 5000ms exceeded'));
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toContain('timeout');
@@ -107,7 +114,7 @@ describe('Ollama Module', () => {
       const nonAxiosError = new TypeError('Invalid URL');
       (axios.get as jest.Mock).mockRejectedValue(nonAxiosError);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Invalid URL');
@@ -116,7 +123,7 @@ describe('Ollama Module', () => {
     it('should handle unknown errors', async () => {
       (axios.get as jest.Mock).mockRejectedValue('some string error' as any);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Unknown error');
@@ -125,7 +132,7 @@ describe('Ollama Module', () => {
     it('should handle object errors without message property', async () => {
       (axios.get as jest.Mock).mockRejectedValue({ code: 'ETIMEDOUT' } as any);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Unknown error');
@@ -134,7 +141,7 @@ describe('Ollama Module', () => {
     it('should handle error with null error object', async () => {
       (axios.get as jest.Mock).mockRejectedValue(null as any);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Unknown error');
@@ -143,7 +150,7 @@ describe('Ollama Module', () => {
     it('should handle error with undefined error object', async () => {
       (axios.get as jest.Mock).mockRejectedValue(undefined as any);
 
-      const status = await checkOllama(mockOllamaUrl);
+      const status = await helper.checkOllama(mockOllamaUrl);
 
       expect(status.available).toBe(false);
       expect(status.error).toBe('Unknown error');
@@ -166,7 +173,7 @@ describe('Ollama Module', () => {
 
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await pullModel('qwen2.5:0.5b', mockOllamaUrl);
+      await helper.helper.pullModel('qwen2.5:0.5b', mockOllamaUrl);
 
       expect(mockOllama).toHaveBeenCalledWith({ host: mockOllamaUrl });
       expect(ollamaInstance.pull).toHaveBeenCalledWith({
@@ -188,7 +195,7 @@ describe('Ollama Module', () => {
 
       (mockOllama as jest.Mock).mockReturnValue(ollamaInstance);
 
-      await expect(pullModel('qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow(
+      await expect(helper.pullModel('qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow(
         'Failed to pull model qwen2.5:0.5b: Network error'
       );
     });
@@ -204,7 +211,7 @@ describe('Ollama Module', () => {
 
       (mockOllama as jest.Mock).mockReturnValue(ollamaInstance);
 
-      await pullModel('qwen2.5:0.5b', mockOllamaUrl);
+      await helper.helper.pullModel('qwen2.5:0.5b', mockOllamaUrl);
 
       expect(ollamaInstance.pull).toHaveBeenCalled();
     });
@@ -224,7 +231,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const result = await generate('What is the meaning of life?', 'llama2:7b', mockOllamaUrl);
+      const result = await helper.generate('What is the meaning of life?', 'llama2:7b', mockOllamaUrl);
 
       expect(result).toBe('The answer is 42');
       expect(ollamaInstance.chat).toHaveBeenCalledWith(expect.objectContaining({
@@ -250,7 +257,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -266,7 +273,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const result = await generate('Test prompt', undefined, mockOllamaUrl);
+      const result = await helper.generate('Test prompt', undefined, mockOllamaUrl);
 
       expect(result).toBe('Generated response');
       expect(ollamaInstance.chat).toHaveBeenCalledWith(expect.objectContaining({
@@ -281,7 +288,7 @@ describe('Ollama Module', () => {
     it('should throw error when Ollama is not available', async () => {
       (axios.get as jest.Mock).mockRejectedValue(new Error('Connection refused'));
 
-      await expect(generate('Test', undefined, mockOllamaUrl)).rejects.toThrow('Ollama is not available');
+      await expect(helper.generate('Test', undefined, mockOllamaUrl)).rejects.toThrow('Ollama is not available');
     });
 
     it('should handle generation errors', async () => {
@@ -289,7 +296,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -303,7 +310,7 @@ describe('Ollama Module', () => {
 
       (mockOllama as jest.Mock).mockReturnValue(ollamaInstance);
 
-      await expect(generate('Test', 'qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow('Generation failed: Model not found');
+      await expect(helper.generate('Test', 'qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow('Generation failed: Model not found');
     });
 
     it('should trim whitespace from generated content', async () => {
@@ -315,7 +322,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -331,7 +338,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const result = await generate('Test', 'qwen2.5:0.5b', mockOllamaUrl);
+      const result = await helper.helper.generate('Test', 'qwen2.5:0.5b', mockOllamaUrl);
 
       expect(result).toBe('Response with spaces');
 
@@ -343,7 +350,7 @@ describe('Ollama Module', () => {
     it('should throw error when Ollama is not running', async () => {
       (axios.get as jest.Mock).mockRejectedValue(new Error('Connection refused'));
 
-      await expect(ensureModel('qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow(
+      await expect(helper.ensureModel('qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow(
         'Ollama is not running. Start with: ollama serve'
       );
     });
@@ -357,7 +364,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'llama2:7b' }] }, // Different model
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -373,7 +380,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await ensureModel('qwen2.5:0.5b', mockOllamaUrl);
+      await helper.helper.ensureModel('qwen2.5:0.5b', mockOllamaUrl);
 
       expect(ollamaInstance.pull).toHaveBeenCalledWith({
         model: 'qwen2.5:0.5b',
@@ -388,7 +395,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -404,7 +411,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await ensureModel('qwen2.5:0.5b', mockOllamaUrl);
+      await helper.helper.ensureModel('qwen2.5:0.5b', mockOllamaUrl);
 
       expect(ollamaInstance.pull).not.toHaveBeenCalled();
 
@@ -416,7 +423,7 @@ describe('Ollama Module', () => {
         data: { models: [{ name: 'qwen2.5:3b' }] }, // Different tag, same family
       } as any);
 
-      (detectHardware as jest.Mock).mockResolvedValue({
+      (mockHardwareHelper.detectHardware as jest.Mock).mockReturnValue({
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
@@ -432,7 +439,7 @@ describe('Ollama Module', () => {
 
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await expect(ensureModel('qwen2.5:0.5b', mockOllamaUrl)).resolves.not.toThrow();
+      await expect(helper.ensureModel('qwen2.5:0.5b', mockOllamaUrl)).resolves.not.toThrow();
 
       // Should NOT pull - same family found
       expect(ollamaInstance.pull).not.toHaveBeenCalled();
