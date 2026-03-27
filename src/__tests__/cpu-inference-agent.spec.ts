@@ -112,70 +112,95 @@ describe('isCpuInferenceWorkOrder', () => {
 
 // ---------------------------------------------------------------------------
 // executeCpuInferenceWorkOrder — embedding
+// Uses real EmbeddingHelper → mocks global.fetch (Ollama API), not LLM
 // ---------------------------------------------------------------------------
+
+const MOCK_EMBEDDING_384 = Array.from({ length: 384 }, (_, i) => Math.sin(i));
 
 describe('executeCpuInferenceWorkOrder — embedding', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock global.fetch for Ollama embeddings API
+    global.fetch = (jest.fn() as any).mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ embedding: MOCK_EMBEDDING_384 }),
+        text: () => Promise.resolve(''),
+      }),
+    );
   });
 
-  it('should return an array output for embedding task', async () => {
-    mockGenerateLLM.mockResolvedValue('[0.1, 0.2, -0.3, 0.4, 0.5, -0.6, 0.7, 0.8]');
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
+  it('should return a real embedding array via Ollama', async () => {
     const wo = makeWorkOrder({
       description: JSON.stringify({ task: 'embedding', input: 'hello world' }),
     });
     const result = await executeCpuInferenceWorkOrder(wo, makeLLMModel());
 
     expect(Array.isArray(result.output)).toBe(true);
+    expect((result.output as number[]).length).toBe(384);
     expect(result.tokensProcessed).toBeGreaterThan(0);
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
-    expect(typeof result.modelUsed).toBe('string');
+    expect(result.modelUsed).toBe('ollama/all-minilm-l6-v2');
+    // LLM should NOT be called for embeddings
+    expect(mockGenerateLLM).not.toHaveBeenCalled();
   });
 
-  it('should use modelHint as modelUsed if provided', async () => {
-    mockGenerateLLM.mockResolvedValue('[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]');
-
+  it('should use modelHint in modelUsed if provided', async () => {
     const wo = makeWorkOrder({
-      description: JSON.stringify({ task: 'embedding', input: 'test', modelHint: 'my-model' }),
+      description: JSON.stringify({ task: 'embedding', input: 'test', modelHint: 'my-embed-model' }),
     });
     const result = await executeCpuInferenceWorkOrder(wo, makeLLMModel());
 
-    expect(result.modelUsed).toBe('my-model');
+    expect(result.modelUsed).toBe('ollama/my-embed-model');
   });
 
-  it('should fallback to mock embedding when LLM response is not a valid JSON array', async () => {
-    mockGenerateLLM.mockResolvedValue('Sorry, I cannot generate that.');
+  it('should throw (not silently fallback) when Ollama is unavailable', async () => {
+    global.fetch = (jest.fn() as any).mockImplementation(() =>
+      Promise.reject(new Error('ECONNREFUSED')),
+    );
 
     const wo = makeWorkOrder({
       description: JSON.stringify({ task: 'embedding', input: 'hello world test' }),
     });
-    const result = await executeCpuInferenceWorkOrder(wo, makeLLMModel());
 
-    expect(Array.isArray(result.output)).toBe(true);
-    expect((result.output as number[]).length).toBeGreaterThan(0);
+    await expect(executeCpuInferenceWorkOrder(wo, makeLLMModel())).rejects.toThrow(
+      'Cannot connect to Ollama',
+    );
   });
 
-  it('should fallback to mock embedding when LLM throws', async () => {
-    mockGenerateLLM.mockRejectedValue(new Error('LLM error'));
-
-    const wo = makeWorkOrder({
-      description: JSON.stringify({ task: 'embedding', input: 'hello world' }),
-    });
-    const result = await executeCpuInferenceWorkOrder(wo, makeLLMModel());
-
-    expect(Array.isArray(result.output)).toBe(true);
-  });
-
-  it('should strip <think> blocks from LLM response before parsing', async () => {
-    mockGenerateLLM.mockResolvedValue('<think>reasoning here</think>[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]');
+  it('should throw (not silently fallback) when Ollama returns an error', async () => {
+    global.fetch = (jest.fn() as any).mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        text: () => Promise.resolve('model not found'),
+      }),
+    );
 
     const wo = makeWorkOrder({
       description: JSON.stringify({ task: 'embedding', input: 'hello' }),
     });
-    const result = await executeCpuInferenceWorkOrder(wo, makeLLMModel());
 
-    expect(Array.isArray(result.output)).toBe(true);
+    await expect(executeCpuInferenceWorkOrder(wo, makeLLMModel())).rejects.toThrow(
+      'Ollama embeddings API error',
+    );
+  });
+
+  it('should truncate long input to 2000 chars before sending to Ollama', async () => {
+    const longInput = 'a'.repeat(5000);
+    const wo = makeWorkOrder({
+      description: JSON.stringify({ task: 'embedding', input: longInput }),
+    });
+    await executeCpuInferenceWorkOrder(wo, makeLLMModel());
+
+    const fetchCall = (global.fetch as any).mock.calls[0];
+    const body = JSON.parse(fetchCall[1].body);
+    expect(body.prompt.length).toBe(2000);
   });
 });
 
