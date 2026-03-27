@@ -4,7 +4,10 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { checkOllama, generate as generateOllama, GenerateOptions } from './ollama.js';
+import { OllamaHelper, GenerateOptions } from './ollama.js';
+
+// Module-level helper instance for functional-style consumers
+const _ollamaHelper = new OllamaHelper();
 
 export type LLMProvider = 'ollama' | 'cloud';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
@@ -162,7 +165,7 @@ export async function generateLLM(
 
 async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
   try {
-    const status = await checkOllama();
+    const status = await _ollamaHelper.checkOllama();
 
     if (!status.available) {
       return {
@@ -202,7 +205,7 @@ async function checkOllamaLLM(model: LLMModel): Promise<LLMStatus> {
 }
 
 async function generateOllamaLLM(model: LLMModel, prompt: string, hyperparams?: GenerateOptions): Promise<string> {
-  return generateOllama(prompt, model.modelId, undefined, hyperparams);
+  return _ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
 }
 
 // --- Private: Cloud API implementations ---

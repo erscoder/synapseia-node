@@ -10,16 +10,24 @@ import {
   type LLMModel,
 } from '../modules/llm/llm-provider';
 
-// Mock ollama module
-jest.mock('../modules/llm/ollama.js', () => ({
-  checkOllama: jest.fn(),
-  generate: jest.fn(),
-}));
+// Mock OllamaHelper prototype methods so the module-level _ollamaHelper instance is intercepted
+jest.mock('../modules/llm/ollama.js', () => {
+  const mockCheckOllama = jest.fn();
+  const mockGenerate = jest.fn();
+  class MockOllamaHelper {
+    checkOllama = mockCheckOllama;
+    generate = mockGenerate;
+  }
+  // Attach to prototype for expect(OllamaHelper.prototype.xxx) assertions
+  MockOllamaHelper.prototype.checkOllama = mockCheckOllama;
+  MockOllamaHelper.prototype.generate = mockGenerate;
+  return { OllamaHelper: MockOllamaHelper };
+});
 
 // Mock fetch for cloud APIs
 global.fetch = jest.fn() as any;
 
-import { checkOllama, generate as generateOllama } from '../modules/llm/ollama.js';
+import { OllamaHelper } from '../modules/llm/ollama.js';
 
 describe('LLM Provider Abstraction', () => {
   const ollamaModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
@@ -149,7 +157,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('checkLLM - Ollama', () => {
     it('should return available status when Ollama is running and model exists', async () => {
-      (checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
         available: true,
         url: 'http://localhost:11434',
         models: ['qwen2.5:0.5b', 'qwen2.5:3b'],
@@ -166,7 +174,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when Ollama is not running', async () => {
-      (checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
         available: false,
         url: 'http://localhost:11434',
         models: [],
@@ -183,7 +191,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when model not found', async () => {
-      (checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
         available: true,
         url: 'http://localhost:11434',
         models: ['qwen2.5:3b'], // Model not present
@@ -198,7 +206,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama errors', async () => {
-      (checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
         throw new Error('Check failed');
       });
 
@@ -209,7 +217,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama with non-Error rejection', async () => {
-      (checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
         throw 'String error from Ollama';
       });
 
@@ -220,7 +228,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama with object rejection', async () => {
-      (checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
         throw { code: 'ECONNREFUSED' };
       });
 
@@ -233,16 +241,16 @@ describe('LLM Provider Abstraction', () => {
 
   describe('generateLLM - Ollama', () => {
     it('should generate text with Ollama model', async () => {
-      (generateOllama as jest.Mock).mockResolvedValue('Generated response');
+      (OllamaHelper.prototype.generate as jest.Mock).mockResolvedValue('Generated response');
 
       const result = await generateLLM(ollamaModel, 'Test prompt');
 
       expect(result).toBe('Generated response');
-      expect(generateOllama).toHaveBeenCalledWith('Test prompt', 'qwen2.5:0.5b', undefined, undefined);
+      expect(OllamaHelper.prototype.generate).toHaveBeenCalledWith('Test prompt', 'qwen2.5:0.5b', undefined, undefined);
     });
 
     it('should throw error when Ollama generation fails', async () => {
-      (generateOllama as jest.Mock).mockRejectedValue(new Error('Generation failed'));
+      (OllamaHelper.prototype.generate as jest.Mock).mockRejectedValue(new Error('Generation failed'));
 
       await expect(generateLLM(ollamaModel, 'Test')).rejects.toThrow('Generation failed');
     });
