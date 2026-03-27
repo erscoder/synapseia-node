@@ -9,6 +9,7 @@
  *   stopReviewLoop()
  */
 
+import { Injectable } from '@nestjs/common';
 import logger from '../../utils/logger.js';
 import { generateLLM, type LLMConfig, type LLMModel } from '../llm/llm-provider.js';
 
@@ -331,3 +332,64 @@ export const _test = {
   runReviewPollCycle,
   isReviewLoopRunning,
 };
+
+// ─── Injectable Service ───────────────────────────────────────────────────────
+
+/**
+ * Injectable service for the review agent.
+ * Wraps all review loop functionality with NestJS DI support.
+ */
+@Injectable()
+export class ReviewAgentHelper {
+  fetchEvaluationAssignments(coordinatorUrl: string, nodeId: string): Promise<EvaluationAssignment[]> {
+    return fetchEvaluationAssignments(coordinatorUrl, nodeId);
+  }
+
+  fetchSubmissionsForRound(coordinatorUrl: string, roundId: string): Promise<Submission[]> {
+    return fetchSubmissionsForRound(coordinatorUrl, roundId);
+  }
+
+  buildReviewPrompt(submission: Submission): string {
+    return buildReviewPrompt(submission);
+  }
+
+  scoreSubmission(
+    submission: Submission,
+    llmConfig: LLMReviewConfig,
+  ): Promise<ReviewScores | null> {
+    return scoreSubmission(submission, llmConfig);
+  }
+
+  postEvaluation(
+    coordinatorUrl: string,
+    peerId: string,
+    assignment: EvaluationAssignment,
+    scores: ReviewScores,
+  ): Promise<boolean> {
+    return postEvaluation(coordinatorUrl, peerId, assignment, scores);
+  }
+
+  runReviewPollCycle(
+    coordinatorUrl: string,
+    peerId: string,
+    llmConfig: LLMReviewConfig,
+  ): Promise<number> {
+    return runReviewPollCycle(coordinatorUrl, peerId, llmConfig);
+  }
+
+  startReviewLoop(
+    coordinatorUrl: string,
+    peerId: string,
+    llmConfig: LLMReviewConfig,
+  ): void {
+    startReviewLoop(coordinatorUrl, peerId, llmConfig);
+  }
+
+  stopReviewLoop(): void {
+    stopReviewLoop();
+  }
+
+  isReviewLoopRunning(): boolean {
+    return isReviewLoopRunning();
+  }
+}

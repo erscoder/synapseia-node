@@ -5,6 +5,7 @@
  * When a round enters evaluation, it starts the peer review loop.
  */
 
+import { Injectable } from '@nestjs/common';
 import { io, Socket } from 'socket.io-client';
 import logger from '../../utils/logger.js';
 import {
@@ -133,3 +134,20 @@ export function stopRoundListener(): void {
 }
 
 export { startReviewLoop, stopReviewLoop, isReviewLoopRunning };
+
+// ─── Injectable Service ───────────────────────────────────────────────────────
+
+/**
+ * Injectable service for the round listener.
+ * Wraps all round listener functionality with NestJS DI support.
+ */
+@Injectable()
+export class RoundListenerHelper {
+  startRoundListener(coordinatorUrl: string, peerId: string, llmConfig?: LLMReviewConfig): void {
+    startRoundListener(coordinatorUrl, peerId, llmConfig);
+  }
+
+  stopRoundListener(): void {
+    stopRoundListener();
+  }
+}
