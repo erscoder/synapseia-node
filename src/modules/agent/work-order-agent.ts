@@ -899,15 +899,15 @@ export function isCpuInferenceWorkOrder(workOrder: WorkOrder): boolean {
 
 /**
  * Execute a CPU_INFERENCE work order:
- * - embedding: uses Ollama all-minilm-l6-v2 (real 384-dim vectors, no mocks)
+ * - embedding: uses Ollama locusai/all-minilm-l6-v2 (real 384-dim vectors, no mocks)
  * - tokenize: splits input by whitespace and returns token count (no LLM needed)
  * - classify: calls the configured LLM with a classification prompt
  *
- * IMPORTANT: embedding task requires Ollama running locally with all-minilm-l6-v2.
+ * IMPORTANT: embedding task requires Ollama running locally with locusai/all-minilm-l6-v2.
  * If Ollama is not available, the work order fails with a clear error — no silent fallbacks.
- * To set up: `ollama pull all-minilm-l6-v2`
+ * To set up: `ollama pull locusai/all-minilm-l6-v2`
  */
-export const EMBEDDING_MODEL = 'all-minilm-l6-v2';
+export const EMBEDDING_MODEL = 'locusai/all-minilm-l6-v2';
 const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
 export async function executeCpuInferenceWorkOrder(
@@ -937,7 +937,7 @@ export async function executeCpuInferenceWorkOrder(
     modelUsed = 'whitespace-tokenizer';
 
   } else if (payload.task === 'embedding') {
-    // Real embeddings via Ollama all-minilm-l6-v2 (384-dim vectors)
+    // Real embeddings via Ollama locusai/all-minilm-l6-v2 (384-dim vectors)
     // No LLM mock fallbacks — if Ollama is not running, this fails loudly
     const embeddingHelper = new EmbeddingHelper();
     const resolvedModel = payload.modelHint ?? EMBEDDING_MODEL;
