@@ -955,13 +955,18 @@ Reply with ONLY the category label, nothing else.
 
 Text: ${payload.input.slice(0, 500)}`;
 
-    const raw = await generateLLM(llmModel, prompt, llmConfig);
-    output = raw
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .trim()
-      .split(/\s+/)[0]
-      .toLowerCase();
-    logger.log(`[CpuInference] Classification result: "${output}"`);
+    try {
+      const raw = await generateLLM(llmModel, prompt, llmConfig);
+      output = raw
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .trim()
+        .split(/\s+/)[0]
+        .toLowerCase();
+      logger.log(`[CpuInference] Classification result: "${output}"`);
+    } catch (err) {
+      logger.warn(`[CpuInference] LLM classify failed: ${(err as Error).message} — defaulting to 'neutral'`);
+      output = 'neutral';
+    }
   }
 
   const latencyMs = Date.now() - startMs;
