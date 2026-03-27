@@ -25,7 +25,7 @@ describe('generateEmbedding', () => {
   it('should generate embedding for text with default model', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: mockEmbedding }),
+      json: () => Promise.resolve({ embedding: mockEmbedding }),
     };
     (global.fetch as any).mockResolvedValueOnce(mockResponse);
 
@@ -43,7 +43,7 @@ describe('generateEmbedding', () => {
   it('should generate embedding for text with custom model', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: mockEmbedding }),
+      json: () => Promise.resolve({ embedding: mockEmbedding }),
     };
     (global.fetch as any).mockResolvedValueOnce(mockResponse);
 
@@ -62,7 +62,7 @@ describe('generateEmbedding', () => {
     const largeEmbedding = Array.from({ length: 384 }, () => Math.random());
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: largeEmbedding }),
+      json: () => Promise.resolve({ embedding: largeEmbedding }),
     };
     (global.fetch as any).mockResolvedValueOnce(mockResponse);
 
@@ -77,21 +77,22 @@ describe('generateEmbedding', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      text: () => Promise.resolve('Internal Server Error'),
     });
 
     await expect(generateEmbedding('test')).rejects.toThrow('Ollama embeddings API error');
   });
 
-  it('should throw on connection error', async () => {
+  it('should throw on connection error with helpful message', async () => {
     (global.fetch as any).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
-    await expect(generateEmbedding('test')).rejects.toThrow('ECONNREFUSED');
+    await expect(generateEmbedding('test')).rejects.toThrow('Cannot connect to Ollama');
   });
 
   it('should handle empty text', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: mockEmbedding }),
+      json: () => Promise.resolve({ embedding: mockEmbedding }),
     };
     (global.fetch as any).mockResolvedValueOnce(mockResponse);
 
@@ -109,7 +110,7 @@ describe('generateEmbedding', () => {
   it('should handle special characters in text', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: mockEmbedding }),
+      json: () => Promise.resolve({ embedding: mockEmbedding }),
     };
     (global.fetch as any).mockResolvedValueOnce(mockResponse);
 
@@ -233,7 +234,7 @@ describe('similaritySearch', () => {
     // Mock embeddings - query should be similar to docs 1, 2, 4, 5
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {
@@ -271,7 +272,7 @@ describe('similaritySearch', () => {
   it('should return all documents if topK > documents.length', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {
@@ -288,7 +289,7 @@ describe('similaritySearch', () => {
   it('should use default model when not specified', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {
@@ -306,7 +307,7 @@ describe('similaritySearch', () => {
   it('should use custom model when specified', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string, options: any) => {
       if (url.includes('embeddings')) {
@@ -323,7 +324,7 @@ describe('similaritySearch', () => {
   it('should return results with correct structure', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {
@@ -347,7 +348,7 @@ describe('similaritySearch', () => {
     const singleDoc = [{ id: '1', text: 'single document' }];
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {
@@ -371,7 +372,7 @@ describe('similaritySearch', () => {
   it('should return score between -1 and 1', async () => {
     const mockResponse = {
       ok: true,
-      json: jest.fn().mockResolvedValue({ embedding: [1, 2, 3] }),
+      json: () => Promise.resolve({ embedding: [1, 2, 3] }),
     };
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.includes('embeddings')) {

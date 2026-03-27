@@ -22,32 +22,65 @@ export interface SimilarityResult {
   score: number;
 }
 
+/** Default Ollama base URL — override via OLLAMA_URL env var */
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
+
 @Injectable()
 export class EmbeddingHelper {
+  private readonly ollamaBaseUrl: string;
+
+  constructor(ollamaUrl?: string) {
+    this.ollamaBaseUrl = ollamaUrl ?? process.env.OLLAMA_URL ?? DEFAULT_OLLAMA_URL;
+  }
+
   /**
-   * Generate embedding vector from text via Ollama
+   * Generate embedding vector from text via Ollama (real vectors, no mocks).
+   * Requires Ollama running locally with the target model pulled.
+   * Throws clearly if Ollama is unavailable — no silent fallbacks.
    */
   async generateEmbedding(
     text: string,
     model: string = 'all-minilm-l6-v2',
   ): Promise<number[]> {
-    const url = 'http://localhost:11434/api/embeddings';
+    const url = `${this.ollamaBaseUrl}/api/embeddings`;
     const payload = {
       model,
       prompt: text,
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      throw new Error(
+        `Cannot connect to Ollama at ${this.ollamaBaseUrl}. ` +
+        `Is Ollama running? Start with: ollama serve. ` +
+        `Then pull the model: ollama pull ${model}. ` +
+        `Original error: ${(err as Error).message}`,
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(`Ollama embeddings API error: ${response.status} ${response.statusText}`);
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Ollama embeddings API error ${response.status} ${response.statusText} — ` +
+        `model="${model}", url="${url}". ` +
+        (body.includes('model not found') || response.status === 404
+          ? `Model not found. Pull it with: ollama pull ${model}`
+          : body || 'Unknown error'),
+      );
     }
 
     const data = (await response.json()) as { embedding: number[] };
+
+    if (!Array.isArray(data.embedding) || data.embedding.length === 0) {
+      throw new Error(`Ollama returned empty embedding for model="${model}"`);
+    }
+
     return data.embedding;
   }
 
@@ -126,6 +159,7 @@ export class EmbeddingHelper {
 }
 
 // Backward-compatible standalone function exports
+// Each creates an EmbeddingHelper that respects OLLAMA_URL env var
 export const generateEmbedding = (...args: Parameters<EmbeddingHelper['generateEmbedding']>) =>
   new EmbeddingHelper().generateEmbedding(...args);
 
