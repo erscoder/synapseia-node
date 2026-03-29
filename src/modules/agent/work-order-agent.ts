@@ -1224,6 +1224,27 @@ export async function executeResearchWorkOrder(
       logger.log(` Reported experiment quality: ${qualityScore}/10 (strategy: ${strategy})`);
     }
 
+    // Upload high-quality insight to network corpus (only if metric > 0.7)
+    const metricValue = scoreResearchResult(result);
+    if (coordinatorUrl && peerId && metricValue > 0.7) {
+      // Extract topic from work order title (first 3 words, kebab-case)
+      const topic = workOrder.title
+        .split(/\s+/)
+        .slice(0, 3)
+        .join('-')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '');
+
+      await uploadInsightToNetwork(
+        coordinatorUrl,
+        peerId,
+        topic,
+        result.summary,       // hypothesis
+        result.keyInsights,
+        metricValue
+      );
+    }
+
     return { result, rawResponse, success: true, hyperparams: hyperConfig ?? undefined };
   } catch (error) {
     logger.error(' Failed to parse research result:', (error as Error).message);
@@ -1275,6 +1296,69 @@ export async function submitResearchResult(
     return true;
   } catch (error) {
     logger.warn(' Failed to submit research result:', (error as Error).message);
+    return false;
+  }
+}
+
+/**
+ * Upload a high-quality insight to the network's insight corpus.
+ * Only uploads if metricValue > 0.7 (quality threshold).
+ *
+ * @param coordinatorUrl - Base URL of the coordinator
+ * @param nodeId - Node ID submitting the insight
+ * @param topic - Topic/topic key for the insight
+ * @param hypothesis - Main hypothesis/summary of the research
+ * @param keyInsights - Array of key findings
+ * @param metricValue - Quality score (0.0-1.0); upload only if > 0.7
+ * @param roundId - Optional round ID the insight was submitted in
+ * @param submissionId - Optional submission ID from the research queue
+ */
+export async function uploadInsightToNetwork(
+  coordinatorUrl: string,
+  nodeId: string,
+  topic: string,
+  hypothesis: string,
+  keyInsights: string[],
+  metricValue: number,
+  roundId?: string,
+  submissionId?: string
+): Promise<boolean> {
+  // Quality threshold: only upload high-quality insights
+  if (metricValue <= 0.7) {
+    logger.log(`[InsightUpload] Skipping upload — metricValue ${metricValue.toFixed(2)} <= 0.7 threshold`);
+    return false;
+  }
+
+  try {
+    const payload = {
+      nodeId,
+      topic,
+      hypothesis,
+      keyInsights,
+      metricValue,
+      ...(roundId ? { roundId } : {}),
+      ...(submissionId ? { submissionId } : {}),
+    };
+
+    // Strip trailing slash from coordinatorUrl to avoid double slashes
+    const baseUrl = coordinatorUrl.replace(/\/$/, '');
+    const response = await fetch(`${baseUrl}/insights`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'unknown error');
+      logger.warn(`[InsightUpload] Failed to upload insight: ${response.status} ${errorText}`);
+      return false;
+    }
+
+    logger.log(`[InsightUpload] Successfully uploaded insight (metric: ${metricValue.toFixed(2)}, topic: ${topic})`);
+    return true;
+  } catch (error) {
+    // Graceful error handling — don't crash the agent if upload fails
+    logger.warn(`[InsightUpload] Network error during upload: ${(error as Error).message}`);
     return false;
   }
 }
@@ -1980,6 +2064,7 @@ export const _test = {
   isCpuInferenceWorkOrder,
   executeCpuInferenceWorkOrder,
   fetchReferenceContext,
+  uploadInsightToNetwork,
 };
 
 // ---------------------------------------------------------------------------
@@ -2118,5 +2203,18 @@ export class WorkOrderAgentHelper {
 
   fetchReferenceContext(coordinatorUrl: string, topic: string): Promise<string> {
     return fetchReferenceContext(coordinatorUrl, topic);
+  }
+
+  uploadInsightToNetwork(
+    coordinatorUrl: string,
+    nodeId: string,
+    topic: string,
+    hypothesis: string,
+    keyInsights: string[],
+    metricValue: number,
+    roundId?: string,
+    submissionId?: string
+  ): Promise<boolean> {
+    return uploadInsightToNetwork(coordinatorUrl, nodeId, topic, hypothesis, keyInsights, metricValue, roundId, submissionId);
   }
 }
