@@ -89,6 +89,9 @@ export async function runDiLoCoInnerLoop(
     testMode: config.testMode ?? false,
   };
 
+  // Configurable timeout: env DILOCO_TIMEOUT_MS, default 15 minutes = 900000ms
+  const DILOCO_TIMEOUT_MS = parseInt(process.env.DILOCO_TIMEOUT_MS || '900000', 10);
+
   return new Promise((resolve, reject) => {
     const proc = spawnFn('python3', [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -96,6 +99,14 @@ export async function runDiLoCoInnerLoop(
 
     let stderr = '';
     let finalResult: DiLoCoResult | null = null;
+    let timedOut = false;
+
+    // Setup timeout — will kill process if training takes too long
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      proc.kill?.('SIGTERM');
+      reject(new Error(`DiLoCo training timed out after ${DILOCO_TIMEOUT_MS / 1000}s`));
+    }, DILOCO_TIMEOUT_MS);
 
     // Send config via stdin
     proc.stdin!.write(JSON.stringify(payload));
@@ -108,6 +119,7 @@ export async function runDiLoCoInnerLoop(
           const parsed = JSON.parse(line) as Record<string, unknown>;
 
           if (parsed['error']) {
+            clearTimeout(timeoutHandle);
             reject(new Error(String(parsed['error'])));
             return;
           }
@@ -153,6 +165,13 @@ export async function runDiLoCoInnerLoop(
     });
 
     proc.on('close', (code) => {
+      clearTimeout(timeoutHandle);
+
+      // If we already timed out, don't process further
+      if (timedOut) {
+        return;
+      }
+
       if (code !== 0) {
         reject(
           new Error(
@@ -171,6 +190,7 @@ export async function runDiLoCoInnerLoop(
     });
 
     proc.on('error', (err) => {
+      clearTimeout(timeoutHandle);
       reject(new Error(`Failed to spawn diloco_train.py: ${err.message}`));
     });
   });

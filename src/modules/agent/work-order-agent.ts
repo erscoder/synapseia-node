@@ -323,6 +323,10 @@ export async function acceptWorkOrder(
 
 /**
  * Complete a work order with result
+ * 
+ * Idempotent: if this WO was already successfully completed in this session,
+ * skip the submission to prevent double-submission if coordinator returns 500
+ * after we already completed it.
  */
 export async function completeWorkOrder(
   coordinatorUrl: string,
@@ -331,6 +335,12 @@ export async function completeWorkOrder(
   result: string,
   success: boolean = true
 ): Promise<boolean> {
+  // Check if already completed this session (idempotency guard)
+  if (agentState.completedWorkOrderIds.has(workOrderId)) {
+    logger.log(` Work order ${workOrderId} already submitted in this session — skipping to avoid double-submission`);
+    return true; // Already submitted successfully before
+  }
+
   try {
     const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, {
       method: 'POST',
@@ -350,6 +360,9 @@ export async function completeWorkOrder(
     }
 
     const data = await response.json() as WorkOrder;
+
+    // Mark as completed only after successful submission
+    agentState.completedWorkOrderIds.add(workOrderId);
 
     // Track rewards
     if (success && data.rewardAmount) {
@@ -1750,7 +1763,7 @@ export async function runWorkOrderAgentIteration(
       agentState.researchCooldowns.set(workOrder.id, Date.now() + RESEARCH_COOLDOWN_MS);
       logger.log(` Research paper will be available for re-analysis in ${RESEARCH_COOLDOWN_MS / 1000}s`);
     } else {
-      agentState.completedWorkOrderIds.add(workOrder.id);
+      // Note: non-research WOs are marked as completed in completeWorkOrder() itself (idempotency)
       if (isCpuInferenceWorkOrder(workOrder)) {
         logger.log(` CPU inference result submitted — reward: ${workOrder.rewardAmount} SYN`);
       }

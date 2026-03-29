@@ -251,6 +251,41 @@ describe('WorkOrderAgent', () => {
 
       expect(result).toBe(true);
     });
+
+    it('should skip submission on second call for same work order (idempotency)', async () => {
+      // First call should complete successfully
+      (fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'wo_idempotent',
+          rewardAmount: '1000000000',
+        }),
+      });
+
+      const result1 = await completeWorkOrder(
+        'http://localhost:3001',
+        'wo_idempotent',
+        'peer1',
+        'Result',
+        true
+      );
+
+      expect(result1).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // Second call with same workOrderId should skip POST and return true immediately
+      const result2 = await completeWorkOrder(
+        'http://localhost:3001',
+        'wo_idempotent',
+        'peer1',
+        'Result',
+        true
+      );
+
+      expect(result2).toBe(true);
+      // fetch should NOT have been called again
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('executeWorkOrder', () => {

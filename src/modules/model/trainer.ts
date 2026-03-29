@@ -50,6 +50,9 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
     hardware,
   };
 
+  // Configurable timeout: env TRAINING_TIMEOUT_MS, default 10 minutes = 600000ms
+  const TRAINING_TIMEOUT_MS = parseInt(process.env.TRAINING_TIMEOUT_MS || '600000', 10);
+
   return new Promise((resolve, reject) => {
     const pythonProcess = spawn('python3', [pythonScriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -58,6 +61,14 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
     let stdout = '';
     let stderr = '';
     let finalResult: Partial<TrainingResult> | null = null;
+    let timedOut = false;
+
+    // Setup timeout — will kill process if training takes too long
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      pythonProcess.kill('SIGTERM');
+      reject(new Error(`Training timed out after ${TRAINING_TIMEOUT_MS / 1000}s`));
+    }, TRAINING_TIMEOUT_MS);
 
     // Send hyperparams to Python script via stdin
     pythonProcess.stdin.write(JSON.stringify(hyperparamsPayload));
@@ -98,6 +109,13 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
 
     // Handle process completion
     pythonProcess.on('close', (code) => {
+      clearTimeout(timeoutHandle);
+
+      // If we already timed out, don't process further
+      if (timedOut) {
+        return;
+      }
+
       const durationMs = Date.now() - startTime;
 
       if (code !== 0) {
@@ -129,6 +147,7 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
 
     // Handle process errors (spawn failures, etc.)
     pythonProcess.on('error', (error) => {
+      clearTimeout(timeoutHandle);
       reject(new Error(`Failed to spawn Python process: ${error.message}`));
     });
   });

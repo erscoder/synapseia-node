@@ -1,9 +1,17 @@
 /**
  * Agent Brain cognitive loop (A18)
  * Manages memory, journaling, strategy, and learning from experiments
+ * 
+ * PERSISTENCE (P1-3):
+ * - Learnings are persisted to disk to survive session restarts
+ * - Call saveBrainToDisk() after updateBrain() or saveResearchToBrain()
+ * - initBrain() automatically loads from disk on startup
  */
 
 import { Injectable } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import logger from '../../utils/logger.js';
 
 export interface MemoryEntry {
   timestamp: number;
@@ -36,11 +44,68 @@ export interface AgentBrain {
 }
 
 const DEFAULT_GOALS = ['minimize loss', 'discover novel architectures'];
+const DEFAULT_BRAIN_PATH = process.env.AGENT_BRAIN_PATH || path.join(process.cwd(), 'data', 'agent-brain.json');
+
+/**
+ * Load brain from disk
+ * Returns null if file does not exist
+ */
+export function loadBrainFromDisk(filePath: string = DEFAULT_BRAIN_PATH): AgentBrain | null {
+  try {
+    if (!fs.existsSync(filePath)) {
+      logger.debug(`[AgentBrain] No saved brain at ${filePath}`);
+      return null;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const brain = JSON.parse(content) as AgentBrain;
+    logger.log(`[AgentBrain] Loaded brain from disk: ${filePath} (${brain.totalExperiments} experiments, ${brain.memory.length} memories)`);
+    return brain;
+  } catch (error) {
+    logger.warn(`[AgentBrain] Failed to load brain from ${filePath}:`, (error as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Save brain to disk
+ * Creates parent directory if it does not exist
+ */
+export function saveBrainToDisk(brain: AgentBrain, filePath: string = DEFAULT_BRAIN_PATH): void {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(filePath, JSON.stringify(brain, null, 2), 'utf-8');
+    logger.debug(`[AgentBrain] Saved brain to disk: ${filePath} (${brain.totalExperiments} experiments, ${brain.memory.length} memories)`);
+  } catch (error) {
+    logger.error(`[AgentBrain] Failed to save brain to ${filePath}:`, (error as Error).message);
+  }
+}
+
+/**
+ * Persist brain to disk with optional path override
+ */
+export function persistBrain(brain: AgentBrain, filePath?: string): void {
+  saveBrainToDisk(brain, filePath || DEFAULT_BRAIN_PATH);
+}
 
 /**
  * Initialize a new agent brain
+ * Loads from disk first if available, otherwise creates fresh
  */
-export function initBrain(goals?: string[]): AgentBrain {
+export function initBrain(goals?: string[], filePath?: string): AgentBrain {
+  const resolvedPath = filePath || DEFAULT_BRAIN_PATH;
+  
+  // Try to load from disk first
+  const loaded = loadBrainFromDisk(resolvedPath);
+  if (loaded) {
+    return loaded;
+  }
+
+  // Create fresh brain
   return {
     goals: goals ? [...goals] : [...DEFAULT_GOALS],
     memory: [],
@@ -178,8 +243,8 @@ export function getRecentJournal(brain: AgentBrain, maxEntries: number = 10): Jo
 
 @Injectable()
 export class AgentBrainHelper {
-  initBrain(goals?: string[]): AgentBrain {
-    return initBrain(goals);
+  initBrain(goals?: string[], filePath?: string): AgentBrain {
+    return initBrain(goals, filePath);
   }
 
   updateBrain(
@@ -203,5 +268,17 @@ export class AgentBrainHelper {
 
   getRecentJournal(brain: AgentBrain, maxEntries?: number): JournalEntry[] {
     return getRecentJournal(brain, maxEntries);
+  }
+
+  loadBrainFromDisk(filePath?: string): AgentBrain | null {
+    return loadBrainFromDisk(filePath);
+  }
+
+  saveBrainToDisk(brain: AgentBrain, filePath?: string): void {
+    return saveBrainToDisk(brain, filePath);
+  }
+
+  persistBrain(brain: AgentBrain, filePath?: string): void {
+    return persistBrain(brain, filePath);
   }
 }
