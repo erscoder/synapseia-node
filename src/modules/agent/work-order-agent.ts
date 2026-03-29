@@ -1023,10 +1023,17 @@ export function extractResearchPayload(workOrder: WorkOrder): ResearchPayload | 
 }
 
 /**
- * Build research prompt for LLM
+ * Build research prompt for LLM, optionally including reference context from the network
+ * 
+ * @param payload - The paper title and abstract to analyze
+ * @param referenceContext - Optional previous discoveries from the reference corpus to build upon
  */
-export function buildResearchPrompt(payload: ResearchPayload): string {
-  return `You are an expert research analyst in a decentralized AI compute network. Your job is NOT to summarize the paper — it is to critically analyze it and generate original insights.
+export function buildResearchPrompt(payload: ResearchPayload, referenceContext?: string): string {
+  const contextSection = referenceContext
+    ? `\n\nYou have access to previous discoveries from the network on this topic:\n\n${referenceContext}\n\nBuild upon these findings. Don't repeat what's already known. Focus on NEW insights and gaps in the existing research that this paper addresses.\n`
+    : '';
+
+  return `You are an expert research analyst in a decentralized AI compute network. Your job is NOT to summarize the paper — it is to critically analyze it and generate original insights.${contextSection}
 
 Read the paper carefully and produce a rigorous analysis. Your entire response must be a single JSON object starting with { and ending with }. Do not include any other text, backticks, or formatting.
 
@@ -1045,6 +1052,44 @@ Output format (replace values):
 
 Title: ${payload.title}
 Abstract: ${payload.abstract}`;
+}
+
+/**
+ * Fetch reference context from the coordinator's reference corpus for a given topic.
+ * Used to build upon previous discoveries instead of rediscovering knowledge.
+ * 
+ * @param coordinatorUrl - Base URL of the coordinator (e.g. http://localhost:3000)
+ * @param topic - Topic/domain to fetch context for (e.g. "machine-learning", "quantum-computing")
+ * @returns Formatted markdown string with previous discoveries, or empty string if none found or API unavailable
+ */
+export async function fetchReferenceContext(coordinatorUrl: string, topic: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${coordinatorUrl}/corpus/context?topic=${encodeURIComponent(topic)}&limit=5`
+    );
+    if (!res.ok) return '';
+    const docs = await res.json() as Array<{
+      id: string;
+      title: string;
+      content: string;
+      score: number;
+      topic: string;
+      tags?: string[];
+    }>;
+    
+    if (!Array.isArray(docs) || docs.length === 0) return '';
+    
+    // Format previous discoveries as markdown
+    return docs
+      .map(
+        (d) =>
+          `### Previous Discovery (score: ${d.score}/10)\n**${d.title}**\n${d.content}`
+      )
+      .join('\n\n');
+  } catch (error) {
+    logger.warn(`[ReferenceCorpus] Failed to fetch context for topic "${topic}": ${(error as Error).message}`);
+    return ''; // Graceful fallback — don't block research if corpus unavailable
+  }
 }
 
 /**
@@ -1102,6 +1147,25 @@ export async function executeResearchWorkOrder(
     throw new Error('Invalid research payload in work order');
   }
 
+  // Fetch reference context from the network's reference corpus (optional)
+  // This allows the node to build upon previous discoveries instead of rediscovering
+  let referenceContext = '';
+  if (coordinatorUrl) {
+    // Extract topic from paper metadata (title, description, or infer from abstract)
+    // For now, use first few words of title as topic key
+    const topic = payload.title
+      .split(/\s+/)
+      .slice(0, 3)
+      .join('-')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
+    
+    referenceContext = await fetchReferenceContext(coordinatorUrl, topic);
+    if (referenceContext) {
+      logger.log(` Fetched reference context for topic "${topic}" (${referenceContext.length} chars)`);
+    }
+  }
+
   // Fetch hyperparameter config from coordinator (exploit best or explore new)
   let hyperConfig: { id: string; temperature: number; promptTemplate: string; analysisDepth: string; chunkSize?: number } | null = null;
   let strategy: 'exploit' | 'explore' = 'explore';
@@ -1114,7 +1178,7 @@ export async function executeResearchWorkOrder(
     }
   }
 
-  const prompt = buildResearchPrompt(payload);
+  const prompt = buildResearchPrompt(payload, referenceContext || undefined);
   const startMs = Date.now();
   const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? {
     temperature: hyperConfig.temperature,
@@ -1915,6 +1979,7 @@ export const _test = {
   uploadGradients,
   isCpuInferenceWorkOrder,
   executeCpuInferenceWorkOrder,
+  fetchReferenceContext,
 };
 
 // ---------------------------------------------------------------------------
@@ -2049,5 +2114,9 @@ export class WorkOrderAgentHelper {
 
   getDatasetCacheDir(): string {
     return getDatasetCacheDir();
+  }
+
+  fetchReferenceContext(coordinatorUrl: string, topic: string): Promise<string> {
+    return fetchReferenceContext(coordinatorUrl, topic);
   }
 }
