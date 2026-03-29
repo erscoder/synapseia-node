@@ -1781,8 +1781,12 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
   const { intervalMs, maxIterations } = config;
 
   // Connect to coordinator WebSocket to receive round.closed notifications
+  // Pass LLM config so the peer review loop can be activated when rounds enter evaluating phase
   const peerId = config.peerId ?? 'unknown';
-  startRoundListener(config.coordinatorUrl, peerId);
+  startRoundListener(config.coordinatorUrl, peerId, {
+    llmModel: config.llmModel,
+    llmConfig: config.llmConfig,
+  });
 
   // Startup summary is logged by the caller (node-runtime / CLI)
 
