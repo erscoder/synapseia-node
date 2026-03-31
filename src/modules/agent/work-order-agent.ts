@@ -18,6 +18,7 @@ import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
 import { parseModel, type LLMModel } from '../llm/llm-provider.js';
 import type { AgentBrain } from './agent-brain.js';
 import { startRoundListener } from './round-listener.js';
+import { saveBrainToDisk } from './agent-brain.js';
 import { EmbeddingHelper } from '../../shared/embedding.js';
 import { trainMicroModel } from '../model/trainer.js';
 import { proposeMutation } from '../model/mutation-engine.js';
@@ -1899,6 +1900,7 @@ export async function runWorkOrderAgentIteration(
     // Save to agent brain if provided
     if (brain && success) {
       saveResearchToBrain(brain, workOrder, researchResult);
+      saveBrainToDisk(brain);
       logger.log(' Research saved to agent brain');
     }
 
