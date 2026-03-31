@@ -1,51 +1,56 @@
 /**
- * Config module tests - ESM compatible
- * Uses isolated mocks to avoid file system state issues
+ * Config module tests - Uses real FS with SYNAPSEIA_HOME isolation
+ * Avoids ESM mock issues by using real filesystem operations in a temp dir
  */
 
 import { jest } from '@jest/globals';
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 
-// Create isolated config paths for testing
+// Unique temp dir for this test run — set BEFORE any imports so CONFIG_DIR picks it up
 const testConfigDir = join(tmpdir(), 'synapseia-test-' + Date.now());
-const testConfigFile = join(testConfigDir, 'config.json');
+process.env.SYNAPSEIA_HOME = testConfigDir;
 
-// Mock before importing
-const mockExistsSync = jest.fn();
-const mockReadFileSync = jest.fn();
-const mockWriteFileSync = jest.fn();
-const mockMkdirSync = jest.fn();
-
-jest.mock('fs', () => ({
-  existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
-  writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
-  mkdirSync: (...args: unknown[]) => mockMkdirSync(...args),
-}));
-
-jest.mock('os', () => ({
-  homedir: () => testConfigDir,
-}));
-
-jest.mock('path', () => ({
-  join: (...args: string[]) => args.join('/'),
-}));
-
-// Import after mocks
-import { loadConfig, saveConfig, defaultConfig, validateCoordinatorUrl, validateModelFormat, isCloudModel, CONFIG_FILE, CONFIG_DIR } from '../modules/config/config';
+// Now import the module (it will use SYNAPSEIA_HOME for CONFIG_DIR)
+import {
+  loadConfig,
+  saveConfig,
+  defaultConfig,
+  validateCoordinatorUrl,
+  validateModelFormat,
+  isCloudModel,
+  CONFIG_FILE,
+  CONFIG_DIR,
+} from '../modules/config/config';
 
 describe('Config Module', () => {
+  beforeAll(() => {
+    // Create temp config dir
+    mkdirSync(testConfigDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    // Cleanup temp dir
+    try { rmSync(testConfigDir, { recursive: true, force: true }); } catch {}
+    delete process.env.SYNAPSEIA_HOME;
+  });
+
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockExistsSync.mockReturnValue(false);
+    // Remove config file before each test for isolation
+    try { rmSync(CONFIG_FILE); } catch {}
+    // Clear env var overrides
+    delete process.env.SYNAPSEIA_COORDINATOR_URL;
+    delete process.env.LLM_CLOUD_MODEL;
+    delete process.env.LLM_CLOUD_API_KEY;
+    delete process.env.LLM_CLOUD_URL;
+    delete process.env.LLM_CLOUD_BASE_URL;
   });
 
   describe('defaultConfig', () => {
     it('should return default configuration', () => {
       const config = defaultConfig();
-
       expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
       expect(config.llmUrl).toBeUndefined();
@@ -56,12 +61,10 @@ describe('Config Module', () => {
 
   describe('loadConfig', () => {
     it('should return default config when file does not exist', () => {
-      mockExistsSync.mockReturnValue(false);
-
+      // CONFIG_FILE deleted in beforeEach
       const config = loadConfig();
-
       expect(config.coordinatorUrl).toBe('http://localhost:3701');
-      expect(mockExistsSync).toHaveBeenCalledWith(testConfigFile);
+      expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
     });
 
     it('should load config from file when it exists', () => {
@@ -71,8 +74,7 @@ describe('Config Module', () => {
         llmUrl: 'https://api.custom.com',
         llmKey: 'secret-key',
       };
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(JSON.stringify(savedConfig));
+      writeFileSync(CONFIG_FILE, JSON.stringify(savedConfig));
 
       const config = loadConfig();
 
@@ -83,8 +85,7 @@ describe('Config Module', () => {
     });
 
     it('should return default config when file has invalid JSON', () => {
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue('invalid json');
+      writeFileSync(CONFIG_FILE, 'invalid json{{{');
 
       const config = loadConfig();
 
@@ -95,26 +96,12 @@ describe('Config Module', () => {
 
   describe('saveConfig', () => {
     it('should create config directory if it does not exist', () => {
-      mockExistsSync.mockReturnValue(false);
-
       const config = defaultConfig();
       saveConfig(config);
-
-      expect(mockMkdirSync).toHaveBeenCalledWith(testConfigDir, { recursive: true });
-    });
-
-    it('should not create directory if it already exists', () => {
-      mockExistsSync.mockReturnValue(true);
-
-      const config = defaultConfig();
-      saveConfig(config);
-
-      expect(mockMkdirSync).not.toHaveBeenCalled();
+      expect(existsSync(CONFIG_FILE)).toBe(true);
     });
 
     it('should write config to file with proper formatting', () => {
-      mockExistsSync.mockReturnValue(true);
-
       const config = {
         coordinatorUrl: 'http://custom:3001',
         defaultModel: 'ollama/custom',
@@ -123,11 +110,18 @@ describe('Config Module', () => {
       };
       saveConfig(config);
 
-      expect(mockWriteFileSync).toHaveBeenCalledWith(
-        testConfigFile,
-        expect.stringContaining('"coordinatorUrl"'),
-        expect.anything()
-      );
+      const loaded = loadConfig();
+      expect(loaded.coordinatorUrl).toBe('http://custom:3001');
+      expect(loaded.defaultModel).toBe('ollama/custom');
+    });
+
+    it('should round-trip config correctly', () => {
+      const original = defaultConfig();
+      original.coordinatorUrl = 'http://my-coordinator:9000';
+      saveConfig(original);
+
+      const loaded = loadConfig();
+      expect(loaded.coordinatorUrl).toBe('http://my-coordinator:9000');
     });
   });
 

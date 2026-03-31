@@ -34,7 +34,7 @@ describe('generateEmbedding', () => {
     expect(fetch).toHaveBeenCalledWith('http://localhost:11434/api/embeddings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'all-minilm-l6-v2', prompt: 'test text' }),
+      body: JSON.stringify({ model: 'locusai/all-minilm-l6-v2', prompt: 'test text' }),
     });
 
     expect(result).toEqual(mockEmbedding);
@@ -102,7 +102,7 @@ describe('generateEmbedding', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:11434/api/embeddings',
       expect.objectContaining({
-        body: JSON.stringify({ model: 'all-minilm-l6-v2', prompt: '' }),
+        body: JSON.stringify({ model: 'locusai/all-minilm-l6-v2', prompt: '' }),
       }),
     );
   });

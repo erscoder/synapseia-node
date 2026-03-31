@@ -6,8 +6,6 @@ import { Injectable } from '@nestjs/common';
 // Config file path
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-
-console.log(CONFIG_FILE)
 export interface Config {
   coordinatorUrl: string;
   defaultModel: string;
