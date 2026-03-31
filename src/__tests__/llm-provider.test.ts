@@ -10,10 +10,12 @@ import {
   type LLMModel,
 } from '../modules/llm/llm-provider';
 
+// ESM-compatible mocks: declare before jest.mock so factories can reference them
+const mockCheckOllama: any = jest.fn();
+const mockGenerate: any = jest.fn();
+
 // Mock OllamaHelper prototype methods so the module-level _ollamaHelper instance is intercepted
 jest.mock('../modules/llm/ollama.js', () => {
-  const mockCheckOllama = jest.fn();
-  const mockGenerate = jest.fn();
   class MockOllamaHelper {
     checkOllama = mockCheckOllama;
     generate = mockGenerate;

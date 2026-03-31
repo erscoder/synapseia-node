@@ -1,22 +1,31 @@
 import { jest } from '@jest/globals';
-import axios from 'axios';
 import { ModelDiscovery } from '../model-discovery';
-import { MODEL_CATALOG } from '../../model/model-catalog';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+// ESM-compatible mocks: declare before jest.mock so factories can reference them
+const mockAxiosPost: any = jest.fn();
+const mockGetLocalModels: any = jest.fn().mockReturnValue([]);
+const mockExecSync: any = jest.fn();
 
-// Mock getLocalModels
-jest.mock('../../model/model-catalog', () => {
-  const original = jest.requireActual('../../model/model-catalog');
-  return {
-    ...original,
-    getLocalModels: jest.fn(),
-  };
+// Mock child_process to prevent real curl calls in getLocalModels
+jest.mock('child_process', () => ({
+  execSync: mockExecSync,
+  spawn: jest.fn() as any,
+}));
+
+// Mock axios
+jest.mock('axios', () => {
+  const mockInstance = { post: mockAxiosPost, get: jest.fn() as any };
+  return { default: mockInstance, ...mockInstance };
 });
 
-import { getLocalModels } from '../../model/model-catalog';
-const mockedGetLocalModels = getLocalModels as jest.MockedFunction<typeof getLocalModels>;
+// Mock model-catalog to intercept getLocalModels without spawning curl
+jest.mock('../../model/model-catalog.js', () => ({
+  getLocalModels: mockGetLocalModels,
+  MODEL_CATALOG: [],
+  CLOUD_MODELS: [],
+  FULL_CATALOG: [],
+}));
+const mockedGetLocalModels = mockGetLocalModels;
 
 describe('ModelDiscovery', () => {
   let discovery: ModelDiscovery;
@@ -32,16 +41,16 @@ describe('ModelDiscovery', () => {
 
       await discovery.registerModels('http://coordinator:3700', 'peer-1', { tier: 1 } as any);
 
-      expect(mockedAxios.post).not.toHaveBeenCalled();
+      expect(mockAxiosPost).not.toHaveBeenCalled();
     });
 
     it('should register models with coordinator', async () => {
       mockedGetLocalModels.mockReturnValue(['qwen2.5-0.5b', 'all-minilm-l6-v2']);
-      mockedAxios.post.mockResolvedValue({ data: { success: true } });
+      mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
       await discovery.registerModels('http://coordinator:3700', 'peer-1', { tier: 1 } as any);
 
-      expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect(mockAxiosPost).toHaveBeenCalledWith(
         'http://coordinator:3700/inference/register',
         expect.objectContaining({
           peerId: 'peer-1',
@@ -56,17 +65,17 @@ describe('ModelDiscovery', () => {
 
     it('should not re-register if models have not changed', async () => {
       mockedGetLocalModels.mockReturnValue(['qwen2.5-0.5b']);
-      mockedAxios.post.mockResolvedValue({ data: { success: true } });
+      mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
       await discovery.registerModels('http://coordinator:3700', 'peer-1', {} as any);
       await discovery.registerModels('http://coordinator:3700', 'peer-1', {} as any);
 
       // Only called once because hash didn't change
-      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
 
     it('should re-register when model list changes', async () => {
-      mockedAxios.post.mockResolvedValue({ data: { success: true } });
+      mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
       mockedGetLocalModels.mockReturnValue(['qwen2.5-0.5b']);
       await discovery.registerModels('http://coordinator:3700', 'peer-1', {} as any);
@@ -74,12 +83,12 @@ describe('ModelDiscovery', () => {
       mockedGetLocalModels.mockReturnValue(['qwen2.5-0.5b', 'phi-2']);
       await discovery.registerModels('http://coordinator:3700', 'peer-1', {} as any);
 
-      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
     });
 
     it('should handle network errors gracefully', async () => {
       mockedGetLocalModels.mockReturnValue(['qwen2.5-0.5b']);
-      mockedAxios.post.mockRejectedValue(new Error('Connection refused'));
+      mockAxiosPost.mockRejectedValue(new Error('Connection refused'));
 
       // Should not throw
       await expect(
@@ -98,7 +107,8 @@ describe('ModelDiscovery', () => {
     });
 
     it('should detect embedding models', () => {
-      const models = discovery.buildModelList(['all-minilm-l6-v2'], {} as any);
+      // Use the full catalog name so the catalog entry is found (locusai/all-minilm-l6-v2)
+      const models = discovery.buildModelList(['locusai/all-minilm-l6-v2'], {} as any);
 
       expect(models[0].capabilities).toContain('embedding');
       expect(models[0].capabilities).not.toContain('inference');

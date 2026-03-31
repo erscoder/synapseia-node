@@ -12,17 +12,30 @@ import {
 } from '../modules/agent/work-order-agent.js';
 
 // ---------------------------------------------------------------------------
-// Mock generateLLM
+// Mock generateLLM via OllamaHelper (ESM-compatible)
 // ---------------------------------------------------------------------------
+const mockGenerateLLM: any = jest.fn();
+const mockParseModel: any = jest.fn((s: string) => ({ provider: 'ollama', modelId: s }));
 
+// Mock llm-provider module
 jest.mock('../modules/llm/llm-provider.js', () => ({
-  generateLLM: jest.fn(),
-  parseModel: jest.fn((s: string) => ({ provider: 'ollama', modelId: s })),
+  generateLLM: mockGenerateLLM,
+  parseModel: mockParseModel,
+  detectAvailableProviders: jest.fn() as any,
+  checkLLM: jest.fn() as any,
 }));
 
-import { generateLLM } from '../modules/llm/llm-provider.js';
+// Also mock OllamaHelper to intercept Ollama calls in case llm-provider mock doesn't fully intercept
+const mockOllamaGenerate: any = jest.fn();
+jest.mock('../modules/llm/ollama.js', () => ({
+  OllamaHelper: class MockOllamaHelper {
+    generate = mockOllamaGenerate;
+    checkOllama = jest.fn() as any;
+  },
+}));
 
-const mockGenerateLLM = generateLLM as jest.MockedFunction<typeof generateLLM>;
+import { generateLLM as _generateLLM } from '../modules/llm/llm-provider.js';
+import * as llmProvider from '../modules/llm/llm-provider.js';
 
 function makeLLMModel() {
   return { provider: 'ollama' as const, providerId: '' as const, modelId: 'phi4-mini' };
@@ -131,7 +144,9 @@ describe('executeCpuInferenceWorkOrder — embedding', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    // Don't use restoreAllMocks() — it resets jest.fn() mocks (mockGenerateLLM etc.)
+    // which breaks subsequent test blocks. Use clearAllMocks() instead.
+    jest.clearAllMocks();
   });
 
   it('should return a real embedding array via Ollama', async () => {
@@ -144,7 +159,7 @@ describe('executeCpuInferenceWorkOrder — embedding', () => {
     expect((result.output as number[]).length).toBe(384);
     expect(result.tokensProcessed).toBeGreaterThan(0);
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
-    expect(result.modelUsed).toBe('ollama/all-minilm-l6-v2');
+    expect(result.modelUsed).toBe('ollama/locusai/all-minilm-l6-v2');
     // LLM should NOT be called for embeddings
     expect(mockGenerateLLM).not.toHaveBeenCalled();
   });

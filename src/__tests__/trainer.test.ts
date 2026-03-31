@@ -4,9 +4,12 @@ import type { MutationProposal } from '../modules/model/mutation-engine.js';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 
+// ESM-compatible mock: declare before jest.mock so factory can reference it
+const mockSpawn: any = jest.fn();
+
 // Mock child_process
 jest.mock('child_process', () => ({
-  spawn: jest.fn(),
+  spawn: mockSpawn,
 }));
 
 describe('Trainer', () => {
@@ -45,7 +48,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -81,7 +84,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -109,7 +112,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -133,7 +136,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -157,7 +160,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -180,7 +183,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -213,7 +216,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
@@ -243,7 +246,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const customPath = '/custom/path/train.py';
       const options: TrainingOptions = {
@@ -273,7 +276,7 @@ describe('Trainer', () => {
       mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
 
-      (spawn as jest.Mock).mockReturnValue(mockProcess);
+      mockSpawn.mockReturnValue(mockProcess);
 
       const options: TrainingOptions = {
         proposal: mockProposal,
