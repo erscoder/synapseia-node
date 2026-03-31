@@ -7,7 +7,7 @@ import { jest } from '@jest/globals';
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 // Create mock functions before importing
-const mockPost = jest.fn();
+const mockPost: any = jest.fn();
 
 // Mock axios module - setup before import
 jest.mock('axios', () => {
