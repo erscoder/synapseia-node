@@ -14,8 +14,9 @@ import {
 // ---------------------------------------------------------------------------
 // Mock generateLLM via OllamaHelper (ESM-compatible)
 // ---------------------------------------------------------------------------
-const mockGenerateLLM: any = jest.fn();
-const mockParseModel: any = jest.fn((s: string) => ({ provider: 'ollama', modelId: s }));
+// Use var so jest.mock() factory (which is hoisted) can reference it at initialization
+var mockGenerateLLM: any = jest.fn();
+var mockParseModel: any = jest.fn((s: string) => ({ provider: 'ollama', modelId: s }));
 
 // Mock llm-provider module
 jest.mock('../modules/llm/llm-provider.js', () => ({

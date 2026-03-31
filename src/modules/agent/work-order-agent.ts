@@ -1028,10 +1028,29 @@ export function extractResearchPayload(workOrder: WorkOrder): ResearchPayload | 
  * @param payload - The paper title and abstract to analyze
  * @param referenceContext - Optional previous discoveries from the reference corpus to build upon
  */
-export function buildResearchPrompt(payload: ResearchPayload, referenceContext?: string): string {
-  const contextSection = referenceContext
+/**
+ * Build research prompt for LLM, optionally including knowledge graph context and reference discoveries.
+ *
+ * @param payload - The paper title and abstract to analyze
+ * @param knowledgeGraphContext - Optional broader context from the knowledge graph (from prior research/missions)
+ * @param referenceContext - Optional previous discoveries from the reference corpus to build upon
+ */
+export function buildResearchPrompt(
+  payload: ResearchPayload,
+  knowledgeGraphContext?: string,
+  referenceContext?: string
+): string {
+  // KG context: broader research framing from the knowledge graph
+  const kgSection = knowledgeGraphContext
+    ? `\n\nResearch context from the knowledge graph:\n${knowledgeGraphContext}\n`
+    : '';
+
+  // Reference corpus: specific prior discoveries to build upon
+  const refSection = referenceContext
     ? `\n\nYou have access to previous discoveries from the network on this topic:\n\n${referenceContext}\n\nBuild upon these findings. Don't repeat what's already known. Focus on NEW insights and gaps in the existing research that this paper addresses.\n`
     : '';
+
+  const contextSection = kgSection || refSection ? `\n\n${kgSection}${refSection}` : '';
 
   return `You are an expert research analyst in a decentralized AI compute network. Your job is NOT to summarize the paper — it is to critically analyze it and generate original insights.${contextSection}
 
@@ -1093,6 +1112,35 @@ export async function fetchReferenceContext(coordinatorUrl: string, topic: strin
 }
 
 /**
+ * Fetch knowledge graph context from the coordinator for a given topic.
+ * Used to get broader research context before conducting new research.
+ *
+ * @param coordinatorUrl - Base URL of the coordinator
+ * @param topic - Topic/domain to fetch context for
+ * @param missionId - Optional mission ID to scope the context
+ * @returns The context string from the KG, or empty string if unavailable
+ */
+export async function fetchKGraphContext(
+  coordinatorUrl: string,
+  topic: string,
+  missionId?: string
+): Promise<string> {
+  try {
+    const params = new URLSearchParams({ topic });
+    if (missionId) params.set('missionId', missionId);
+    const res = await fetch(
+      `${coordinatorUrl}/knowledge-graph/research-context?${params.toString()}`
+    );
+    if (!res.ok) return '';
+    const data = await res.json() as { context: string };
+    return data.context ?? '';
+  } catch (error) {
+    logger.warn(`[KnowledgeGraph] Failed to fetch context for topic "${topic}": ${(error as Error).message}`);
+    return ''; // Graceful fallback — don't block research if KG unavailable
+  }
+}
+
+/**
  * Execute research work order
  */
 export async function fetchHyperparamConfig(coordinatorUrl: string): Promise<{
@@ -1147,19 +1195,27 @@ export async function executeResearchWorkOrder(
     throw new Error('Invalid research payload in work order');
   }
 
-  // Fetch reference context from the network's reference corpus (optional)
-  // This allows the node to build upon previous discoveries instead of rediscovering
+  // Extract topic from paper metadata (title, description, or infer from abstract)
+  // For now, use first few words of title as topic key
+  const topic = payload.title
+    .split(/\s+/)
+    .slice(0, 3)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+
+  // Fetch knowledge graph context first (broader research framing from prior missions)
+  let kgContext = '';
+  if (coordinatorUrl) {
+    kgContext = await fetchKGraphContext(coordinatorUrl, topic);
+    if (kgContext) {
+      logger.log(` Fetched KG context for topic "${topic}" (${kgContext.length} chars)`);
+    }
+  }
+
+  // Fetch reference context from the network's reference corpus (specific prior discoveries)
   let referenceContext = '';
   if (coordinatorUrl) {
-    // Extract topic from paper metadata (title, description, or infer from abstract)
-    // For now, use first few words of title as topic key
-    const topic = payload.title
-      .split(/\s+/)
-      .slice(0, 3)
-      .join('-')
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '');
-    
     referenceContext = await fetchReferenceContext(coordinatorUrl, topic);
     if (referenceContext) {
       logger.log(` Fetched reference context for topic "${topic}" (${referenceContext.length} chars)`);
@@ -1178,7 +1234,11 @@ export async function executeResearchWorkOrder(
     }
   }
 
-  const prompt = buildResearchPrompt(payload, referenceContext || undefined);
+  const prompt = buildResearchPrompt(
+    payload,
+    kgContext || undefined,
+    referenceContext || undefined
+  );
   const startMs = Date.now();
   const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? {
     temperature: hyperConfig.temperature,
@@ -2064,6 +2124,7 @@ export const _test = {
   isCpuInferenceWorkOrder,
   executeCpuInferenceWorkOrder,
   fetchReferenceContext,
+  fetchKGraphContext,
   uploadInsightToNetwork,
 };
 
@@ -2203,6 +2264,10 @@ export class WorkOrderAgentHelper {
 
   fetchReferenceContext(coordinatorUrl: string, topic: string): Promise<string> {
     return fetchReferenceContext(coordinatorUrl, topic);
+  }
+
+  fetchKGraphContext(coordinatorUrl: string, topic: string, missionId?: string): Promise<string> {
+    return fetchKGraphContext(coordinatorUrl, topic, missionId);
   }
 
   uploadInsightToNetwork(
