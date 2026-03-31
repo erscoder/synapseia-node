@@ -1,6 +1,8 @@
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
 
 // @noble/ed25519 is no longer used by identity.ts (replaced with Node crypto)
 
@@ -19,7 +21,7 @@ describe('identity', () => {
 
   afterEach(() => {
     // Clean up test directory
-    const fs = require('fs');
+    
     const identityPath = path.join(testDir, 'identity.json');
     if (fs.existsSync(identityPath)) {
       fs.unlinkSync(identityPath);
@@ -42,8 +44,8 @@ describe('identity', () => {
     });
 
     it('should work when directory already exists', () => {
-      const fs = require('fs');
-      const { generateIdentity } = require('../modules/identity/identity.js');
+      
+      
 
       // Create directory first
       if (!fs.existsSync(testDir)) {
@@ -83,7 +85,7 @@ describe('identity', () => {
     });
 
     it('should create identity file', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       generateIdentity(testDir);
@@ -105,7 +107,7 @@ describe('identity', () => {
     });
 
     it('should generate different identities on multiple calls', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       const identity1 = generateIdentity(testDir);
@@ -133,7 +135,7 @@ describe('identity', () => {
     });
 
     it('should throw if identity file has invalid structure', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       if (!fs.existsSync(testDir)) {
@@ -145,7 +147,7 @@ describe('identity', () => {
     });
 
     it('should backfill missing agentId', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       const generated = generateIdentity(testDir);
@@ -161,7 +163,7 @@ describe('identity', () => {
     });
 
     it('should backfill missing tier', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       const generated = generateIdentity(testDir);
@@ -176,7 +178,7 @@ describe('identity', () => {
     });
 
     it('should backfill missing mode', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       const generated = generateIdentity(testDir);
@@ -191,7 +193,7 @@ describe('identity', () => {
     });
 
     it('should backfill missing status', () => {
-      const fs = require('fs');
+      
       const identityPath = path.join(testDir, 'identity.json');
 
       const generated = generateIdentity(testDir);
@@ -276,10 +278,10 @@ describe('identity', () => {
     });
 
     it('should use default directory when not specified', () => {
-      const { updateIdentity, generateIdentity } = require('../modules/identity/identity.js');
-      const fs = require('fs');
-      const os = require('os');
-      const path = require('path');
+      
+      
+      
+      
 
       const defaultDir = path.join(os.homedir(), '.synapse');
 
@@ -389,7 +391,7 @@ describe('identity', () => {
 
   describe('sign', () => {
     it('should sign a message', async () => {
-      const crypto = require('crypto');
+      
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const message = 'test message';
       const signature = await sign(message, privateKeyHex);
@@ -399,7 +401,7 @@ describe('identity', () => {
     });
 
     it('should produce different signatures for different messages', async () => {
-      const crypto = require('crypto');
+      
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const sig1 = await sign('message1', privateKeyHex);
       const sig2 = await sign('message2', privateKeyHex);
@@ -408,7 +410,7 @@ describe('identity', () => {
     });
 
     it('should produce same signature for same message', async () => {
-      const crypto = require('crypto');
+      
       const privateKeyHex = crypto.randomBytes(32).toString('hex');
       const sig1 = await sign('same message', privateKeyHex);
       const sig2 = await sign('same message', privateKeyHex);
@@ -433,7 +435,7 @@ describe('identity', () => {
       expect(identity).toBeDefined();
       expect(identity.peerId).toBeDefined();
       // Clean up
-      const fs = require('fs');
+      
       try { fs.rmSync(freshDir, { recursive: true }); } catch {}
     });
   });
@@ -481,7 +483,7 @@ describe('identity', () => {
 
   describe('loadIdentity backfill branches', () => {
     it('backfills missing A16 fields from old format', () => {
-      const fs = require('fs');
+      
       // Write old-format identity without A16 fields
       const oldIdentity = {
         peerId: 'old-peer-123',
@@ -502,7 +504,7 @@ describe('identity', () => {
 
   describe('getOrCreateIdentity', () => {
     it('should return existing identity if found', () => {
-      const { generateIdentity, getOrCreateIdentity } = require('../modules/identity/identity.js');
+      
 
       generateIdentity(testDir);
       const identity = getOrCreateIdentity(testDir);
@@ -512,7 +514,7 @@ describe('identity', () => {
     });
 
     it('should create new identity if not found', () => {
-      const { getOrCreateIdentity } = require('../modules/identity/identity.js');
+      
 
       // Use unique temp dir to ensure no existing identity
       const newDir = path.join(testDir, 'new-identity');
@@ -525,7 +527,7 @@ describe('identity', () => {
     });
 
     it('should handle error when loading identity and create new one', () => {
-      const { getOrCreateIdentity } = require('../modules/identity/identity.js');
+      
 
       // Use test dir without existing identity - tests catch block
       const newDir = path.join(testDir, 'identity-test-2');

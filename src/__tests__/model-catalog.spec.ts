@@ -23,7 +23,7 @@ jest.mock('child_process', () => ({
   execSync: jest.fn(),
 }));
 
-const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockExecSync = execSync as any;
 
 describe('Model Catalog', () => {
   beforeEach(() => {

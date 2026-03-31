@@ -49,7 +49,7 @@ describe('Ollama Module', () => {
         { name: 'llama2:7b' },
       ];
 
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: mockModels },
       } as any);
 
@@ -71,7 +71,7 @@ describe('Ollama Module', () => {
     });
 
     it('should recommend GPU model when GPU is detected', async () => {
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
@@ -90,7 +90,7 @@ describe('Ollama Module', () => {
 
     it('should return unavailable status when Ollama is not running', async () => {
       const axiosError = { message: 'ECONNREFUSED', isAxiosError: true } as any;
-      (axios.get as jest.Mock).mockRejectedValue(axiosError);
+      (axios.get as any).mockRejectedValue(axiosError);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -102,7 +102,7 @@ describe('Ollama Module', () => {
     });
 
     it('should timeout after 5 seconds', async () => {
-      (axios.get as jest.Mock).mockRejectedValue(new Error('timeout of 5000ms exceeded'));
+      (axios.get as any).mockRejectedValue(new Error('timeout of 5000ms exceeded'));
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -112,7 +112,7 @@ describe('Ollama Module', () => {
 
     it('should handle non-Axios errors', async () => {
       const nonAxiosError = new TypeError('Invalid URL');
-      (axios.get as jest.Mock).mockRejectedValue(nonAxiosError);
+      (axios.get as any).mockRejectedValue(nonAxiosError);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -121,7 +121,7 @@ describe('Ollama Module', () => {
     });
 
     it('should handle unknown errors', async () => {
-      (axios.get as jest.Mock).mockRejectedValue('some string error' as any);
+      (axios.get as any).mockRejectedValue('some string error' as any);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -130,7 +130,7 @@ describe('Ollama Module', () => {
     });
 
     it('should handle object errors without message property', async () => {
-      (axios.get as jest.Mock).mockRejectedValue({ code: 'ETIMEDOUT' } as any);
+      (axios.get as any).mockRejectedValue({ code: 'ETIMEDOUT' } as any);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -139,7 +139,7 @@ describe('Ollama Module', () => {
     });
 
     it('should handle error with null error object', async () => {
-      (axios.get as jest.Mock).mockRejectedValue(null as any);
+      (axios.get as any).mockRejectedValue(null as any);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -148,7 +148,7 @@ describe('Ollama Module', () => {
     });
 
     it('should handle error with undefined error object', async () => {
-      (axios.get as jest.Mock).mockRejectedValue(undefined as any);
+      (axios.get as any).mockRejectedValue(undefined as any);
 
       const status = await helper.checkOllama(mockOllamaUrl);
 
@@ -253,7 +253,7 @@ describe('Ollama Module', () => {
         message: { content: 'Generated response' },
       };
 
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
@@ -286,13 +286,13 @@ describe('Ollama Module', () => {
     });
 
     it('should throw error when Ollama is not available', async () => {
-      (axios.get as jest.Mock).mockRejectedValue(new Error('Connection refused'));
+      (axios.get as any).mockRejectedValue(new Error('Connection refused'));
 
       await expect(helper.generate('Test', undefined, mockOllamaUrl)).rejects.toThrow('Ollama is not available');
     });
 
     it('should handle generation errors', async () => {
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
@@ -318,7 +318,7 @@ describe('Ollama Module', () => {
         message: { content: '  Response with spaces  \n  ' },
       };
 
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
@@ -348,7 +348,7 @@ describe('Ollama Module', () => {
 
   describe('ensureModel', () => {
     it('should throw error when Ollama is not running', async () => {
-      (axios.get as jest.Mock).mockRejectedValue(new Error('Connection refused'));
+      (axios.get as any).mockRejectedValue(new Error('Connection refused'));
 
       await expect(helper.ensureModel('qwen2.5:0.5b', mockOllamaUrl)).rejects.toThrow(
         'Ollama is not running. Start with: ollama serve'
@@ -360,7 +360,7 @@ describe('Ollama Module', () => {
         yield { status: 'success' };
       };
 
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'llama2:7b' }] }, // Different model
       } as any);
 
@@ -391,7 +391,7 @@ describe('Ollama Module', () => {
     });
 
     it('should not pull model when already available', async () => {
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:0.5b' }] },
       } as any);
 
@@ -419,7 +419,7 @@ describe('Ollama Module', () => {
     });
 
     it('should match model family when checking availability (ignoring tags)', async () => {
-      (axios.get as jest.Mock).mockResolvedValue({
+      (axios.get as any).mockResolvedValue({
         data: { models: [{ name: 'qwen2.5:3b' }] }, // Different tag, same family
       } as any);
 
