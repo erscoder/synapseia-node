@@ -19,6 +19,6 @@ import { WorkOrderAgentService } from './services/work-order-agent.service.js';
     AgentLoopService,
     WorkOrderAgentService,
   ],
-  exports: [AgentBrainService, AgentLoopService, WorkOrderAgentService],
+  exports: [AgentBrainService, AgentLoopService, WorkOrderAgentService, RoundListenerHelper],
 })
 export class AgentModule {}
