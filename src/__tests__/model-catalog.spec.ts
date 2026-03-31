@@ -19,7 +19,8 @@ import {
 import { execSync } from 'child_process';
 
 // ESM-compatible mock: declare before jest.mock so factory can reference it
-const mockExecSync: any = jest.fn();
+// Use var so jest.mock() factory (which is hoisted) can reference it at initialization
+var mockExecSync: any = jest.fn();
 
 // Mock execSync for testing
 jest.mock('child_process', () => ({

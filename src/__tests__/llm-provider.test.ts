@@ -11,8 +11,9 @@ import {
 } from '../modules/llm/llm-provider';
 
 // ESM-compatible mocks: declare before jest.mock so factories can reference them
-const mockCheckOllama: any = jest.fn();
-const mockGenerate: any = jest.fn();
+// Use var so jest.mock() factory (which is hoisted) can reference it at initialization
+var mockCheckOllama: any = jest.fn();
+var mockGenerate: any = jest.fn();
 
 // Mock OllamaHelper prototype methods so the module-level _ollamaHelper instance is intercepted
 jest.mock('../modules/llm/ollama.js', () => {

@@ -145,7 +145,8 @@ describe('Reference Corpus Context Fetching', () => {
 **Foundational ML Work**
 Earlier research showed...`;
 
-      const prompt = _test.buildResearchPrompt(payload, referenceContext);
+      // New signature: buildResearchPrompt(payload, knowledgeGraphContext?, referenceContext?)
+      const prompt = _test.buildResearchPrompt(payload, undefined, referenceContext);
 
       expect(prompt).toContain('You have access to previous discoveries from the network');
       expect(prompt).toContain('Foundational ML Work');

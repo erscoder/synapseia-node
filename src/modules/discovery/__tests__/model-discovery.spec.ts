@@ -2,9 +2,10 @@ import { jest } from '@jest/globals';
 import { ModelDiscovery } from '../model-discovery';
 
 // ESM-compatible mocks: declare before jest.mock so factories can reference them
-const mockAxiosPost: any = jest.fn();
-const mockGetLocalModels: any = jest.fn().mockReturnValue([]);
-const mockExecSync: any = jest.fn();
+// Use var so jest.mock() factory (which is hoisted) can reference it at initialization
+var mockAxiosPost: any = jest.fn();
+var mockGetLocalModels: any = jest.fn().mockReturnValue([]);
+var mockExecSync: any = jest.fn();
 
 // Mock child_process to prevent real curl calls in getLocalModels
 jest.mock('child_process', () => ({

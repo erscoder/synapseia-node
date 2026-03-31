@@ -5,7 +5,8 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 
 // ESM-compatible mock: declare before jest.mock so factory can reference it
-const mockSpawn: any = jest.fn();
+// Use var so jest.mock() factory (which is hoisted) can reference it at initialization
+var mockSpawn: any = jest.fn();
 
 // Mock child_process
 jest.mock('child_process', () => ({
