@@ -4,6 +4,20 @@ import { jest } from '@jest/globals';
  * Covers: A5 (isTrainingWorkOrder + routing), A6 (canTrain), A7 (submit results)
  */
 
+// ESM-compatible mocks: declare before jest.mock so factories can reference them
+const mockTrainMicroModel: any = jest.fn();
+const mockProposeMutation: any = jest.fn();
+
+jest.mock('../modules/model/trainer.js', () => ({
+  trainMicroModel: mockTrainMicroModel,
+  validateTrainingConfig: jest.fn() as any,
+  calculateImprovement: jest.fn() as any,
+}));
+
+jest.mock('../modules/model/mutation-engine.js', () => ({
+  proposeMutation: mockProposeMutation,
+}));
+
 import {
   isTrainingWorkOrder,
   isResearchWorkOrder,
@@ -280,6 +294,10 @@ describe('A7 — submitTrainingToExperiments', () => {
 describe('A5+A7 — executeTrainingWorkOrder', () => {
   const originalFetch = global.fetch;
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   afterEach(() => {
     global.fetch = originalFetch;
     jest.restoreAllMocks();
@@ -298,12 +316,10 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     const wo = makeTrainingWO();
     global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
-    // Spy on trainer
-    const trainerModule = await import('../modules/model/trainer.js');
-    jest.spyOn(trainerModule, 'trainMicroModel').mockRejectedValue(new Error('Python crashed'));
+    // Mock trainMicroModel to throw
+    mockTrainMicroModel.mockRejectedValue(new Error('Python crashed'));
 
-    const mutModule = await import('../modules/model/mutation-engine.js');
-    jest.spyOn(mutModule, 'proposeMutation').mockResolvedValue({
+    mockProposeMutation.mockResolvedValue({
       model: { provider: 'ollama', providerId: '', modelId: 'test' },
       type: 'explore',
       baseExperimentId: null,
@@ -332,8 +348,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     const wo = makeTrainingWO();
     global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
-    const trainerModule = await import('../modules/model/trainer.js');
-    jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
+    mockTrainMicroModel.mockResolvedValue({
       runNumber: 1,
       finalLoss: 2.3,
       valLoss: 2.4,
@@ -356,8 +371,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
       hardwareUsed: 'cpu',
     });
 
-    const mutModule = await import('../modules/model/mutation-engine.js');
-    jest.spyOn(mutModule, 'proposeMutation').mockResolvedValue({
+    mockProposeMutation.mockResolvedValue({
       model: { provider: 'ollama', providerId: '', modelId: 'test' },
       type: 'explore',
       baseExperimentId: null,
@@ -392,8 +406,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     const wo = makeTrainingWO();
     global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
-    const trainerModule = await import('../modules/model/trainer.js');
-    const trainSpy = jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
+    mockTrainMicroModel.mockResolvedValue({
       runNumber: 1,
       finalLoss: 2.3,
       valLoss: 2.4,
@@ -415,8 +428,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
       lossCurve: [],
       hardwareUsed: 'gpu',
     });
-    const mutModule = await import('../modules/model/mutation-engine.js');
-    jest.spyOn(mutModule, 'proposeMutation').mockResolvedValue({
+    mockProposeMutation.mockResolvedValue({
       model: { provider: 'ollama', providerId: '', modelId: 'test' },
       type: 'explore',
       baseExperimentId: null,
@@ -437,7 +449,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     });
 
     await executeTrainingWorkOrder(wo, 'http://localhost', 'peer', ['cpu', 'gpu'], 1);
-    expect(trainSpy).toHaveBeenCalledWith(expect.objectContaining({ hardware: 'gpu' }));
+    expect(mockTrainMicroModel).toHaveBeenCalledWith(expect.objectContaining({ hardware: 'gpu' }));
   });
 
   it('should apply baseConfig from payload when provided', async () => {
@@ -451,8 +463,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     const wo = makeTrainingWO({ description: JSON.stringify(payload) });
     global.fetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
 
-    const trainerModule = await import('../modules/model/trainer.js');
-    const trainSpy = jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
+    mockTrainMicroModel.mockResolvedValue({
       runNumber: 1,
       finalLoss: 2.3,
       valLoss: 2.4,
@@ -475,8 +486,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
       hardwareUsed: 'cpu',
     });
 
-    const mutModule = await import('../modules/model/mutation-engine.js');
-    jest.spyOn(mutModule, 'proposeMutation').mockResolvedValue({
+    mockProposeMutation.mockResolvedValue({
       model: { provider: 'ollama', providerId: '', modelId: 'test' },
       type: 'explore',
       baseExperimentId: null,
@@ -498,7 +508,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
 
     await executeTrainingWorkOrder(wo, 'http://localhost', 'peer', ['cpu'], 1);
     // baseConfig overrides: learningRate 0.001 → 0.0001, batchSize 32 → 64
-    expect(trainSpy).toHaveBeenCalledWith(
+    expect(mockTrainMicroModel).toHaveBeenCalledWith(
       expect.objectContaining({
         proposal: expect.objectContaining({
           hyperparams: expect.objectContaining({ learningRate: 0.0001, batchSize: 64 }),
@@ -512,8 +522,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
     const mockFetch = (jest.fn() as any).mockResolvedValue({ ok: true, json: async () => ({ entries: [] }) });
     global.fetch = mockFetch as any;
 
-    const trainerModule = await import('../modules/model/trainer.js');
-    jest.spyOn(trainerModule, 'trainMicroModel').mockResolvedValue({
+    mockTrainMicroModel.mockResolvedValue({
       runNumber: 1,
       finalLoss: 2.3,
       valLoss: 2.4,
@@ -535,8 +544,7 @@ describe('A5+A7 — executeTrainingWorkOrder', () => {
       lossCurve: [],
       hardwareUsed: 'cpu',
     });
-    const mutModule = await import('../modules/model/mutation-engine.js');
-    jest.spyOn(mutModule, 'proposeMutation').mockResolvedValue({
+    mockProposeMutation.mockResolvedValue({
       model: { provider: 'ollama', providerId: '', modelId: 'test' },
       type: 'explore',
       baseExperimentId: null,

@@ -2,18 +2,18 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { proposeMutation, _test } from '../modules/model/mutation-engine.js';
 import type { Experiment } from '../types.js';
 
+// ESM-compatible mock: declare before jest.mock so factory can reference it
+const mockGenerateLLM: any = jest.fn();
+
 // Mock llm-provider
 jest.mock('../modules/llm/llm-provider.js', () => ({
-  generateLLM: jest.fn(),
+  generateLLM: mockGenerateLLM,
 }));
-
-import { generateLLM as _generateLLM } from '../modules/llm/llm-provider.js';
-const mockGenerateLLM = _generateLLM as any;
 
 describe('Mutation Engine', () => {
   beforeEach(() => {
-    mockGenerateLLM.mockReturnValue(Promise.resolve(''));
     jest.clearAllMocks();
+    mockGenerateLLM.mockReturnValue(Promise.resolve(''));
   });
 
   describe('proposeMutation', () => {

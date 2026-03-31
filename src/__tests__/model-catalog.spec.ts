@@ -18,12 +18,13 @@ import {
 } from '../modules/model/model-catalog';
 import { execSync } from 'child_process';
 
+// ESM-compatible mock: declare before jest.mock so factory can reference it
+const mockExecSync: any = jest.fn();
+
 // Mock execSync for testing
 jest.mock('child_process', () => ({
-  execSync: jest.fn(),
+  execSync: mockExecSync,
 }));
-
-const mockExecSync = execSync as any;
 
 describe('Model Catalog', () => {
   beforeEach(() => {
