@@ -4,14 +4,15 @@ import type { Experiment } from '../types.js';
 
 // Mock llm-provider
 jest.mock('../modules/llm/llm-provider.js', () => ({
-  generateLLM: jest.fn() as any,
+  generateLLM: jest.fn(),
 }));
 
-import { generateLLM } from '../modules/llm/llm-provider.js';
+import { generateLLM as _generateLLM } from '../modules/llm/llm-provider.js';
+const mockGenerateLLM = _generateLLM as any;
 
 describe('Mutation Engine', () => {
   beforeEach(() => {
-    (generateLLM as jest.Mock as any).mockReturnValue(Promise.resolve(''));
+    mockGenerateLLM.mockReturnValue(Promise.resolve(''));
     jest.clearAllMocks();
   });
 
@@ -54,7 +55,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -77,8 +78,8 @@ describe('Mutation Engine', () => {
 
       const proposal = await proposeMutation([mockExp], 3.5, ['cpu']);
 
-      expect(generateLLM).toHaveBeenCalled();
-      const [, prompt] = (generateLLM as jest.Mock).mock.calls[0];
+      expect(mockGenerateLLM).toHaveBeenCalled();
+      const [, prompt] = mockGenerateLLM.mock.calls[0];
       expect(prompt).toContain('best loss so far');
       expect(prompt).toContain('3.5000');
     });
@@ -92,7 +93,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -127,7 +128,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -154,7 +155,7 @@ describe('Mutation Engine', () => {
     });
 
     it('should round batchSize to valid values', async () => {
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -181,7 +182,7 @@ describe('Mutation Engine', () => {
     });
 
     it('should round hiddenDim to valid values', async () => {
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -216,7 +217,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -251,7 +252,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockRejectedValue(new Error('Failed to parse JSON'));
+      mockGenerateLLM.mockRejectedValue(new Error('Failed to parse JSON'));
 
       await expect(proposeMutation([mockExp], 3.5, ['cpu'])).rejects.toThrow('Failed to parse JSON');
     });
@@ -265,7 +266,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -300,7 +301,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -335,7 +336,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -370,7 +371,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -405,7 +406,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -440,7 +441,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -466,7 +467,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -501,7 +502,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'explore',
           baseExperimentId: null,
@@ -536,7 +537,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'exp:lore',  // Invalid type, defaults to explore
           baseExperimentId: null,
@@ -572,7 +573,7 @@ describe('Mutation Engine', () => {
         status: 'completed',
       };
 
-      (generateLLM as any).mockResolvedValue(
+      mockGenerateLLM.mockResolvedValue(
         JSON.stringify({
           type: 'improve',
           baseExperimentId: 'exp1',

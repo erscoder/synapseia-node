@@ -8,6 +8,9 @@ import {
   resetWorkOrderAgentState,
   runWorkOrderAgentIteration,
   stopWorkOrderAgent,
+  shouldStopForMaxIterations,
+  shouldContinueLoop,
+  shouldSleepBetweenIterations,
   WorkOrder,
   EconomicConfig,
   ResearchResult,
@@ -18,6 +21,20 @@ import { initBrain } from '../modules/agent/agent-brain.js';
 import { parseModel, type LLMModel } from '../modules/llm/llm-provider.js';
 import * as llmProvider from '../modules/llm/llm-provider.js';
 
+// ESM-compatible mock for generateLLM (jest.spyOn can't mock ESM read-only exports)
+const mockGenerateLLM: any = jest.fn();
+jest.mock('../modules/llm/llm-provider.js', () => ({
+  generateLLM: mockGenerateLLM,
+  parseModel: jest.fn((s: string) => {
+    if (!s) return null;
+    const [provider, ...modelParts] = s.split('/');
+    return modelParts.length > 0
+      ? { provider, model: modelParts.join('/') }
+      : { provider: 'ollama', model: s };
+  }),
+  detectAvailableProviders: jest.fn() as any,
+}));
+
 /** Helper: parseModel that asserts non-null for test convenience */
 function testParseModel(modelStr: string): LLMModel {
   const model = parseModel(modelStr);
@@ -26,7 +43,7 @@ function testParseModel(modelStr: string): LLMModel {
 }
 
 // Mock fetch globally
-global.fetch = jest.fn();
+global.fetch = jest.fn() as unknown as typeof fetch;
 
 describe('WorkOrderAgent', () => {
   beforeEach(() => {
@@ -49,7 +66,7 @@ describe('WorkOrderAgent', () => {
         },
       ];
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => mockWorkOrders,
       });
@@ -68,7 +85,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return empty array on 404 response', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -84,7 +101,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should throw on non-404 error response', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: 'Server Error',
@@ -100,7 +117,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return empty array on error', async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      (fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
       const result = await fetchAvailableWorkOrders(
         'http://localhost:3001',
@@ -112,7 +129,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should handle null response data', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => null,
       });
@@ -129,7 +146,7 @@ describe('WorkOrderAgent', () => {
 
   describe('acceptWorkOrder', () => {
     it('should accept work order successfully', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
       });
 
@@ -156,7 +173,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return false on error', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: false,
         text: async () => 'Work order not found',
       });
@@ -171,7 +188,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return false on network error', async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      (fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
       const result = await acceptWorkOrder(
         'http://localhost:3001',
@@ -185,7 +202,7 @@ describe('WorkOrderAgent', () => {
 
   describe('completeWorkOrder', () => {
     it('should complete work order successfully', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           id: 'wo_1',
@@ -205,7 +222,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return false on HTTP error', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: false,
         text: async () => 'Failed to complete',
       });
@@ -222,7 +239,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should return false on network error', async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      (fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
       const result = await completeWorkOrder(
         'http://localhost:3001',
@@ -236,7 +253,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should use default success parameter', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ success: true }),
       });
@@ -254,7 +271,7 @@ describe('WorkOrderAgent', () => {
 
     it('should skip submission on second call for same work order (idempotency)', async () => {
       // First call should complete successfully
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           id: 'wo_idempotent',
@@ -340,7 +357,7 @@ describe('WorkOrderAgent', () => {
     };
 
     it('should return completed false when no work orders available', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => [],
       });
@@ -352,7 +369,7 @@ describe('WorkOrderAgent', () => {
 
     it('should complete full work order cycle', async () => {
       // Mock generateLLM
-      jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce('Generated result');
+      mockGenerateLLM.mockResolvedValueOnce('Generated result');
 
       const mockWorkOrder: WorkOrder = {
         id: 'wo_1',
@@ -366,7 +383,7 @@ describe('WorkOrderAgent', () => {
       };
 
       // Mock fetch available work orders
-      (fetch as jest.Mock)
+      (fetch as any)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [mockWorkOrder],
@@ -402,7 +419,7 @@ describe('WorkOrderAgent', () => {
         createdAt: Date.now(),
       };
 
-      (fetch as jest.Mock)
+      (fetch as any)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [mockWorkOrder],
@@ -418,7 +435,7 @@ describe('WorkOrderAgent', () => {
     });
 
     it('should handle completeWorkOrder returning false', async () => {
-      jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce('Generated result');
+      mockGenerateLLM.mockResolvedValueOnce('Generated result');
 
       const mockWorkOrder: WorkOrder = {
         id: 'wo_1',
@@ -431,7 +448,7 @@ describe('WorkOrderAgent', () => {
         createdAt: Date.now(),
       };
 
-      (fetch as jest.Mock)
+      (fetch as any)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [mockWorkOrder],
@@ -596,11 +613,7 @@ describe('WorkOrderAgent', () => {
   });
 
   describe('pure helper functions', () => {
-    const {
-      shouldStopForMaxIterations,
-      shouldContinueLoop,
-      shouldSleepBetweenIterations,
-    } = jest.requireActual('../modules/agent/work-order-agent.js');
+    // Use top-level imports (ESM-compatible — jest.requireActual doesn't work for ESM)
 
     describe('shouldStopForMaxIterations', () => {
       it('should return false when maxIterations is undefined', () => {
@@ -854,7 +867,7 @@ describe('WorkOrderAgent', () => {
           proposal: 'This is a proposal',
         });
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(mockResponse);
+        mockGenerateLLM.mockResolvedValueOnce(mockResponse);
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
@@ -885,7 +898,7 @@ describe('WorkOrderAgent', () => {
 
         const mockResponse = '```json\n{"summary": "test", "keyInsights": ["a"], "proposal": "b"}\n```';
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(mockResponse);
+        mockGenerateLLM.mockResolvedValueOnce(mockResponse);
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
@@ -912,7 +925,7 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce('not valid json');
+        mockGenerateLLM.mockResolvedValueOnce('not valid json');
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
@@ -939,7 +952,7 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({ summary: 'only summary' }));
+        mockGenerateLLM.mockResolvedValueOnce(JSON.stringify({ summary: 'only summary' }));
 
         const result = await _test.executeResearchWorkOrder(
           workOrder,
@@ -970,7 +983,7 @@ describe('WorkOrderAgent', () => {
 
     describe('submitResearchResult', () => {
       it('should submit result to coordinator', async () => {
-        (fetch as jest.Mock).mockResolvedValueOnce({
+        (fetch as any).mockResolvedValueOnce({
           ok: true,
           json: async () => ({ success: true }),
         });
@@ -997,7 +1010,7 @@ describe('WorkOrderAgent', () => {
       });
 
       it('should return false on error response', async () => {
-        (fetch as jest.Mock).mockResolvedValueOnce({
+        (fetch as any).mockResolvedValueOnce({
           ok: false,
           text: async () => 'Server error',
         });
@@ -1017,7 +1030,7 @@ describe('WorkOrderAgent', () => {
       });
 
       it('should return false on network error', async () => {
-        (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+        (fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
         const result = await _test.submitResearchResult(
           'http://localhost:3001',
@@ -1114,7 +1127,7 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        (fetch as jest.Mock)
+        (fetch as any)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] }) // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // acceptWorkOrder
           .mockResolvedValueOnce({ ok: false, status: 404 }) // fetchHyperparamConfig (no suggestion)
@@ -1122,7 +1135,7 @@ describe('WorkOrderAgent', () => {
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // submitResearchResult
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({
+        mockGenerateLLM.mockResolvedValueOnce(JSON.stringify({
           summary: 'Summary', keyInsights: ['i'], proposal: 'P'
         }));
 
@@ -1149,7 +1162,7 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        (fetch as jest.Mock)
+        (fetch as any)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
           .mockResolvedValueOnce({ ok: false, status: 404 })                        // fetchHyperparamConfig (no suggestion)
@@ -1157,7 +1170,7 @@ describe('WorkOrderAgent', () => {
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // submitResearchResult
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({
+        mockGenerateLLM.mockResolvedValueOnce(JSON.stringify({
           summary: 'Summary', keyInsights: ['i'], proposal: 'P'
         }));
 
@@ -1186,7 +1199,7 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        (fetch as jest.Mock)
+        (fetch as any)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })  // fetchAvailable
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })              // acceptWorkOrder
           .mockResolvedValueOnce({ ok: false, status: 404 })                        // fetchHyperparamConfig (no suggestion)
@@ -1194,7 +1207,7 @@ describe('WorkOrderAgent', () => {
           .mockResolvedValueOnce({ ok: false, text: async () => 'Error' })          // submitResearchResult (fails)
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) }); // completeWorkOrder
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce(JSON.stringify({
+        mockGenerateLLM.mockResolvedValueOnce(JSON.stringify({
           summary: 'Summary', keyInsights: ['i'], proposal: 'P'
         }));
 
@@ -1221,12 +1234,12 @@ describe('WorkOrderAgent', () => {
           createdAt: Date.now(),
         };
 
-        (fetch as jest.Mock)
+        (fetch as any)
           .mockResolvedValueOnce({ ok: true, json: async () => [mockWorkOrder] })
           .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
           .mockResolvedValueOnce({ ok: true, json: async () => ({ ...mockWorkOrder, status: 'COMPLETED' }) });
 
-        jest.spyOn(llmProvider, 'generateLLM').mockResolvedValueOnce('Training complete');
+        mockGenerateLLM.mockResolvedValueOnce('Training complete');
 
         const result = await runWorkOrderAgentIteration({
           coordinatorUrl: 'http://localhost:3001',
@@ -1292,7 +1305,7 @@ describe('WorkOrderAgent', () => {
           process.env.LLM_MODEL = 'openai-compat/unknown-model-xyz'; // cloud prefix, unknown name
           delete process.env.LLM_COST_PER_1K_TOKENS;
 
-          const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+          const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
           const config = loadEconomicConfig();
           expect(config.llmType).toBe('cloud');
@@ -1351,7 +1364,7 @@ describe('WorkOrderAgent', () => {
         });
 
         it('should fallback to haiku price for unknown models with warning', () => {
-          const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+          const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
           
           const price = getModelCostPer1kTokens('unknown-model');
           expect(price).toBe(0.00025); // Fallback to haiku

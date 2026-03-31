@@ -157,7 +157,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('checkLLM - Ollama', () => {
     it('should return available status when Ollama is running and model exists', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as any).mockResolvedValue({
         available: true,
         url: 'http://localhost:11434',
         models: ['qwen2.5:0.5b', 'qwen2.5:3b'],
@@ -174,7 +174,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when Ollama is not running', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as any).mockResolvedValue({
         available: false,
         url: 'http://localhost:11434',
         models: [],
@@ -191,7 +191,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when model not found', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockResolvedValue({
+      (OllamaHelper.prototype.checkOllama as any).mockResolvedValue({
         available: true,
         url: 'http://localhost:11434',
         models: ['qwen2.5:3b'], // Model not present
@@ -206,7 +206,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama errors', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as any).mockImplementation(async () => {
         throw new Error('Check failed');
       });
 
@@ -217,7 +217,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama with non-Error rejection', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as any).mockImplementation(async () => {
         throw 'String error from Ollama';
       });
 
@@ -228,7 +228,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle checkOllama with object rejection', async () => {
-      (OllamaHelper.prototype.checkOllama as jest.Mock).mockImplementation(async () => {
+      (OllamaHelper.prototype.checkOllama as any).mockImplementation(async () => {
         throw { code: 'ECONNREFUSED' };
       });
 
@@ -241,7 +241,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('generateLLM - Ollama', () => {
     it('should generate text with Ollama model', async () => {
-      (OllamaHelper.prototype.generate as jest.Mock).mockResolvedValue('Generated response');
+      (OllamaHelper.prototype.generate as any).mockResolvedValue('Generated response');
 
       const result = await generateLLM(ollamaModel, 'Test prompt');
 
@@ -250,7 +250,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should throw error when Ollama generation fails', async () => {
-      (OllamaHelper.prototype.generate as jest.Mock).mockRejectedValue(new Error('Generation failed'));
+      (OllamaHelper.prototype.generate as any).mockRejectedValue(new Error('Generation failed'));
 
       await expect(generateLLM(ollamaModel, 'Test')).rejects.toThrow('Generation failed');
     });
@@ -258,7 +258,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('checkLLM - Cloud Anthropic', () => {
     it('should return available status when API key is valid', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ content: [{ text: 'Hi' }] }),
       } as any);
@@ -279,7 +279,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when API returns error', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         status: 401,
         json: async () => ({ error: { message: 'Invalid API key' } }),
@@ -292,7 +292,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle network errors', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
       const status = await checkLLM(anthropicModel, { apiKey: 'test-key' });
 
@@ -301,7 +301,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle non-Error errors in catch', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue('String error');
+      (global.fetch as any).mockRejectedValue('String error');
 
       const status = await checkLLM(anthropicModel, { apiKey: 'test-key' });
 
@@ -310,7 +310,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle object errors without message property', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+      (global.fetch as any).mockRejectedValue({ code: 500 });
 
       const status = await checkLLM(anthropicModel, { apiKey: 'test-key' });
 
@@ -321,7 +321,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('generateLLM - Cloud Anthropic', () => {
     it('should generate text with Anthropic API', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ content: [{ text: 'Anthropic response' }] }),
       } as any);
@@ -346,7 +346,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should throw error when API returns error', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         json: async () => ({ error: { message: 'Rate limit exceeded' } }),
       } as any);
@@ -357,7 +357,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('checkLLM - Cloud Moonshot', () => {
     it('should return available status when API key is valid', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ choices: [{ message: { content: 'Hi' } }] }),
       } as any);
@@ -371,7 +371,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when API returns error', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         json: async () => ({ error: { message: 'Unauthorized' } }),
       } as any);
@@ -383,7 +383,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle network errors', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
       const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
 
@@ -392,7 +392,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle non-Error errors in catch', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue('String error');
+      (global.fetch as any).mockRejectedValue('String error');
 
       const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
 
@@ -401,7 +401,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle object errors without message property', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+      (global.fetch as any).mockRejectedValue({ code: 500 });
 
       const status = await checkLLM(kimiModel, { apiKey: 'test-key' });
 
@@ -412,7 +412,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('generateLLM - Cloud Moonshot', () => {
     it('should generate text with Moonshot API', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ choices: [{ message: { content: 'Moonshot response' } }] }),
       } as any);
@@ -436,7 +436,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should throw error when API returns error', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         statusText: 'Rate limit exceeded',
         json: async () => ({ error: { message: 'Rate limit' } }),
@@ -448,7 +448,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('checkLLM - Cloud Minimax', () => {
     it('should return available status when API key is valid', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ choices: [{ message: { content: 'Hi' } }] }),
       } as any);
@@ -462,7 +462,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should return unavailable status when API returns error', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         json: async () => ({ error: { message: 'Invalid request' } }),
       } as any);
@@ -474,7 +474,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle network errors', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
       const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
 
@@ -483,7 +483,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle non-Error errors in catch', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue('String error');
+      (global.fetch as any).mockRejectedValue('String error');
 
       const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
 
@@ -492,7 +492,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should handle object errors without message property', async () => {
-      (global.fetch as jest.Mock).mockRejectedValue({ code: 500 });
+      (global.fetch as any).mockRejectedValue({ code: 500 });
 
       const status = await checkLLM(minimaxModel, { apiKey: 'test-key' });
 
@@ -503,7 +503,7 @@ describe('LLM Provider Abstraction', () => {
 
   describe('generateLLM - Cloud Minimax', () => {
     it('should generate text with Minimax default URL', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ choices: [{ message: { content: 'Minimax response' } }] }),
       } as any);
@@ -522,7 +522,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should generate text with custom Minimax URL', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: true,
         json: async () => ({ choices: [{ message: { content: 'Custom response' } }] }),
       } as any);
@@ -544,7 +544,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should throw error when API returns error with message', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         statusText: 'Gateway Timeout',
         json: async () => ({ error: { message: 'Server error' } }),
@@ -554,7 +554,7 @@ describe('LLM Provider Abstraction', () => {
     });
 
     it('should throw error when API returns statusText only', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         statusText: 'Gateway Timeout',
         json: async () => ({}),
