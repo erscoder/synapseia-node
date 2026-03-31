@@ -24,17 +24,22 @@ import * as llmProvider from '../modules/llm/llm-provider.js';
 // ESM-compatible mock for generateLLM (jest.spyOn can't mock ESM read-only exports)
 // Use var so jest.mock() factory (which is hoisted) can reference it at initialization
 var mockGenerateLLM: any = jest.fn();
-jest.mock('../modules/llm/llm-provider.js', () => ({
-  generateLLM: mockGenerateLLM,
-  parseModel: jest.fn((s: string) => {
+
+jest.mock('../modules/llm/llm-provider.js', () => {
+  // Factory function must be a plain function (not arrow) to avoid ESM class field issues
+  function mockParseModel(s: string): any {
     if (!s) return null;
-    const [provider, ...modelParts] = s.split('/');
-    return modelParts.length > 0
-      ? { provider, model: modelParts.join('/') }
+    const parts = s.split('/');
+    return parts.length > 1
+      ? { provider: parts[0], model: parts.slice(1).join('/') }
       : { provider: 'ollama', model: s };
-  }),
-  detectAvailableProviders: jest.fn() as any,
-}));
+  }
+  return {
+    generateLLM: mockGenerateLLM,
+    parseModel: mockParseModel,
+    detectAvailableProviders: jest.fn(),
+  };
+});
 
 /** Helper: parseModel that asserts non-null for test convenience */
 function testParseModel(modelStr: string): LLMModel {

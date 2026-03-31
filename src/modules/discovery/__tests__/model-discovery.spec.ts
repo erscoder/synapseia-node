@@ -20,9 +20,32 @@ jest.mock('axios', () => {
 });
 
 // Mock model-catalog to intercept getLocalModels without spawning curl
+// Provide a proper mock catalog so buildModelList lookups work correctly
 jest.mock('../../model/model-catalog.js', () => ({
   getLocalModels: mockGetLocalModels,
-  MODEL_CATALOG: [],
+  MODEL_CATALOG: [
+    {
+      name: 'locusai/all-minilm-l6-v2',
+      minVram: 1,
+      recommendedTier: 1,
+      category: 'embedding',
+      description: 'Lightweight embedding model for vector search',
+    },
+    {
+      name: 'qwen2.5-coder-0.5b',
+      minVram: 1,
+      recommendedTier: 1,
+      category: 'code',
+      description: 'Tiny code model',
+    },
+    {
+      name: 'gemma-3-4b',
+      minVram: 4,
+      recommendedTier: 2,
+      category: 'general',
+      description: 'Google Gemma 3 4B',
+    },
+  ],
   CLOUD_MODELS: [],
   FULL_CATALOG: [],
 }));
