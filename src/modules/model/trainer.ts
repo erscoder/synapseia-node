@@ -29,7 +29,8 @@ export interface TrainingOptions {
 
 /**
  * Train a micro-transformer with given hyperparameters
- * Spawns Python script and captures results from stdout
+ * Spawns Python script and captures results from stdout.
+ * Uses Promise.race to enforce a configurable timeout.
  */
 export async function trainMicroModel(options: TrainingOptions): Promise<TrainingResult> {
   const {
@@ -40,53 +41,79 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
     runNumber = 1,
   } = options;
 
-  const startTime = Date.now();
-  const lossCurve: number[] = [];
-
-  // Prepare hyperparams payload for Python script
-  const hyperparamsPayload = {
-    ...proposal.hyperparams,
-    dataPath: datasetPath,
-    hardware,
-  };
-
   // Configurable timeout: env TRAINING_TIMEOUT_MS, default 10 minutes = 600000ms
   const TRAINING_TIMEOUT_MS = parseInt(process.env.TRAINING_TIMEOUT_MS || '600000', 10);
 
-  return new Promise((resolve, reject) => {
+  /**
+   * Inner promise that settles when the Python subprocess completes.
+   * Resolves with TrainingResult on success, rejects on failure.
+   */
+  let killProcess: (() => void) | null = null;
+  const settledHolder: { current: boolean } = { current: false };
+
+  const trainingPromise = new Promise<TrainingResult>((resolve, reject) => {
+    const startTime = Date.now();
+    const lossCurve: number[] = [];
+
     const pythonProcess = spawn('python3', [pythonScriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = '';
-    let stderr = '';
-    let finalResult: Partial<TrainingResult> | null = null;
-    let timedOut = false;
+    // Expose kill function so the timeout handler can stop the subprocess
+    killProcess = () => {
+      if (!pythonProcess.killed) {
+        pythonProcess.kill('SIGTERM');
+      }
+    };
 
-    // Setup timeout — will kill process if training takes too long
-    const timeoutHandle = setTimeout(() => {
-      timedOut = true;
-      pythonProcess.kill('SIGTERM');
-      reject(new Error(`Training timed out after ${TRAINING_TIMEOUT_MS / 1000}s`));
-    }, TRAINING_TIMEOUT_MS);
+    // Prepare hyperparams payload for Python script
+    const hyperparamsPayload = {
+      ...proposal.hyperparams,
+      dataPath: datasetPath,
+      hardware,
+    };
+
+    const settle = (err?: Error, result?: TrainingResult) => {
+      if (settledHolder.current) return;
+      settledHolder.current = true;
+      killProcess = null; // prevent timeout handler from killing after normal completion
+      if (err) reject(err);
+      else resolve(result!);
+    };
+
+    // Ensure process is killed when promise settles (via timeout or completion)
+    pythonProcess.on('close', () => {
+      if (!settledHolder.current) {
+        settle(new Error('Training process closed unexpectedly'));
+      }
+    });
+
+    // Handle spawn errors
+    pythonProcess.on('error', (error) => {
+      settle(new Error(`Failed to spawn Python process: ${error.message}`));
+    });
 
     // Send hyperparams to Python script via stdin
     pythonProcess.stdin.write(JSON.stringify(hyperparamsPayload));
     pythonProcess.stdin.end();
 
+    let stdout = '';
+    let stderr = '';
+    let finalResult: Partial<TrainingResult> | null = null;
+
     // Capture stdout (JSON lines)
     pythonProcess.stdout.on('data', (data: Buffer) => {
       const lines = data.toString().split('\n').filter(line => line.trim());
-      
+
       for (const line of lines) {
         try {
           const parsed = JSON.parse(line);
-          
+
           // Progress update: { step, loss, lr }
           if (parsed.step !== undefined && parsed.loss !== undefined) {
             lossCurve.push(parsed.loss);
           }
-          
+
           // Final result: { result: { finalLoss, valLoss, steps, durationMs } }
           if (parsed.result) {
             finalResult = {
@@ -98,7 +125,7 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
           // Ignore non-JSON lines (logs, warnings, etc.)
         }
       }
-      
+
       stdout += data.toString();
     });
 
@@ -109,22 +136,15 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
 
     // Handle process completion
     pythonProcess.on('close', (code) => {
-      clearTimeout(timeoutHandle);
-
-      // If we already timed out, don't process further
-      if (timedOut) {
-        return;
-      }
-
       const durationMs = Date.now() - startTime;
 
       if (code !== 0) {
-        reject(new Error(`Training failed with exit code ${code}: ${stderr || 'Unknown error'}`));
+        settle(new Error(`Training failed with exit code ${code}: ${stderr || 'Unknown error'}`));
         return;
       }
 
       if (!finalResult) {
-        reject(new Error('Training completed but no result received from Python script'));
+        settle(new Error('Training completed but no result received from Python script'));
         return;
       }
 
@@ -142,15 +162,29 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
         hardwareUsed: hardware,
       };
 
-      resolve(result);
-    });
-
-    // Handle process errors (spawn failures, etc.)
-    pythonProcess.on('error', (error) => {
-      clearTimeout(timeoutHandle);
-      reject(new Error(`Failed to spawn Python process: ${error.message}`));
+      settle(undefined, result);
     });
   });
+
+  /**
+   * Timeout promise that rejects after TRAINING_TIMEOUT_MS.
+   * Kills the Python subprocess if it fires before training completes.
+   */
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    const timeoutHandle = setTimeout(() => {
+      // Kill the subprocess if it's still running
+      if (killProcess) {
+        killProcess();
+        killProcess = null;
+      }
+      reject(new Error(`Training timed out after ${TRAINING_TIMEOUT_MS / 1000}s`));
+    }, TRAINING_TIMEOUT_MS);
+
+    // Prevent unhandled rejection warning — clear handle once training resolves first
+    trainingPromise.finally(() => clearTimeout(timeoutHandle));
+  });
+
+  return await Promise.race([trainingPromise, timeoutPromise]);
 }
 
 /**
