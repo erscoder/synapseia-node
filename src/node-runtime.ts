@@ -106,7 +106,7 @@ export async function startNode(
   const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
     config.coordinatorUrl,
     config.identity,
-    { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama') },
+    { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama'), hasCloudLlm: !!config.llmConfig?.baseUrl },
     config.intervalMs ?? 30000,
     p2pNode ?? undefined,
     config.lat,
