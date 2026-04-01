@@ -64,7 +64,7 @@ export interface WorkOrder {
   assigneeAddress?: string;
   createdAt: number;
   expiresAt?: number;
-  type?: 'TRAINING' | 'RESEARCH' | 'INFERENCE';
+  type?: 'TRAINING' | 'RESEARCH' | 'INFERENCE' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'COMPUTATION' | 'DATA_PROCESSING';
 }
 
 export interface ResearchPayload {
@@ -444,7 +444,7 @@ export interface DiLoCoWorkOrderPayload {
  * Detect if a work order is of type DILOCO_TRAINING
  */
 export function isDiLoCoWorkOrder(workOrder: WorkOrder): boolean {
-  if ((workOrder.type as string) === 'DILOCO_TRAINING') return true;
+  if ((workOrder.type as string) === 'DILOCO_TRAINING' || (workOrder.type as string) === 'diloco_training') return true;
   try {
     const payload = JSON.parse(workOrder.description) as Partial<DiLoCoWorkOrderPayload>;
     return !!(
@@ -916,7 +916,7 @@ export interface CpuInferenceResultPayload {
  * Detect if a work order is of type CPU_INFERENCE
  */
 export function isCpuInferenceWorkOrder(workOrder: WorkOrder): boolean {
-  if ((workOrder.type as string) === 'cpu_inference' || (workOrder.type as string) === 'CPU_INFERENCE') return true;
+  if ((workOrder.type as string) === 'CPU_INFERENCE') return true;
   if (workOrder.requiredCapabilities.includes('cpu_inference')) return true;
   try {
     const payload = JSON.parse(workOrder.description) as Partial<CpuInferenceWorkOrderPayload>;
