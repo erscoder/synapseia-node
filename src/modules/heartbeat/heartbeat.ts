@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity.js';
 import type { Hardware } from '../hardware/hardware.js';
 import type { P2PNode } from '../p2p/p2p.js';
+import { isPyTorchAvailable } from '../model/trainer.js';
 import { ModelDiscovery } from '../discovery/model-discovery.js';
 
 export interface HeartbeatPayload {
@@ -37,7 +38,7 @@ export class HeartbeatHelper {
     walletAddress?: string | null,
   ): Promise<HeartbeatResponse> {
     const startTime = Date.now();
-    const capabilities = this.determineCapabilities(hardware);
+    const capabilities = await this.determineCapabilitiesAsync(hardware);
 
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
@@ -95,7 +96,10 @@ export class HeartbeatHelper {
   determineCapabilities(hardware: Hardware): string[] {
     const capabilities: string[] = [];
 
-    // cpu_training: any node can run micro-transformer hyperparam search (PyTorch CPU)
+    // cpu_training: micro-transformer hyperparam search (PyTorch CPU, requires python3 + torch)
+    // NOTE: determineCapabilities() is sync but isPyTorchAvailable() is async.
+    // The heartbeat loop calls determineCapabilitiesAsync() instead for accuracy.
+    // This sync version assumes PyTorch IS available (conservative default).
     capabilities.push('cpu_training');
 
     // cpu_inference: tokenize/classify/embedding tasks that run on CPU without a full LLM.
@@ -119,6 +123,22 @@ export class HeartbeatHelper {
     }
 
     return capabilities;
+  }
+
+  /**
+   * Async version of determineCapabilities — checks PyTorch availability
+   * before emitting cpu_training. Used by the heartbeat loop.
+   */
+  async determineCapabilitiesAsync(hardware: Hardware): Promise<string[]> {
+    const caps = this.determineCapabilities(hardware);
+    // Verify PyTorch is actually available before claiming cpu_training
+    const hasTorch = await isPyTorchAvailable();
+    if (!hasTorch) {
+      const idx = caps.indexOf('cpu_training');
+      if (idx !== -1) caps.splice(idx, 1);
+      logger.warn('[Heartbeat] PyTorch not found — removing cpu_training capability. Install with: pip3 install torch');
+    }
+    return caps;
   }
 
   /**
@@ -155,7 +175,7 @@ export class HeartbeatHelper {
         }
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
-          const capabilities = this.determineCapabilities(hardware);
+          const capabilities = await this.determineCapabilitiesAsync(hardware);
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
             name: identity.name,
