@@ -5,7 +5,9 @@
 
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
-import { resolve } from 'path';
+import { existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import type { MutationProposal } from './mutation-engine.js';
 
 export interface TrainingResult {
@@ -32,12 +34,45 @@ export interface TrainingOptions {
  * Spawns Python script and captures results from stdout.
  * Uses Promise.race to enforce a configurable timeout.
  */
+/**
+ * Resolve path to train_micro.py relative to this module's location.
+ * Works both in dev (src/) and production (dist/) since the scripts/
+ * folder is copied next to the compiled output.
+ *
+ * Resolution order:
+ *  1. Next to dist/index.js → <distDir>/../../scripts/train_micro.py (monorepo)
+ *  2. Sibling scripts/ dir  → <moduleDir>/../../scripts/train_micro.py
+ *  3. Fallback to process.cwd()
+ */
+function resolveTrainScript(): string {
+  try {
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    // Resolution order (most specific first):
+    // 1. dist/scripts/ — tsup copies scripts/ there at build time
+    // 2. Walk up from module dir (monorepo dev setup)
+    // 3. process.cwd() fallback
+    const candidates = [
+      resolve(moduleDir, '../scripts/train_micro.py'),    // dist/scripts/ (copied by tsup)
+      resolve(moduleDir, '../../scripts/train_micro.py'),
+      resolve(moduleDir, '../../../scripts/train_micro.py'),
+      resolve(moduleDir, '../../../../scripts/train_micro.py'),
+      resolve(process.cwd(), 'scripts/train_micro.py'),
+    ];
+    for (const c of candidates) {
+      if (existsSync(c)) return c;
+    }
+    return candidates[0]; // fall back even if not found — error will be thrown at spawn time
+  } catch {
+    return resolve(process.cwd(), 'scripts/train_micro.py');
+  }
+}
+
 export async function trainMicroModel(options: TrainingOptions): Promise<TrainingResult> {
   const {
     proposal,
     datasetPath,
     hardware,
-    pythonScriptPath = resolve(process.cwd(), 'scripts/train_micro.py'),
+    pythonScriptPath = resolveTrainScript(),
     runNumber = 1,
   } = options;
 
