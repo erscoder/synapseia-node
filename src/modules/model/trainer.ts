@@ -106,6 +106,9 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
     const startTime = Date.now();
     const lossCurve: number[] = [];
 
+    logger.log(`[trainer] Spawning: python3 ${pythonScriptPath}`);
+    logger.log(`[trainer] Script exists: ${existsSync(pythonScriptPath)}`);
+
     const pythonProcess = spawn('python3', [pythonScriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -132,16 +135,9 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
       else resolve(result!);
     };
 
-    // Ensure process is killed when promise settles (via timeout or completion)
-    pythonProcess.on('close', () => {
-      if (!settledHolder.current) {
-        settle(new Error('Training process closed unexpectedly'));
-      }
-    });
-
-    // Handle spawn errors
+    // Handle spawn errors (python3 binary not found, etc.)
     pythonProcess.on('error', (error) => {
-      settle(new Error(`Failed to spawn Python process: ${error.message}`));
+      settle(new Error(`Failed to spawn python3: ${error.message}. Is python3 installed?`));
     });
 
     // Send hyperparams to Python script via stdin
@@ -189,8 +185,16 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
     pythonProcess.on('close', (code) => {
       const durationMs = Date.now() - startTime;
 
-      if (code !== 0) {
-        settle(new Error(`Training failed with exit code ${code}: ${stderr || 'Unknown error'}`));
+      // Always log stderr (contains Python tracebacks, import errors, etc.)
+      if (stderr.trim()) {
+        logger.warn(`[trainer] python3 stderr:\n${stderr.trim().slice(0, 2000)}`);
+      }
+
+      if (code !== 0 || !settledHolder.current) {
+        const errorMsg = stderr.trim()
+          ? `Training failed (exit ${code}): ${stderr.trim().slice(0, 500)}`
+          : `Training process exited with code ${code ?? 'null'} — no output received`;
+        settle(new Error(errorMsg));
         return;
       }
 
