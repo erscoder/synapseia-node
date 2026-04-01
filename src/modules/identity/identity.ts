@@ -164,11 +164,21 @@ export class IdentityHelper {
    * Get or create identity (convenience function for CLI)
    */
   getOrCreateIdentity(identityDir: string = IDENTITY_DIR, nodeName?: string): Identity {
-    try {
-      return this.loadIdentity(identityDir);
-    } catch {
-      return this.generateIdentity(identityDir, nodeName);
+    const idPath = path.join(identityDir, 'identity.json');
+
+    // If the file exists but fails to load, NEVER silently regenerate — that would
+    // create a new node identity on every restart. Surface the error instead.
+    if (existsSync(idPath)) {
+      const raw = readFileSync(idPath, 'utf-8').trim();
+      if (raw) {
+        // File exists and has content — load it, throwing on any parse/validation error
+        // so the operator can fix the file rather than losing their node identity.
+        return this.loadIdentity(identityDir);
+      }
     }
+
+    // File doesn't exist (or is empty) — first run, safe to generate.
+    return this.generateIdentity(identityDir, nodeName);
   }
 
   /**
