@@ -7,6 +7,34 @@ import type { P2PNode } from '../p2p/p2p.js';
 import { isPyTorchAvailable } from '../model/trainer.js';
 import { ModelDiscovery } from '../discovery/model-discovery.js';
 
+/** Cached public IP (refreshed every 30 min) */
+let _cachedPublicIp: string | null = null;
+let _cachedIpAt = 0;
+const PUBLIC_IP_TTL_MS = 30 * 60 * 1000; // 30 min
+
+/**
+ * Resolve the node's public IP address via ipify.org.
+ * Cached for 30 minutes to avoid hammering the external API.
+ * Returns null on failure (no internet, timeout, etc.).
+ */
+async function resolvePublicIp(): Promise<string | null> {
+  if (_cachedPublicIp && Date.now() - _cachedIpAt < PUBLIC_IP_TTL_MS) {
+    return _cachedPublicIp;
+  }
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { ip: string };
+    _cachedPublicIp = data.ip;
+    _cachedIpAt = Date.now();
+    return data.ip;
+  } catch {
+    return null; // graceful fallback — no crash if ipify is unreachable
+  }
+}
+
 export interface HeartbeatPayload {
   peerId: string;
   publicKey: string;  // Full Ed25519 public key (64 hex chars = 32 bytes)
@@ -17,6 +45,7 @@ export interface HeartbeatPayload {
   name?: string;
   lat?: number;
   lng?: number;
+  publicIp?: string; // Self-reported public IP for geo-lookup
 }
 
 export interface HeartbeatResponse {
@@ -40,6 +69,10 @@ export class HeartbeatHelper {
     const startTime = Date.now();
     const capabilities = await this.determineCapabilitiesAsync(hardware);
 
+    // Resolve public IP for geo-lookup (cached 30 min)
+    const publicIp = await resolvePublicIp();
+    if (publicIp) logger.log(`[Heartbeat] Public IP: ${publicIp}`);
+
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
       name: identity.name,
@@ -50,6 +83,7 @@ export class HeartbeatHelper {
       uptime: Math.floor((Date.now() - startTime) / 1000), // Seconds since process start
       lat,
       lng,
+      publicIp: publicIp ?? undefined,
     };
 
     let lastError: Error | null = null;
