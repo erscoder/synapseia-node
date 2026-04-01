@@ -231,6 +231,38 @@ async function bootstrap() {
           );
         }
 
+        // ── PyTorch check + optional install ──────────────────────────────
+        const { isPyTorchAvailable: checkTorch } = await import('../modules/model/trainer.js');
+        const hasTorch = await checkTorch();
+        if (!hasTorch) {
+          logger.log('\n⚡ Hyperparam Search capability detected!');
+          logger.log('   Your node can run micro-transformer training to optimize');
+          logger.log('   AI hyperparameters and earn SYN rewards.');
+          logger.log('   This requires Python 3 + PyTorch (CPU only, no GPU needed).\n');
+          const { confirm } = await import('@inquirer/prompts');
+          const installTorch = await safePrompt(() => confirm({
+            message: 'Install Python3 + PyTorch now? (recommended)',
+            default: true,
+          }));
+          if (installTorch) {
+            logger.log('\n📦 Installing PyTorch...');
+            const { execSync } = await import('child_process');
+            try {
+              // Try pip3 first (no sudo needed for --user install)
+              execSync('pip3 install torch --index-url https://download.pytorch.org/whl/cpu --quiet', {
+                stdio: 'inherit',
+              });
+              logger.log('✅ PyTorch installed successfully! Your node can now run Hyperparam Search.\n');
+            } catch {
+              logger.warn('⚠️  pip3 install failed. Try manually: pip3 install torch');
+              logger.warn('   The node will start without Hyperparam Search capability.\n');
+            }
+          } else {
+            logger.log('   Skipping. Node will start without Hyperparam Search.\n');
+            logger.log('   To enable later, run: pip3 install torch\n');
+          }
+        }
+
         logger.log(SYPNASEIA_HEADER);
         logger.log('Starting Sypnaseia node...');
         logger.log(`Version: ${VERSION}`);
