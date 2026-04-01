@@ -264,9 +264,13 @@ async function bootstrap() {
 
         // cpu_inference is always enabled: tokenize/embedding have no LLM dependency,
         // classify falls back gracefully if no model available.
-        const capabilities = hardware.hasOllama
-          ? ['llm', 'ollama', 'cpu_inference', `tier-${hardware.tier}`]
-          : ['llm', 'cpu_inference', `tier-${hardware.tier}`];
+        const capabilities = ['cpu'];
+        if (hardware.hasOllama) {
+          capabilities.push('llm', 'ollama', 'cpu_inference');
+        } else {
+          capabilities.push('llm', 'cpu_inference');
+        }
+        capabilities.push(`tier-${hardware.tier}`);
         if (inferenceEnabled) capabilities.push('inference');
 
         // ── Hand off to the node runtime ──────────────────────────────────
