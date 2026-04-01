@@ -90,7 +90,11 @@ export class HeartbeatHelper {
     // CPU is always available
     capabilities.push('cpu');
 
-    // Add inference capability if Ollama is running OR cloud LLM is configured
+    // cpu_inference: tokenize/classify/embedding tasks that run on CPU without a full LLM.
+    // Always enabled — these tasks have no GPU/Ollama dependency.
+    capabilities.push('cpu_inference');
+
+    // Add LLM-based inference capabilities if Ollama is running OR cloud LLM is configured
     if (hardware.hasOllama || hardware.hasCloudLlm) {
       capabilities.push('inference');
       capabilities.push('llm');
