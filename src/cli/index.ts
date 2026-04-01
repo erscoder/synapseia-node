@@ -36,7 +36,9 @@ process.on('uncaughtException', (err: unknown) => {
     logger.log('\nBye 👋');
     process.exit(0);
   }
-  logger.error(err);
+  const e = err as Error;
+  logger.error(`[uncaughtException] ${e?.name ?? 'Unknown'}: ${e?.message ?? JSON.stringify(err)}`);
+  if (e?.stack) logger.error(e.stack);
   process.exit(1);
 });
 process.on('unhandledRejection', (reason: unknown) => {
@@ -44,8 +46,10 @@ process.on('unhandledRejection', (reason: unknown) => {
     logger.log('\nBye 👋');
     process.exit(0);
   }
-  logger.error(reason);
-  process.exit(1);
+  const e = reason as Error;
+  logger.error(`[unhandledRejection] ${e?.name ?? 'Unknown'}: ${e?.message ?? JSON.stringify(reason)}`);
+  if (e?.stack) logger.error(e.stack);
+  // Don't exit on unhandled rejections — just log them (node continues running)
 });
 
 async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
