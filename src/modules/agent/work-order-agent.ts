@@ -315,26 +315,28 @@ export async function acceptWorkOrder(
   peerId: string,
   nodeCapabilities: string[] = []
 ): Promise<boolean> {
+  const url = `${coordinatorUrl}/work-orders/${workOrderId}/accept`;
+  logger.log(` [Accept] POST ${url}`);
   try {
-    const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/accept`, {
+    const body = JSON.stringify({ workOrderId, assigneeAddress: peerId, nodeCapabilities });
+    logger.log(` [Accept] body: ${body.slice(0, 200)}`);
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        workOrderId,
-        assigneeAddress: peerId,
-        nodeCapabilities,
-      }),
+      body,
     });
 
     if (!response.ok) {
       const error = await response.text();
-      logger.warn(` Failed to accept work order ${workOrderId}:`, error);
+      logger.warn(` [Accept] HTTP ${response.status} for ${workOrderId}: ${error}`);
       return false;
     }
 
+    logger.log(` [Accept] OK ${response.status} for ${workOrderId}`);
     return true;
   } catch (error) {
-    logger.warn(' Failed to accept work order:', (error as Error).message);
+    const e = error as Error;
+    logger.error(` [Accept] EXCEPTION for ${workOrderId}: name=${e.name} msg=${e.message} stack=${e.stack?.slice(0, 300)}`);
     return false;
   }
 }
