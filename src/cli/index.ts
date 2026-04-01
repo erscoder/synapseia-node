@@ -262,14 +262,10 @@ async function bootstrap() {
           process.exit(1);
         }
 
-        // cpu_inference is always enabled: tokenize/embedding have no LLM dependency,
-        // classify falls back gracefully if no model available.
-        const capabilities = ['cpu'];
-        if (hardware.hasOllama) {
-          capabilities.push('llm', 'ollama', 'cpu_inference');
-        } else {
-          capabilities.push('llm', 'cpu_inference');
-        }
+        // Use HeartbeatHelper as single source of truth for capabilities
+        // (same logic used when registering the node with the coordinator via heartbeat)
+        const heartbeatHelper = new (await import('../modules/heartbeat/heartbeat.js')).HeartbeatHelper();
+        const capabilities = heartbeatHelper.determineCapabilities(hardware);
         capabilities.push(`tier-${hardware.tier}`);
         if (inferenceEnabled) capabilities.push('inference');
 
