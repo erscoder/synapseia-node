@@ -82,13 +82,21 @@ export class HeartbeatHelper {
   }
 
   /**
-   * Determine capabilities based on hardware
+   * Determine capabilities based on hardware.
+   *
+   * Capability taxonomy:
+   *  - cpu_training  → hyperparam search (train_micro.py / PyTorch CPU). Any node.
+   *  - gpu_training  → DiLoCo federated fine-tuning (LoRA, requires VRAM). GPU nodes only.
+   *  - cpu_inference → tokenize / embed / classify. Always enabled (no LLM needed).
+   *  - inference     → full LLM inference (requires Ollama or cloud LLM).
+   *  - llm           → alias for inference, kept for backwards compat.
+   *  - embedding     → Ollama embedding models (requires Ollama + ≥8 GB RAM).
    */
   determineCapabilities(hardware: Hardware): string[] {
     const capabilities: string[] = [];
 
-    // CPU is always available
-    capabilities.push('cpu');
+    // cpu_training: any node can run micro-transformer hyperparam search (PyTorch CPU)
+    capabilities.push('cpu_training');
 
     // cpu_inference: tokenize/classify/embedding tasks that run on CPU without a full LLM.
     // Always enabled — these tasks have no GPU/Ollama dependency.
@@ -103,6 +111,11 @@ export class HeartbeatHelper {
     // Add embedding capability if Ollama can run embeddings
     if (hardware.hasOllama && hardware.ramGb >= 8) {
       capabilities.push('embedding');
+    }
+
+    // gpu_training: DiLoCo LoRA fine-tuning — requires dedicated GPU VRAM
+    if (hardware.gpuVramGb > 0) {
+      capabilities.push('gpu_training');
     }
 
     return capabilities;
