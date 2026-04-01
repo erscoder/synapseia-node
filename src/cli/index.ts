@@ -231,35 +231,83 @@ async function bootstrap() {
           );
         }
 
-        // ── PyTorch check + optional install ──────────────────────────────
+        // ── Python3 + PyTorch check + optional install ────────────────────
         const { isPyTorchAvailable: checkTorch } = await import('../modules/model/trainer.js');
-        const hasTorch = await checkTorch();
+        const { execSync: execSyncFn, spawnSync } = await import('child_process');
+
+        // Check python3 availability first
+        const hasPython = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0;
+        const hasTorch = hasPython && await checkTorch();
+
         if (!hasTorch) {
           logger.log('\n⚡ Hyperparam Search capability detected!');
           logger.log('   Your node can run micro-transformer training to optimize');
           logger.log('   AI hyperparameters and earn SYN rewards.');
           logger.log('   This requires Python 3 + PyTorch (CPU only, no GPU needed).\n');
+
           const { confirm } = await import('@inquirer/prompts');
           const installTorch = await safePrompt(() => confirm({
             message: 'Install Python3 + PyTorch now? (recommended)',
             default: true,
           }));
+
           if (installTorch) {
-            logger.log('\n📦 Installing PyTorch...');
-            const { execSync } = await import('child_process');
-            try {
-              // Try pip3 first (no sudo needed for --user install)
-              execSync('pip3 install torch --index-url https://download.pytorch.org/whl/cpu --quiet', {
-                stdio: 'inherit',
-              });
-              logger.log('✅ PyTorch installed successfully! Your node can now run Hyperparam Search.\n');
-            } catch {
-              logger.warn('⚠️  pip3 install failed. Try manually: pip3 install torch');
-              logger.warn('   The node will start without Hyperparam Search capability.\n');
+            const plat = os.platform();
+
+            // Step 1: install python3 if missing
+            if (!hasPython) {
+              logger.log('\n📦 Installing Python 3...');
+              try {
+                if (plat === 'darwin') {
+                  // macOS: try brew first, fall back to python.org installer guide
+                  const hasBrew = spawnSync('brew', ['--version'], { stdio: 'ignore' }).status === 0;
+                  if (hasBrew) {
+                    execSyncFn('brew install python3', { stdio: 'inherit' });
+                  } else {
+                    logger.warn('⚠️  Homebrew not found. Install Python 3 from https://www.python.org/downloads/');
+                    logger.warn('   Then re-run syn start to enable Hyperparam Search.');
+                    logger.log('   Continuing without Hyperparam Search...\n');
+                  }
+                } else if (plat === 'linux') {
+                  // Linux: apt / dnf / pacman
+                  const haApt = spawnSync('apt-get', ['--version'], { stdio: 'ignore' }).status === 0;
+                  const hasDnf = spawnSync('dnf', ['--version'], { stdio: 'ignore' }).status === 0;
+                  if (haApt) {
+                    execSyncFn('sudo apt-get install -y python3 python3-pip', { stdio: 'inherit' });
+                  } else if (hasDnf) {
+                    execSyncFn('sudo dnf install -y python3 python3-pip', { stdio: 'inherit' });
+                  } else {
+                    execSyncFn('sudo pacman -S --noconfirm python python-pip', { stdio: 'inherit' });
+                  }
+                } else {
+                  logger.warn('⚠️  Unsupported OS for auto-install. Install Python 3 manually from https://www.python.org');
+                  logger.log('   Continuing without Hyperparam Search...\n');
+                }
+                logger.log('✅ Python 3 installed.\n');
+              } catch {
+                logger.warn('⚠️  Python 3 install failed. Install manually: https://www.python.org/downloads/');
+                logger.warn('   Continuing without Hyperparam Search.\n');
+              }
+            }
+
+            // Step 2: install torch (CPU-only wheel, no CUDA, ~200MB)
+            const pythonNow = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0;
+            if (pythonNow) {
+              logger.log('📦 Installing PyTorch (CPU-only, ~200MB)...');
+              try {
+                execSyncFn(
+                  'pip3 install torch --index-url https://download.pytorch.org/whl/cpu',
+                  { stdio: 'inherit' }
+                );
+                logger.log('✅ PyTorch installed! Your node can now run Hyperparam Search.\n');
+              } catch {
+                logger.warn('⚠️  PyTorch install failed. Try manually: pip3 install torch');
+                logger.warn('   Continuing without Hyperparam Search.\n');
+              }
             }
           } else {
             logger.log('   Skipping. Node will start without Hyperparam Search.\n');
-            logger.log('   To enable later, run: pip3 install torch\n');
+            logger.log('   To enable later:\n     pip3 install torch\n');
           }
         }
 
