@@ -8,6 +8,10 @@
     "synapseia": "./dist/index.js",
     "syn": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "scripts"
+  ],
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js --help\"",
     "build": "tsup src/cli/index.ts",
