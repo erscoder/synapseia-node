@@ -43,6 +43,8 @@ export interface Hardware {
   gpuVramGb: number;
   tier: number;
   hasOllama: boolean;
+  /** True when the node has a cloud LLM URL configured (--llm-url) */
+  hasCloudLlm?: boolean;
 }
 
 export type HardwareTier = 0 | 1 | 2 | 3 | 4 | 5;

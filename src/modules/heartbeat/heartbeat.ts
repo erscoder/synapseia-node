@@ -89,9 +89,10 @@ export class HeartbeatHelper {
     // CPU is always available
     capabilities.push('cpu');
 
-    // Add inference capability if Ollama is running
-    if (hardware.hasOllama) {
+    // Add inference capability if Ollama is running OR cloud LLM is configured
+    if (hardware.hasOllama || hardware.hasCloudLlm) {
       capabilities.push('inference');
+      capabilities.push('llm');
     }
 
     // Add embedding capability if Ollama can run embeddings
