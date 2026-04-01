@@ -174,6 +174,23 @@ export interface WorkOrderEvaluation {
 /** Cooldown for re-analyzing a research paper (ms) — allows hyperparams diversity */
 const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10); // default 5 min, override via env
 
+/**
+ * Minimum submission quality score (0.0–1.0).
+ * Submissions below this threshold are dropped to avoid polluting the reward pool.
+ * Can be overridden via SUBMISSION_MIN_SCORE env var.
+ */
+const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.1');
+
+/**
+ * Rate limit: minimum ms between consecutive submissions from this node.
+ * Default 60 s. A random jitter of 0–60 s is added so nodes don't all submit
+ * at the same wall-clock second (important at scale: 1 M nodes).
+ */
+const SUBMISSION_RATE_LIMIT_MS = parseInt(process.env.SUBMISSION_RATE_LIMIT_MS ?? String(60 * 1000), 10);
+
+/** Timestamp of the last successful submission (rate limiting) */
+let lastSubmissionAt = 0;
+
 let agentState: WorkOrderAgentState  = {
   iteration: 0,
   totalWorkOrdersCompleted: 0,
@@ -1948,12 +1965,34 @@ export async function runWorkOrderAgentIteration(
     success = execution.success;
   }
 
-  // 5. Complete work order — skip if research or training failed
+  // 5. Quality + rate-limit gate before submitting
+  // 5a. Skip if execution failed
   if ((isResearchWorkOrder(workOrder) || isTrainingWorkOrder(workOrder) || isDiLoCoWorkOrder(workOrder) || isCpuInferenceWorkOrder(workOrder)) && !success) {
     logger.warn(' Work order execution failed — skipping result submission to avoid polluting rewards');
     agentState.currentWorkOrder = undefined;
     continue;
   }
+
+  // 5b. For research WOs: skip if score is below minimum quality threshold
+  if (isResearchWorkOrder(workOrder) && researchResult) {
+    const submissionScore = scoreResearchResult(researchResult);
+    if (submissionScore < SUBMISSION_MIN_SCORE) {
+      logger.warn(` Research score ${submissionScore.toFixed(4)} < threshold ${SUBMISSION_MIN_SCORE} — skipping submission (LLM may have returned an error or empty response)`);
+      agentState.currentWorkOrder = undefined;
+      continue;
+    }
+  }
+
+  // 5c. Rate limit: max 1 submission per SUBMISSION_RATE_LIMIT_MS + random jitter [0, rateLimit)
+  const now = Date.now();
+  const jitterMs = Math.floor(Math.random() * SUBMISSION_RATE_LIMIT_MS);
+  const nextAllowedAt = lastSubmissionAt + SUBMISSION_RATE_LIMIT_MS + jitterMs;
+  if (now < nextAllowedAt) {
+    const waitMs = nextAllowedAt - now;
+    logger.log(` Rate limit: waiting ${(waitMs / 1000).toFixed(1)}s before submitting (jitter: ${(jitterMs / 1000).toFixed(1)}s)`);
+    await sleep(waitMs);
+  }
+  lastSubmissionAt = Date.now();
 
   logger.log(' Reporting result...');
   const completed = await completeWorkOrder(
