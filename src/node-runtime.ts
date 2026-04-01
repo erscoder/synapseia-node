@@ -111,6 +111,7 @@ export async function startNode(
     p2pNode ?? undefined,
     config.lat,
     config.lng,
+    config.walletAddress, // Solana wallet address for reward payouts
   );
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
