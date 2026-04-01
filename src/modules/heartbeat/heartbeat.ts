@@ -34,6 +34,7 @@ export class HeartbeatHelper {
     hardware: Hardware,
     lat?: number,
     lng?: number,
+    walletAddress?: string | null,
   ): Promise<HeartbeatResponse> {
     const startTime = Date.now();
     const capabilities = this.determineCapabilities(hardware);
@@ -41,8 +42,8 @@ export class HeartbeatHelper {
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
       name: identity.name,
-      publicKey: identity.publicKey,  // Full Ed25519 public key for signature verification
-      walletAddress: null, // TODO: connect wallet
+      publicKey: identity.publicKey,  // Full Ed25519 public key for node signature verification
+      walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts
       tier: hardware.tier,
       capabilities,
       uptime: Math.floor((Date.now() - startTime) / 1000), // Seconds since process start
@@ -116,6 +117,7 @@ export class HeartbeatHelper {
     p2pNode?: P2PNode,
     lat?: number,
     lng?: number,
+    walletAddress?: string | null,
   ): () => void {
     const intervalStartTime = Date.now();
     const modelDiscovery = new ModelDiscovery();
@@ -124,7 +126,7 @@ export class HeartbeatHelper {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
         // Always send HTTP heartbeat to register with coordinator
         try {
-          await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng);
+          await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng, walletAddress);
         } catch (httpErr) {
           logger.error('HTTP heartbeat failed:', (httpErr as Error).message);
         }
@@ -141,7 +143,7 @@ export class HeartbeatHelper {
             peerId: p2pNode.getPeerId(),
             name: identity.name,
             publicKey: identity.publicKey,
-            walletAddress: null,
+            walletAddress: walletAddress ?? null,
             tier: hardware.tier,
             capabilities,
             uptime: uptimeSeconds,
