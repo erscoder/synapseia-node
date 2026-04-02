@@ -14,6 +14,8 @@ import { UpdateMemoryNode } from './nodes/update-memory';
 import { RetrieveMemoryNode } from './nodes/retrieve-memory';
 import { PlanExecutionNode } from './nodes/plan-execution';
 import { SelfCritiqueNode } from './nodes/self-critique';
+// Sprint C - ReAct Tool Calling
+import { ToolsModule } from './tools.module';
 import { LangGraphLlmService } from './llm.service';
 import { AgentGraphService } from './agent-graph.service';
 import { LlmProviderHelper } from '../../llm/llm-provider';
@@ -37,6 +39,7 @@ const NODES = [
 ];
 
 @Module({
+  imports: [ToolsModule],
   providers: [
     ...NODES, 
     LangGraphLlmService,

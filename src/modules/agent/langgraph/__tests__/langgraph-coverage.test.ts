@@ -11,6 +11,31 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
   calculateImprovement: jest.fn(() => 0),
 }));
 
+// Sprint C - ReAct Tool Calling: Mock dependencies for ExecuteResearchNode
+jest.mock('../tools/tool-runner.service', () => ({
+  ToolRunnerService: jest.fn().mockImplementation(() => ({
+    createExecutionContext: jest.fn().mockReturnValue({ callCount: 0, maxCalls: 5 }),
+    run: jest.fn(),
+  })),
+}));
+jest.mock('../tools/tool-registry', () => ({
+  ToolRegistry: jest.fn().mockImplementation(() => ({
+    register: jest.fn(),
+    getAll: jest.fn().mockReturnValue([]),
+    get: jest.fn(),
+    toPromptString: jest.fn().mockReturnValue(''),
+  })),
+}));
+jest.mock('../llm.service', () => ({
+  LangGraphLlmService: jest.fn().mockImplementation(() => ({
+    generate: jest.fn(),
+  })),
+}));
+jest.mock('../../../../utils/logger', () => ({
+  __esModule: true,
+  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 global.fetch = jest.fn() as unknown as typeof fetch;
 
 import type { AgentState } from '../state';
@@ -202,7 +227,16 @@ describe('Executor nodes — null work order guard', () => {
   beforeEach(() => jest.resetAllMocks());
 
   it('executeResearch returns failure when no work order', async () => {
-    const node = new ExecuteResearchNode();
+    // Import mocked classes
+    const { ToolRunnerService } = await import('../tools/tool-runner.service');
+    const { ToolRegistry } = await import('../tools/tool-registry');
+    const { LangGraphLlmService } = await import('../llm.service');
+    
+    const node = new ExecuteResearchNode(
+      new ToolRunnerService(null as any, null as any, null as any),
+      new ToolRegistry(),
+      new LangGraphLlmService(null as any),
+    );
     const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
