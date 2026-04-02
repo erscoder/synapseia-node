@@ -15,7 +15,7 @@ describe('PeerReviewHandler', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    handler = new PeerReviewHandler(mockReviewAgent as any);
+    handler = new PeerReviewHandler();
   });
 
   describe('handle', () => {

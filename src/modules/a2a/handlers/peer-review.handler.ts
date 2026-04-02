@@ -7,7 +7,23 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { ReviewAgentHelper, Submission, LLMReviewConfig, ReviewScores } from '../../agent/review-agent';
+
+// Local types — handler is self-contained, no dependency on AgentModule
+interface Submission {
+  id: string;
+  roundId: string;
+  nodeId: string;
+  summary: string;
+  keyInsights: string[];
+  title: string;
+}
+interface ReviewScores {
+  accuracy: number;
+  novelty: number;
+  methodology: number;
+  conclusions: number;
+  commentary: string;
+}
 
 export interface PeerReviewPayload {
   submission: string;
@@ -16,7 +32,6 @@ export interface PeerReviewPayload {
 
 @Injectable()
 export class PeerReviewHandler {
-  constructor(private readonly reviewAgent: ReviewAgentHelper) {}
 
   /**
    * Handle a peer review request.

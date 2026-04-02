@@ -941,6 +941,8 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  logger.error(err);
+  const e = err as Error;
+  logger.error(`[FATAL] ${e?.name ?? 'Error'}: ${e?.message ?? JSON.stringify(err, Object.getOwnPropertyNames(err))}`);
+  if (e?.stack) logger.error(e.stack);
   process.exit(1);
 });

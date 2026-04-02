@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   WorkOrderAgentHelper,
   type WorkOrderAgentConfig,
@@ -17,18 +17,18 @@ import type { LLMModel, LLMConfig } from '../../llm/llm-provider';
 export class WorkOrderAgentService {
   constructor(
     private readonly workOrderAgentHelper: WorkOrderAgentHelper,
-    private readonly langGraphService: LangGraphWorkOrderAgentService,
+    @Optional() private readonly langGraphService?: LangGraphWorkOrderAgentService,
   ) {}
 
   start(config: WorkOrderAgentConfig): Promise<void> {
-    if (isLangGraphMode()) {
+    if (isLangGraphMode() && this.langGraphService) {
       return this.langGraphService.start(config);
     }
     return this.workOrderAgentHelper.startWorkOrderAgent(config);
   }
 
   stop(): void {
-    if (isLangGraphMode()) {
+    if (isLangGraphMode() && this.langGraphService) {
       this.langGraphService.stop();
       return;
     }

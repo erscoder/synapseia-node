@@ -25,7 +25,7 @@ import { A2AModule } from './modules/a2a/a2a.module';
     WalletModule,
     InferenceModule,
     AgentModule,
-    A2AModule,
+    A2AModule,  // restored (ReviewAgentHelper dep removed from PeerReviewHandler)
   ],
 })
 export class AppModule {}

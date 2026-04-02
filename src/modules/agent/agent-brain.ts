@@ -242,6 +242,7 @@ export function getRecentJournal(brain: AgentBrain, maxEntries: number = 10): Jo
 // ---------------------------------------------------------------------------
 
 @Injectable()
+@Injectable()
 export class AgentBrainHelper {
   initBrain(goals?: string[], filePath?: string): AgentBrain {
     return initBrain(goals, filePath);
