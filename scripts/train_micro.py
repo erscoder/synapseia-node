@@ -319,27 +319,30 @@ def main():
     train_dataset = TextDataset(train_text, tokenizer, seq_length)
     val_dataset = TextDataset(val_text, tokenizer, seq_length)
 
-    # Guard: dataset must have enough samples to train
-    MIN_SAMPLES = 2
-    if len(train_dataset) < MIN_SAMPLES:
-        # Corpus too short — fall back to built-in astrophysics sample
-        print(json.dumps({
-            "warning": f"Corpus too short ({len(text)} chars, need >={seq_length + 1} chars). Using built-in sample data."
-        }), flush=True)
+    # Guard: dataset must have enough samples to train (domain corpus must be correct)
+    MIN_TRAIN_SAMPLES = 2
+    if len(train_dataset) < MIN_TRAIN_SAMPLES:
+        # Delete cached file so it gets re-downloaded on the next run
         from pathlib import Path as _Path
         try:
-            _Path(data_path).unlink(missing_ok=True)  # remove the bad file so next call re-downloads
+            _Path(data_path).unlink(missing_ok=True)
         except Exception:
             pass
-        fallback_text = load_data('/nonexistent')  # triggers the built-in sample
-        train_text_fb, val_text_fb = split_data(fallback_text)
-        tokenizer = CharTokenizer(fallback_text)
-        vocab_size = tokenizer.vocab_size
-        train_dataset = TextDataset(train_text_fb, tokenizer, seq_length)
-        val_dataset = TextDataset(val_text_fb, tokenizer, seq_length)
+        err_msg = (
+            f"Corpus too short for domain training: only {len(text)} chars in '{data_path}'. "
+            f"Need at least {seq_length + 1} chars to produce even one training sample. "
+            f"The coordinator must export a valid corpus before dispatching training work orders."
+        )
+        print(json.dumps({"error": err_msg}), flush=True)
+        sys.exit(1)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    # Clamp batch_size to available samples (avoids empty-batch edge cases with small corpora)
+    effective_batch_size = min(batch_size, len(train_dataset))
+    if effective_batch_size != batch_size:
+        print(json.dumps({"warning": f"batch_size clamped from {batch_size} to {effective_batch_size} (only {len(train_dataset)} training samples)"}), flush=True)
+
+    train_loader = DataLoader(train_dataset, batch_size=effective_batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=max(1, min(effective_batch_size, len(val_dataset))), shuffle=False)
     
     # Create model
     model = MicroTransformer(
