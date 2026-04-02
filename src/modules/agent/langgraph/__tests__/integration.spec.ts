@@ -11,6 +11,31 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
   calculateImprovement: jest.fn(() => 0),
 }));
 
+// Sprint C - ReAct Tool Calling: Mock dependencies for ExecuteResearchNode
+jest.mock('../tools/tool-runner.service', () => ({
+  ToolRunnerService: jest.fn().mockImplementation(() => ({
+    createExecutionContext: jest.fn().mockReturnValue({ callCount: 0, maxCalls: 5 }),
+    run: jest.fn(),
+  })),
+}));
+jest.mock('../tools/tool-registry', () => ({
+  ToolRegistry: jest.fn().mockImplementation(() => ({
+    register: jest.fn(),
+    getAll: jest.fn().mockReturnValue([]),
+    get: jest.fn(),
+    toPromptString: jest.fn().mockReturnValue(''),
+  })),
+}));
+jest.mock('../llm.service', () => ({
+  LangGraphLlmService: jest.fn().mockImplementation(() => ({
+    generate: jest.fn(),
+  })),
+}));
+jest.mock('../../../../utils/logger', () => ({
+  __esModule: true,
+  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 global.fetch = jest.fn() as unknown as typeof fetch;
 
 import { AgentGraphService } from '../agent-graph.service';
@@ -40,13 +65,22 @@ const TEST_CONFIG: WorkOrderAgentConfig = {
 
 const mockLlmService = { generate: (jest.fn() as any).mockResolvedValue('[]') };
 
+// Import mocked classes for ExecuteResearchNode
+const { ToolRunnerService } = require('../tools/tool-runner.service');
+const { ToolRegistry } = require('../tools/tool-registry');
+const { LangGraphLlmService } = require('../llm.service');
+
 function buildService(): AgentGraphService {
   return new AgentGraphService(
     new FetchWorkOrdersNode(),
     new SelectWorkOrderNode(),
     new EvaluateEconomicsNode(),
     new AcceptWorkOrderNode(),
-    new ExecuteResearchNode(),
+    new ExecuteResearchNode(
+      new ToolRunnerService(null, null, null),
+      new ToolRegistry(),
+      new LangGraphLlmService(null),
+    ),
     new ExecuteTrainingNode(),
     new ExecuteInferenceNode(),
     new ExecuteDilocoNode(),

@@ -11,6 +11,31 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
   calculateImprovement: jest.fn(() => 0),
 }));
 
+// Sprint C - ReAct Tool Calling: Mock dependencies for ExecuteResearchNode
+jest.mock('../tools/tool-runner.service', () => ({
+  ToolRunnerService: jest.fn().mockImplementation(() => ({
+    createExecutionContext: jest.fn().mockReturnValue({ callCount: 0, maxCalls: 5 }),
+    run: jest.fn(),
+  })),
+}));
+jest.mock('../tools/tool-registry', () => ({
+  ToolRegistry: jest.fn().mockImplementation(() => ({
+    register: jest.fn(),
+    getAll: jest.fn().mockReturnValue([]),
+    get: jest.fn(),
+    toPromptString: jest.fn().mockReturnValue(''),
+  })),
+}));
+jest.mock('../llm.service', () => ({
+  LangGraphLlmService: jest.fn().mockImplementation(() => ({
+    generate: jest.fn(),
+  })),
+}));
+jest.mock('../../../../utils/logger', () => ({
+  __esModule: true,
+  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 jest.mock('../../work-order-agent', () => {
   const actual = jest.requireActual('../../work-order-agent') as Record<string, unknown>;
   return {
@@ -251,7 +276,18 @@ describe('ExecuteDilocoNode', () => {
 
 describe('ExecuteResearchNode (mocked)', () => {
   let node: ExecuteResearchNode;
-  beforeEach(() => { jest.resetAllMocks(); node = new ExecuteResearchNode(); });
+  beforeEach(() => { 
+    jest.resetAllMocks(); 
+    // Import mocked classes
+    const { ToolRunnerService } = require('../tools/tool-runner.service');
+    const { ToolRegistry } = require('../tools/tool-registry');
+    const { LangGraphLlmService } = require('../llm.service');
+    node = new ExecuteResearchNode(
+      new ToolRunnerService(null, null, null),
+      new ToolRegistry(),
+      new LangGraphLlmService(null),
+    );
+  });
 
   it('returns success with research result', async () => {
     const mockResult = {
