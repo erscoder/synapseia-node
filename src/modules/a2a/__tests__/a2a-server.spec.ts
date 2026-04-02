@@ -25,7 +25,7 @@ function makeAgentCardService(): AgentCardService {
 }
 
 function makeTaskRouter(agentCardService: AgentCardService): TaskRouter {
-  const peerReviewHandler = new PeerReviewHandler({} as any);
+  const peerReviewHandler = new PeerReviewHandler();
   const embeddingHandler = new EmbeddingHandler();
   const healthCheckHandler = new HealthCheckHandler(agentCardService);
   const delegateResearchHandler = new DelegateResearchHandler();
