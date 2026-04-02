@@ -1,18 +1,11 @@
-/**
- * LangGraph Work Order Agent Service
- * Sprint A - LangGraph Foundation
- * 
- * Implements the same interface as WorkOrderAgentService but uses LangGraph
- */
-
 import { Injectable } from '@nestjs/common';
+import { AgentGraphService } from '../langgraph/agent-graph.service';
+import { initBrain } from '../agent-brain';
 import type { AgentBrain } from '../agent-brain';
 import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order-agent';
-import { runLangGraphIteration } from '../langgraph/graph';
-import { initBrain } from '../agent-brain';
 import logger from '../../../utils/logger';
 
-export interface WorkOrderAgentState {
+export interface LangGraphAgentState {
   isRunning: boolean;
   currentWorkOrder: WorkOrder | null;
   iteration: number;
@@ -27,31 +20,26 @@ export class LangGraphWorkOrderAgentService {
   private totalWorkOrdersCompleted = 0;
   private brain: AgentBrain;
 
-  constructor() {
+  constructor(private readonly agentGraphService: AgentGraphService) {
     this.brain = initBrain();
   }
 
   start(config: WorkOrderAgentConfig): Promise<void> {
-    if (this.isRunning) {
-      throw new Error('Work order agent is already running');
-    }
-
+    if (this.isRunning) throw new Error('LangGraph agent is already running');
     this.isRunning = true;
     const { intervalMs, maxIterations } = config;
-
-    logger.log('🚀 Starting LangGraph work order agent...');
-    logger.log(`   Agent mode: langgraph`);
+    logger.log('🚀 Starting LangGraph work order agent');
     logger.log(`   Coordinator: ${config.coordinatorUrl}`);
-
-    return this.runLoop(config, intervalMs ?? 30000, maxIterations);
+    logger.log(`   Mode: langgraph`);
+    return this.runLoop(config, intervalMs ?? 30_000, maxIterations);
   }
 
   stop(): void {
     this.isRunning = false;
-    logger.log(' Stopping LangGraph work order agent...');
+    logger.log(' Stopping LangGraph agent...');
   }
 
-  getState(): WorkOrderAgentState {
+  getState(): LangGraphAgentState {
     return {
       isRunning: this.isRunning,
       currentWorkOrder: this.currentWorkOrder,
@@ -73,8 +61,7 @@ export class LangGraphWorkOrderAgentService {
     iteration: number,
     brain?: AgentBrain,
   ): Promise<{ workOrder?: WorkOrder; completed: boolean; researchResult?: ResearchResult }> {
-    const useBrain = brain ?? this.brain;
-    const result = await runLangGraphIteration(config, iteration, useBrain);
+    const result = await this.agentGraphService.runIteration(config, iteration, brain ?? this.brain);
 
     if (result.completed && result.workOrder) {
       this.totalWorkOrdersCompleted++;
@@ -89,28 +76,19 @@ export class LangGraphWorkOrderAgentService {
 
   private async runLoop(config: WorkOrderAgentConfig, intervalMs: number, maxIterations?: number): Promise<void> {
     let iteration = 1;
-
     while (this.shouldContinue(iteration, maxIterations)) {
       try {
-        const result = await this.runIteration(config, iteration);
-        
-        if (result.completed) {
-          logger.log(` Iteration ${iteration} completed work order`);
-        }
+        await this.runIteration(config, iteration);
       } catch (error) {
         logger.error(` Iteration ${iteration} failed:`, (error as Error).message);
       }
-
-      // Sleep between iterations
       if (this.shouldContinue(iteration + 1, maxIterations)) {
         await this.sleep(intervalMs);
       }
-
       iteration++;
     }
-
     this.isRunning = false;
-    logger.log(`\n LangGraph agent stopped (max iterations: ${maxIterations ?? 'unlimited'})`);
+    logger.log(`\n LangGraph agent stopped`);
   }
 
   private shouldContinue(iteration: number, maxIterations?: number): boolean {

@@ -1,84 +1,57 @@
-/**
- * Node: qualityGate
- * Extracts quality scoring + rate limiting logic
- * Returns { qualityScore, shouldSubmit }
- * Sprint A - LangGraph Foundation
- */
-
-import type { AgentState } from '../state';
+import { Injectable } from '@nestjs/common';
 import { scoreResearchResult, isResearchWorkOrder } from '../../work-order-agent';
+import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
-// Rate limiting: max 1 submission per this many ms + random jitter
-const SUBMISSION_RATE_LIMIT_MS = 10_000; // 10 seconds base
-const SUBMISSION_MIN_SCORE = 0.15; // Minimum quality score threshold
+const SUBMISSION_RATE_LIMIT_MS = parseInt(process.env.SUBMISSION_RATE_LIMIT_MS ?? String(10_000), 10);
+const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.15');
 
-// Track last submission time across iterations
-let lastSubmissionAt = 0;
+@Injectable()
+export class QualityGateNode {
+  private lastSubmissionAt = 0;
 
-/**
- * Quality gate: evaluate execution result quality
- * - Scores research results
- * - Enforces rate limiting
- * - Returns whether result should be submitted
- */
-export async function qualityGate(state: AgentState): Promise<Partial<AgentState>> {
-  const { selectedWorkOrder, executionResult, researchResult } = state;
+  async execute(state: AgentState): Promise<Partial<AgentState>> {
+    const { selectedWorkOrder, executionResult, researchResult } = state;
 
-  // If execution failed, don't submit
-  if (!executionResult?.success) {
-    logger.warn(' Work order execution failed — skipping result submission to avoid polluting rewards');
-    return { qualityScore: 0, shouldSubmit: false };
-  }
-
-  // For research work orders: check quality score
-  if (selectedWorkOrder && isResearchWorkOrder(selectedWorkOrder) && researchResult) {
-    const submissionScore = scoreResearchResult(researchResult);
-    
-    if (submissionScore < SUBMISSION_MIN_SCORE) {
-      logger.warn(` Research score ${submissionScore.toFixed(4)} < threshold ${SUBMISSION_MIN_SCORE} — skipping submission`);
-      return { qualityScore: submissionScore, shouldSubmit: false };
+    if (!executionResult?.success) {
+      logger.warn(' Execution failed — skipping submission');
+      return { qualityScore: 0, shouldSubmit: false };
     }
 
-    logger.log(` Research quality score: ${submissionScore.toFixed(4)}`);
+    if (selectedWorkOrder && isResearchWorkOrder(selectedWorkOrder) && researchResult) {
+      const score = scoreResearchResult(researchResult);
+      if (score < SUBMISSION_MIN_SCORE) {
+        logger.warn(` Research score ${score.toFixed(4)} < ${SUBMISSION_MIN_SCORE} — skipping`);
+        return { qualityScore: score, shouldSubmit: false };
+      }
+      logger.log(` Research quality score: ${score.toFixed(4)}`);
+    }
+
+    const now = Date.now();
+    const jitterMs = Math.floor(Math.random() * SUBMISSION_RATE_LIMIT_MS);
+    const nextAllowedAt = this.lastSubmissionAt + SUBMISSION_RATE_LIMIT_MS + jitterMs;
+    if (now < nextAllowedAt) {
+      const waitMs = nextAllowedAt - now;
+      logger.log(` Rate limit: waiting ${(waitMs / 1000).toFixed(1)}s`);
+      await this.sleep(waitMs);
+    }
+    this.lastSubmissionAt = Date.now();
+
+    return {
+      qualityScore: researchResult ? scoreResearchResult(researchResult) : 1.0,
+      shouldSubmit: true,
+    };
   }
 
-  // Rate limiting: wait if needed
-  const now = Date.now();
-  const jitterMs = Math.floor(Math.random() * SUBMISSION_RATE_LIMIT_MS);
-  const nextAllowedAt = lastSubmissionAt + SUBMISSION_RATE_LIMIT_MS + jitterMs;
-  
-  if (now < nextAllowedAt) {
-    const waitMs = nextAllowedAt - now;
-    logger.log(` Rate limit: waiting ${(waitMs / 1000).toFixed(1)}s before submitting (jitter: ${(jitterMs / 1000).toFixed(1)}s)`);
-    await sleep(waitMs);
+  resetRateLimit(): void {
+    this.lastSubmissionAt = 0;
   }
-  
-  lastSubmissionAt = Date.now();
 
-  return {
-    qualityScore: researchResult ? scoreResearchResult(researchResult) : 1.0,
-    shouldSubmit: true,
-  };
-}
+  getLastSubmissionTime(): number {
+    return this.lastSubmissionAt;
+  }
 
-/**
- * Sleep utility
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Reset last submission time (for testing)
- */
-export function resetLastSubmissionTime(): void {
-  lastSubmissionAt = 0;
-}
-
-/**
- * Get current rate limit state (for testing)
- */
-export function getLastSubmissionTime(): number {
-  return lastSubmissionAt;
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 }

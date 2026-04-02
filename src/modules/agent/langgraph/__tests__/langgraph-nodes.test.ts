@@ -1,348 +1,166 @@
 /**
- * Unit tests for LangGraph nodes
+ * Unit tests for LangGraph node classes (NestJS injectable)
  * Sprint A - LangGraph Foundation
- * A17 - Migrate agent tests
  */
 
 import { jest } from '@jest/globals';
 
-// Mock trainer to avoid import.meta issues (pre-existing in trainer.ts)
 jest.mock('../../../../modules/model/trainer.js', () => ({
   trainMicroModel: jest.fn(),
   validateTrainingConfig: jest.fn(() => ({ valid: true })),
   calculateImprovement: jest.fn(() => 0),
 }));
 
-// Mock fetch globally
 global.fetch = jest.fn() as unknown as typeof fetch;
 
-// Import after mocking
 import type { AgentState } from '../state';
-import { selectBestWorkOrder } from '../nodes/select-wo';
-import { fetchWorkOrders, resetWorkOrderFilters } from '../nodes/fetch-work-orders';
-import { evaluateEconomics } from '../nodes/evaluate-economics';
-import { acceptWorkOrderNode } from '../nodes/accept-wo';
-import { updateMemory } from '../nodes/update-memory';
-import type { WorkOrder, WorkOrderEvaluation } from '../../work-order-agent';
+import { SelectWorkOrderNode } from '../nodes/select-wo';
+import { FetchWorkOrdersNode } from '../nodes/fetch-work-orders';
+import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
+import { AcceptWorkOrderNode } from '../nodes/accept-wo';
+import { UpdateMemoryNode } from '../nodes/update-memory';
 import { initBrain } from '../../agent-brain';
+import type { WorkOrder } from '../../work-order-agent';
 
-describe('LangGraph Nodes', () => {
+function makeState(overrides: Partial<AgentState> = {}): AgentState {
+  return {
+    availableWorkOrders: [],
+    selectedWorkOrder: null,
+    economicEvaluation: null,
+    executionResult: null,
+    researchResult: null,
+    qualityScore: 0,
+    shouldSubmit: false,
+    submitted: false,
+    accepted: false,
+    brain: initBrain(),
+    iteration: 1,
+    config: {
+      coordinatorUrl: 'http://localhost:3701',
+      peerId: 'peer1',
+      capabilities: ['llm'],
+      llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
+      intervalMs: 5000,
+    },
+    coordinatorUrl: 'http://localhost:3701',
+    peerId: 'peer1',
+    capabilities: ['llm'],
+    ...overrides,
+  };
+}
+
+const RESEARCH_WO: WorkOrder = {
+  id: 'wo_1',
+  title: 'BRCA1 Breast Cancer Risk',
+  description: JSON.stringify({ title: 'BRCA1 Study', abstract: 'BRCA1 variants increase breast cancer risk.' }),
+  type: 'RESEARCH',
+  requiredCapabilities: ['llm'],
+  rewardAmount: '1000000000',
+  status: 'PENDING',
+  creatorAddress: 'creator1',
+  createdAt: Date.now(),
+};
+
+describe('SelectWorkOrderNode', () => {
+  const node = new SelectWorkOrderNode();
+
+  it('returns first available WO', () => {
+    const result = node.execute(makeState({ availableWorkOrders: [RESEARCH_WO] }));
+    expect(result.selectedWorkOrder?.id).toBe('wo_1');
+  });
+
+  it('returns null when no WOs', () => {
+    const result = node.execute(makeState({ availableWorkOrders: [] }));
+    expect(result.selectedWorkOrder).toBeNull();
+  });
+});
+
+describe('FetchWorkOrdersNode', () => {
+  let node: FetchWorkOrdersNode;
+
   beforeEach(() => {
     jest.resetAllMocks();
-    resetWorkOrderFilters();
+    node = new FetchWorkOrdersNode();
+    node.reset();
   });
 
-  describe('selectBestWorkOrder', () => {
-    it('should select first available work order', () => {
-      const mockWorkOrder: WorkOrder = {
-        id: 'wo_1',
-        title: 'Test Research',
-        description: '{"title":"Test","abstract":"Test abstract"}',
-        type: 'RESEARCH',
-        requiredCapabilities: ['llm'],
-        rewardAmount: '1000000000',
-        status: 'PENDING',
-        creatorAddress: 'creator1',
-        createdAt: Date.now(),
-      };
-
-      const state: AgentState = {
-        availableWorkOrders: [mockWorkOrder],
-        selectedWorkOrder: null,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = selectBestWorkOrder(state);
-
-      expect(result.selectedWorkOrder).toEqual(mockWorkOrder);
-      expect(result.selectedWorkOrder?.id).toBe('wo_1');
-    });
-
-    it('should return null when no work orders available', () => {
-      const state: AgentState = {
-        availableWorkOrders: [],
-        selectedWorkOrder: null,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = selectBestWorkOrder(state);
-
-      expect(result.selectedWorkOrder).toBeNull();
-    });
+  it('returns empty array when coordinator returns empty', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [] });
+    const result = await node.execute(makeState());
+    expect(result.availableWorkOrders).toEqual([]);
   });
 
-  describe('fetchWorkOrders', () => {
-    it('should return empty array when coordinator returns empty', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      });
-
-      const state: AgentState = {
-        availableWorkOrders: [],
-        selectedWorkOrder: null,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = await fetchWorkOrders(state);
-
-      expect(result.availableWorkOrders).toEqual([]);
-    });
-
-    it('should return work orders from coordinator', async () => {
-      const mockWorkOrders: WorkOrder[] = [
-        {
-          id: 'wo_1',
-          title: 'Research Task',
-          description: '{"title":"Test","abstract":"Test abstract"}',
-          type: 'RESEARCH',
-          requiredCapabilities: ['llm'],
-          rewardAmount: '1000000000',
-          status: 'PENDING',
-          creatorAddress: 'creator1',
-          createdAt: Date.now(),
-        },
-      ];
-
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockWorkOrders,
-      });
-
-      const state: AgentState = {
-        availableWorkOrders: [],
-        selectedWorkOrder: null,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = await fetchWorkOrders(state);
-
-      expect(result.availableWorkOrders).toHaveLength(1);
-      expect(result.availableWorkOrders?.[0].id).toBe('wo_1');
-    });
+  it('returns work orders from coordinator', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [RESEARCH_WO] });
+    const result = await node.execute(makeState());
+    expect(result.availableWorkOrders).toHaveLength(1);
   });
 
-  describe('evaluateEconomics', () => {
-    it('should evaluate work order economics', () => {
-      const mockWorkOrder: WorkOrder = {
-        id: 'wo_1',
-        title: 'Test Research',
-        description: '{"title":"Test","abstract":"This is a test abstract for evaluating economics"}',
-        type: 'RESEARCH',
-        requiredCapabilities: ['llm'],
-        rewardAmount: '1000000000', // 1 SYN
-        status: 'PENDING',
-        creatorAddress: 'creator1',
-        createdAt: Date.now(),
-      };
-
-      const state: AgentState = {
-        availableWorkOrders: [mockWorkOrder],
-        selectedWorkOrder: mockWorkOrder,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {
-          coordinatorUrl: 'http://localhost:3001',
-          peerId: 'peer1',
-          capabilities: ['llm'],
-          llmModel: { provider: 'ollama', modelId: 'qwen2.5:0.5b' },
-          llmConfig: undefined,
-        } as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = evaluateEconomics(state);
-
-      expect(result.economicEvaluation).not.toBeNull();
-      expect(result.economicEvaluation?.shouldAccept).toBe(true); // Ollama = $0 cost = always accept
-    });
+  it('filters completed non-research WOs', async () => {
+    const trainingWO: WorkOrder = {
+      ...RESEARCH_WO,
+      id: 'wo_training',
+      type: 'TRAINING',
+      description: JSON.stringify({ domain: 'medical', datasetId: 'test', currentBestLoss: 0.5, maxTrainSeconds: 60 }),
+    };
+    node.markCompleted(trainingWO);
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [trainingWO] });
+    const result = await node.execute(makeState());
+    expect(result.availableWorkOrders).toEqual([]);
   });
 
-  describe('acceptWorkOrderNode', () => {
-    it('should accept work order successfully', async () => {
-      const mockWorkOrder: WorkOrder = {
-        id: 'wo_1',
-        title: 'Test Task',
-        description: 'Test description',
-        type: 'TRAINING',
-        requiredCapabilities: ['llm'],
-        rewardAmount: '1000000000',
-        status: 'PENDING',
-        creatorAddress: 'creator1',
-        createdAt: Date.now(),
-      };
+  it('applies research cooldown', async () => {
+    node.setResearchCooldown(RESEARCH_WO.id);
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [RESEARCH_WO] });
+    const result = await node.execute(makeState());
+    expect(result.availableWorkOrders).toEqual([]);
+  });
+});
 
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-      });
+describe('EvaluateEconomicsNode', () => {
+  const node = new EvaluateEconomicsNode();
 
-      const state: AgentState = {
-        availableWorkOrders: [mockWorkOrder],
-        selectedWorkOrder: mockWorkOrder,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = await acceptWorkOrderNode(state);
-
-      expect(result.accepted).toBe(true);
-    });
-
-    it('should return false when accept fails', async () => {
-      const mockWorkOrder: WorkOrder = {
-        id: 'wo_1',
-        title: 'Test Task',
-        description: 'Test description',
-        type: 'TRAINING',
-        requiredCapabilities: ['llm'],
-        rewardAmount: '1000000000',
-        status: 'PENDING',
-        creatorAddress: 'creator1',
-        createdAt: Date.now(),
-      };
-
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        text: async () => 'Failed to accept',
-      });
-
-      const state: AgentState = {
-        availableWorkOrders: [mockWorkOrder],
-        selectedWorkOrder: mockWorkOrder,
-        economicEvaluation: null,
-        executionResult: null,
-        researchResult: null,
-        qualityScore: 0,
-        shouldSubmit: false,
-        submitted: false,
-        accepted: false,
-        brain: initBrain(),
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
-
-      const result = await acceptWorkOrderNode(state);
-
-      expect(result.accepted).toBe(false);
-    });
+  it('returns null evaluation when no WO selected', () => {
+    const result = node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.economicEvaluation).toBeNull();
   });
 
-  describe('updateMemory', () => {
-    it('should update brain with research result', () => {
-      const mockWorkOrder: WorkOrder = {
-        id: 'wo_1',
-        title: 'Test Research',
-        description: '{"title":"Test","abstract":"Test abstract"}',
-        type: 'RESEARCH',
-        requiredCapabilities: ['llm'],
-        rewardAmount: '1000000000',
-        status: 'PENDING',
-        creatorAddress: 'creator1',
-        createdAt: Date.now(),
-      };
+  it('evaluates WO with ollama model (always accept)', () => {
+    const result = node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
+    expect(result.economicEvaluation).not.toBeNull();
+    expect(result.economicEvaluation?.shouldAccept).toBe(true);
+  });
+});
 
-      const mockResearchResult = {
-        summary: 'Test summary',
-        keyInsights: ['insight1', 'insight2'],
-        proposal: 'Test proposal',
-      };
+describe('AcceptWorkOrderNode', () => {
+  const node = new AcceptWorkOrderNode();
 
-      const brain = initBrain();
-      const initialMemoryCount = brain.memory.length;
+  beforeEach(() => jest.resetAllMocks());
 
-      const state: AgentState = {
-        availableWorkOrders: [mockWorkOrder],
-        selectedWorkOrder: mockWorkOrder,
-        economicEvaluation: null,
-        executionResult: { result: 'success', success: true },
-        researchResult: mockResearchResult,
-        qualityScore: 5,
-        shouldSubmit: true,
-        submitted: false,
-        accepted: false,
-        brain,
-        iteration: 1,
-        config: {} as AgentState['config'],
-        coordinatorUrl: 'http://localhost:3001',
-        peerId: 'peer1',
-        capabilities: ['llm'],
-      };
+  it('accepts work order successfully', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: true });
+    const result = await node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
+    expect(result.accepted).toBe(true);
+  });
 
-      const result = updateMemory(state);
+  it('returns false when coordinator rejects', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: false, text: async () => 'error' });
+    const result = await node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
+    expect(result.accepted).toBe(false);
+  });
 
-      // Brain should have been updated (memory entries added)
-      expect(result.brain).toBeDefined();
-    });
+  it('returns false when no work order', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.accepted).toBe(false);
+  });
+});
+
+describe('UpdateMemoryNode', () => {
+  const node = new UpdateMemoryNode();
+
+  it('returns brain unchanged when no research result', () => {
+    const brain = initBrain();
+    const result = node.execute(makeState({ brain, selectedWorkOrder: null }));
+    expect(result.brain).toBeDefined();
   });
 });

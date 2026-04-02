@@ -7,8 +7,11 @@ import { RoundListenerHelper } from './round-listener';
 import { AgentBrainService } from './services/agent-brain.service';
 import { AgentLoopService } from './services/agent-loop.service';
 import { WorkOrderAgentService } from './services/work-order-agent.service';
+import { LangGraphWorkOrderAgentService } from './services/langgraph-work-order-agent.service';
+import { LanggraphModule } from './langgraph/langgraph.module';
 
 @Module({
+  imports: [LanggraphModule],
   providers: [
     AgentBrainHelper,
     AgentLoopHelper,
@@ -18,7 +21,14 @@ import { WorkOrderAgentService } from './services/work-order-agent.service';
     AgentBrainService,
     AgentLoopService,
     WorkOrderAgentService,
+    LangGraphWorkOrderAgentService,
   ],
-  exports: [AgentBrainService, AgentLoopService, WorkOrderAgentService, RoundListenerHelper],
+  exports: [
+    AgentBrainService,
+    AgentLoopService,
+    WorkOrderAgentService,
+    LangGraphWorkOrderAgentService,
+    RoundListenerHelper,
+  ],
 })
 export class AgentModule {}

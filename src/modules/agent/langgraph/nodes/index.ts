@@ -1,16 +1,11 @@
-/**
- * LangGraph Nodes Index
- * Sprint A - LangGraph Foundation
- */
-
-export { fetchWorkOrders } from './fetch-work-orders';
-export { selectBestWorkOrder } from './select-wo';
-export { evaluateEconomics } from './evaluate-economics';
-export { acceptWorkOrderNode } from './accept-wo';
-export { executeResearch } from './execute-research';
-export { executeTraining } from './execute-training';
-export { executeInference } from './execute-inference';
-export { executeDiloco } from './execute-diloco';
-export { qualityGate } from './quality-gate';
-export { submitResult } from './submit-result';
-export { updateMemory } from './update-memory';
+export { FetchWorkOrdersNode } from './fetch-work-orders';
+export { SelectWorkOrderNode } from './select-wo';
+export { EvaluateEconomicsNode } from './evaluate-economics';
+export { AcceptWorkOrderNode } from './accept-wo';
+export { ExecuteResearchNode } from './execute-research';
+export { ExecuteTrainingNode } from './execute-training';
+export { ExecuteInferenceNode } from './execute-inference';
+export { ExecuteDilocoNode } from './execute-diloco';
+export { QualityGateNode } from './quality-gate';
+export { SubmitResultNode } from './submit-result';
+export { UpdateMemoryNode } from './update-memory';
