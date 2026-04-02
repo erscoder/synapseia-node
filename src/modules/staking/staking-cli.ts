@@ -12,15 +12,31 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
 
-// IDs from .env
-if (!process.env.STAKING_PROGRAM_ID) throw new Error('STAKING_PROGRAM_ID not informed');
-const STAKING_PROGRAM_ID = new PublicKey(process.env.STAKING_PROGRAM_ID);
-if (!process.env.SYN_TOKEN_MINT) throw new Error('SYN_TOKEN_MINT not informed');
-const SYN_MINT = new PublicKey(process.env.SYN_TOKEN_MINT);
-if (!process.env.SOLANA_RPC_URL) throw new Error('SOLANA_RPC_URL not informed');
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
+// IDs from .env — resolved lazily to avoid top-level throw when env is not set
+function requireEnvPublicKey(key: string): PublicKey {
+  const val = process.env[key];
+  if (!val) throw new Error(`${key} not informed`);
+  return new PublicKey(val);
+}
+function requireEnv(key: string, fallback?: string): string {
+  const val = process.env[key];
+  if (!val && fallback === undefined) throw new Error(`${key} not informed`);
+  return val ?? fallback!;
+}
+
+const getStakingProgramId = () => requireEnvPublicKey('STAKING_PROGRAM_ID');
+const getSynMint = () => requireEnvPublicKey('SYN_TOKEN_MINT');
+const getSolanaRpcUrl = () => requireEnv('SOLANA_RPC_URL');
 const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+// Aliases resolved on first use (inside functions, never at module load time)
+let _STAKING_PROGRAM_ID: PublicKey | null = null;
+let _SYN_MINT: PublicKey | null = null;
+let _SOLANA_RPC_URL: string | null = null;
+const STAKING_PROGRAM_ID = new Proxy({} as PublicKey, { get: (_t, prop) => ((_STAKING_PROGRAM_ID ??= getStakingProgramId()) as any)[prop] });
+const SYN_MINT = new Proxy({} as PublicKey, { get: (_t, prop) => ((_SYN_MINT ??= getSynMint()) as any)[prop] });
+const SOLANA_RPC_URL_GETTER = () => (_SOLANA_RPC_URL ??= getSolanaRpcUrl());
 
 // Derive vault authority PDA
 function getVaultAuthorityPDA(): [PublicKey, number] {
@@ -153,7 +169,7 @@ function createClaimRewardsInstructionData(): Buffer {
 export async function stakeTokens(amount: number): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -233,7 +249,7 @@ export async function stakeTokens(amount: number): Promise<string> {
 export async function unstakeTokens(amount: number): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -283,7 +299,7 @@ export async function unstakeTokens(amount: number): Promise<string> {
 export async function claimStakingRewards(): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -345,7 +361,7 @@ export async function claimStakingRewards(): Promise<string> {
 export async function depositSol(amount: number): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -373,7 +389,7 @@ export async function depositSol(amount: number): Promise<string> {
 export async function depositSyn(amount: number): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -397,7 +413,7 @@ export async function depositSyn(amount: number): Promise<string> {
 export async function withdrawSol(amount: number, destinationAddress: string): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -437,7 +453,7 @@ export async function withdrawSol(amount: number, destinationAddress: string): P
 export async function withdrawSyn(amount: number, destinationAddress: string): Promise<string> {
   logger.log(`\n🔄 Connecting to Solana...`);
   
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   const wallet = await loadWalletWithPassword();
   
   logger.log(`✅ Connected. Wallet: ${wallet.publicKey.toBase58()}`);
@@ -493,7 +509,7 @@ export async function getStakeInfo(): Promise<{
   lockedUntil: number;
 } | null> {
   const wallet = await loadWalletWithPassword();
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   
   const stakeAccountAddress = await findStakeAccount(connection, wallet.publicKey);
   
@@ -545,7 +561,7 @@ export async function getWalletBalance(): Promise<{
   syn: number;
 }> {
   const wallet = await loadWalletWithPassword();
-  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+  const connection = new Connection(SOLANA_RPC_URL_GETTER(), 'confirmed');
   
   const solBalance = await connection.getBalance(wallet.publicKey);
   const sol = solBalance / 1_000_000_000;
