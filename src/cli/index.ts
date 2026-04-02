@@ -1,6 +1,23 @@
 #!/usr/bin/env node
 // Load .env before anything else — must be first import
-import 'dotenv/config';
+// Search order: cwd, ~/.synapseia, package directory
+import { config as dotenvConfig } from 'dotenv';
+import { existsSync as dotenvExists } from 'fs';
+import { join as dotenvJoin, dirname as dotenvDirname } from 'path';
+import { fileURLToPath as dotenvFileUrlToPath } from 'url';
+import { homedir as dotenvHomedir } from 'os';
+
+(function loadDotEnv() {
+  const candidates = [
+    dotenvJoin(process.cwd(), '.env'),
+    dotenvJoin(dotenvHomedir(), '.synapseia', '.env'),
+    dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '.env'),
+    dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '..', '.env'),
+  ];
+  for (const f of candidates) {
+    if (dotenvExists(f)) { dotenvConfig({ path: f }); break; }
+  }
+})();
 import logger from '../utils/logger';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
