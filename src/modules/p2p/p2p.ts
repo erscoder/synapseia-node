@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createLibp2p } from 'libp2p';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 import { tcp } from '@libp2p/tcp';
 import { noise } from '@libp2p/noise';
 import { yamux } from '@libp2p/yamux';
@@ -10,8 +10,8 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { ping } from '@libp2p/ping';
 import { Injectable } from '@nestjs/common';
-import type { Identity } from '../identity/identity.js';
-import { sign, canonicalPayload } from '../identity/identity.js';
+import type { Identity } from '../identity/identity';
+import { sign, canonicalPayload } from '../identity/identity';
 
 export const TOPICS = {
   HEARTBEAT: '/synapseia/heartbeat/1.0.0',

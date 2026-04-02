@@ -1,6 +1,6 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { proposeMutation, _test } from '../modules/model/mutation-engine.js';
-import type { Experiment } from '../types.js';
+import { proposeMutation, _test } from '../modules/model/mutation-engine';
+import type { Experiment } from '../types';
 
 // NOTE: We test proposeMutation only for the no-experiments path (no LLM call).
 // All LLM-dependent behavior is tested via _test.parseMutationResponse directly,

@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { WorkOrderAgentService } from '../work-order-agent.service.js';
-import { WorkOrderAgentHelper } from '../../work-order-agent.js';
+import { WorkOrderAgentService } from '../work-order-agent.service';
+import { WorkOrderAgentHelper } from '../../work-order-agent';
 
 const mockConfig = {
   coordinatorUrl: 'http://localhost:3001',

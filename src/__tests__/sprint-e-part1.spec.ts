@@ -13,7 +13,7 @@ import {
   type DiLoCoProgressUpdate,
   type SpawnFn,
   type StatFn,
-} from '../modules/model/diloco-trainer.js';
+} from '../modules/model/diloco-trainer';
 
 function makeSpawnMock(lines: string[], exitCode = 0): ReturnType<SpawnFn> {
   const proc = new EventEmitter();
@@ -158,7 +158,7 @@ describe('E2 — runDiLoCoInnerLoop', () => {
 // ======================================================================
 // E7: canDiLoCo
 // ======================================================================
-import { HardwareHelper, canDiLoCo, buildCapabilities, type Hardware } from '../modules/hardware/hardware.js';
+import { HardwareHelper, canDiLoCo, buildCapabilities, type Hardware } from '../modules/hardware/hardware';
 
 const gpuHw: Hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 16, tier: 3, hasOllama: false };
 const cpuHw: Hardware = { cpuCores: 4, ramGb: 16, gpuVramGb: 0, tier: 0, hasOllama: false };

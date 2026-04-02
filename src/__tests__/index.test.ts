@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { type LLMModel, type LLMProvider, type CloudProviderId } from '../modules/llm/llm-provider.js';
+import { type LLMModel, type LLMProvider, type CloudProviderId } from '../modules/llm/llm-provider';
 
 describe('CLI Model Parsing', () => {
   beforeEach(() => {

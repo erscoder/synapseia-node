@@ -14,7 +14,7 @@ import {
   getOrCreateIdentity,
   sign,
   type Identity,
-} from '../modules/identity/identity.js';
+} from '../modules/identity/identity';
 
 describe('identity', () => {
   const testDir = path.join(os.tmpdir(), '.synapse-test-' + Date.now());

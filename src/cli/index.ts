@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Load .env before anything else — must be first import
 import 'dotenv/config';
-import logger from '../utils/logger.js';
+import logger from '../utils/logger';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
@@ -10,21 +10,21 @@ import { join, dirname } from 'path';
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
-import { AppModule } from '../app.module.js';
-import { IdentityService } from '../modules/identity/services/identity.service.js';
-import { HardwareService } from '../modules/hardware/services/hardware.service.js';
-import { NodeConfigService } from '../modules/config/services/node-config.service.js';
-import { WalletService } from '../modules/wallet/services/wallet.service.js';
-import { ModelCatalogService } from '../modules/model/services/model-catalog.service.js';
-import { LlmService } from '../modules/llm/services/llm.service.js';
-import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service.js';
-import { P2pService } from '../modules/p2p/services/p2p.service.js';
-import { startNode } from '../node-runtime.js';
+import { AppModule } from '../app.module';
+import { IdentityService } from '../modules/identity/services/identity.service';
+import { HardwareService } from '../modules/hardware/services/hardware.service';
+import { NodeConfigService } from '../modules/config/services/node-config.service';
+import { WalletService } from '../modules/wallet/services/wallet.service';
+import { ModelCatalogService } from '../modules/model/services/model-catalog.service';
+import { LlmService } from '../modules/llm/services/llm.service';
+import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service';
+import { P2pService } from '../modules/p2p/services/p2p.service';
+import { startNode } from '../node-runtime';
 import { input, select, confirm, password } from '@inquirer/prompts';
-import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance.js';
-import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli.js';
-import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware.js';
-import { CONFIG_FILE } from '../modules/config/config.js';
+import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance';
+import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
+import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
+import { CONFIG_FILE } from '../modules/config/config';
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {

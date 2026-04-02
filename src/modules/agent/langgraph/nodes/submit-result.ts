@@ -5,9 +5,9 @@
  * Sprint A - LangGraph Foundation
  */
 
-import type { AgentState } from '../state.js';
-import { completeWorkOrder, submitResearchResult } from '../../work-order-agent.js';
-import logger from '../../../../utils/logger.js';
+import type { AgentState } from '../state';
+import { completeWorkOrder, submitResearchResult } from '../../work-order-agent';
+import logger from '../../../../utils/logger';
 
 /**
  * Submit the work order result to the coordinator

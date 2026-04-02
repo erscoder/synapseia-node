@@ -27,8 +27,8 @@ import {
   executeTrainingWorkOrder,
   type WorkOrder,
   type TrainingWorkOrderPayload,
-} from '../modules/agent/work-order-agent.js';
-import { HardwareHelper, canTrain, buildCapabilities } from '../modules/hardware/hardware.js';
+} from '../modules/agent/work-order-agent';
+import { HardwareHelper, canTrain, buildCapabilities } from '../modules/hardware/hardware';
 
 // ---------------------------------------------------------------------------
 // Helpers

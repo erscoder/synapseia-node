@@ -10,7 +10,7 @@ import {
   similaritySearch,
   type Document,
   type SimilarityResult,
-} from '../shared/embedding.js';
+} from '../shared/embedding';
 
 // Mock fetch for Ollama API
 global.fetch = jest.fn() as any;

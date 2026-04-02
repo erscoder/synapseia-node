@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { HeartbeatHelper } from '../../heartbeat.js';
-import { HeartbeatService } from '../heartbeat.service.js';
+import { HeartbeatHelper } from '../../heartbeat';
+import { HeartbeatService } from '../heartbeat.service';
 
 const mockIdentity = {
   peerId: 'peer-1',

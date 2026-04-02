@@ -10,8 +10,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import logger from '../../utils/logger.js';
-import { generateLLM, type LLMConfig, type LLMModel } from '../llm/llm-provider.js';
+import logger from '../../utils/logger';
+import { generateLLM, type LLMConfig, type LLMModel } from '../llm/llm-provider';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

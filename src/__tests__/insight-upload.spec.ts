@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { _test } from '../modules/agent/work-order-agent.js';
+import { _test } from '../modules/agent/work-order-agent';
 
 // Mock fetch globally
 global.fetch = jest.fn() as any;

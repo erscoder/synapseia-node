@@ -1,11 +1,11 @@
 import axios from 'axios';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 import { Injectable } from '@nestjs/common';
-import type { Identity } from '../identity/identity.js';
-import type { Hardware } from '../hardware/hardware.js';
-import type { P2PNode } from '../p2p/p2p.js';
-import { isPyTorchAvailable } from '../model/trainer.js';
-import { ModelDiscovery } from '../discovery/model-discovery.js';
+import type { Identity } from '../identity/identity';
+import type { Hardware } from '../hardware/hardware';
+import type { P2PNode } from '../p2p/p2p';
+import { isPyTorchAvailable } from '../model/trainer';
+import { ModelDiscovery } from '../discovery/model-discovery';
 
 /** Cached public IP (refreshed every 30 min) */
 let _cachedPublicIp: string | null = null;

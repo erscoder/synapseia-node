@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { HardwareHelper } from '../../hardware.js';
-import { HardwareService } from '../hardware.service.js';
+import { HardwareHelper } from '../../hardware';
+import { HardwareService } from '../hardware.service';
 
 const mockHardware = {
   arch: 'arm64' as const,

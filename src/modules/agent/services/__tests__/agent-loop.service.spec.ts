@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { AgentLoopService } from '../agent-loop.service.js';
-import { AgentLoopHelper } from '../../agent-loop.js';
+import { AgentLoopService } from '../agent-loop.service';
+import { AgentLoopHelper } from '../../agent-loop';
 
 const mockConfig = {
   coordinatorUrl: 'http://localhost:3001',

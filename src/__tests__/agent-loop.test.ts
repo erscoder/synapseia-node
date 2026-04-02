@@ -28,7 +28,7 @@ import {
   startAgentLoop, stopAgentLoop, getAgentLoopState, resetAgentLoopState,
   fetchTopExperiments, createExperiment, updateExperiment, postToFeed,
   runAgentIteration, type AgentLoopConfig,
-} from '../modules/agent/agent-loop.js';
+} from '../modules/agent/agent-loop';
 
 // Untyped mock for fetch
 const mockFetch: any = jest.fn();

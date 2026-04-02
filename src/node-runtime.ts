@@ -9,11 +9,11 @@
  * for config/wallet purposes. That's the CLI's job.
  */
 
-import type { Identity } from './modules/identity/identity.js';
-import logger from './utils/logger.js';
-import type { LLMModel, LLMConfig } from './modules/llm/llm-provider.js';
-import { P2PNode } from './modules/p2p/p2p.js';
-import { HeartbeatHelper } from './modules/heartbeat/heartbeat.js';
+import type { Identity } from './modules/identity/identity';
+import logger from './utils/logger';
+import type { LLMModel, LLMConfig } from './modules/llm/llm-provider';
+import { P2PNode } from './modules/p2p/p2p';
+import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
 
 export interface NodeRuntimeConfig {
   /** Resolved peer identity (peerId, publicKey, privateKey) */

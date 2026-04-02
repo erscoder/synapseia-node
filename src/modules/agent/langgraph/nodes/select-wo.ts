@@ -5,8 +5,8 @@
  * Sprint A - LangGraph Foundation
  */
 
-import type { AgentState } from '../state.js';
-import logger from '../../../../utils/logger.js';
+import type { AgentState } from '../state';
+import logger from '../../../../utils/logger';
 
 /**
  * Select the best work order from available work orders

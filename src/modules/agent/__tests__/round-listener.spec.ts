@@ -13,7 +13,7 @@
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import type { LLMReviewConfig } from '../review-agent.js';
+import type { LLMReviewConfig } from '../review-agent';
 
 // ─── Mock review-agent ────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,7 +38,7 @@ jest.mock('../review-agent.js', () => ({
  */
 
 // Re-export for use in tests
-import { startRoundListener } from '../round-listener.js';
+import { startRoundListener } from '../round-listener';
 
 describe('round-listener LLMConfig passthrough', () => {
   const COORDINATOR_URL = 'http://localhost:3701';

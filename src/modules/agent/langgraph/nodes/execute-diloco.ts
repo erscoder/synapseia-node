@@ -4,9 +4,9 @@
  * Sprint A - LangGraph Foundation
  */
 
-import type { AgentState } from '../state.js';
-import { executeDiLoCoWorkOrder } from '../../work-order-agent.js';
-import logger from '../../../../utils/logger.js';
+import type { AgentState } from '../state';
+import { executeDiLoCoWorkOrder } from '../../work-order-agent';
+import logger from '../../../../utils/logger';
 
 /**
  * Execute a DiLoCo training work order

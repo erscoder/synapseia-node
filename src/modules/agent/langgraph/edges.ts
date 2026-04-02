@@ -5,7 +5,7 @@
  * Defines the routing logic between nodes based on state
  */
 
-import type { AgentState } from './state.js';
+import type { AgentState } from './state';
 
 /**
  * Edge: hasWorkOrders

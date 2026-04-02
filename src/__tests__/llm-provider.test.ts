@@ -30,7 +30,7 @@ jest.mock('../modules/llm/ollama.js', () => {
 // Mock fetch for cloud APIs
 global.fetch = jest.fn() as any;
 
-import { OllamaHelper } from '../modules/llm/ollama.js';
+import { OllamaHelper } from '../modules/llm/ollama';
 
 describe('LLM Provider Abstraction', () => {
   const ollamaModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };

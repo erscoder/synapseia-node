@@ -5,11 +5,11 @@
  * Sprint A - LangGraph Foundation
  */
 
-import type { AgentState } from '../state.js';
-import { saveResearchToBrain as saveResearchToBrainLegacy, isResearchWorkOrder } from '../../work-order-agent.js';
-import { saveBrainToDisk } from '../../agent-brain.js';
-import logger from '../../../../utils/logger.js';
-import type { AgentBrain } from '../../agent-brain.js';
+import type { AgentState } from '../state';
+import { saveResearchToBrain as saveResearchToBrainLegacy, isResearchWorkOrder } from '../../work-order-agent';
+import { saveBrainToDisk } from '../../agent-brain';
+import logger from '../../../../utils/logger';
+import type { AgentBrain } from '../../agent-brain';
 
 /**
  * Update the agent's brain with the work order result

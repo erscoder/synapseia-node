@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { OllamaHelper, GenerateOptions } from './ollama.js';
+import { OllamaHelper, GenerateOptions } from './ollama';
 
 // Module-level helper instance for functional-style consumers
 const _ollamaHelper = new OllamaHelper();

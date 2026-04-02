@@ -6,7 +6,7 @@ import {
   FULL_CATALOG,
   type ModelInfo,
   type ModelCategory,
-} from '../model-catalog.js';
+} from '../model-catalog';
 
 @Injectable()
 export class ModelCatalogService {

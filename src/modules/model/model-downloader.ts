@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 
 /** Base directory for locally cached models */
 export function getModelCacheDir(homeDir?: string): string {

@@ -22,7 +22,7 @@ jest.mock('../modules/hardware/hardware.js', () => ({
 }));
 
 import { Ollama } from 'ollama';
-import { HardwareHelper } from '../modules/hardware/hardware.js';
+import { HardwareHelper } from '../modules/hardware/hardware';
 
 const mockOllama = Ollama as jest.MockedClass<typeof Ollama>;
 let helper: OllamaHelper;

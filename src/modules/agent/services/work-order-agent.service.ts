@@ -7,11 +7,11 @@ import {
   type ResearchResult,
   type EconomicConfig,
   type WorkOrderEvaluation,
-} from '../work-order-agent.js';
-import { LangGraphWorkOrderAgentService } from './langgraph-work-order-agent.service.js';
-import { isLangGraphMode } from '../../config/config.js';
-import type { AgentBrain } from '../agent-brain.js';
-import type { LLMModel, LLMConfig } from '../../llm/llm-provider.js';
+} from '../work-order-agent';
+import { LangGraphWorkOrderAgentService } from './langgraph-work-order-agent.service';
+import { isLangGraphMode } from '../../config/config';
+import type { AgentBrain } from '../agent-brain';
+import type { LLMModel, LLMConfig } from '../../llm/llm-provider';
 
 @Injectable()
 export class WorkOrderAgentService {

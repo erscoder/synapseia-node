@@ -99,6 +99,12 @@
       "type": "discovery",
       "content": "Research: Test summary",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775149613322,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
     }
   ],
   "journal": [
@@ -194,6 +200,12 @@
     },
     {
       "timestamp": 1775147048257,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775149613322,
       "action": "research:wo_1",
       "outcome": "completed",
       "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"

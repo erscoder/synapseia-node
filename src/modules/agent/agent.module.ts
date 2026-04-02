@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { AgentBrainHelper } from './agent-brain.js';
-import { AgentLoopHelper } from './agent-loop.js';
-import { WorkOrderAgentHelper } from './work-order-agent.js';
-import { ReviewAgentHelper } from './review-agent.js';
-import { RoundListenerHelper } from './round-listener.js';
-import { AgentBrainService } from './services/agent-brain.service.js';
-import { AgentLoopService } from './services/agent-loop.service.js';
-import { WorkOrderAgentService } from './services/work-order-agent.service.js';
+import { AgentBrainHelper } from './agent-brain';
+import { AgentLoopHelper } from './agent-loop';
+import { WorkOrderAgentHelper } from './work-order-agent';
+import { ReviewAgentHelper } from './review-agent';
+import { RoundListenerHelper } from './round-listener';
+import { AgentBrainService } from './services/agent-brain.service';
+import { AgentLoopService } from './services/agent-loop.service';
+import { WorkOrderAgentService } from './services/work-order-agent.service';
 
 @Module({
   providers: [

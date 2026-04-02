@@ -10,10 +10,10 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import logger from '../../utils/logger.js';
-import { proposeMutation, type MutationProposal } from '../model/mutation-engine.js';
-import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from '../model/trainer.js';
-import type { Experiment } from '../../types.js';
+import logger from '../../utils/logger';
+import { proposeMutation, type MutationProposal } from '../model/mutation-engine';
+import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from '../model/trainer';
+import type { Experiment } from '../../types';
 
 export interface AgentLoopConfig {
   coordinatorUrl: string;

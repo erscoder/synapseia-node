@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { HeartbeatHelper } from './heartbeat.js';
-import { HeartbeatService } from './services/heartbeat.service.js';
+import { HeartbeatHelper } from './heartbeat';
+import { HeartbeatService } from './services/heartbeat.service';
 
 @Module({
   providers: [HeartbeatHelper, HeartbeatService],

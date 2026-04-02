@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   IdentityHelper,
   type Identity,
-} from '../identity.js';
+} from '../identity';
 
 @Injectable()
 export class IdentityService {

@@ -13,18 +13,18 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import logger from '../../utils/logger.js';
-import { generateLLM, type LLMConfig } from '../llm/llm-provider.js';
-import { parseModel, type LLMModel } from '../llm/llm-provider.js';
-import type { AgentBrain } from './agent-brain.js';
-import { startRoundListener } from './round-listener.js';
-import { saveBrainToDisk } from './agent-brain.js';
-import { EmbeddingHelper } from '../../shared/embedding.js';
-import { trainMicroModel } from '../model/trainer.js';
-import { proposeMutation } from '../model/mutation-engine.js';
-import { runDiLoCoInnerLoop } from '../model/diloco-trainer.js';
-import { downloadAdapter } from '../model/model-downloader.js';
-import type { Experiment } from '../../types.js';
+import logger from '../../utils/logger';
+import { generateLLM, type LLMConfig } from '../llm/llm-provider';
+import { parseModel, type LLMModel } from '../llm/llm-provider';
+import type { AgentBrain } from './agent-brain';
+import { startRoundListener } from './round-listener';
+import { saveBrainToDisk } from './agent-brain';
+import { EmbeddingHelper } from '../../shared/embedding';
+import { trainMicroModel } from '../model/trainer';
+import { proposeMutation } from '../model/mutation-engine';
+import { runDiLoCoInnerLoop } from '../model/diloco-trainer';
+import { downloadAdapter } from '../model/model-downloader';
+import type { Experiment } from '../../types';
 
 /**
  * Parse rewardAmount string to lamports BigInt.

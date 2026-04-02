@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { IdentityHelper } from './identity.js';
-import { IdentityService } from './services/identity.service.js';
+import { IdentityHelper } from './identity';
+import { IdentityService } from './services/identity.service';
 
 @Module({
   providers: [IdentityHelper, IdentityService],
