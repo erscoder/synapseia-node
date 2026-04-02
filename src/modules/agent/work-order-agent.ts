@@ -17,8 +17,8 @@ import logger from '../../utils/logger';
 import { generateLLM, type LLMConfig } from '../llm/llm-provider';
 import { parseModel, type LLMModel } from '../llm/llm-provider';
 import type { AgentBrain } from './agent-brain';
-import { startRoundListener } from './round-listener';
-import { saveBrainToDisk } from './agent-brain';
+import { RoundListenerHelper } from './round-listener';
+import { AgentBrainHelper } from './agent-brain';
 import { EmbeddingHelper } from '../../shared/embedding';
 import { trainMicroModel } from '../model/trainer';
 import { proposeMutation } from '../model/mutation-engine';
@@ -1919,7 +1919,7 @@ export async function runWorkOrderAgentIteration(
     // Save to agent brain if provided
     if (brain && success) {
       saveResearchToBrain(brain, workOrder, researchResult);
-      saveBrainToDisk(brain);
+      agentBrainHelperInstance?.saveBrainToDisk(brain);
       logger.log(' Research saved to agent brain');
     }
 
@@ -2047,7 +2047,7 @@ export async function startWorkOrderAgent(config: WorkOrderAgentConfig): Promise
   // Connect to coordinator WebSocket to receive round.closed notifications
   // Pass LLM config so the peer review loop can be activated when rounds enter evaluating phase
   const peerId = config.peerId ?? 'unknown';
-  startRoundListener(config.coordinatorUrl, peerId, {
+  roundListenerHelperInstance?.startRoundListener(config.coordinatorUrl, peerId, {
     llmModel: config.llmModel,
     llmConfig: config.llmConfig,
   });
@@ -2175,8 +2175,31 @@ export const _test = {
 // Injectable helper class — wraps the standalone functions for NestJS DI
 // ---------------------------------------------------------------------------
 
+// Module-level helper instances — set by constructor, used by standalone functions for backward-compat
+let agentBrainHelperInstance: AgentBrainHelper | undefined;
+let roundListenerHelperInstance: RoundListenerHelper | undefined;
+
 @Injectable()
 export class WorkOrderAgentHelper {
+  private agentState: WorkOrderAgentState = {
+    iteration: 0,
+    totalWorkOrdersCompleted: 0,
+    totalRewardsEarned: 0n,
+    isRunning: false,
+    completedWorkOrderIds: new Set<string>(),
+    researchCooldowns: new Map<string, number>(),
+  };
+  private lastSubmissionAt = 0;
+
+  constructor(
+    private readonly roundListenerHelper: RoundListenerHelper,
+    private readonly agentBrainHelper: AgentBrainHelper,
+  ) {
+    // Set module-level instances so standalone functions can use them
+    agentBrainHelperInstance = this.agentBrainHelper;
+    roundListenerHelperInstance = this.roundListenerHelper;
+  }
+
   startWorkOrderAgent(config: WorkOrderAgentConfig): Promise<void> {
     return startWorkOrderAgent(config);
   }

@@ -12,7 +12,7 @@
 import { Injectable } from '@nestjs/common';
 import logger from '../../utils/logger';
 import { proposeMutation, type MutationProposal } from '../model/mutation-engine';
-import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingResult } from '../model/trainer';
+import { trainMicroModel, validateTrainingConfig, type TrainingResult } from '../model/trainer';
 import type { Experiment } from '../../types';
 
 export interface AgentLoopConfig {
@@ -39,348 +39,238 @@ export interface AgentLoopState {
   isRunning: boolean;
 }
 
-// Global state for the agent loop
-let loopState: AgentLoopState = {
-  iteration: 0,
-  bestLoss: Infinity,
-  totalExperiments: 0,
-  isRunning: false,
-};
+// Standalone function exports for backward-compat — delegates to singleton AgentLoopHelper instance
+// NOTE: This must be declared BEFORE @Injectable decorator on the class below,
+// so TypeScript doesn't treat it as a decorator target.
+let agentLoopHelperInstance: AgentLoopHelper;
 
-/**
- * Get current agent loop state
- */
-export function getAgentLoopState(): AgentLoopState {
-  return { ...loopState };
+function getAgentLoopHelper(): AgentLoopHelper {
+  if (!agentLoopHelperInstance) agentLoopHelperInstance = new AgentLoopHelper();
+  return agentLoopHelperInstance;
 }
 
-/**
- * Reset agent loop state
- */
-export function resetAgentLoopState(): void {
-  loopState = {
-    iteration: 0,
-    bestLoss: Infinity,
-    totalExperiments: 0,
-    isRunning: false,
-  };
+export function startAgentLoop(config: AgentLoopConfig): Promise<void> {
+  return getAgentLoopHelper().startAgentLoop(config);
 }
-
-/**
- * Fetch top experiments from coordinator
- */
-export async function fetchTopExperiments(
-  coordinatorUrl: string,
-  limit: number = 5
-): Promise<Experiment[]> {
-  try {
-    const response = await fetch(`${coordinatorUrl}/experiments?limit=${limit}&status=completed`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch experiments: ${response.statusText}`);
-    }
-    
-    const data = await response.json() as { experiments: Experiment[] };
-    
-    // Sort by valLoss (lower is better)
-    return (data.experiments || [])
-      .filter((exp: Experiment) => exp.valLoss !== null && exp.valLoss !== undefined)
-      .sort((a: Experiment, b: Experiment) => (a.valLoss ?? Infinity) - (b.valLoss ?? Infinity))
-      .slice(0, limit);
-  } catch (error) {
-    logger.warn('Failed to fetch experiments:', (error as Error).message);
-    return [];
-  }
+export function stopAgentLoop(): void { getAgentLoopHelper().stopAgentLoop(); }
+export function getAgentLoopState(): AgentLoopState { return getAgentLoopHelper().getAgentLoopState(); }
+export function resetAgentLoopState(): void { getAgentLoopHelper().resetAgentLoopState(); }
+export function fetchTopExperiments(coordinatorUrl: string, limit = 5) {
+  return getAgentLoopHelper().fetchTopExperiments(coordinatorUrl, limit);
 }
-
-/**
- * Create experiment in coordinator
- */
 export async function createExperiment(
   coordinatorUrl: string,
   proposal: MutationProposal,
   peerId: string,
-  tier: number
+  tier: number,
 ): Promise<string> {
-  try {
-    const response = await fetch(`${coordinatorUrl}/experiments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'micro-transformer-120k',
-        hyperparams: proposal.hyperparams,
-        tier,
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to create experiment: ${response.statusText}`);
-    }
-    
-    const data = await response.json() as { experiment: { id: string } };
-    return data.experiment.id;
-  } catch (error) {
-    throw new Error(`Failed to create experiment: ${(error as Error).message}`);
-  }
+  return getAgentLoopHelper().createExperiment(coordinatorUrl, proposal, peerId, tier);
 }
-
-/**
- * Update experiment with training results
- */
 export async function updateExperiment(
   coordinatorUrl: string,
   experimentId: string,
-  result: TrainingResult
+  result: TrainingResult,
 ): Promise<void> {
-  try {
-    const response = await fetch(`${coordinatorUrl}/experiments/${experimentId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: 'completed',
-        progress: 100,
-        valLoss: result.valLoss,
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to update experiment: ${response.statusText}`);
-    }
-  } catch (error) {
-    logger.error('Failed to update experiment:', (error as Error).message);
-    throw error;
-  }
+  return getAgentLoopHelper().updateExperiment(coordinatorUrl, experimentId, result);
 }
-
-/**
- * Post discovery to feed
- */
 export async function postToFeed(
   coordinatorUrl: string,
   peerId: string,
   mutation: MutationProposal,
   result: TrainingResult,
-  improved: boolean
+  improved: boolean,
 ): Promise<void> {
-  try {
-    // Note: Feed endpoint needs to be implemented in coordinator
-    // This is a placeholder for the feed integration
-    logger.log(`[FEED] ${improved ? '🎉 IMPROVEMENT' : '📝 Result'}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
-  } catch (error) {
-    logger.warn('Failed to post to feed:', (error as Error).message);
-  }
+  return getAgentLoopHelper().postToFeed(coordinatorUrl, peerId, mutation, result, improved);
 }
-
-/**
- * Run single iteration of the agent loop
- */
-export async function runAgentIteration(
-  config: AgentLoopConfig,
-  iteration: number
-): Promise<AgentIterationResult> {
-  const { coordinatorUrl, peerId, capabilities, datasetPath } = config;
-  
-  logger.log(`\n🔄 Iteration ${iteration} starting...`);
-  
-  // 1. Fetch top experiments
-  logger.log('📥 Fetching top experiments...');
-  const topExperiments = await fetchTopExperiments(coordinatorUrl);
-  logger.log(`   Found ${topExperiments.length} experiments`);
-  
-  // Update best loss
-  if (topExperiments.length > 0 && topExperiments[0].valLoss) {
-    loopState.bestLoss = Math.min(loopState.bestLoss, topExperiments[0].valLoss);
-  }
-  logger.log(`   Best loss so far: ${loopState.bestLoss.toFixed(4)}`);
-  
-  // 2. Propose mutation
-  logger.log('🧠 Proposing mutation via LLM...');
-  const mutation = await proposeMutation(topExperiments, loopState.bestLoss, capabilities);
-  logger.log(`   Type: ${mutation.type}`);
-  logger.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
-  
-  // Validate configuration
-  const validation = validateTrainingConfig(mutation);
-  if (!validation.valid) {
-    throw new Error(`Invalid training config: ${validation.error}`);
-  }
-  
-  // 3. Create experiment in coordinator
-  logger.log('📝 Creating experiment...');
-  const tier = capabilities.includes('gpu') ? 2 : 0;
-  const experimentId = await createExperiment(coordinatorUrl, mutation, peerId, tier);
-  logger.log(`   Experiment ID: ${experimentId}`);
-  
-  // 4. Train micro-model
-  logger.log('🚀 Training micro-model...');
-  const hardware = capabilities.includes('gpu') ? 'gpu' : 'cpu';
-  const trainingResult = await trainMicroModel({
-    proposal: mutation,
-    datasetPath,
-    hardware,
-    runNumber: iteration,
-  });
-  
-  logger.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
-  logger.log(`   Duration: ${trainingResult.durationMs}ms`);
-  logger.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
-  
-  // 5. Update experiment with results
-  logger.log('💾 Updating experiment...');
-  await updateExperiment(coordinatorUrl, experimentId, trainingResult);
-  
-  // 6. Check if improved
-  const improved = trainingResult.valLoss < loopState.bestLoss;
-  if (improved) {
-    loopState.bestLoss = trainingResult.valLoss;
-    logger.log(`🎉 New best loss: ${loopState.bestLoss.toFixed(4)}!`);
-  }
-  
-  // 7. Post to feed
-  await postToFeed(coordinatorUrl, peerId, mutation, trainingResult, improved);
-  
-  loopState.iteration = iteration;
-  loopState.totalExperiments++;
-  
-  return {
-    iteration,
-    mutation,
-    trainingResult,
-    experimentId,
-    improved,
-  };
+export function runAgentIteration(config: AgentLoopConfig, iteration: number) {
+  return getAgentLoopHelper().runAgentIteration(config, iteration);
 }
-
-/**
- * Start the autonomous agent loop
- */
-export async function startAgentLoop(config: AgentLoopConfig): Promise<void> {
-  if (loopState.isRunning) {
-    throw new Error('Agent loop is already running');
-  }
-  
-  loopState.isRunning = true;
-  const { intervalMs, maxIterations } = config;
-  
-  logger.log('🚀 Starting SynapseIA Agent Loop');
-  logger.log(`   Coordinator: ${config.coordinatorUrl}`);
-  logger.log(`   Peer ID: ${config.peerId}`);
-  logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
-  logger.log(`   Interval: ${intervalMs}ms`);
-  if (maxIterations) {
-    logger.log(`   Max iterations: ${maxIterations}`);
-  }
-  logger.log('');
-  
-  try {
-    let iteration = 1;
-    
-    while (loopState.isRunning) {
-      // Check max iterations
-      if (maxIterations && iteration > maxIterations) {
-        logger.log(`\n✅ Reached max iterations (${maxIterations}), stopping.`);
-        break;
-      }
-      
-      try {
-        await runAgentIteration(config, iteration);
-      } catch (error) {
-        logger.error(`❌ Iteration ${iteration} failed:`, (error as Error).message);
-      }
-      
-      // Sleep before next iteration
-      if (loopState.isRunning) {
-        logger.log(`⏳ Sleeping for ${intervalMs}ms...`);
-        await sleep(intervalMs);
-      }
-      
-      iteration++;
-    }
-  } finally {
-    loopState.isRunning = false;
-    logger.log('\n🛑 Agent loop stopped');
-  }
-}
-
-/**
- * Stop the agent loop
- */
-export function stopAgentLoop(): void {
-  loopState.isRunning = false;
-  logger.log('🛑 Stopping agent loop...');
-}
-
-/**
- * Sleep utility
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Export for testing
-export const _test = {
-  fetchTopExperiments,
-  createExperiment,
-  updateExperiment,
-  postToFeed,
-  runAgentIteration,
-  sleep,
-};
-
-// ---------------------------------------------------------------------------
-// Injectable helper class — wraps the standalone functions for NestJS DI
-// ---------------------------------------------------------------------------
 
 @Injectable()
 export class AgentLoopHelper {
-  startAgentLoop(config: AgentLoopConfig): Promise<void> {
-    return startAgentLoop(config);
-  }
-
-  stopAgentLoop(): void {
-    return stopAgentLoop();
-  }
-
-  runAgentIteration(config: AgentLoopConfig, iteration: number): Promise<AgentIterationResult> {
-    return runAgentIteration(config, iteration);
-  }
+  private state: AgentLoopState = {
+    iteration: 0,
+    bestLoss: Infinity,
+    totalExperiments: 0,
+    isRunning: false,
+  };
 
   getAgentLoopState(): AgentLoopState {
-    return getAgentLoopState();
+    return { ...this.state };
   }
 
   resetAgentLoopState(): void {
-    return resetAgentLoopState();
+    this.state = {
+      iteration: 0,
+      bestLoss: Infinity,
+      totalExperiments: 0,
+      isRunning: false,
+    };
   }
 
-  fetchTopExperiments(coordinatorUrl: string, limit?: number): Promise<import('../../types.js').Experiment[]> {
-    return fetchTopExperiments(coordinatorUrl, limit);
+  async fetchTopExperiments(coordinatorUrl: string, limit = 5): Promise<Experiment[]> {
+    try {
+      const response = await fetch(`${coordinatorUrl}/experiments?limit=${limit}&status=completed`);
+      if (!response.ok) throw new Error(`Failed to fetch experiments: ${response.statusText}`);
+      const data = await response.json() as { experiments: Experiment[] };
+      return (data.experiments || [])
+        .filter((exp: Experiment) => exp.valLoss !== null && exp.valLoss !== undefined)
+        .sort((a: Experiment, b: Experiment) => (a.valLoss ?? Infinity) - (b.valLoss ?? Infinity))
+        .slice(0, limit);
+    } catch (error) {
+      logger.warn('Failed to fetch experiments:', (error as Error).message);
+      return [];
+    }
   }
 
-  createExperiment(
+  async createExperiment(
     coordinatorUrl: string,
     proposal: MutationProposal,
     peerId: string,
     tier: number,
   ): Promise<string> {
-    return createExperiment(coordinatorUrl, proposal, peerId, tier);
+    try {
+      const response = await fetch(`${coordinatorUrl}/experiments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'micro-transformer-120k', hyperparams: proposal.hyperparams, tier }),
+      });
+      if (!response.ok) throw new Error(`Failed to create experiment: ${response.statusText}`);
+      const data = await response.json() as { experiment: { id: string } };
+      return data.experiment.id;
+    } catch (error) {
+      throw new Error(`Failed to create experiment: ${(error as Error).message}`);
+    }
   }
 
-  updateExperiment(
+  async updateExperiment(
     coordinatorUrl: string,
     experimentId: string,
-    result: import('../model/trainer.js').TrainingResult,
+    result: TrainingResult,
   ): Promise<void> {
-    return updateExperiment(coordinatorUrl, experimentId, result);
+    try {
+      const response = await fetch(`${coordinatorUrl}/experiments/${experimentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed', progress: 100, valLoss: result.valLoss }),
+      });
+      if (!response.ok) throw new Error(`Failed to update experiment: ${response.statusText}`);
+    } catch (error) {
+      logger.error('Failed to update experiment:', (error as Error).message);
+      throw error;
+    }
   }
 
-  postToFeed(
+  async postToFeed(
     coordinatorUrl: string,
     peerId: string,
     mutation: MutationProposal,
-    result: import('../model/trainer.js').TrainingResult,
+    result: TrainingResult,
     improved: boolean,
   ): Promise<void> {
-    return postToFeed(coordinatorUrl, peerId, mutation, result, improved);
+    logger.log(`[FEED] ${improved ? '🎉 IMPROVEMENT' : '📝 Result'}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
+  }
+
+  async runAgentIteration(config: AgentLoopConfig, iteration: number): Promise<AgentIterationResult> {
+    const { coordinatorUrl, peerId, capabilities, datasetPath } = config;
+
+    logger.log(`\n🔄 Iteration ${iteration} starting...`);
+
+    logger.log('📥 Fetching top experiments...');
+    const topExperiments = await this.fetchTopExperiments(coordinatorUrl);
+    logger.log(`   Found ${topExperiments.length} experiments`);
+
+    if (topExperiments.length > 0 && topExperiments[0].valLoss) {
+      this.state.bestLoss = Math.min(this.state.bestLoss, topExperiments[0].valLoss);
+    }
+    logger.log(`   Best loss so far: ${this.state.bestLoss.toFixed(4)}`);
+
+    logger.log('🧠 Proposing mutation via LLM...');
+    const mutation = await proposeMutation(topExperiments, this.state.bestLoss, capabilities);
+    logger.log(`   Type: ${mutation.type}`);
+    logger.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
+
+    const validation = validateTrainingConfig(mutation);
+    if (!validation.valid) throw new Error(`Invalid training config: ${validation.error}`);
+
+    logger.log('📝 Creating experiment...');
+    const tier = capabilities.includes('gpu') ? 2 : 0;
+    const experimentId = await this.createExperiment(coordinatorUrl, mutation, peerId, tier);
+    logger.log(`   Experiment ID: ${experimentId}`);
+
+    logger.log('🚀 Training micro-model...');
+    const hardware = capabilities.includes('gpu') ? 'gpu' : 'cpu';
+    const trainingResult = await trainMicroModel({
+      proposal: mutation,
+      datasetPath,
+      hardware,
+      runNumber: iteration,
+    });
+
+    logger.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
+    logger.log(`   Duration: ${trainingResult.durationMs}ms`);
+    logger.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
+
+    logger.log('💾 Updating experiment...');
+    await this.updateExperiment(coordinatorUrl, experimentId, trainingResult);
+
+    const improved = trainingResult.valLoss < this.state.bestLoss;
+    if (improved) {
+      this.state.bestLoss = trainingResult.valLoss;
+      logger.log(`🎉 New best loss: ${this.state.bestLoss.toFixed(4)}!`);
+    }
+
+    await this.postToFeed(coordinatorUrl, peerId, mutation, trainingResult, improved);
+
+    this.state.iteration = iteration;
+    this.state.totalExperiments++;
+
+    return { iteration, mutation, trainingResult, experimentId, improved };
+  }
+
+  async startAgentLoop(config: AgentLoopConfig): Promise<void> {
+    if (this.state.isRunning) throw new Error('Agent loop is already running');
+
+    this.state.isRunning = true;
+    const { intervalMs, maxIterations } = config;
+
+    logger.log('🚀 Starting SynapseIA Agent Loop');
+    logger.log(`   Coordinator: ${config.coordinatorUrl}`);
+    logger.log(`   Peer ID: ${config.peerId}`);
+    logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
+    logger.log(`   Interval: ${intervalMs}ms`);
+    if (maxIterations) logger.log(`   Max iterations: ${maxIterations}`);
+
+    try {
+      let iteration = 1;
+      while (this.state.isRunning) {
+        if (maxIterations && iteration > maxIterations) {
+          logger.log(`\n✅ Reached max iterations (${maxIterations}), stopping.`);
+          break;
+        }
+        try {
+          await this.runAgentIteration(config, iteration);
+        } catch (error) {
+          logger.error(`❌ Iteration ${iteration} failed:`, (error as Error).message);
+        }
+        if (this.state.isRunning) {
+          logger.log(`⏳ Sleeping for ${intervalMs}ms...`);
+          await this.sleep(intervalMs);
+        }
+        iteration++;
+      }
+    } finally {
+      this.state.isRunning = false;
+      logger.log('\n🛑 Agent loop stopped');
+    }
+  }
+
+  stopAgentLoop(): void {
+    this.state.isRunning = false;
+    logger.log('🛑 Stopping agent loop...');
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
