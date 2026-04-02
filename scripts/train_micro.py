@@ -318,9 +318,28 @@ def main():
     seq_length = 128
     train_dataset = TextDataset(train_text, tokenizer, seq_length)
     val_dataset = TextDataset(val_text, tokenizer, seq_length)
-    
+
+    # Guard: dataset must have enough samples to train
+    MIN_SAMPLES = 2
+    if len(train_dataset) < MIN_SAMPLES:
+        # Corpus too short — fall back to built-in astrophysics sample
+        print(json.dumps({
+            "warning": f"Corpus too short ({len(text)} chars, need >={seq_length + 1} chars). Using built-in sample data."
+        }), flush=True)
+        from pathlib import Path as _Path
+        try:
+            _Path(data_path).unlink(missing_ok=True)  # remove the bad file so next call re-downloads
+        except Exception:
+            pass
+        fallback_text = load_data('/nonexistent')  # triggers the built-in sample
+        train_text_fb, val_text_fb = split_data(fallback_text)
+        tokenizer = CharTokenizer(fallback_text)
+        vocab_size = tokenizer.vocab_size
+        train_dataset = TextDataset(train_text_fb, tokenizer, seq_length)
+        val_dataset = TextDataset(val_text_fb, tokenizer, seq_length)
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
     # Create model
     model = MicroTransformer(
