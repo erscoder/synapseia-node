@@ -6,6 +6,13 @@
 
 import { jest } from '@jest/globals';
 
+// Mock trainer to avoid import.meta issues (pre-existing in trainer.ts)
+jest.mock('../../../../modules/model/trainer.js', () => ({
+  trainMicroModel: jest.fn(),
+  validateTrainingConfig: jest.fn(() => ({ valid: true })),
+  calculateImprovement: jest.fn(() => 0),
+}));
+
 // Mock fetch globally
 global.fetch = jest.fn() as unknown as typeof fetch;
 
@@ -16,8 +23,8 @@ import { fetchWorkOrders, resetWorkOrderFilters } from '../nodes/fetch-work-orde
 import { evaluateEconomics } from '../nodes/evaluate-economics.js';
 import { acceptWorkOrderNode } from '../nodes/accept-wo.js';
 import { updateMemory } from '../nodes/update-memory.js';
-import type { WorkOrder, WorkOrderEvaluation } from '../work-order-agent.js';
-import { initBrain } from '../agent-brain.js';
+import type { WorkOrder, WorkOrderEvaluation } from '../../work-order-agent.js';
+import { initBrain } from '../../agent-brain.js';
 
 describe('LangGraph Nodes', () => {
   beforeEach(() => {
@@ -90,7 +97,7 @@ describe('LangGraph Nodes', () => {
 
   describe('fetchWorkOrders', () => {
     it('should return empty array when coordinator returns empty', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => [],
       });
@@ -133,7 +140,7 @@ describe('LangGraph Nodes', () => {
         },
       ];
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => mockWorkOrders,
       });
@@ -222,7 +229,7 @@ describe('LangGraph Nodes', () => {
         createdAt: Date.now(),
       };
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
       });
 
@@ -262,7 +269,7 @@ describe('LangGraph Nodes', () => {
         createdAt: Date.now(),
       };
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: false,
         text: async () => 'Failed to accept',
       });

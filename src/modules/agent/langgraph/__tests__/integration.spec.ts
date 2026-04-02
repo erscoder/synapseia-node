@@ -6,6 +6,13 @@
 
 import { jest } from '@jest/globals';
 
+// Mock trainer to avoid import.meta issues (pre-existing in trainer.ts)
+jest.mock('../../../../modules/model/trainer.js', () => ({
+  trainMicroModel: jest.fn(),
+  validateTrainingConfig: jest.fn(() => ({ valid: true })),
+  calculateImprovement: jest.fn(() => 0),
+}));
+
 // Mock fetch globally
 global.fetch = jest.fn() as unknown as typeof fetch;
 
@@ -37,7 +44,7 @@ describe('LangGraph Agent Integration', () => {
       ];
 
       let callCount = 0;
-      (fetch as jest.Mock).mockImplementation(async (url: string) => {
+      (fetch as any).mockImplementation(async (url: string) => {
         callCount++;
         
         // Fetch available work orders
@@ -142,7 +149,7 @@ describe('LangGraph Agent Integration', () => {
 
     it('should handle empty work order list gracefully', async () => {
       // Mock empty response
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => [],
       });

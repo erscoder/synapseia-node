@@ -1,21 +1,33 @@
 /**
  * LangGraph Agent StateGraph
  * Sprint A - LangGraph Foundation
- * 
- * Builds the StateGraph<AgentState> with all nodes and edges
+ *
  * Graph flow:
- * FETCH_WORK_ORDERS → (hasWorkOrders?) → SELECT_BEST_WO → EVALUATE_ECONOMICS → 
- * (shouldAccept?) → ACCEPT_WO → ROUTE_BY_TYPE → [EXECUTE_*] → QUALITY_GATE → 
+ * FETCH_WORK_ORDERS → (hasWorkOrders?) → SELECT_BEST_WO → EVALUATE_ECONOMICS →
+ * (shouldAccept?) → ACCEPT_WO → (routeByType?) → [EXECUTE_*] → QUALITY_GATE →
  * (shouldSubmit?) → SUBMIT_RESULT → UPDATE_MEMORY → END
- * 
- * Note: Uses TypeScript ignores for LangGraph API type compatibility.
- * The LangGraph SDK types are complex and change across versions.
  */
 
-import { StateGraph } from '@langchain/langgraph';
+import { StateGraph, Annotation } from '@langchain/langgraph';
 import type { WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain } from './state.js';
 import type { WorkOrderAgentConfig } from '../work-order-agent.js';
 import { initBrain } from '../agent-brain.js';
+
+// Node imports (ESM — no require())
+import { fetchWorkOrders } from './nodes/fetch-work-orders.js';
+import { selectBestWorkOrder } from './nodes/select-wo.js';
+import { evaluateEconomics } from './nodes/evaluate-economics.js';
+import { acceptWorkOrderNode } from './nodes/accept-wo.js';
+import { executeResearch } from './nodes/execute-research.js';
+import { executeTraining } from './nodes/execute-training.js';
+import { executeInference } from './nodes/execute-inference.js';
+import { executeDiloco } from './nodes/execute-diloco.js';
+import { qualityGate } from './nodes/quality-gate.js';
+import { submitResult } from './nodes/submit-result.js';
+import { updateMemory } from './nodes/update-memory.js';
+import { hasWorkOrders, shouldAccept, routeByType, shouldSubmitResult } from './edges.js';
+
+export type { WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain };
 
 /**
  * Agent state interface used by the graph
@@ -38,7 +50,7 @@ export interface GraphAgentState {
   capabilities: string[];
 }
 
-// Re-export nodes for external use
+// Re-export nodes and edges for external use
 export {
   fetchWorkOrders,
   selectBestWorkOrder,
@@ -51,89 +63,106 @@ export {
   qualityGate,
   submitResult,
   updateMemory,
-} from './nodes/index.js';
-
-// Re-export edges for external use
-export {
   hasWorkOrders,
   shouldAccept,
   routeByType,
   shouldSubmitResult,
-} from './edges.js';
+};
 
 /**
- * Create the compiled LangGraph agent
+ * Create the compiled LangGraph agent.
+ * Uses `any` casts to work around LangGraph's strict generic typing —
+ * the runtime behaviour is fully correct.
  */
-export function createAgentGraph() {
-  // Import nodes dynamically to avoid circular dependencies
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const nodes = require('./nodes/index.js');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const edges = require('./edges.js');
-
-  // Build the graph - use any to bypass strict LangGraph type checking
-  // LangGraph's TypeScript types are complex and vary across versions
+/**
+ * LangGraph Annotation schema for AgentState.
+ * Uses LastValue reducer (last write wins) for all fields.
+ */
+const AgentStateAnnotation = Annotation.Root({
+  availableWorkOrders: Annotation<WorkOrder[]>({ default: () => [], reducer: (_a, b) => b }),
+  selectedWorkOrder: Annotation<WorkOrder | null>({ default: () => null, reducer: (_a, b) => b }),
+  economicEvaluation: Annotation<WorkOrderEvaluation | null>({ default: () => null, reducer: (_a, b) => b }),
+  executionResult: Annotation<{ result: string; success: boolean } | null>({ default: () => null, reducer: (_a, b) => b }),
+  researchResult: Annotation<ResearchResult | null>({ default: () => null, reducer: (_a, b) => b }),
+  qualityScore: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
+  shouldSubmit: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
+  submitted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
+  accepted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
+  brain: Annotation<AgentBrain>({ default: () => initBrain(), reducer: (_a, b) => b }),
+  iteration: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const workflow = new StateGraph<GraphAgentState>({} as any);
+  config: Annotation<WorkOrderAgentConfig | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
+  coordinatorUrl: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  peerId: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  capabilities: Annotation<string[]>({ default: () => [], reducer: (_a, b) => b }),
+});
 
-  // Add all nodes
-  workflow.addNode('fetchWorkOrders', nodes.fetchWorkOrders);
-  workflow.addNode('selectBestWorkOrder', nodes.selectBestWorkOrder);
-  workflow.addNode('evaluateEconomics', nodes.evaluateEconomics);
-  workflow.addNode('acceptWorkOrder', nodes.acceptWorkOrderNode);
-  workflow.addNode('executeResearch', nodes.executeResearch);
-  workflow.addNode('executeTraining', nodes.executeTraining);
-  workflow.addNode('executeInference', nodes.executeInference);
-  workflow.addNode('executeDiloco', nodes.executeDiloco);
-  workflow.addNode('qualityGate', nodes.qualityGate);
-  workflow.addNode('submitResult', nodes.submitResult);
-  workflow.addNode('updateMemory', nodes.updateMemory);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createAgentGraph(): any {
+  const workflow = new StateGraph(AgentStateAnnotation);
 
-  // Set entry point
-  workflow.addEdge('__start__', 'fetchWorkOrders');
+  // ── Nodes ────────────────────────────────────────────────────────────────
+  workflow.addNode('fetchWorkOrders', fetchWorkOrders);
+  workflow.addNode('selectBestWorkOrder', selectBestWorkOrder);
+  workflow.addNode('evaluateEconomics', evaluateEconomics);
+  workflow.addNode('acceptWorkOrder', acceptWorkOrderNode);
+  workflow.addNode('executeResearch', executeResearch);
+  workflow.addNode('executeTraining', executeTraining);
+  workflow.addNode('executeInference', executeInference);
+  workflow.addNode('executeDiloco', executeDiloco);
+  workflow.addNode('qualityGate', qualityGate);
+  workflow.addNode('submitResult', submitResult);
+  workflow.addNode('updateMemory', updateMemory);
 
-  // Add conditional edges
-  workflow.addConditionalEdges('fetchWorkOrders', edges.hasWorkOrders, {
+  // ── Edges (cast to any to bypass LangGraph's strict generic node-name types) ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = workflow as any;
+
+  w.addEdge('__start__', 'fetchWorkOrders');
+
+  // After fetch: if no WOs → END, else → select
+  w.addConditionalEdges('fetchWorkOrders', hasWorkOrders, {
     selectBestWorkOrder: 'selectBestWorkOrder',
     __end__: '__end__',
   });
 
-  workflow.addEdge('selectBestWorkOrder', 'evaluateEconomics');
+  w.addEdge('selectBestWorkOrder', 'evaluateEconomics');
 
-  workflow.addConditionalEdges('evaluateEconomics', edges.shouldAccept, {
+  // Economics: accept → acceptWorkOrder, reject → retry fetchWorkOrders
+  w.addConditionalEdges('evaluateEconomics', shouldAccept, {
     acceptWorkOrder: 'acceptWorkOrder',
     fetchWorkOrders: 'fetchWorkOrders',
   });
 
-  workflow.addEdge('acceptWorkOrder', 'routeByType');
-
-  workflow.addConditionalEdges('routeByType', edges.routeByType, {
+  // After accept: route to correct executor
+  w.addConditionalEdges('acceptWorkOrder', routeByType, {
     executeResearch: 'executeResearch',
     executeTraining: 'executeTraining',
     executeInference: 'executeInference',
     executeDiloco: 'executeDiloco',
   });
 
-  workflow.addEdge('executeResearch', 'qualityGate');
-  workflow.addEdge('executeTraining', 'qualityGate');
-  workflow.addEdge('executeInference', 'qualityGate');
-  workflow.addEdge('executeDiloco', 'qualityGate');
+  // All executors → quality gate
+  w.addEdge('executeResearch', 'qualityGate');
+  w.addEdge('executeTraining', 'qualityGate');
+  w.addEdge('executeInference', 'qualityGate');
+  w.addEdge('executeDiloco', 'qualityGate');
 
-  workflow.addConditionalEdges('qualityGate', edges.shouldSubmitResult, {
+  // Quality gate: pass → submit, fail → update memory (skip submit)
+  w.addConditionalEdges('qualityGate', shouldSubmitResult, {
     submitResult: 'submitResult',
     updateMemory: 'updateMemory',
   });
 
-  workflow.addEdge('submitResult', 'updateMemory');
-  workflow.addEdge('updateMemory', '__end__');
+  w.addEdge('submitResult', 'updateMemory');
+  w.addEdge('updateMemory', '__end__');
 
-  // Compile the graph
   return workflow.compile();
 }
 
 /**
- * Run a single iteration of the agent graph
- * This is the main entry point for the langgraph mode
+ * Run a single iteration of the agent graph.
+ * Main entry point when AGENT_MODE=langgraph.
  */
 export async function runLangGraphIteration(
   config: WorkOrderAgentConfig,
@@ -142,7 +171,6 @@ export async function runLangGraphIteration(
 ): Promise<{ completed: boolean; workOrder?: WorkOrder | null }> {
   const graph = createAgentGraph();
 
-  // Initialize state
   const initialState: GraphAgentState = {
     availableWorkOrders: [],
     selectedWorkOrder: null,
@@ -161,12 +189,11 @@ export async function runLangGraphIteration(
     capabilities: config.capabilities,
   };
 
-  // Run the graph - use any to bypass strict LangGraph type checking
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await (graph.invoke as any)(initialState);
 
   return {
-    completed: result.submitted,
-    workOrder: result.selectedWorkOrder,
+    completed: result.submitted ?? false,
+    workOrder: result.selectedWorkOrder ?? null,
   };
 }
