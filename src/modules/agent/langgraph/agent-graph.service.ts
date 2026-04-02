@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { StateGraph, Annotation } from '@langchain/langgraph';
 import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain, MemoryEntry, ExecutionStep } from './state';
 import type { WorkOrderAgentConfig } from '../work-order-agent';
-import { initBrain } from '../agent-brain';
+import { AgentBrainHelper } from '../agent-brain';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';
 import { EvaluateEconomicsNode } from './nodes/evaluate-economics';
@@ -35,7 +35,7 @@ const AgentStateAnnotation = Annotation.Root({
   submitted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   accepted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  brain: Annotation<AgentBrain>({ default: () => initBrain(), reducer: (_a: any, b: any) => b }),
+  brain: Annotation<AgentBrain>({ default: () => new AgentBrainHelper().initBrain(), reducer: (_a: any, b: any) => b }),
   iteration: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Annotation<WorkOrderAgentConfig | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
@@ -70,6 +70,7 @@ export class AgentGraphService {
     private readonly retrieveMemoryNode: RetrieveMemoryNode,
     private readonly planExecutionNode: PlanExecutionNode,
     private readonly selfCritiqueNode: SelfCritiqueNode,
+    private readonly agentBrainHelper: AgentBrainHelper,
   ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -185,7 +186,7 @@ export class AgentGraphService {
       shouldSubmit: false,
       submitted: false,
       accepted: false,
-      brain: brain ?? initBrain(),
+      brain: brain ?? this.agentBrainHelper.initBrain(),
       iteration,
       config,
       coordinatorUrl: config.coordinatorUrl,

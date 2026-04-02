@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AgentGraphService } from '../langgraph/agent-graph.service';
-import { initBrain } from '../agent-brain';
+import { AgentBrainHelper } from '../agent-brain';
 import type { AgentBrain } from '../agent-brain';
 import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order-agent';
 import logger from '../../../utils/logger';
@@ -20,8 +20,11 @@ export class LangGraphWorkOrderAgentService {
   private totalWorkOrdersCompleted = 0;
   private brain: AgentBrain;
 
-  constructor(private readonly agentGraphService: AgentGraphService) {
-    this.brain = initBrain();
+  constructor(
+    private readonly agentGraphService: AgentGraphService,
+    private readonly agentBrainHelper: AgentBrainHelper,
+  ) {
+    this.brain = this.agentBrainHelper.initBrain();
   }
 
   start(config: WorkOrderAgentConfig): Promise<void> {
@@ -53,7 +56,7 @@ export class LangGraphWorkOrderAgentService {
     this.currentWorkOrder = null;
     this.iteration = 0;
     this.totalWorkOrdersCompleted = 0;
-    this.brain = initBrain();
+    this.brain = this.agentBrainHelper.initBrain();
   }
 
   async runIteration(
