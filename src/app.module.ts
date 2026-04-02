@@ -10,6 +10,7 @@ import { StakingModule } from './modules/staking/staking.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { InferenceModule } from './modules/inference/inference.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { A2AModule } from './modules/a2a/a2a.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AgentModule } from './modules/agent/agent.module';
     WalletModule,
     InferenceModule,
     AgentModule,
+    A2AModule,
   ],
 })
 export class AppModule {}
