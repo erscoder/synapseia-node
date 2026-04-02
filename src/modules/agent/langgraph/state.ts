@@ -11,6 +11,25 @@ import type { WorkOrder, ResearchResult, WorkOrderEvaluation } from '../work-ord
 export type { WorkOrder, ResearchResult, WorkOrderEvaluation, AgentBrain };
 
 /**
+ * Execution step for multi-step planning (Sprint B)
+ */
+export interface ExecutionStep {
+  id: string;
+  action: 'fetch_context' | 'analyze_paper' | 'cross_reference' | 'generate_hypothesis' | 'peer_review_prep';
+  description: string;
+}
+
+/**
+ * Memory entry from agent brain (re-export for state usage)
+ */
+export interface MemoryEntry {
+  timestamp: number;
+  type: 'experiment' | 'discovery' | 'failure';
+  content: string;
+  importance: number;
+}
+
+/**
  * AgentState - The complete state for the LangGraph agent
  * This represents all the data that flows through the graph
  */
@@ -56,6 +75,22 @@ export interface AgentState {
   peerId: string;
   /** This node's capabilities */
   capabilities: string[];
+
+  // Sprint B - Planning + Self-Critique
+  /** Relevant memories retrieved for the current work order */
+  relevantMemories?: MemoryEntry[];
+  /** Multi-step execution plan for research work orders */
+  executionPlan?: ExecutionStep[];
+  /** Current step index in the execution plan */
+  currentStepIndex?: number;
+  /** Self-critique score (0-10 average) */
+  selfCritiqueScore?: number;
+  /** Whether self-critique passed (avg >= 7.0) */
+  selfCritiquePassed?: boolean;
+  /** Feedback from self-critique for improvement */
+  selfCritiqueFeedback?: string;
+  /** Number of retries attempted */
+  retryCount?: number;
 }
 
 /**
@@ -90,5 +125,13 @@ export function createInitialAgentState(config: WorkOrderAgentConfig): AgentStat
     coordinatorUrl: config.coordinatorUrl,
     peerId: config.peerId,
     capabilities: config.capabilities,
+    // Sprint B - Planning + Self-Critique
+    relevantMemories: [],
+    executionPlan: [],
+    currentStepIndex: 0,
+    selfCritiqueScore: 0,
+    selfCritiquePassed: false,
+    selfCritiqueFeedback: '',
+    retryCount: 0,
   };
 }

@@ -25,6 +25,9 @@ import { ExecuteDilocoNode } from '../nodes/execute-diloco';
 import { QualityGateNode } from '../nodes/quality-gate';
 import { SubmitResultNode } from '../nodes/submit-result';
 import { UpdateMemoryNode } from '../nodes/update-memory';
+import { RetrieveMemoryNode } from '../nodes/retrieve-memory';
+import { PlanExecutionNode } from '../nodes/plan-execution';
+import { SelfCritiqueNode } from '../nodes/self-critique';
 import type { WorkOrderAgentConfig } from '../../work-order-agent';
 
 const TEST_CONFIG: WorkOrderAgentConfig = {
@@ -34,6 +37,8 @@ const TEST_CONFIG: WorkOrderAgentConfig = {
   llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
   intervalMs: 5000,
 };
+
+const mockLlmService = { generate: (jest.fn() as any).mockResolvedValue('[]') };
 
 function buildService(): AgentGraphService {
   return new AgentGraphService(
@@ -48,6 +53,9 @@ function buildService(): AgentGraphService {
     new QualityGateNode(),
     new SubmitResultNode(),
     new UpdateMemoryNode(),
+    new RetrieveMemoryNode(),
+    new PlanExecutionNode(mockLlmService as any),
+    new SelfCritiqueNode(mockLlmService as any),
   );
 }
 

@@ -9,3 +9,7 @@ export { ExecuteDilocoNode } from './execute-diloco';
 export { QualityGateNode } from './quality-gate';
 export { SubmitResultNode } from './submit-result';
 export { UpdateMemoryNode } from './update-memory';
+// Sprint B - Planning + Self-Critique
+export { RetrieveMemoryNode } from './retrieve-memory';
+export { PlanExecutionNode } from './plan-execution';
+export { SelfCritiqueNode } from './self-critique';

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { StateGraph, Annotation } from '@langchain/langgraph';
-import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain } from './state';
+import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain, MemoryEntry, ExecutionStep } from './state';
 import type { WorkOrderAgentConfig } from '../work-order-agent';
 import { initBrain } from '../agent-brain';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
@@ -14,6 +14,10 @@ import { ExecuteDilocoNode } from './nodes/execute-diloco';
 import { QualityGateNode } from './nodes/quality-gate';
 import { SubmitResultNode } from './nodes/submit-result';
 import { UpdateMemoryNode } from './nodes/update-memory';
+// Sprint B - Planning + Self-Critique
+import { RetrieveMemoryNode } from './nodes/retrieve-memory';
+import { PlanExecutionNode } from './nodes/plan-execution';
+import { SelfCritiqueNode } from './nodes/self-critique';
 import logger from '../../../utils/logger';
 
 /**
@@ -38,6 +42,14 @@ const AgentStateAnnotation = Annotation.Root({
   coordinatorUrl: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   peerId: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   capabilities: Annotation<string[]>({ default: () => [], reducer: (_a, b) => b }),
+  // Sprint B fields
+  relevantMemories: Annotation<MemoryEntry[]>({ default: () => [], reducer: (_a, b) => b }),
+  executionPlan: Annotation<ExecutionStep[]>({ default: () => [], reducer: (_a, b) => b }),
+  currentStepIndex: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
+  selfCritiqueScore: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
+  selfCritiquePassed: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
+  selfCritiqueFeedback: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  retryCount: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
 });
 
 @Injectable()
@@ -54,6 +66,10 @@ export class AgentGraphService {
     private readonly qualityGateNode: QualityGateNode,
     private readonly submitResultNode: SubmitResultNode,
     private readonly updateMemoryNode: UpdateMemoryNode,
+    // Sprint B nodes
+    private readonly retrieveMemoryNode: RetrieveMemoryNode,
+    private readonly planExecutionNode: PlanExecutionNode,
+    private readonly selfCritiqueNode: SelfCritiqueNode,
   ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,6 +83,11 @@ export class AgentGraphService {
     workflow.addNode('selectBestWorkOrder', (s: AgentState) => this.selectWorkOrderNode.execute(s));
     workflow.addNode('evaluateEconomics', (s: AgentState) => this.evaluateEconomicsNode.execute(s));
     workflow.addNode('acceptWorkOrder', (s: AgentState) => this.acceptWorkOrderNode.execute(s));
+    // Sprint B nodes
+    workflow.addNode('retrieveMemory', (s: AgentState) => this.retrieveMemoryNode.execute(s));
+    workflow.addNode('planExecution', (s: AgentState) => this.planExecutionNode.execute(s));
+    workflow.addNode('selfCritique', (s: AgentState) => this.selfCritiqueNode.execute(s));
+    // Execution nodes
     workflow.addNode('executeResearch', (s: AgentState) => this.executeResearchNode.execute(s));
     workflow.addNode('executeTraining', (s: AgentState) => this.executeTrainingNode.execute(s));
     workflow.addNode('executeInference', (s: AgentState) => this.executeInferenceNode.execute(s));
@@ -90,9 +111,15 @@ export class AgentGraphService {
       { acceptWorkOrder: 'acceptWorkOrder', fetchWorkOrders: 'fetchWorkOrders' },
     );
 
-    w.addConditionalEdges('acceptWorkOrder',
+    // After accepting, retrieve memories (Sprint B)
+    w.addEdge('acceptWorkOrder', 'retrieveMemory');
+
+    // After memory retrieval, plan execution for research WOs
+    w.addEdge('retrieveMemory', 'planExecution');
+
+    // After planning, route to appropriate executor based on WO type
+    w.addConditionalEdges('planExecution',
       (s: AgentState) => {
-        if (!s.accepted) return 'fetchWorkOrders';
         switch (s.selectedWorkOrder?.type) {
           case 'RESEARCH':       return 'executeResearch';
           case 'TRAINING':       return 'executeTraining';
@@ -102,7 +129,6 @@ export class AgentGraphService {
         }
       },
       {
-        fetchWorkOrders: 'fetchWorkOrders',
         executeResearch: 'executeResearch',
         executeTraining: 'executeTraining',
         executeInference: 'executeInference',
@@ -110,10 +136,26 @@ export class AgentGraphService {
       },
     );
 
-    w.addEdge('executeResearch',  'qualityGate');
-    w.addEdge('executeTraining',  'qualityGate');
+    // After execution, self-critique for research WOs (Sprint B)
+    w.addEdge('executeResearch', 'selfCritique');
+    w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
-    w.addEdge('executeDiloco',    'qualityGate');
+    w.addEdge('executeDiloco', 'qualityGate');
+
+    // After self-critique, decide whether to retry or proceed to quality gate
+    w.addConditionalEdges('selfCritique',
+      (s: AgentState) => {
+        // Only retry for research WOs that failed critique and haven't exceeded max retries
+        if (s.selectedWorkOrder?.type === 'RESEARCH' && !s.selfCritiquePassed && (s.retryCount || 0) < 2) {
+          return 'executeResearch'; // Retry - go back to execution
+        }
+        return 'qualityGate';
+      },
+      {
+        executeResearch: 'executeResearch',
+        qualityGate: 'qualityGate',
+      },
+    );
 
     w.addConditionalEdges('qualityGate',
       (s: AgentState) => s.shouldSubmit ? 'submitResult' : 'updateMemory',
@@ -149,6 +191,14 @@ export class AgentGraphService {
       coordinatorUrl: config.coordinatorUrl,
       peerId: config.peerId,
       capabilities: config.capabilities,
+      // Sprint B initial state
+      relevantMemories: [],
+      executionPlan: [],
+      currentStepIndex: 0,
+      selfCritiqueScore: 0,
+      selfCritiquePassed: false,
+      selfCritiqueFeedback: '',
+      retryCount: 0,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

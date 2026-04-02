@@ -10,7 +10,13 @@ import { ExecuteDilocoNode } from './nodes/execute-diloco';
 import { QualityGateNode } from './nodes/quality-gate';
 import { SubmitResultNode } from './nodes/submit-result';
 import { UpdateMemoryNode } from './nodes/update-memory';
+// Sprint B - Planning + Self-Critique
+import { RetrieveMemoryNode } from './nodes/retrieve-memory';
+import { PlanExecutionNode } from './nodes/plan-execution';
+import { SelfCritiqueNode } from './nodes/self-critique';
+import { LangGraphLlmService } from './llm.service';
 import { AgentGraphService } from './agent-graph.service';
+import { LlmProviderHelper } from '../../llm/llm-provider';
 
 const NODES = [
   FetchWorkOrdersNode,
@@ -24,10 +30,19 @@ const NODES = [
   QualityGateNode,
   SubmitResultNode,
   UpdateMemoryNode,
+  // Sprint B
+  RetrieveMemoryNode,
+  PlanExecutionNode,
+  SelfCritiqueNode,
 ];
 
 @Module({
-  providers: [...NODES, AgentGraphService],
-  exports: [AgentGraphService, ...NODES],
+  providers: [
+    ...NODES, 
+    LangGraphLlmService,
+    LlmProviderHelper,
+    AgentGraphService,
+  ],
+  exports: [AgentGraphService, LangGraphLlmService, ...NODES],
 })
 export class LanggraphModule {}
