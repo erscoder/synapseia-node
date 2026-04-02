@@ -258,55 +258,93 @@ async function bootstrap() {
           if (installTorch) {
             const plat = os.platform();
 
-            // Step 1: install python3 if missing
-            if (!hasPython) {
-              logger.log('\n📦 Installing Python 3...');
+            // Required versions
+            const REQUIRED_PYTHON_MINOR = 14;   // Python 3.14.x
+            const TORCH_VERSION = '2.10.0';      // Tested and confirmed working
+
+            // Step 1: install python3 if missing or wrong version
+            const pythonVersionRaw = spawnSync('python3', ['--version'], { stdio: 'pipe' });
+            const pythonVersionStr = (pythonVersionRaw.stdout?.toString() ?? '').trim(); // e.g. "Python 3.14.3"
+            const pythonMinor = parseInt(pythonVersionStr.match(/Python 3\.(\.\d+)/)?.[1] ?? '0', 10);
+            const hasPythonCorrect = hasPython && pythonMinor >= REQUIRED_PYTHON_MINOR;
+
+            if (!hasPythonCorrect) {
+              logger.log(`\n📦 Installing Python 3.${REQUIRED_PYTHON_MINOR}+ (current: ${pythonVersionStr || 'none'})...`);
               try {
                 if (plat === 'darwin') {
-                  // macOS: try brew first, fall back to python.org installer guide
                   const hasBrew = spawnSync('brew', ['--version'], { stdio: 'ignore' }).status === 0;
                   if (hasBrew) {
-                    execSyncFn('brew install python3', { stdio: 'inherit' });
+                    // Install specific minor version via pyenv or brew python@3.14 formula
+                    const hasPyenv = spawnSync('pyenv', ['--version'], { stdio: 'ignore' }).status === 0;
+                    if (hasPyenv) {
+                      execSyncFn(`pyenv install 3.${REQUIRED_PYTHON_MINOR} --skip-existing`, { stdio: 'inherit' });
+                      execSyncFn(`pyenv global 3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
+                    } else {
+                      // brew python@3.14 formula (may not exist yet for very new versions)
+                      try {
+                        execSyncFn(`brew install python@3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
+                        execSyncFn(`brew link --force python@3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
+                      } catch {
+                        // fallback: install latest python3 via brew
+                        execSyncFn('brew install python3', { stdio: 'inherit' });
+                      }
+                    }
                   } else {
-                    logger.warn('⚠️  Homebrew not found. Install Python 3 from https://www.python.org/downloads/');
+                    logger.warn(`⚠️  Homebrew not found. Install Python 3.${REQUIRED_PYTHON_MINOR} from https://www.python.org/downloads/`);
                     logger.warn('   Then re-run syn start to enable Hyperparam Search.');
                     logger.log('   Continuing without Hyperparam Search...\n');
                   }
                 } else if (plat === 'linux') {
-                  // Linux: apt / dnf / pacman
-                  const haApt = spawnSync('apt-get', ['--version'], { stdio: 'ignore' }).status === 0;
+                  const hasApt = spawnSync('apt-get', ['--version'], { stdio: 'ignore' }).status === 0;
                   const hasDnf = spawnSync('dnf', ['--version'], { stdio: 'ignore' }).status === 0;
-                  if (haApt) {
-                    execSyncFn('sudo apt-get install -y python3 python3-pip', { stdio: 'inherit' });
+                  if (hasApt) {
+                    // Ubuntu/Debian: use deadsnakes PPA for specific Python versions
+                    try {
+                      execSyncFn(`sudo add-apt-repository -y ppa:deadsnakes/ppa`, { stdio: 'inherit' });
+                      execSyncFn(`sudo apt-get update`, { stdio: 'inherit' });
+                      execSyncFn(`sudo apt-get install -y python3.${REQUIRED_PYTHON_MINOR} python3.${REQUIRED_PYTHON_MINOR}-venv python3-pip`, { stdio: 'inherit' });
+                      execSyncFn(`sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.${REQUIRED_PYTHON_MINOR} 1`, { stdio: 'inherit' });
+                    } catch {
+                      execSyncFn('sudo apt-get install -y python3 python3-pip', { stdio: 'inherit' });
+                    }
                   } else if (hasDnf) {
-                    execSyncFn('sudo dnf install -y python3 python3-pip', { stdio: 'inherit' });
+                    execSyncFn(`sudo dnf install -y python3.${REQUIRED_PYTHON_MINOR} python3-pip`, { stdio: 'inherit' });
                   } else {
                     execSyncFn('sudo pacman -S --noconfirm python python-pip', { stdio: 'inherit' });
                   }
                 } else {
-                  logger.warn('⚠️  Unsupported OS for auto-install. Install Python 3 manually from https://www.python.org');
+                  logger.warn(`⚠️  Unsupported OS. Install Python 3.${REQUIRED_PYTHON_MINOR} manually: https://www.python.org`);
                   logger.log('   Continuing without Hyperparam Search...\n');
                 }
-                logger.log('✅ Python 3 installed.\n');
+                logger.log(`✅ Python 3.${REQUIRED_PYTHON_MINOR} installed.\n`);
               } catch {
-                logger.warn('⚠️  Python 3 install failed. Install manually: https://www.python.org/downloads/');
+                logger.warn(`⚠️  Python 3.${REQUIRED_PYTHON_MINOR} install failed. Install manually: https://www.python.org/downloads/`);
                 logger.warn('   Continuing without Hyperparam Search.\n');
               }
             }
 
-            // Step 2: install torch (CPU-only wheel, no CUDA, ~200MB)
+            // Step 2: install torch==2.10.0 (CPU-only wheel, no CUDA, ~200MB)
             const pythonNow = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0;
             if (pythonNow) {
-              logger.log('📦 Installing PyTorch (CPU-only, ~200MB)...');
-              try {
-                execSyncFn(
-                  'pip3 install torch --index-url https://download.pytorch.org/whl/cpu',
-                  { stdio: 'inherit' }
-                );
-                logger.log('✅ PyTorch installed! Your node can now run Hyperparam Search.\n');
-              } catch {
-                logger.warn('⚠️  PyTorch install failed. Try manually: pip3 install torch');
-                logger.warn('   Continuing without Hyperparam Search.\n');
+              // Check if correct torch version is already installed
+              const torchCheck = spawnSync(
+                'python3', ['-c', `import torch; assert torch.__version__ == '${TORCH_VERSION}', torch.__version__`],
+                { stdio: 'pipe' }
+              );
+              if (torchCheck.status === 0) {
+                logger.log(`✅ PyTorch ${TORCH_VERSION} already installed.\n`);
+              } else {
+                logger.log(`📦 Installing PyTorch ${TORCH_VERSION} (CPU-only, ~200MB)...`);
+                try {
+                  execSyncFn(
+                    `pip3 install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`,
+                    { stdio: 'inherit' }
+                  );
+                  logger.log(`✅ PyTorch ${TORCH_VERSION} installed! Your node can now run Hyperparam Search.\n`);
+                } catch {
+                  logger.warn(`⚠️  PyTorch install failed. Try manually: pip3 install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`);
+                  logger.warn('   Continuing without Hyperparam Search.\n');
+                }
               }
             }
           } else {
