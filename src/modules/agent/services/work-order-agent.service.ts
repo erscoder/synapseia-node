@@ -8,18 +8,31 @@ import {
   type EconomicConfig,
   type WorkOrderEvaluation,
 } from '../work-order-agent.js';
+import { LangGraphWorkOrderAgentService } from './langgraph-work-order-agent.service.js';
+import { isLangGraphMode } from '../../config/config.js';
 import type { AgentBrain } from '../agent-brain.js';
 import type { LLMModel, LLMConfig } from '../../llm/llm-provider.js';
 
 @Injectable()
 export class WorkOrderAgentService {
-  constructor(private readonly workOrderAgentHelper: WorkOrderAgentHelper) {}
+  private readonly langGraphService: LangGraphWorkOrderAgentService;
+
+  constructor(private readonly workOrderAgentHelper: WorkOrderAgentHelper) {
+    this.langGraphService = new LangGraphWorkOrderAgentService();
+  }
 
   start(config: WorkOrderAgentConfig): Promise<void> {
+    if (isLangGraphMode()) {
+      return this.langGraphService.start(config);
+    }
     return this.workOrderAgentHelper.startWorkOrderAgent(config);
   }
 
   stop(): void {
+    if (isLangGraphMode()) {
+      this.langGraphService.stop();
+      return;
+    }
     return this.workOrderAgentHelper.stopWorkOrderAgent();
   }
 

@@ -3,6 +3,33 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { Injectable } from '@nestjs/common';
 
+// Agent mode enum for feature flag
+type AgentMode = 'langgraph' | 'legacy';
+
+// Agent mode configuration
+export type AgentModeConfig = {
+  mode: AgentMode;
+};
+
+/**
+ * Get the current agent mode from environment
+ * Default: 'legacy' (maintains backward compatibility)
+ */
+export function getAgentMode(): AgentMode {
+  const mode = process.env.AGENT_MODE?.toLowerCase();
+  if (mode === 'langgraph') {
+    return 'langgraph';
+  }
+  return 'legacy';
+}
+
+/**
+ * Check if langgraph mode is enabled
+ */
+export function isLangGraphMode(): boolean {
+  return getAgentMode() === 'langgraph';
+}
+
 // Config file path
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
@@ -90,6 +117,14 @@ export class NodeConfigHelper {
            model.startsWith('anthropic/') ||
            model.startsWith('kimi/') ||
            model.startsWith('minimax/');
+  }
+
+  getAgentMode(): AgentMode {
+    return getAgentMode();
+  }
+
+  isLangGraphMode(): boolean {
+    return isLangGraphMode();
   }
 }
 
