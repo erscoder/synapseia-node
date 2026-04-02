@@ -1,0 +1,210 @@
+{
+  "goals": [
+    "minimize loss",
+    "discover novel architectures"
+  ],
+  "memory": [
+    {
+      "timestamp": 1775146155579,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146245123,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146415942,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146440007,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146473657,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146498628,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146530534,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146608065,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146627059,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146640699,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146739752,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146888157,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146945798,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775146978486,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775147002379,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775147048257,
+      "type": "discovery",
+      "content": "Research: Test summary",
+      "importance": 0.7
+    }
+  ],
+  "journal": [
+    {
+      "timestamp": 1775146155579,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146245123,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146415942,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146440007,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146473657,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146498628,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146530534,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146608065,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146627059,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146640699,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146739752,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146888157,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146945798,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775146978486,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775147002379,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775147048257,
+      "action": "research:wo_1",
+      "outcome": "completed",
+      "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    }
+  ],
+  "strategy": {
+    "explorationRate": 0.5,
+    "focusArea": "",
+    "recentLessons": [],
+    "consecutiveFailures": 0
+  },
+  "totalExperiments": 0,
+  "bestResult": null
+}
