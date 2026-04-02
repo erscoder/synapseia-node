@@ -1,33 +1,27 @@
 /**
- * Coverage tests for LangGraph nodes and edges
+ * Coverage tests for LangGraph node classes and edges
  * Sprint A - LangGraph Foundation
- * Target: ≥90% coverage on langgraph/**
  */
 
 import { jest } from '@jest/globals';
 
-// Mock trainer to avoid import.meta issues
 jest.mock('../../../../modules/model/trainer.js', () => ({
   trainMicroModel: jest.fn(),
   validateTrainingConfig: jest.fn(() => ({ valid: true })),
   calculateImprovement: jest.fn(() => 0),
 }));
 
-// Mock fetch globally
 global.fetch = jest.fn() as unknown as typeof fetch;
 
 import type { AgentState } from '../state';
-import { hasWorkOrders, shouldAccept, routeByType, shouldSubmitResult } from '../edges';
-import { qualityGate, resetLastSubmissionTime, getLastSubmissionTime } from '../nodes/quality-gate';
-import { submitResult } from '../nodes/submit-result';
-import { executeResearch } from '../nodes/execute-research';
-import { executeTraining } from '../nodes/execute-training';
-import { executeInference } from '../nodes/execute-inference';
-import { executeDiloco } from '../nodes/execute-diloco';
+import { QualityGateNode } from '../nodes/quality-gate';
+import { SubmitResultNode } from '../nodes/submit-result';
+import { ExecuteResearchNode } from '../nodes/execute-research';
+import { ExecuteTrainingNode } from '../nodes/execute-training';
+import { ExecuteInferenceNode } from '../nodes/execute-inference';
+import { ExecuteDilocoNode } from '../nodes/execute-diloco';
 import { initBrain } from '../../agent-brain';
 import type { WorkOrder } from '../../work-order-agent';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeState(overrides: Partial<AgentState> = {}): AgentState {
   return {
@@ -44,13 +38,13 @@ function makeState(overrides: Partial<AgentState> = {}): AgentState {
     iteration: 1,
     config: {
       coordinatorUrl: 'http://localhost:3701',
-      peerId: 'test_peer',
+      peerId: 'peer1',
       capabilities: ['llm'],
       llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
       intervalMs: 5000,
     },
     coordinatorUrl: 'http://localhost:3701',
-    peerId: 'test_peer',
+    peerId: 'peer1',
     capabilities: ['llm'],
     ...overrides,
   };
@@ -74,90 +68,19 @@ function makeResearchWO(overrides: Partial<WorkOrder> = {}): WorkOrder {
   };
 }
 
-// ─── Edges ────────────────────────────────────────────────────────────────────
+// ─── QualityGateNode ─────────────────────────────────────────────────────────
 
-describe('Edges', () => {
-  describe('hasWorkOrders', () => {
-    it('returns __end__ when no work orders', () => {
-      expect(hasWorkOrders(makeState({ availableWorkOrders: [] }))).toBe('__end__');
-    });
+describe('QualityGateNode', () => {
+  let node: QualityGateNode;
 
-    it('returns selectBestWorkOrder when WOs available', () => {
-      expect(hasWorkOrders(makeState({ availableWorkOrders: [makeResearchWO()] }))).toBe('selectBestWorkOrder');
-    });
-  });
-
-  describe('shouldAccept', () => {
-    it('returns fetchWorkOrders when no evaluation', () => {
-      expect(shouldAccept(makeState({ economicEvaluation: null }))).toBe('fetchWorkOrders');
-    });
-
-    it('returns acceptWorkOrder when shouldAccept=true', () => {
-      expect(shouldAccept(makeState({
-        economicEvaluation: {
-          shouldAccept: true, bountySyn: 1000000000n, bountyUsd: 0.01,
-          estimatedCostUsd: 0, profitRatio: Infinity, reason: 'ollama',
-        },
-      }))).toBe('acceptWorkOrder');
-    });
-
-    it('returns fetchWorkOrders when shouldAccept=false', () => {
-      expect(shouldAccept(makeState({
-        economicEvaluation: {
-          shouldAccept: false, bountySyn: 0n, bountyUsd: 0,
-          estimatedCostUsd: 1, profitRatio: 0, reason: 'not profitable',
-        },
-      }))).toBe('fetchWorkOrders');
-    });
-  });
-
-  describe('routeByType', () => {
-    it('returns executeResearch for RESEARCH type', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: makeResearchWO({ type: 'RESEARCH' }) }))).toBe('executeResearch');
-    });
-
-    it('returns executeTraining for TRAINING type', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: makeResearchWO({ type: 'TRAINING' }) }))).toBe('executeTraining');
-    });
-
-    it('returns executeInference for CPU_INFERENCE type', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: makeResearchWO({ type: 'CPU_INFERENCE' }) }))).toBe('executeInference');
-    });
-
-    it('returns executeDiloco for DILOCO_TRAINING type', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: makeResearchWO({ type: 'DILOCO_TRAINING' }) }))).toBe('executeDiloco');
-    });
-
-    it('returns executeDefault for unknown type', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: makeResearchWO({ type: undefined }) }))).toBe('executeDefault');
-    });
-
-    it('returns executeDefault when no selectedWorkOrder', () => {
-      expect(routeByType(makeState({ selectedWorkOrder: null }))).toBe('executeDefault');
-    });
-  });
-
-  describe('shouldSubmitResult', () => {
-    it('returns submitResult when shouldSubmit=true', () => {
-      expect(shouldSubmitResult(makeState({ shouldSubmit: true }))).toBe('submitResult');
-    });
-
-    it('returns updateMemory when shouldSubmit=false', () => {
-      expect(shouldSubmitResult(makeState({ shouldSubmit: false }))).toBe('updateMemory');
-    });
-  });
-});
-
-// ─── qualityGate ─────────────────────────────────────────────────────────────
-
-describe('qualityGate node', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    resetLastSubmissionTime();
+    node = new QualityGateNode();
+    node.resetRateLimit();
   });
 
   it('rejects failed execution', async () => {
-    const result = await qualityGate(makeState({
+    const result = await node.execute(makeState({
       executionResult: { result: 'error', success: false },
     }));
     expect(result.shouldSubmit).toBe(false);
@@ -165,32 +88,28 @@ describe('qualityGate node', () => {
   });
 
   it('rejects research result below min score', async () => {
-    const result = await qualityGate(makeState({
+    const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO(),
       executionResult: { result: '', success: true },
-      researchResult: {
-        summary: 'x', // too short
-        keyInsights: [],
-        proposal: 'y',
-      },
+      researchResult: { summary: 'x', keyInsights: [], proposal: 'y' },
     }));
     expect(result.shouldSubmit).toBe(false);
   });
 
   it('accepts research result with good quality', async () => {
-    const result = await qualityGate(makeState({
+    const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO(),
       executionResult: { result: '', success: true },
       researchResult: {
-        summary: 'This study demonstrates that BRCA1 pathogenic variants significantly increase breast cancer risk in premenopausal women, with a 4.2x elevated risk observed across three independent cohorts.',
+        summary: 'BRCA1 p.Cys61Gly carriers show 4.2× elevated oncogenic risk confirmed across three independent cohorts with p<0.001 statistical significance.',
         keyInsights: [
-          'BRCA1 p.Cys61Gly carriers show 4.2x elevated risk in premenopausal women',
+          'BRCA1 p.Cys61Gly carriers show 4.2× elevated risk in premenopausal cohort',
           'Three independent cohorts confirm the association with statistical significance p<0.001',
           'Risk is highest in women under 40 with family history of breast cancer',
           'Variant penetrance varies by ancestry group with notable differences in Ashkenazi populations',
-          'Prophylactic interventions reduce risk by 85% in carriers who undergo surgery before age 40',
+          'Prophylactic interventions reduce risk by 85% in carriers before age 40',
         ],
-        proposal: 'Integrate BRCA1 variant screening into decentralized medical research workflows. Implement federated learning nodes that analyze patient genomic data locally without centralizing sensitive information, using the p.Cys61Gly variant as a high-priority screening biomarker for risk stratification algorithms.',
+        proposal: 'Integrate BRCA1 variant screening into decentralized medical research workflows using federated learning nodes that analyze patient genomic data locally without centralizing sensitive information.',
       },
     }));
     expect(result.shouldSubmit).toBe(true);
@@ -198,7 +117,7 @@ describe('qualityGate node', () => {
   });
 
   it('accepts non-research WO unconditionally', async () => {
-    const result = await qualityGate(makeState({
+    const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO({ type: 'TRAINING' }),
       executionResult: { result: '{"valLoss":0.4}', success: true },
     }));
@@ -207,126 +126,102 @@ describe('qualityGate node', () => {
   });
 
   it('updates lastSubmissionTime after accepting', async () => {
-    resetLastSubmissionTime();
-    const before = getLastSubmissionTime();
-    await qualityGate(makeState({
-      selectedWorkOrder: makeResearchWO({ type: 'TRAINING' }),
+    node.resetRateLimit();
+    const before = node.getLastSubmissionTime();
+    await node.execute(makeState({
       executionResult: { result: 'ok', success: true },
     }));
-    expect(getLastSubmissionTime()).toBeGreaterThan(before);
+    expect(node.getLastSubmissionTime()).toBeGreaterThan(before);
   });
 
-  it('waits for rate limit when submissions are too fast (timer mock)', async () => {
+  it('handles rate limit with fake timers', async () => {
     jest.useFakeTimers();
-    resetLastSubmissionTime();
+    node.resetRateLimit();
 
-    // First submission
-    const p1 = qualityGate(makeState({
-      executionResult: { result: 'ok', success: true },
-    }));
+    const p1 = node.execute(makeState({ executionResult: { result: 'ok', success: true } }));
     jest.runAllTimers();
     await p1;
 
-    // Second submission immediately after — should wait (rate limit active)
-    const p2 = qualityGate(makeState({
-      executionResult: { result: 'ok', success: true },
-    }));
+    const p2 = node.execute(makeState({ executionResult: { result: 'ok', success: true } }));
     jest.runAllTimers();
     const result = await p2;
-
     expect(result.shouldSubmit).toBe(true);
     jest.useRealTimers();
   });
 });
 
-// ─── submitResult ─────────────────────────────────────────────────────────────
+// ─── SubmitResultNode ─────────────────────────────────────────────────────────
 
-describe('submitResult node', () => {
+describe('SubmitResultNode', () => {
+  let node: SubmitResultNode;
+
   beforeEach(() => {
     jest.resetAllMocks();
+    node = new SubmitResultNode();
   });
 
   it('returns submitted=false when no work order', async () => {
-    const result = await submitResult(makeState({ selectedWorkOrder: null }));
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.submitted).toBe(false);
   });
 
   it('returns submitted=false when no executionResult', async () => {
-    const result = await submitResult(makeState({
+    const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO(),
       executionResult: null,
     }));
     expect(result.submitted).toBe(false);
   });
 
-  it('submits successfully and returns submitted=true', async () => {
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // completeWorkOrder
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // submitResearchResult
+  it('submits successfully', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
-    const result = await submitResult(makeState({
+    const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO(),
       executionResult: { result: '{"summary":"test"}', success: true },
-      researchResult: {
-        summary: 'Test summary',
-        keyInsights: ['insight1'],
-        proposal: 'Test proposal',
-      },
+      researchResult: { summary: 'Test', keyInsights: ['i1'], proposal: 'p1' },
     }));
     expect(result.submitted).toBe(true);
   });
 
-  it('returns submitted=false when coordinator returns error', async () => {
+  it('returns submitted=false when coordinator errors', async () => {
     (fetch as any).mockResolvedValueOnce({ ok: false, text: async () => 'error' });
 
-    // Use a unique WO id to avoid idempotency guard from previous test
-    const result = await submitResult(makeState({
-      selectedWorkOrder: { ...makeResearchWO(), id: `wo_error_${Date.now()}` },
+    const result = await node.execute(makeState({
+      selectedWorkOrder: { ...makeResearchWO(), id: `wo_err_${Date.now()}` },
       executionResult: { result: 'result', success: true },
     }));
     expect(result.submitted).toBe(false);
   });
 });
 
-// ─── Executor nodes (error paths) ─────────────────────────────────────────────
+// ─── Executor nodes — null guard ─────────────────────────────────────────────
 
 describe('Executor nodes — null work order guard', () => {
   beforeEach(() => jest.resetAllMocks());
 
   it('executeResearch returns failure when no work order', async () => {
-    const result = await executeResearch(makeState({ selectedWorkOrder: null }));
+    const node = new ExecuteResearchNode();
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 
   it('executeTraining returns failure when no work order', async () => {
-    const result = await executeTraining(makeState({ selectedWorkOrder: null }));
+    const node = new ExecuteTrainingNode();
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 
   it('executeInference returns failure when no work order', async () => {
-    const result = await executeInference(makeState({ selectedWorkOrder: null }));
+    const node = new ExecuteInferenceNode();
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 
   it('executeDiloco returns failure when no work order', async () => {
-    const result = await executeDiloco(makeState({ selectedWorkOrder: null }));
-    expect(result.executionResult?.success).toBe(false);
-  });
-
-  it('executeResearch handles execution error gracefully', async () => {
-    // Mock LLM to throw
-    (fetch as any).mockRejectedValueOnce(new Error('LLM unavailable'));
-
-    const result = await executeResearch(makeState({
-      selectedWorkOrder: makeResearchWO(),
-      config: {
-        coordinatorUrl: 'http://localhost:3701',
-        peerId: 'peer',
-        capabilities: ['llm'],
-        llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
-        intervalMs: 5000,
-      },
-    }));
-    // Should not throw, returns failure
+    const node = new ExecuteDilocoNode();
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 });

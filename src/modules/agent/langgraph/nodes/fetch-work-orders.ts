@@ -1,99 +1,64 @@
-/**
- * Node: fetchWorkOrders
- * Extracts the fetch + filter logic from runWorkOrderAgentIteration
- * Sprint A - LangGraph Foundation
- */
-
+import { Injectable } from '@nestjs/common';
+import { fetchAvailableWorkOrders, isResearchWorkOrder } from '../../work-order-agent';
 import type { AgentState, WorkOrder } from '../state';
-import { fetchAvailableWorkOrders } from '../../work-order-agent';
-import { isResearchWorkOrder } from '../../work-order-agent';
 import logger from '../../../../utils/logger';
 
-const RESEARCH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10);
 
-/**
- * State variable to track research cooldowns across iterations
- * In the legacy implementation, this was agentState.researchCooldowns
- */
-const researchCooldowns = new Map<string, number>();
+@Injectable()
+export class FetchWorkOrdersNode {
+  private readonly researchCooldowns = new Map<string, number>();
+  private readonly completedWorkOrderIds = new Set<string>();
 
-/**
- * State variable to track completed work order IDs (non-research)
- * In the legacy implementation, this was agentState.completedWorkOrderIds
- */
-const completedWorkOrderIds = new Set<string>();
+  async execute(state: AgentState): Promise<Partial<AgentState>> {
+    const { coordinatorUrl, peerId, capabilities } = state;
+    logger.log(' Polling for available work orders...');
 
-/**
- * Fetch available work orders from the coordinator
- * Filters out:
- * - Research WOs on cooldown (can be re-analyzed after cooldown)
- * - Completed non-research WOs (permanent)
- */
-export async function fetchWorkOrders(state: AgentState): Promise<Partial<AgentState>> {
-  const { coordinatorUrl, peerId, capabilities } = state;
-
-  logger.log(' Polling for available work orders...');
-
-  // Fetch work orders from coordinator
-  const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
-
-  if (workOrders.length === 0) {
-    logger.log(' No work orders available');
-    return { availableWorkOrders: [] };
-  }
-
-  logger.log(` Found ${workOrders.length} available work order(s)`);
-
-  // Filter work orders
-  const now = Date.now();
-  const pendingWorkOrders = workOrders.filter((wo: WorkOrder) => {
-    if (isResearchWorkOrder(wo)) {
-      // Research: skip only during cooldown period
-      const cooldownUntil = researchCooldowns.get(wo.id);
-      if (cooldownUntil && now < cooldownUntil) {
-        const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
-        logger.log(` Research WO "${wo.title}" on cooldown — ${remainingSec}s remaining`);
-        return false;
-      }
-      return true; // Ready to re-analyze with new hyperparams
+    const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    if (workOrders.length === 0) {
+      logger.log(' No work orders available');
+      return { availableWorkOrders: [] };
     }
-    // Non-research: skip permanently once completed
-    return !completedWorkOrderIds.has(wo.id);
-  });
 
-  if (pendingWorkOrders.length < workOrders.length) {
-    logger.log(` Skipping ${workOrders.length - pendingWorkOrders.length} WO(s) (completed/cooldown) — ${pendingWorkOrders.length} remaining`);
+    logger.log(` Found ${workOrders.length} available work order(s)`);
+    const now = Date.now();
+
+    const pending = workOrders.filter((wo: WorkOrder) => {
+      if (isResearchWorkOrder(wo)) {
+        const cooldownUntil = this.researchCooldowns.get(wo.id);
+        if (cooldownUntil && now < cooldownUntil) {
+          const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
+          logger.log(` Research WO "${wo.title}" on cooldown — ${remainingSec}s remaining`);
+          return false;
+        }
+        return true;
+      }
+      return !this.completedWorkOrderIds.has(wo.id);
+    });
+
+    if (pending.length < workOrders.length) {
+      logger.log(` Skipping ${workOrders.length - pending.length} WO(s) — ${pending.length} remaining`);
+    }
+    if (pending.length === 0) {
+      logger.log(' All work orders completed or on cooldown — waiting');
+      return { availableWorkOrders: [] };
+    }
+
+    return { availableWorkOrders: pending };
   }
 
-  if (pendingWorkOrders.length === 0) {
-    logger.log(' All work orders completed or on cooldown — waiting');
-    return { availableWorkOrders: [] };
+  markCompleted(workOrder: WorkOrder): void {
+    if (!isResearchWorkOrder(workOrder)) {
+      this.completedWorkOrderIds.add(workOrder.id);
+    }
   }
 
-  return { availableWorkOrders: pendingWorkOrders };
-}
-
-/**
- * Mark a work order as completed (for tracking purposes)
- */
-export function markWorkOrderCompleted(workOrder: WorkOrder): void {
-  if (!isResearchWorkOrder(workOrder)) {
-    completedWorkOrderIds.add(workOrder.id);
+  setResearchCooldown(workOrderId: string): void {
+    this.researchCooldowns.set(workOrderId, Date.now() + RESEARCH_COOLDOWN_MS);
   }
-}
 
-/**
- * Set research cooldown for a work order
- */
-export function setResearchCooldown(workOrderId: string): void {
-  researchCooldowns.set(workOrderId, Date.now() + RESEARCH_COOLDOWN_MS);
-}
-
-/**
- * Clear all cooldowns and completed work orders
- * Useful for testing
- */
-export function resetWorkOrderFilters(): void {
-  researchCooldowns.clear();
-  completedWorkOrderIds.clear();
+  reset(): void {
+    this.researchCooldowns.clear();
+    this.completedWorkOrderIds.clear();
+  }
 }

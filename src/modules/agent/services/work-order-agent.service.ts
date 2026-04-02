@@ -15,11 +15,10 @@ import type { LLMModel, LLMConfig } from '../../llm/llm-provider';
 
 @Injectable()
 export class WorkOrderAgentService {
-  private readonly langGraphService: LangGraphWorkOrderAgentService;
-
-  constructor(private readonly workOrderAgentHelper: WorkOrderAgentHelper) {
-    this.langGraphService = new LangGraphWorkOrderAgentService();
-  }
+  constructor(
+    private readonly workOrderAgentHelper: WorkOrderAgentHelper,
+    private readonly langGraphService: LangGraphWorkOrderAgentService,
+  ) {}
 
   start(config: WorkOrderAgentConfig): Promise<void> {
     if (isLangGraphMode()) {
