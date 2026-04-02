@@ -191,7 +191,10 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
         logger.warn(`[trainer] python3 stderr:\n${stderr.trim().slice(0, 2000)}`);
       }
 
-      if (code !== 0 || !settledHolder.current) {
+      // code null = killed by signal (SIGKILL/SIGTERM) before timeout fires
+      // code !== 0 = Python script returned non-zero exit
+      // Both are failures. code === 0 = success.
+      if (code === null || code !== 0) {
         const errorMsg = stderr.trim()
           ? `Training failed (exit ${code}): ${stderr.trim().slice(0, 500)}`
           : `Training process exited with code ${code ?? 'null'} — no output received`;
