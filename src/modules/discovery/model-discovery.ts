@@ -4,10 +4,10 @@
  */
 
 import axios from 'axios';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 import { Injectable } from '@nestjs/common';
-import { getLocalModels, MODEL_CATALOG } from '../model/model-catalog.js';
-import type { Hardware } from '../hardware/hardware.js';
+import { getLocalModels, MODEL_CATALOG } from '../model/model-catalog';
+import type { Hardware } from '../hardware/hardware';
 
 /** Model info as expected by coordinator's POST /inference/register */
 export interface CoordinatorModelInfo {

@@ -9,23 +9,23 @@
  */
 
 import { StateGraph, Annotation } from '@langchain/langgraph';
-import type { WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain } from './state.js';
-import type { WorkOrderAgentConfig } from '../work-order-agent.js';
-import { initBrain } from '../agent-brain.js';
+import type { WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain } from './state';
+import type { WorkOrderAgentConfig } from '../work-order-agent';
+import { initBrain } from '../agent-brain';
 
 // Node imports (ESM — no require())
-import { fetchWorkOrders } from './nodes/fetch-work-orders.js';
-import { selectBestWorkOrder } from './nodes/select-wo.js';
-import { evaluateEconomics } from './nodes/evaluate-economics.js';
-import { acceptWorkOrderNode } from './nodes/accept-wo.js';
-import { executeResearch } from './nodes/execute-research.js';
-import { executeTraining } from './nodes/execute-training.js';
-import { executeInference } from './nodes/execute-inference.js';
-import { executeDiloco } from './nodes/execute-diloco.js';
-import { qualityGate } from './nodes/quality-gate.js';
-import { submitResult } from './nodes/submit-result.js';
-import { updateMemory } from './nodes/update-memory.js';
-import { hasWorkOrders, shouldAccept, routeByType, shouldSubmitResult } from './edges.js';
+import { fetchWorkOrders } from './nodes/fetch-work-orders';
+import { selectBestWorkOrder } from './nodes/select-wo';
+import { evaluateEconomics } from './nodes/evaluate-economics';
+import { acceptWorkOrderNode } from './nodes/accept-wo';
+import { executeResearch } from './nodes/execute-research';
+import { executeTraining } from './nodes/execute-training';
+import { executeInference } from './nodes/execute-inference';
+import { executeDiloco } from './nodes/execute-diloco';
+import { qualityGate } from './nodes/quality-gate';
+import { submitResult } from './nodes/submit-result';
+import { updateMemory } from './nodes/update-memory';
+import { hasWorkOrders, shouldAccept, routeByType, shouldSubmitResult } from './edges';
 
 export type { WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain };
 

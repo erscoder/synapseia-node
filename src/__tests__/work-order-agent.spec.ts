@@ -16,10 +16,10 @@ import {
   ResearchResult,
   scoreResearchResult,
   _test,
-} from '../modules/agent/work-order-agent.js';
-import { initBrain } from '../modules/agent/agent-brain.js';
-import { parseModel, type LLMModel } from '../modules/llm/llm-provider.js';
-import * as llmProvider from '../modules/llm/llm-provider.js';
+} from '../modules/agent/work-order-agent';
+import { initBrain } from '../modules/agent/agent-brain';
+import { parseModel, type LLMModel } from '../modules/llm/llm-provider';
+import * as llmProvider from '../modules/llm/llm-provider';
 
 // ESM-compatible mock for generateLLM (jest.spyOn can't mock ESM read-only exports)
 // Use var so jest.mock() factory (which is hoisted) can reference it at initialization

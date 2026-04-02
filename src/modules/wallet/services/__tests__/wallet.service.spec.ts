@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { WalletHelper } from '../../wallet.js';
-import { WalletService } from '../wallet.service.js';
+import { WalletHelper } from '../../wallet';
+import { WalletService } from '../wallet.service';
 
 const mockWallet = {
   publicKey: 'abc123pubkey',

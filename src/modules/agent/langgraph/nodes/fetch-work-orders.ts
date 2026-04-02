@@ -4,10 +4,10 @@
  * Sprint A - LangGraph Foundation
  */
 
-import type { AgentState, WorkOrder } from '../state.js';
-import { fetchAvailableWorkOrders } from '../../work-order-agent.js';
-import { isResearchWorkOrder } from '../../work-order-agent.js';
-import logger from '../../../../utils/logger.js';
+import type { AgentState, WorkOrder } from '../state';
+import { fetchAvailableWorkOrders } from '../../work-order-agent';
+import { isResearchWorkOrder } from '../../work-order-agent';
+import logger from '../../../../utils/logger';
 
 const RESEARCH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 

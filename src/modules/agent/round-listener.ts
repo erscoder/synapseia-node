@@ -7,13 +7,13 @@
 
 import { Injectable } from '@nestjs/common';
 import { io, Socket } from 'socket.io-client';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 import {
   startReviewLoop,
   stopReviewLoop,
   isReviewLoopRunning,
   type LLMReviewConfig,
-} from './review-agent.js';
+} from './review-agent';
 
 interface RoundWinner {
   rank: number;

@@ -14,8 +14,8 @@ import {
   type EvaluationAssignment,
   type Submission,
   type ReviewScores,
-} from '../modules/agent/review-agent.js';
-import type { LLMModel } from '../modules/llm/llm-provider.js';
+} from '../modules/agent/review-agent';
+import type { LLMModel } from '../modules/llm/llm-provider';
 
 // Mock fetch globally - use any to avoid strict typing issues with jest mock
 const mockFetch: any = jest.fn();

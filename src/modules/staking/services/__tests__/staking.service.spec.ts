@@ -4,8 +4,8 @@ process.env.ESCROW_PROGRAM_ID = 'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK';
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { StakingHelper } from '../../staking.js';
-import { StakingService } from '../staking.service.js';
+import { StakingHelper } from '../../staking';
+import { StakingService } from '../staking.service';
 
 describe('StakingService', () => {
   let service: StakingService;

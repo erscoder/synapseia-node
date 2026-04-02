@@ -4,7 +4,7 @@
  */
 
 import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 import { getAssociatedTokenAddress, transfer, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction } from '@solana/spl-token';
 import * as fs from 'fs';
 import * as path from 'path';

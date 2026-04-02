@@ -3,8 +3,8 @@ import {
   TrainerHelper,
   type TrainingResult,
   type TrainingOptions,
-} from '../trainer.js';
-import type { MutationProposal } from '../mutation-engine.js';
+} from '../trainer';
+import type { MutationProposal } from '../mutation-engine';
 
 @Injectable()
 export class TrainerService {

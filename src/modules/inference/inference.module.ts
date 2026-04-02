@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { InferenceServerHelper } from './inference-server.js';
-import { InferenceService } from './services/inference.service.js';
+import { InferenceServerHelper } from './inference-server';
+import { InferenceService } from './services/inference.service';
 
 @Module({
   providers: [InferenceServerHelper, InferenceService],

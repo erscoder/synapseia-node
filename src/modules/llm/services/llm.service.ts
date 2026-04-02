@@ -5,9 +5,9 @@ import {
   type LLMModel,
   type LLMStatus,
   type LLMConfig,
-} from '../llm-provider.js';
-import { LlmProviderHelper } from '../llm-provider.js';
-import { OllamaHelper } from '../ollama.js';
+} from '../llm-provider';
+import { LlmProviderHelper } from '../llm-provider';
+import { OllamaHelper } from '../ollama';
 
 @Injectable()
 export class LlmService {

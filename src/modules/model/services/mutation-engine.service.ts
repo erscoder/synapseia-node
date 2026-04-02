@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { MutationEngineHelper, type MutationProposal } from '../mutation-engine.js';
-import type { Experiment } from '../../../types.js';
+import { MutationEngineHelper, type MutationProposal } from '../mutation-engine';
+import type { Experiment } from '../../../types';
 
 @Injectable()
 export class MutationEngineService {

@@ -11,7 +11,7 @@ import {
   estimateAppleSiliconVram,
   parseNvidiaSmiOutput,
   type Hardware,
-} from '../modules/hardware/hardware.js';
+} from '../modules/hardware/hardware';
 import * as os from 'os';
 import * as childProcess from 'child_process';
 

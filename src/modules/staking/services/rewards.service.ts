@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { RewardsHelper, type RewardCalculation, type RewardBatch, type RewardDistributionResult } from '../rewards.js';
-import type { StakeInfo } from '../staking.js';
+import { RewardsHelper, type RewardCalculation, type RewardBatch, type RewardDistributionResult } from '../rewards';
+import type { StakeInfo } from '../staking';
 
 @Injectable()
 export class RewardsService {

@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { StakingHelper } from './staking.js';
-import { RewardsHelper } from './rewards.js';
-import { StakingService } from './services/staking.service.js';
-import { RewardsService } from './services/rewards.service.js';
+import { StakingHelper } from './staking';
+import { RewardsHelper } from './rewards';
+import { StakingService } from './services/staking.service';
+import { RewardsService } from './services/rewards.service';
 
 @Module({
   providers: [StakingHelper, RewardsHelper, StakingService, RewardsService],

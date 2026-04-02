@@ -9,7 +9,7 @@ import {
   executeCpuInferenceWorkOrder,
   type WorkOrder,
   type CpuInferenceWorkOrderPayload,
-} from '../modules/agent/work-order-agent.js';
+} from '../modules/agent/work-order-agent';
 
 // ---------------------------------------------------------------------------
 // Mock generateLLM via OllamaHelper (ESM-compatible)
@@ -35,8 +35,8 @@ jest.mock('../modules/llm/ollama.js', () => ({
   },
 }));
 
-import { generateLLM as _generateLLM } from '../modules/llm/llm-provider.js';
-import * as llmProvider from '../modules/llm/llm-provider.js';
+import { generateLLM as _generateLLM } from '../modules/llm/llm-provider';
+import * as llmProvider from '../modules/llm/llm-provider';
 
 function makeLLMModel() {
   return { provider: 'ollama' as const, providerId: '' as const, modelId: 'phi4-mini' };

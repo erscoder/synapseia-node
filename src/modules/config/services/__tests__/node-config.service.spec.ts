@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { NodeConfigHelper } from '../../config.js';
-import { NodeConfigService } from '../node-config.service.js';
+import { NodeConfigHelper } from '../../config';
+import { NodeConfigService } from '../node-config.service';
 
 const mockConfig = {
   coordinatorUrl: 'http://localhost:3001',

@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { MutationEngineService } from '../mutation-engine.service.js';
-import { MutationEngineHelper } from '../../mutation-engine.js';
+import { MutationEngineService } from '../mutation-engine.service';
+import { MutationEngineHelper } from '../../mutation-engine';
 
 describe('MutationEngineService', () => {
   let service: MutationEngineService;

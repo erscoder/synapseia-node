@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { NodeConfigHelper } from './config.js';
-import { NodeConfigService } from './services/node-config.service.js';
+import { NodeConfigHelper } from './config';
+import { NodeConfigService } from './services/node-config.service';
 
 @Module({
   providers: [NodeConfigHelper, NodeConfigService],

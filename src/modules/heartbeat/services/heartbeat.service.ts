@@ -3,10 +3,10 @@ import {
   HeartbeatHelper,
   type HeartbeatPayload,
   type HeartbeatResponse,
-} from '../heartbeat.js';
-import type { Identity } from '../../identity/identity.js';
-import type { Hardware } from '../../hardware/hardware.js';
-import type { P2PNode } from '../../p2p/p2p.js';
+} from '../heartbeat';
+import type { Identity } from '../../identity/identity';
+import type { Hardware } from '../../hardware/hardware';
+import type { P2PNode } from '../../p2p/p2p';
 
 @Injectable()
 export class HeartbeatService {

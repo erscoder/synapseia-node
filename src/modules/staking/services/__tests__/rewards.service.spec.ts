@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { RewardsHelper } from '../../rewards.js';
-import { RewardsService } from '../rewards.service.js';
+import { RewardsHelper } from '../../rewards';
+import { RewardsService } from '../rewards.service';
 
 const mockBatch = {
   id: 'batch-1',

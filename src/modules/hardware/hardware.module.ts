@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { HardwareHelper } from './hardware.js';
-import { HardwareService } from './services/hardware.service.js';
+import { HardwareHelper } from './hardware';
+import { HardwareService } from './services/hardware.service';
 
 @Module({
   providers: [HardwareHelper, HardwareService],

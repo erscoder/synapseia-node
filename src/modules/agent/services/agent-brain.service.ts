@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AgentBrainHelper, type AgentBrain, type MemoryEntry, type JournalEntry } from '../agent-brain.js';
+import { AgentBrainHelper, type AgentBrain, type MemoryEntry, type JournalEntry } from '../agent-brain';
 
 @Injectable()
 export class AgentBrainService {

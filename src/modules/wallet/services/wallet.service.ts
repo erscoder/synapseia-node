@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { WalletHelper, type SolanaWallet, type WalletWithStatus } from '../wallet.js';
+import { WalletHelper, type SolanaWallet, type WalletWithStatus } from '../wallet';
 
 @Injectable()
 export class WalletService {

@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
-import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/p2p.js';
-import type { Identity } from '../modules/identity/identity.js';
+import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/p2p';
+import type { Identity } from '../modules/identity/identity';
 import { createLibp2p } from 'libp2p';
 import { bootstrap } from '@libp2p/bootstrap';
 import { kadDHT } from '@libp2p/kad-dht';

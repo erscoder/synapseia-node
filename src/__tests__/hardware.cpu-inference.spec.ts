@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import * as childProcess from 'child_process';
-import { HardwareHelper, canInference, type Hardware } from '../modules/hardware/hardware.js';
+import { HardwareHelper, canInference, type Hardware } from '../modules/hardware/hardware';
 
 // ---------------------------------------------------------------------------
 // Helper to create a HardwareHelper with overridden detectHardware

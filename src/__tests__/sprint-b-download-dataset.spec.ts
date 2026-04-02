@@ -8,7 +8,7 @@ import { jest } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { downloadDataset, getDatasetCacheDir } from '../modules/agent/work-order-agent.js';
+import { downloadDataset, getDatasetCacheDir } from '../modules/agent/work-order-agent';
 
 // Mock fetch globally
 global.fetch = jest.fn() as any;

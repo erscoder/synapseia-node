@@ -3,9 +3,9 @@
  * Sprint A - LangGraph Foundation for Synapseia Node
  */
 
-import type { AgentBrain } from '../agent-brain.js';
-import type { WorkOrderAgentConfig } from '../work-order-agent.js';
-import type { WorkOrder, ResearchResult, WorkOrderEvaluation } from '../work-order-agent.js';
+import type { AgentBrain } from '../agent-brain';
+import type { WorkOrderAgentConfig } from '../work-order-agent';
+import type { WorkOrder, ResearchResult, WorkOrderEvaluation } from '../work-order-agent';
 
 // Re-export types used in state
 export type { WorkOrder, ResearchResult, WorkOrderEvaluation, AgentBrain };

@@ -17,14 +17,14 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
 global.fetch = jest.fn() as unknown as typeof fetch;
 
 // Import after mocking
-import type { AgentState } from '../state.js';
-import { selectBestWorkOrder } from '../nodes/select-wo.js';
-import { fetchWorkOrders, resetWorkOrderFilters } from '../nodes/fetch-work-orders.js';
-import { evaluateEconomics } from '../nodes/evaluate-economics.js';
-import { acceptWorkOrderNode } from '../nodes/accept-wo.js';
-import { updateMemory } from '../nodes/update-memory.js';
-import type { WorkOrder, WorkOrderEvaluation } from '../../work-order-agent.js';
-import { initBrain } from '../../agent-brain.js';
+import type { AgentState } from '../state';
+import { selectBestWorkOrder } from '../nodes/select-wo';
+import { fetchWorkOrders, resetWorkOrderFilters } from '../nodes/fetch-work-orders';
+import { evaluateEconomics } from '../nodes/evaluate-economics';
+import { acceptWorkOrderNode } from '../nodes/accept-wo';
+import { updateMemory } from '../nodes/update-memory';
+import type { WorkOrder, WorkOrderEvaluation } from '../../work-order-agent';
+import { initBrain } from '../../agent-brain';
 
 describe('LangGraph Nodes', () => {
   beforeEach(() => {

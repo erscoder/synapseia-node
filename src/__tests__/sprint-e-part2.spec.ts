@@ -19,7 +19,7 @@ import {
   executeDiLoCoWorkOrder,
   uploadGradients,
   type WorkOrder,
-} from '../modules/agent/work-order-agent.js';
+} from '../modules/agent/work-order-agent';
 
 function makeDiLoCoWO(overrides: Partial<WorkOrder> = {}): WorkOrder {
   const payload = {
@@ -134,7 +134,7 @@ import {
   getAdapterCacheDir,
   ModelDownloaderHelper,
   type ExecSyncFn,
-} from '../modules/model/model-downloader.js';
+} from '../modules/model/model-downloader';
 
 describe('E10 — model-downloader', () => {
   let tmpDir: string;

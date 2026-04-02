@@ -6,11 +6,11 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { AgentBrain } from '../agent-brain.js';
-import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order-agent.js';
-import { runLangGraphIteration } from '../langgraph/graph.js';
-import { initBrain } from '../agent-brain.js';
-import logger from '../../../utils/logger.js';
+import type { AgentBrain } from '../agent-brain';
+import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order-agent';
+import { runLangGraphIteration } from '../langgraph/graph';
+import { initBrain } from '../agent-brain';
+import logger from '../../../utils/logger';
 
 export interface WorkOrderAgentState {
   isRunning: boolean;

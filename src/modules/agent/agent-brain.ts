@@ -11,7 +11,7 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/logger';
 
 export interface MemoryEntry {
   timestamp: number;

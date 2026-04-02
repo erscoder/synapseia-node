@@ -23,7 +23,7 @@ jest.mock('axios', () => {
 });
 
 import axios from 'axios';
-import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../modules/heartbeat/heartbeat.js';
+import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../modules/heartbeat/heartbeat';
 
 describe('heartbeat', () => {
   beforeEach(() => {
