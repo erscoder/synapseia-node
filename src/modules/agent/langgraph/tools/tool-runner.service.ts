@@ -3,11 +3,13 @@
  * Sprint C - ReAct Tool Calling
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { ToolCall, ToolResult } from './types';
 import { SearchCorpusTool } from './search-corpus.tool';
 import { QueryKgTool } from './query-kg.tool';
 import { GenerateEmbeddingTool } from './generate-embedding.tool';
+import { DelegateToPeerTool } from './delegate-peer.tool';
+import { RequestPeerReviewTool } from './request-peer-review.tool';
 
 @Injectable()
 export class ToolRunnerService {
@@ -18,6 +20,8 @@ export class ToolRunnerService {
     private readonly searchCorpusTool: SearchCorpusTool,
     private readonly queryKgTool: QueryKgTool,
     private readonly generateEmbeddingTool: GenerateEmbeddingTool,
+    @Optional() private readonly delegateToPeerTool?: DelegateToPeerTool,
+    @Optional() private readonly requestPeerReviewTool?: RequestPeerReviewTool,
   ) {}
 
   async run(call: ToolCall): Promise<ToolResult> {
@@ -61,6 +65,14 @@ export class ToolRunnerService {
       case 'generate_embedding': {
         const { text } = params as { text: string };
         return this.generateEmbeddingTool.execute({ text });
+      }
+      case 'delegate_to_peer': {
+        if (!this.delegateToPeerTool) throw new Error('DelegateToPeerTool not available (A2A not enabled)');
+        return this.delegateToPeerTool.execute(params as Record<string, unknown>);
+      }
+      case 'request_peer_review': {
+        if (!this.requestPeerReviewTool) throw new Error('RequestPeerReviewTool not available (A2A not enabled)');
+        return this.requestPeerReviewTool.execute(params as Record<string, unknown>);
       }
       default:
         throw new Error(`Unknown tool: ${toolName}`);
