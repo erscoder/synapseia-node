@@ -30,7 +30,7 @@ export class OllamaHelper {
   /**
    * Check Ollama availability and installed models
    */
-  async checkOllama(url: string = 'http://localhost:11434'): Promise<OllamaStatus> {
+  async checkOllama(url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<OllamaStatus> {
     try {
       const response = await axios.get(`${url}/api/tags`, { timeout: 5000 });
       const models: string[] = response.data.models.map((m: any) => m.name);
@@ -65,7 +65,7 @@ export class OllamaHelper {
   /**
    * Pull a model from Ollama registry
    */
-  async pullModel(model: string, url: string = 'http://localhost:11434'): Promise<void> {
+  async pullModel(model: string, url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<void> {
     try {
       console.log(`📥 Pulling model ${model} from Ollama...`);
       const ollamaClient = new Ollama({ host: url });
@@ -97,7 +97,7 @@ export class OllamaHelper {
   async generate(
     prompt: string,
     model?: string,
-    url: string = 'http://localhost:11434',
+    url: string = process.env.OLLAMA_URL || 'http://localhost:11434',
     options?: GenerateOptions,
   ): Promise<string> {
     try {
@@ -132,7 +132,7 @@ export class OllamaHelper {
   /**
    * Ensure a model is available, pulling if necessary
    */
-  async ensureModel(model: string, url: string = 'http://localhost:11434'): Promise<void> {
+  async ensureModel(model: string, url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<void> {
     const status = await this.checkOllama(url);
 
     if (!status.available) {
