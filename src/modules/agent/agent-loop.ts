@@ -39,52 +39,6 @@ export interface AgentLoopState {
   isRunning: boolean;
 }
 
-// Standalone function exports for backward-compat — delegates to singleton AgentLoopHelper instance
-// NOTE: This must be declared BEFORE @Injectable decorator on the class below,
-// so TypeScript doesn't treat it as a decorator target.
-let agentLoopHelperInstance: AgentLoopHelper;
-
-function getAgentLoopHelper(): AgentLoopHelper {
-  if (!agentLoopHelperInstance) agentLoopHelperInstance = new AgentLoopHelper();
-  return agentLoopHelperInstance;
-}
-
-export function startAgentLoop(config: AgentLoopConfig): Promise<void> {
-  return getAgentLoopHelper().startAgentLoop(config);
-}
-export function stopAgentLoop(): void { getAgentLoopHelper().stopAgentLoop(); }
-export function getAgentLoopState(): AgentLoopState { return getAgentLoopHelper().getAgentLoopState(); }
-export function resetAgentLoopState(): void { getAgentLoopHelper().resetAgentLoopState(); }
-export function fetchTopExperiments(coordinatorUrl: string, limit = 5) {
-  return getAgentLoopHelper().fetchTopExperiments(coordinatorUrl, limit);
-}
-export async function createExperiment(
-  coordinatorUrl: string,
-  proposal: MutationProposal,
-  peerId: string,
-  tier: number,
-): Promise<string> {
-  return getAgentLoopHelper().createExperiment(coordinatorUrl, proposal, peerId, tier);
-}
-export async function updateExperiment(
-  coordinatorUrl: string,
-  experimentId: string,
-  result: TrainingResult,
-): Promise<void> {
-  return getAgentLoopHelper().updateExperiment(coordinatorUrl, experimentId, result);
-}
-export async function postToFeed(
-  coordinatorUrl: string,
-  peerId: string,
-  mutation: MutationProposal,
-  result: TrainingResult,
-  improved: boolean,
-): Promise<void> {
-  return getAgentLoopHelper().postToFeed(coordinatorUrl, peerId, mutation, result, improved);
-}
-export function runAgentIteration(config: AgentLoopConfig, iteration: number) {
-  return getAgentLoopHelper().runAgentIteration(config, iteration);
-}
 
 @Injectable()
 export class AgentLoopHelper {
@@ -161,16 +115,6 @@ export class AgentLoopHelper {
     }
   }
 
-  async postToFeed(
-    coordinatorUrl: string,
-    peerId: string,
-    mutation: MutationProposal,
-    result: TrainingResult,
-    improved: boolean,
-  ): Promise<void> {
-    logger.log(`[FEED] ${improved ? '🎉 IMPROVEMENT' : '📝 Result'}: ${mutation.type} - ${mutation.reasoning} (loss: ${result.valLoss.toFixed(4)})`);
-  }
-
   async runAgentIteration(config: AgentLoopConfig, iteration: number): Promise<AgentIterationResult> {
     const { coordinatorUrl, peerId, capabilities, datasetPath } = config;
 
@@ -220,7 +164,7 @@ export class AgentLoopHelper {
       logger.log(`🎉 New best loss: ${this.state.bestLoss.toFixed(4)}!`);
     }
 
-    await this.postToFeed(coordinatorUrl, peerId, mutation, trainingResult, improved);
+    if (improved) logger.log(`[AgentLoop] Iteration ${iteration}: improved → valLoss=${trainingResult.valLoss.toFixed(4)}`);
 
     this.state.iteration = iteration;
     this.state.totalExperiments++;

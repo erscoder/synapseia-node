@@ -9,7 +9,7 @@ import { generateIdentity, loadIdentity, getAgentProfile } from './modules/ident
 import { detectHardware, getTierName, type HardwareTier } from './modules/hardware/hardware';
 import { startPeriodicHeartbeat } from './modules/heartbeat/heartbeat';
 import { createP2PNode } from './modules/p2p/p2p';
-import { startAgentLoop, type AgentLoopConfig } from './modules/agent/agent-loop';
+import { AgentLoopHelper, type AgentLoopConfig } from './modules/agent/agent-loop';
 import { generateLLM, type LLMModel, type LLMProvider, type CloudProviderId } from './modules/llm/llm-provider';
 import logger from './utils/logger';
 
@@ -166,7 +166,7 @@ program
     logger.log('');
     logger.log('🚀 Synapse Node running. Press Ctrl+C to stop.\n');
 
-    startAgentLoop(config);
+    new AgentLoopHelper().startAgentLoop(config);
 
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
