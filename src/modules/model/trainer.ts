@@ -141,8 +141,17 @@ export async function trainMicroModel(options: TrainingOptions): Promise<Trainin
       settle(new Error(`Failed to spawn python3: ${error.message}. Is python3 installed?`));
     });
 
+    // Suppress EPIPE errors on stdin (process may exit before reading all input)
+    pythonProcess.stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EPIPE') {
+        logger.warn(`[trainer] stdin error: ${err.message}`);
+      }
+    });
+
     // Send hyperparams to Python script via stdin
-    pythonProcess.stdin.write(JSON.stringify(hyperparamsPayload));
+    const payload = JSON.stringify(hyperparamsPayload);
+    logger.log(`[trainer] Sending payload (${payload.length} bytes): dataPath=${hyperparamsPayload.dataPath}, hardware=${hyperparamsPayload.hardware}`);
+    pythonProcess.stdin.write(payload);
     pythonProcess.stdin.end();
 
     let stdout = '';
