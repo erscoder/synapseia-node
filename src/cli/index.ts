@@ -271,11 +271,18 @@ async function bootstrap() {
           logger.log('   AI hyperparameters and earn SYN rewards.');
           logger.log('   This requires Python 3 + PyTorch (CPU only, no GPU needed).\n');
 
-          const { confirm } = await import('@inquirer/prompts');
-          const installTorch = await safePrompt(() => confirm({
-            message: 'Install Python3 + PyTorch now? (recommended)',
-            default: true,
-          }));
+          // In non-interactive environments (Docker), skip PyTorch install prompt
+          let installTorch: boolean;
+          if (process.env.CI || process.env.DOCKER || !process.stdout.isTTY) {
+            logger.warn('Non-interactive environment — skipping PyTorch install. Set INSTALL_TORCH=1 to auto-install.');
+            installTorch = process.env.INSTALL_TORCH === '1';
+          } else {
+            const { confirm } = await import('@inquirer/prompts');
+            installTorch = await safePrompt(() => confirm({
+              message: 'Install Python3 + PyTorch now? (recommended)',
+              default: true,
+            }));
+          }
 
           if (installTorch) {
             const plat = os.platform();
