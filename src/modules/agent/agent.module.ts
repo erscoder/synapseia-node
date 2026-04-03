@@ -4,8 +4,6 @@ import { AgentLoopHelper } from './agent-loop';
 import { WorkOrderAgentHelper } from './work-order-agent';
 import { ReviewAgentHelper } from './review-agent';
 import { RoundListenerHelper } from './round-listener';
-import { AgentLoopService } from './services/agent-loop.service';
-import { WorkOrderAgentService } from './services/work-order-agent.service';
 import { WorkOrderStateHelper } from './work-order/work-order.state';
 import { WorkOrderCoordinatorHelper } from './work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from './work-order/work-order.evaluation';
@@ -16,30 +14,30 @@ import { WorkOrderLoopHelper } from './work-order/work-order.loop';
   imports: [],
   providers: [
     AgentBrainHelper,
-    AgentLoopHelper,
     ReviewAgentHelper,
     RoundListenerHelper,
-    // Work order sub-helpers (new granular classes)
+    // Work-order sub-helpers
     WorkOrderStateHelper,
     WorkOrderCoordinatorHelper,
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
-    // Legacy facade — still used by WorkOrderAgentService
+    // Agent loop
+    AgentLoopHelper,
+    // Legacy facade: backward compat for tests importing from work-order-agent.ts
     WorkOrderAgentHelper,
-    AgentLoopService,
-    WorkOrderAgentService,
   ],
   exports: [
-    AgentLoopService,
-    WorkOrderAgentService,
+    AgentBrainHelper,
+    ReviewAgentHelper,
     RoundListenerHelper,
-    // Export sub-helpers for LangGraph nodes etc.
+    AgentLoopHelper,
     WorkOrderStateHelper,
     WorkOrderCoordinatorHelper,
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
+    WorkOrderAgentHelper,
   ],
 })
 export class AgentModule {}

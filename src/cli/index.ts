@@ -34,7 +34,7 @@ import { NodeConfigService } from '../modules/config/services/node-config.servic
 import { WalletService } from '../modules/wallet/services/wallet.service';
 import { ModelCatalogService } from '../modules/model/services/model-catalog.service';
 import { LlmService } from '../modules/llm/services/llm.service';
-import { WorkOrderAgentService } from '../modules/agent/services/work-order-agent.service';
+import { WorkOrderLoopHelper } from '../modules/agent/work-order/work-order.loop';
 import { P2pService } from '../modules/p2p/services/p2p.service';
 import { startNode } from '../node-runtime';
 import { input, select, confirm, password } from '@inquirer/prompts';
@@ -138,7 +138,7 @@ async function bootstrap() {
   const walletService = app.get(WalletService);
   const modelCatalogService = app.get(ModelCatalogService);
   const llmService = app.get(LlmService);
-  const workOrderAgentService = app.get(WorkOrderAgentService);
+  const workOrderAgentService = app.get(WorkOrderLoopHelper);
   const p2pService = app.get(P2pService);
 
   const VERSION = getPackageVersion();
@@ -703,7 +703,7 @@ async function bootstrap() {
     .description('Stop the running SynapseIA node')
     .action(() => {
       logger.log('🛑 Stopping SynapseIA node...');
-      workOrderAgentService.stop();
+      workOrderAgentService.stopWorkOrderAgent();
       logger.log('✅ Node stopped');
     });
 
