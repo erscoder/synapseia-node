@@ -276,9 +276,8 @@ async function _trainMicroModelInner(options: TrainingOptions): Promise<Training
   return await Promise.race([trainingPromise, timeoutPromise]);
 }
 
-/**
- * Validate that the training configuration is valid
- */
+// Functions below are folded into TrainerHelper class.
+// These standalone re-exports exist temporarily for backward compatibility.
 export function validateTrainingConfig(proposal: MutationProposal): { valid: boolean; error?: string } {
   const { hyperparams } = proposal;
 
@@ -344,18 +343,14 @@ export function calculateImprovement(currentLoss: number, bestLoss: number): num
   return ((bestLoss - currentLoss) / bestLoss) * 100;
 }
 
-// Export for testing
-export const _test = {
-  calculateImprovement,
-};
-
-/**
- * Injectable helper class — wraps trainer functions for NestJS DI
- */
 @Injectable()
 export class TrainerHelper {
   trainMicroModel(options: TrainingOptions): Promise<TrainingResult> {
     return trainMicroModel(options);
+  }
+
+  isPyTorchAvailable(): Promise<boolean> {
+    return isPyTorchAvailable();
   }
 
   validateTrainingConfig(proposal: MutationProposal): { valid: boolean; error?: string } {
