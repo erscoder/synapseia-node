@@ -42,6 +42,7 @@ import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE } from '../modules/config/config';
+import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';  
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {
@@ -140,6 +141,7 @@ async function bootstrap() {
   const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
   const p2pService = app.get(P2pService);
+  const heartbeatHelper =app.get(HeartbeatHelper)
 
   const VERSION = getPackageVersion();
   const program = new Command();
@@ -422,8 +424,6 @@ async function bootstrap() {
         }
 
         // Use HeartbeatHelper as single source of truth for capabilities
-        // (same logic used when registering the node with the coordinator via heartbeat)
-        const heartbeatHelper = new (await import('../modules/heartbeat/heartbeat.js')).HeartbeatHelper();
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
         capabilities.push(`tier-${hardware.tier}`);
         if (inferenceEnabled) capabilities.push('inference');

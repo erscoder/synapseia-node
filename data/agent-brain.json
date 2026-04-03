@@ -105,6 +105,126 @@
       "type": "discovery",
       "content": "Research: Test summary",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775243395800,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243454097,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243519338,
+      "type": "discovery",
+      "content": "Research: Analysis of Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243670121,
+      "type": "discovery",
+      "content": "Research: This review synthesizes clinical trial evidence supporting the integration of anti-PD-1/PD-L1 therapy into the treatment paradigm for recurrent or metastatic nasopharyngeal carcinoma. The data demonstrate that adding anti-PD-1 therapy to first-line chemotherapy (gemcitabine + cisplatin) significantly improves progression-free survival outcomes. Additionally, anti-PD-1 monotherapy offers comparable efficacy with improved tolerability compared to chemotherapy in previously treated patients. These findings address a significant unmet clinical need, as RM-NPC patients historically lacked effective treatment options beyond first-line chemotherapy. Anti-PD-1 therapy is poised to become a new standard of care for RM-NPC management.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243764579,
+      "type": "discovery",
+      "content": "Research: ## Research Analysis Report",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243811135,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243864970,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775243933966,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244062394,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244178436,
+      "type": "discovery",
+      "content": "Research: ## Scientific Research Analysis",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244237701,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244286152,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244331292,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244386059,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244461172,
+      "type": "discovery",
+      "content": "Research: This review article examines the emerging role of anti-programmed cell death receptor-1 (PD-1) therapy in treating recurrent or metastatic nasopharyngeal carcinomas (RM-NPC). While anti-PD-1 therapy has become standard care for other head and neck cancers, there are currently no regulatory agency-approved anti-PD-1 agents for RM-NPC in the Western hemisphere, creating an unmet clinical need for this patient population with poor prognosis.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244515396,
+      "type": "discovery",
+      "content": "Research: Analysis of Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244583170,
+      "type": "discovery",
+      "content": "Research: ## Research Analysis: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma (RM-NPC)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244640289,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244686030,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244735200,
+      "type": "discovery",
+      "content": "Research: # Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
     }
   ],
   "journal": [
@@ -209,6 +329,126 @@
       "action": "research:wo_1",
       "outcome": "completed",
       "lesson": "Paper: Test Research\nSummary: Test summary\nProposal: Test proposal"
+    },
+    {
+      "timestamp": 1775243395800,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - Anti-PD-1 monotherapy showed comparable clinical activity with better tolerability compared to chemotherapy in previously treated patients **Key Efficacy Outcomes:** - Anti-PD-1 therapy combined wit"
+    },
+    {
+      "timestamp": 1775243454097,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - No regulatory agency-approved anti-PD-1 agents exist for RM-NPC in Western countries - First-line treatment remains chemotherapy with no established subsequent options - RM-NPC patients have poor pr"
+    },
+    {
+      "timestamp": 1775243519338,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: Analysis of Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775243670121,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: This review synthesizes clinical trial evidence supporting the integration of anti-PD-1/PD-L1 therapy into the treatment paradigm for recurrent or metastatic nasopharyngeal carcinoma. The data demonst\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775243764579,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Analysis Report\nProposal: **Significance:** The paper addresses a critical unmet clinical need—while anti-PD-1 therapy is standard-of-care for non-nasopharyngeal head and neck cancers, there are currently no regulatory agency-"
+    },
+    {
+      "timestamp": 1775243811135,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - However, no regulatory agency has approved anti-PD-1 agents for recurrent or metastatic nasopharyngeal carcinoma (RM-NPC) in Western countries - No standard treatment exists beyond first-line chemot"
+    },
+    {
+      "timestamp": 1775243864970,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: 3. **Open Questions**: Whether PFS benefits require combination chemoimmunotherapy upfront or can be achieved through chemotherapy followed by crossover to immunotherapy upon progression remains undet"
+    },
+    {
+      "timestamp": 1775243933966,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - Randomized clinical trials in first-line treatment settings showed significant improvements in progression-free survival (PFS) when anti-PD-1 was combined with standard chemotherapy **Efficacy Outco"
+    },
+    {
+      "timestamp": 1775244062394,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - In contrast, NO regulatory agency-approved anti-PD-1 agents exist for RM-NPC in the Western hemisphere - No standard treatment beyond first-line chemotherapy exists for RM-NPC - RM-NPC patients have"
+    },
+    {
+      "timestamp": 1775244178436,
+      "action": "research:wo_training_1775244101402_niivjzk",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: ## Scientific Research Analysis\nProposal: 1. **Model Architecture**: Micro-transformer suggests a lightweight transformer model designed for efficiency, likely constrained by parameter count or computational budget. 2. **Dataset Characteristi"
+    },
+    {
+      "timestamp": 1775244237701,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - RM-NPC lacks approved immunotherapies in Western regulatory frameworks - Development of novel systemic therapies for RM-NPC has progressed slowly compared to other tumor types - Patients face poor p"
+    },
+    {
+      "timestamp": 1775244286152,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: 1. **Current Treatment Gap:**    - Anti-PD-1 therapy is standard of care for recurrent/metastatic non-nasopharyngeal head and neck cancer    - No regulatory agency-approved anti-PD-1 agents for RM-NPC"
+    },
+    {
+      "timestamp": 1775244331292,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - No regulatory agency-approved anti-PD-1 agents exist for RM-NPC in Western countries - No standard treatment beyond first-line chemotherapy exists for RM-NPC - Poor prognosis with significant unmet "
+    },
+    {
+      "timestamp": 1775244386059,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: #### 2.1 Clinical Context - Anti-PD-1 therapy is already standard of care for incurable recurrent/metastatic non-nasopharyngeal head and neck cancer - In contrast, **no anti-PD-1 agents are regulatory"
+    },
+    {
+      "timestamp": 1775244461172,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: This review article examines the emerging role of anti-programmed cell death receptor-1 (PD-1) therapy in treating recurrent or metastatic nasopharyngeal carcinomas (RM-NPC). While anti-PD-1 therapy h\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775244515396,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: Analysis of Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775244583170,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Analysis: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma (RM-NPC)\nProposal: - RM-NPC patients have poor prognosis with unmet clinical needs **Clinical Trial Evidence:** - Recent clinical trials demonstrate clinical activity of anti-PD-1 therapy in RM-NPC - Randomized trials i"
+    },
+    {
+      "timestamp": 1775244640289,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: #### 1. Current Treatment Landscape - Anti-PD-1 therapy is **standard of care** for incurable recurrent/metastatic non-nasopharyngeal head and neck cancer - In contrast, **no regulatory agency-approve"
+    },
+    {
+      "timestamp": 1775244686030,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - First-line chemotherapy remains the only standard treatment for RM-NPC - Significant unmet clinical need exists due to poor prognosis and slow development of novel therapies **2. Efficacy Outcomes**"
+    },
+    {
+      "timestamp": 1775244735200,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: # Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: ## 2. Key Findings ### 2.1 Clinical Context - Anti-PD-1 therapy is **standard of care** for recurrent/metastatic non-nasopharyngeal head and neck cancer - In contrast, **no anti-PD-1 agents are regula"
     }
   ],
   "strategy": {
