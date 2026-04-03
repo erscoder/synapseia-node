@@ -84,7 +84,22 @@ export async function isPyTorchAvailable(): Promise<boolean> {
   });
 }
 
+// Module-level guard: prevent concurrent training runs in the same process
+let _trainingInProgress = false;
+
 export async function trainMicroModel(options: TrainingOptions): Promise<TrainingResult> {
+  if (_trainingInProgress) {
+    throw new Error('A training run is already in progress on this node — refusing concurrent execution');
+  }
+  _trainingInProgress = true;
+  try {
+    return await _trainMicroModelInner(options);
+  } finally {
+    _trainingInProgress = false;
+  }
+}
+
+async function _trainMicroModelInner(options: TrainingOptions): Promise<TrainingResult> {
   const {
     proposal,
     datasetPath,
