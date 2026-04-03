@@ -5,36 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775246046158,
-      "type": "discovery",
-      "content": "Research: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775246090198,
-      "type": "discovery",
-      "content": "Research: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775246153335,
-      "type": "discovery",
-      "content": "Research: ## Research Analysis: AVIFAVIR for COVID-19 Treatment",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775246207081,
-      "type": "discovery",
-      "content": "Research: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775246282884,
-      "type": "discovery",
-      "content": "Research: **Research Report: AVIFAVIR for COVID-19 Treatment - Interim Phase II/III Trial Results**",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775246358062,
       "type": "discovery",
       "content": "Research: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial",
@@ -603,39 +573,39 @@
       "type": "discovery",
       "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3)",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775252944237,
+      "type": "discovery",
+      "content": "Research: This Phase III randomized controlled trial (AURA3) evaluated the CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who had progressed on prior EGFR-TKI therapy. The study enrolled 419 patients, with 116 having measurable and/or nonmeasurable CNS lesions, of whom 46 had measurable CNS lesions. Osimertinib demonstrated significantly superior CNS outcomes across all endpoints, establishing it as a preferred treatment option for patients with CNS metastases.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775252994645,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Phase III Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775253055455,
+      "type": "discovery",
+      "content": "Research: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis of the AURA3 Phase III Trial\", \"authors\": \"Mok et al. (JCO 2018)\", \"study_type\": \"Randomized Phase III Clinical Trial (AURA3)\", \"clinical_trials_identifier\": \"NCT02151981\", \"key_findings\": {\"primary_endpoint\": {\"measure\": \"CNS Objective Response Rate (ORR) in patients with measurable CNS lesions\", \"osimertinib_arm\": \"70% (21/30 patients, 95% CI: 51%-85%)\", \"platinum_pemetrexed_arm\": \"31% (5/16 patients, 95% CI: 11%-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64)\", \"p_value\": \"P = 0.015\"}}, \"secondary_endpoints\": {\"ORR_in_all_CNS_lesions\": {\"osimertinib\": \"40% (30/75, 95% CI: 29%-52%)\", \"platinum_pemetrexed\": \"17% (7/41, 95% CI: 7%-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81)\", \"p_value\": \"P = 0.014\"}}, \"CNS_duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 months to NC)\", \"platinum_pemetrexed\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"CNS_progression_free_survival\": {\"osimertinib\": \"11.7 months\", \"platinum_pemetrexed\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69)\", \"p_value\": \"P = 0.004\"}}, \"patient_population\": {\"total_randomized\": 419, \"with_CNS_metastases\": 116, \"with_measurable_CNS_lesions\": 46, \"eligibility\": \"Asymptomatic, stable CNS metastases\", \"molecular_biomarker\": \"EGFR T790M-positive after prior EGFR-TKI progression\"}, \"methodology\": {\"randomization\": \"2:1 ratio (osimertinib:platinum-pemetrexed)\", \"treatment_arms\": {\"experimental\": \"Osimertinib 80 mg once daily\", \"control\": \"Platinum-pemetrexed chemotherapy\"}, \"assessment\": \"Blinded independent central neuroradiological review (BICR)\", \"analysis_sets\": {\"CNS_evaluable_for_response\": \"Patients with ≥1 measurable CNS lesion\"}}, \"clinical_significance\": {\"CNS_activity\": \"Osimertinib demonstrated statistically significant and clinically meaningful superior CNS efficacy compared to platinum-pemetrexed chemotherapy\", \"ORR_improvement\": \"More than doubled CNS response rate (70% vs 31%)\", \"PFS_improvement\": \"55% reduction in CNS progression risk (HR 0.32)\", \"durability\": \"Longer duration of CNS response with osimertinib\"}, \"mechanism\": \"Osimertinib is a third-generation EGFR tyrosine kinase inhibitor specifically designed to penetrate the blood-brain barrier and address CNS metastases in EGFR-mutant NSCLC\", \"applications\": {\"clinical_practice\": \"Osimertinib established as preferred treatment for T790M-positive NSCLC patients with CNS metastases\", \"treatment_sequencing\": \"Validates osimertinib use after first/second-generation EGFR-TKI failure in patients with brain metastases\", \"CNS_metastasis_management\": \"Provides evidence supporting CNS-directed activity of osimertinib, potentially reducing need for whole-brain radiation in some patients\"}, \"limitations\": {\"sample_size\": \"Relatively small CNS evaluable population (n=116 total, n=46 with measurable lesions)\", \"excluded_populations\": \"Patients with symptomatic or untreated CNS metastases were excluded\", \"cross_over\": \"Potential for cross-over design implications on overall survival analysis\"}, \"conclusion\": \"This landmark analysis provides the first comparative evidence demonstrating superior CNS efficacy of osimertinib versus platinum-based chemotherapy in EGFR T790M-positive advanced NSCLC patients with CNS metastases. The results support the use of osimertinib as the standard of care for this patient population, particularly those with brain involvement.\"}",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775253154396,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775253225563,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775246046158,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
-      "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nProposal: See summary for details"
-    },
-    {
-      "timestamp": 1775246090198,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
-      "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775246153335,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
-      "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: ## Research Analysis: AVIFAVIR for COVID-19 Treatment\nProposal: - **Intervention**: AVIFAVIR (favipiravir) - a nucleoside analog that inhibits RNA-dependent RNA polymerase - **Population**: Patients with moderate COVID-19 disease ### Key Findings 1. **Viral Cleara"
-    },
-    {
-      "timestamp": 1775246207080,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
-      "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775246282884,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
-      "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: **Research Report: AVIFAVIR for COVID-19 Treatment - Interim Phase II/III Trial Results**\nProposal: - **Regulatory Milestone**: In May 2020, the Russian Ministry of Health granted fast-track marketing authorization for AVIFAVIR in COVID-19 treatment **3. Methodology** - **Trial Phase**: Phase II/III"
-    },
     {
       "timestamp": 1775246358062,
       "action": "research:wo_1775222161372_ymzyk7h9k",
@@ -1205,6 +1175,36 @@
       "action": "research:wo_1775222161406_d0wxdb5gw",
       "outcome": "completed",
       "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3)\nProposal: - 2:1 randomization ratio (osimertinib:chemotherapy) - Treatment: Osimertinib 80 mg once daily vs. platinum-pemetrexed **Population:** - Total randomized: 419 patients - Patients with measurable and/o"
+    },
+    {
+      "timestamp": 1775252944237,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This Phase III randomized controlled trial (AURA3) evaluated the CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who had progres\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775252994645,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Phase III Trial\nProposal: - **Population**: 419 total randomized patients; 116 with measurable/nonmeasurable CNS lesions; 46 with measurable CNS lesions - **Assessment**: Blinded independent central neuroradiological review - "
+    },
+    {
+      "timestamp": 1775253055455,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis of the AURA3 Phase III Trial\", \"authors\": \"Mok et al. (JCO 2018)\", \"study_type\": \"Randomized Phase III Clinical Trial \nProposal: See summary for details"
+    },
+    {
+      "timestamp": 1775253154396,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775253225563,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Total enrolled: 419 patients randomly assigned (2:1 ratio) - CNS evaluable population: 116 patients with measurable and/or nonmeasurable CNS lesions (46 with measurable lesions) **Intervention**: - "
     }
   ],
   "strategy": {
