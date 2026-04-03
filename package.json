@@ -1,8 +1,8 @@
 {
-  "name": "@synapse/node",
+  "name": "@synapseia/node",
   "version": "0.2.0",
   "private": true,
-  "description": "Synapse Node CLI Software",
+  "description": "Synapseia Node CLI Software",
   "type": "module",
   "bin": {
     "synapseia": "./dist/index.js",

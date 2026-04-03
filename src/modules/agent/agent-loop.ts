@@ -1,5 +1,5 @@
 /**
- * Agent Loop - Autonomous research loop for SynapseIA
+ * Agent Loop - Autonomous research loop for Synapseia
  *
  * Loop principal:
  * 1. Fetch top experiments from coordinator
@@ -178,7 +178,7 @@ export class AgentLoopHelper {
     this.state.isRunning = true;
     const { intervalMs, maxIterations } = config;
 
-    logger.log('🚀 Starting SynapseIA Agent Loop');
+    logger.log('🚀 Starting Synapseia Agent Loop');
     logger.log(`   Coordinator: ${config.coordinatorUrl}`);
     logger.log(`   Peer ID: ${config.peerId}`);
     logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);

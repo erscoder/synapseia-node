@@ -1,5 +1,5 @@
 /**
- * Identity management for Synapse nodes
+ * Identity management for Synapseia nodes
  * Uses Ed25519 for signing and authentication
  */
 
@@ -73,7 +73,7 @@ export class IdentityHelper {
     const idPath = path.join(identityDir, 'identity.json');
 
     if (!existsSync(idPath)) {
-      throw new Error(`Identity not found at ${idPath}. Run generateIdentity() or 'synapse start' first.`);
+      throw new Error(`Identity not found at ${idPath}. Run generateIdentity() or 'synapseia start' first.`);
     }
 
     const content = readFileSync(idPath, 'utf-8');

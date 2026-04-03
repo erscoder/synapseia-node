@@ -1,5 +1,5 @@
 /**
- * Type definitions for SynapseIA agent runtime
+ * Type definitions for Synapseia agent runtime
  */
 
 export interface Experiment {

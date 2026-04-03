@@ -143,12 +143,12 @@ async function bootstrap() {
 
   const VERSION = getPackageVersion();
   const program = new Command();
-  program.name('synapseia').description('SynapseIA Network Node CLI').version(VERSION);
+  program.name('synapseia').description('Synapseia Network Node CLI').version(VERSION);
 
   // ── start ──────────────────────────────────────────────────────────────────
   program
     .command('start')
-    .description('Start SynapseIA node')
+    .description('Start Synapseia node')
     .option('--model <name>', 'Model to use (default: recommended for hardware)')
     .option('--llm-url <url>', 'Custom LLM API base URL (for openai-compat provider)')
     .option('--llm-key <key>', 'API key for cloud LLM provider')
@@ -652,7 +652,7 @@ async function bootstrap() {
       const compatibleModels = hardwareService.getCompatibleModels(sysInfo.gpu.vramGb);
 
       logger.log('═══════════════════════════════════════════════════');
-      logger.log('       SynapseIA Node - System Information');
+      logger.log('       Synapseia Node - System Information');
       logger.log('═══════════════════════════════════════════════════');
       logger.log();
       logger.log('📋 Operating System:');
@@ -700,9 +700,9 @@ async function bootstrap() {
   // ── stop ───────────────────────────────────────────────────────────────────
   program
     .command('stop')
-    .description('Stop the running SynapseIA node')
+    .description('Stop the running Synapseia node')
     .action(() => {
-      logger.log('🛑 Stopping SynapseIA node...');
+      logger.log('🛑 Stopping Synapseia node...');
       workOrderAgentService.stopWorkOrderAgent();
       logger.log('✅ Node stopped');
     });
@@ -730,7 +730,7 @@ async function bootstrap() {
         return;
       }
 
-      logger.log('\n🔧 SynapseIA Configuration Wizard');
+      logger.log('\n🔧 Synapseia Configuration Wizard');
       logger.log('   Use ↑↓ to navigate, Enter to select, Ctrl+C to cancel.\n');
 
       const catalog = modelCatalogService.getCatalog();
