@@ -6,34 +6,7 @@ import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
 import { isPyTorchAvailable } from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
-
-/** Cached public IP (refreshed every 30 min) */
-let _cachedPublicIp: string | null = null;
-let _cachedIpAt = 0;
-const PUBLIC_IP_TTL_MS = 30 * 60 * 1000; // 30 min
-
-/**
- * Resolve the node's public IP address via ipify.org.
- * Cached for 30 minutes to avoid hammering the external API.
- * Returns null on failure (no internet, timeout, etc.).
- */
-async function resolvePublicIp(): Promise<string | null> {
-  if (_cachedPublicIp && Date.now() - _cachedIpAt < PUBLIC_IP_TTL_MS) {
-    return _cachedPublicIp;
-  }
-  try {
-    const res = await fetch('https://api.ipify.org?format=json', {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { ip: string };
-    _cachedPublicIp = data.ip;
-    _cachedIpAt = Date.now();
-    return data.ip;
-  } catch {
-    return null; // graceful fallback — no crash if ipify is unreachable
-  }
-}
+import { IpifyService } from '../shared/infrastructure/ipify.service';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -55,6 +28,11 @@ export interface HeartbeatResponse {
 
 @Injectable()
 export class HeartbeatHelper {
+  private readonly ipifyService: IpifyService;
+
+  constructor(ipifyService?: IpifyService) {
+    this.ipifyService = ipifyService ?? new IpifyService();
+  }
   /**
    * Send heartbeat to coordinator with exponential backoff retry
    */
@@ -70,7 +48,7 @@ export class HeartbeatHelper {
     const capabilities = await this.determineCapabilitiesAsync(hardware);
 
     // Resolve public IP for geo-lookup (cached 30 min)
-    const publicIp = await resolvePublicIp();
+    const publicIp = await this.ipifyService.resolvePublicIp();
 
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
@@ -232,22 +210,4 @@ export class HeartbeatHelper {
   }
 }
 
-// Backward-compatible standalone exports
-export const sendHeartbeat = (
-  coordinatorUrl: string,
-  identity: Identity,
-  hardware: Hardware,
-): Promise<HeartbeatResponse> =>
-  new HeartbeatHelper().sendHeartbeat(coordinatorUrl, identity, hardware);
 
-export const determineCapabilities = (hardware: Hardware): string[] =>
-  new HeartbeatHelper().determineCapabilities(hardware);
-
-export const startPeriodicHeartbeat = (
-  coordinatorUrl: string,
-  identity: Identity,
-  hardware: Hardware,
-  intervalMs?: number,
-  p2pNode?: P2PNode,
-): () => void =>
-  new HeartbeatHelper().startPeriodicHeartbeat(coordinatorUrl, identity, hardware, intervalMs ?? 30000, p2pNode);

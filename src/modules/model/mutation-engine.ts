@@ -4,7 +4,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { generateLLM, type LLMModel } from '../llm/llm-provider';
+import { LlmProviderHelper, type LLMModel } from '../llm/llm-provider';
+
+const _llmProvider = new LlmProviderHelper();
 import type { Experiment, Hyperparams } from '../../types';
 
 export interface MutationProposal {
@@ -54,7 +56,7 @@ export async function proposeMutation(
   const prompt = buildPrompt(topExperiments, bestLoss, capabilities);
   const model: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
 
-  const response = await generateLLM(model, prompt);
+  const response = await _llmProvider.generateLLM(model, prompt);
 
   return parseMutationResponse(response, topExperiments, bestLoss, capabilities);
 }

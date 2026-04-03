@@ -33,7 +33,7 @@ import { HardwareService } from '../modules/hardware/services/hardware.service';
 import { NodeConfigService } from '../modules/config/services/node-config.service';
 import { WalletService } from '../modules/wallet/services/wallet.service';
 import { ModelCatalogService } from '../modules/model/services/model-catalog.service';
-import { LlmService } from '../modules/llm/services/llm.service';
+import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { P2pService } from '../modules/p2p/services/p2p.service';
 import { startNode } from '../node-runtime';
@@ -137,7 +137,7 @@ async function bootstrap() {
   const configService = app.get(NodeConfigService);
   const walletService = app.get(WalletService);
   const modelCatalogService = app.get(ModelCatalogService);
-  const llmService = app.get(LlmService);
+  const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
   const p2pService = app.get(P2pService);
 
@@ -415,7 +415,7 @@ async function bootstrap() {
           rawModel.startsWith('anthropic')
             ? rawModel
             : `ollama/${rawModel}`;
-        const llmModel = llmService.parse(modelWithPrefix);
+        const llmModel = llmService.parseModel(modelWithPrefix);
         if (!llmModel) {
           // Non-fatal for Tier 0 nodes — they can still do training WOs without LLM
           logger.warn(`Warning: Invalid model format '${model}' — node will run without LLM capabilities`);

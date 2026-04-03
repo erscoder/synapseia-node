@@ -6,8 +6,7 @@ import { Injectable } from '@nestjs/common';
 import * as path from 'path';
 import * as os from 'os';
 import logger from '../../../utils/logger';
-import { generateLLM, type LLMConfig } from '../../llm/llm-provider';
-import type { LLMModel } from '../../llm/llm-provider';
+import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../../llm/llm-provider';
 import { EmbeddingHelper } from '../../../shared/embedding';
 import { trainMicroModel } from '../../model/trainer';
 import { proposeMutation } from '../../model/mutation-engine';
@@ -32,6 +31,8 @@ const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
 @Injectable()
 export class WorkOrderExecutionHelper {
+  private readonly llmProvider = new LlmProviderHelper();
+
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly evaluation: WorkOrderEvaluationHelper,
@@ -141,7 +142,7 @@ Abstract: ${payload.abstract}`;
 
     const prompt = this.buildResearchPrompt(payload, kgContext || undefined, referenceContext || undefined);
     const startMs = Date.now();
-    const rawResponse = await generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
+    const rawResponse = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
     const latencyMs = Date.now() - startMs;
 
     try {
@@ -280,7 +281,7 @@ Abstract: ${payload.abstract}`;
       modelUsed = llmModel.modelId ?? 'unknown';
       const prompt = `Classify the following text into exactly ONE of these categories: positive, negative, neutral, technical, medical, financial, other.\nReply with ONLY the category label, nothing else.\n\nText: ${payload.input.slice(0, 500)}`;
       try {
-        const raw = await generateLLM(llmModel, prompt, llmConfig);
+        const raw = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig);
         output = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().split(/\s+/)[0].toLowerCase();
         logger.log(`[CpuInference] Classification result: "${output}"`);
       } catch (err) {
@@ -308,7 +309,7 @@ Abstract: ${payload.abstract}`;
         return { result: rawResponse, success };
       }
       const prompt = this.buildWorkOrderPrompt(workOrder);
-      const result = await generateLLM(llmModel, prompt, llmConfig);
+      const result = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig);
       logger.log(` Execution complete, result length: ${result.length} chars`);
       return { result, success: true };
     } catch (error) {

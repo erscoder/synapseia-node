@@ -7,7 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import logger from '../../utils/logger';
-import { generateLLM, type LLMConfig, type LLMModel } from '../llm/llm-provider';
+import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../llm/llm-provider';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,7 @@ export interface ReviewScores {
 
 @Injectable()
 export class ReviewAgentHelper {
+  private readonly llmProvider = new LlmProviderHelper();
   private static readonly POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
@@ -135,7 +136,7 @@ Respond ONLY with valid JSON (no markdown):
   ): Promise<ReviewScores | null> {
     const prompt = this.buildReviewPrompt(submission);
     try {
-      const raw = await generateLLM(llmConfig.llmModel, prompt, llmConfig.llmConfig);
+      const raw = await this.llmProvider.generateLLM(llmConfig.llmModel, prompt, llmConfig.llmConfig);
       let jsonStr = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/) ||
                          jsonStr.match(/```(?:json)?\s*([\s\S]*)/);
