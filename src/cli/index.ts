@@ -272,7 +272,7 @@ async function bootstrap() {
           logger.log('   This requires Python 3 + PyTorch (CPU only, no GPU needed).\n');
 
           // In non-interactive environments (Docker), skip PyTorch install prompt
-          let installTorch: boolean;
+          let installTorch: boolean | null;
           if (process.env.CI || process.env.DOCKER || !process.stdout.isTTY) {
             logger.warn('Non-interactive environment — skipping PyTorch install. Set INSTALL_TORCH=1 to auto-install.');
             installTorch = process.env.INSTALL_TORCH === '1';
@@ -427,6 +427,11 @@ async function bootstrap() {
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
         capabilities.push(`tier-${hardware.tier}`);
         if (inferenceEnabled) capabilities.push('inference');
+        // If a custom LLM URL is provided (e.g. remote Ollama), treat node as having 'llm' capability
+        if (llmUrl && !capabilities.includes('llm')) {
+          capabilities.push('llm');
+          logger.log('LLM capability added via --llm-url');
+        }
 
         // ── Hand off to the node runtime ──────────────────────────────────
         const runtime = await startNode(
@@ -437,7 +442,7 @@ async function bootstrap() {
             tier: hardware.tier,
             coordinatorUrl,
             capabilities,
-            llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: 'ollama' },
+            llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
             llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
             intervalMs: 30000,
             maxIterations: options.maxIterations,

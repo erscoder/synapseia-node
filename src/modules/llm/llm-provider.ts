@@ -10,7 +10,7 @@ import { OllamaHelper, GenerateOptions } from './ollama';
 const _ollamaHelper = new OllamaHelper();
 
 export type LLMProvider = 'ollama' | 'cloud';
-export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
+export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat' ;
 
 export interface LLMModel {
   provider: LLMProvider;
