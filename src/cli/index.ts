@@ -175,16 +175,21 @@ async function bootstrap() {
         // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
         const nodeHome = process.env.SYNAPSEIA_HOME;
 
-        // Check if identity exists; if not, prompt for a name
+        // Check if identity exists; if not, prompt for a name (or read from NODE_NAME env for non-interactive/docker)
         let nodeName: string | undefined;
         const identityDir = nodeHome ?? path.join(os.homedir(), '.synapseia');
         if (!existsSync(path.join(identityDir, 'identity.json'))) {
-          const { input } = await import('@inquirer/prompts');
-          nodeName = await input({
-            message: 'Choose a name for this node (e.g. "node-alpha"):',
-            validate: (v: string) => v.trim().length > 0 || 'Name cannot be empty',
-          });
-          nodeName = nodeName.trim();
+          if (process.env.NODE_NAME) {
+            nodeName = process.env.NODE_NAME.trim();
+            logger.log(`Using node name from NODE_NAME env: ${nodeName}`);
+          } else {
+            const { input } = await import('@inquirer/prompts');
+            nodeName = await input({
+              message: 'Choose a name for this node (e.g. "node-alpha"):',
+              validate: (v: string) => v.trim().length > 0 || 'Name cannot be empty',
+            });
+            nodeName = nodeName.trim();
+          }
         }
 
         const identity = identityService.getOrCreate(nodeHome, nodeName);
