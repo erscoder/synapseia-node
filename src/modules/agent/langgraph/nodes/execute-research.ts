@@ -104,7 +104,7 @@ export class ExecuteResearchNode {
         observations,
       );
 
-      const raw = await this.llmService.generate(state.config.llmModel, prompt);
+      const raw = await this.llmService.generate(state.config.llmModel, prompt, state.config.llmConfig);
       const thought = this.parseReActResponse(raw);
 
       if (thought.action === 'use_tool' && thought.toolCall && ctx.callCount < ctx.maxCalls) {

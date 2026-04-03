@@ -71,7 +71,6 @@ export class HeartbeatHelper {
 
     // Resolve public IP for geo-lookup (cached 30 min)
     const publicIp = await resolvePublicIp();
-    if (publicIp) logger.log(`[Heartbeat] Public IP: ${publicIp}`);
 
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
