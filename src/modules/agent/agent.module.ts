@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, type DynamicModule } from '@nestjs/common';
 import { AgentBrainHelper } from './agent-brain';
 import { AgentLoopHelper } from './agent-loop';
 
@@ -9,38 +9,56 @@ import { WorkOrderCoordinatorHelper } from './work-order/work-order.coordinator'
 import { WorkOrderEvaluationHelper } from './work-order/work-order.evaluation';
 import { WorkOrderExecutionHelper } from './work-order/work-order.execution';
 import { WorkOrderLoopHelper } from './work-order/work-order.loop';
-// Sprint A-C: LangGraph agent graph
-import { LanggraphModule } from './langgraph/langgraph.module';
-import { LangGraphWorkOrderAgentService } from './services/langgraph-work-order-agent.service';
 
-@Module({
-  imports: [LanggraphModule],
-  providers: [
-    AgentBrainHelper,
-    ReviewAgentHelper,
-    RoundListenerHelper,
-    // Work-order sub-helpers
-    WorkOrderStateHelper,
-    WorkOrderCoordinatorHelper,
-    WorkOrderEvaluationHelper,
-    WorkOrderExecutionHelper,
-    WorkOrderLoopHelper,
-    // Agent loop (legacy)
-    AgentLoopHelper,
-    // LangGraph agent loop (AGENT_MODE=langgraph)
-    LangGraphWorkOrderAgentService,
-  ],
-  exports: [
-    AgentBrainHelper,
-    ReviewAgentHelper,
-    RoundListenerHelper,
-    AgentLoopHelper,
-    LangGraphWorkOrderAgentService,
-    WorkOrderStateHelper,
-    WorkOrderCoordinatorHelper,
-    WorkOrderEvaluationHelper,
-    WorkOrderExecutionHelper,
-    WorkOrderLoopHelper,
-  ],
-})
-export class AgentModule {}
+// LangGraph imports are lazy — only loaded when AGENT_MODE=langgraph
+const isLangGraph = process.env.AGENT_MODE === 'langgraph';
+
+@Module({})
+export class AgentModule {
+  static register(): DynamicModule {
+    const imports: any[] = [];
+    const extraProviders: any[] = [];
+    const extraExports: any[] = [];
+
+    if (isLangGraph) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { LanggraphModule } = require('./langgraph/langgraph.module');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { LangGraphWorkOrderAgentService } = require('./services/langgraph-work-order-agent.service');
+      imports.push(LanggraphModule);
+      extraProviders.push(LangGraphWorkOrderAgentService);
+      extraExports.push(LangGraphWorkOrderAgentService);
+    }
+
+    return {
+      module: AgentModule,
+      imports,
+      providers: [
+        AgentBrainHelper,
+        ReviewAgentHelper,
+        RoundListenerHelper,
+        // Work-order sub-helpers
+        WorkOrderStateHelper,
+        WorkOrderCoordinatorHelper,
+        WorkOrderEvaluationHelper,
+        WorkOrderExecutionHelper,
+        WorkOrderLoopHelper,
+        // Agent loop (legacy)
+        AgentLoopHelper,
+        ...extraProviders,
+      ],
+      exports: [
+        AgentBrainHelper,
+        ReviewAgentHelper,
+        RoundListenerHelper,
+        AgentLoopHelper,
+        WorkOrderStateHelper,
+        WorkOrderCoordinatorHelper,
+        WorkOrderEvaluationHelper,
+        WorkOrderExecutionHelper,
+        WorkOrderLoopHelper,
+        ...extraExports,
+      ],
+    };
+  }
+}
