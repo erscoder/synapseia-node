@@ -19,6 +19,10 @@ export class WorkOrderStateHelper {
   };
 
   private lastSubmissionAt = 0;
+  /** Last WO type accepted — used for round-robin type rotation */
+  lastAcceptedType: string | null = null;
+  /** How many times each type has been executed this session */
+  readonly typeExecutionCount: Map<string, number> = new Map();
 
   private readonly researchCooldownMs = parseInt(
     process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000),
@@ -48,6 +52,8 @@ export class WorkOrderStateHelper {
       researchCooldowns: new Map<string, number>(),
     };
     this.lastSubmissionAt = 0;
+    this.lastAcceptedType = null;
+    this.typeExecutionCount.clear();
   }
 
   get isRunning(): boolean {
