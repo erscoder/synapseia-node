@@ -134,7 +134,7 @@ export class WalletHelper {
    */
   async promptForPassword(message: string = 'Enter wallet password: '): Promise<string> {
     // Check for env var first (useful for Docker)
-    const envPassword = process.env.WALLET_PASSWORD;
+    const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
     if (envPassword) {
       return envPassword;
     }
@@ -149,7 +149,7 @@ export class WalletHelper {
    */
   async promptForNewPassword(): Promise<string> {
     // Check for env var first (useful for Docker)
-    const envPassword = process.env.WALLET_PASSWORD;
+    const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
     if (envPassword) {
       if (envPassword.length < 8) {
         throw new Error('WALLET_PASSWORD must be at least 8 characters');
