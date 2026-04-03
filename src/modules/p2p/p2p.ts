@@ -150,9 +150,4 @@ export class P2pHelper {
 }
 
 // Backward-compatible standalone export
-export async function createP2PNode(
-  identity: Identity,
-  bootstrapAddrs: string[] = [],
-): Promise<P2PNode> {
-  return new P2pHelper().createP2PNode(identity, bootstrapAddrs);
-}
+

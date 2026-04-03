@@ -7,14 +7,6 @@ import { Injectable } from '@nestjs/common';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { STAKING_PROGRAM_ID } from '../../utils/idl';
 
-// Derive stake account inline to avoid dependency issues
-function deriveStakeAccount(peerId: string): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('stake'), Buffer.from(peerId)],
-    STAKING_PROGRAM_ID,
-  );
-}
-
 export interface StakeInfo {
   peerId: string;
   stakedAmount: number; // In SYN tokens
@@ -29,37 +21,24 @@ export interface StakingVerificationResult {
   error?: string;
 }
 
-/**
- * Parse stake account data from raw bytes
- * Simplified parser - in production, use anchor IDL deserializer
- */
-function parseStakeAccountData(data: Buffer): {
-  amount: number;
-  lockupEnd: number | null;
-  owner: string;
-} {
-  // This is a simplified parser. In production, use:
-  // import { Program, AnchorProvider } from '@project-serum/anchor';
-  // const program = new Program(idl, provider);
-  // const account = program.account.stakeAccount.fetch(address);
-
-  // For now, return dummy data based on account size
-  if (data.length < 8) {
-    throw new Error('Invalid stake account data');
-  }
-
-  // Read amount (u64) - simplified
-  const amount = data.readBigUInt64LE(0);
-
-  return {
-    amount: Number(amount),
-    lockupEnd: data.length > 16 ? Number(data.readBigUInt64LE(8)) : null,
-    owner: 'placeholder', // Would parse from account data
-  };
-}
-
 @Injectable()
 export class StakingHelper {
+  private deriveStakeAccount(peerId: string): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('stake'), Buffer.from(peerId)],
+      STAKING_PROGRAM_ID,
+    );
+  }
+
+  private parseStakeAccountData(data: Buffer): { amount: number; lockupEnd: number | null; owner: string } {
+    if (data.length < 8) throw new Error('Invalid stake account data');
+    const amount = data.readBigUInt64LE(0);
+    return {
+      amount: Number(amount),
+      lockupEnd: data.length > 16 ? Number(data.readBigUInt64LE(8)) : null,
+      owner: 'placeholder',
+    };
+  }
   /**
    * Verify stake for a peer on the blockchain
    */
@@ -69,7 +48,7 @@ export class StakingHelper {
   ): Promise<StakingVerificationResult> {
     try {
       const connection = new Connection(rpcUrl);
-      const [stakeAccount] = deriveStakeAccount(peerId);
+      const [stakeAccount] = this.deriveStakeAccount(peerId);
 
       // Fetch account info
       const accountInfo = await connection.getAccountInfo(stakeAccount);
@@ -82,7 +61,7 @@ export class StakingHelper {
       }
 
       // Parse IDL data (simplified - in production, use anchor client)
-      const stakeData = parseStakeAccountData(accountInfo.data);
+      const stakeData = this.parseStakeAccountData(accountInfo.data);
 
       const stakeInfo: StakeInfo = {
         peerId,
@@ -171,7 +150,7 @@ export class StakingHelper {
 
       let totalStake = 0;
       for (const account of programAccounts) {
-        const data = parseStakeAccountData(account.account.data);
+        const data = this.parseStakeAccountData(account.account.data);
         totalStake += data.amount;
       }
 
