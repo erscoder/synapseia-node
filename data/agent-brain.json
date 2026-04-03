@@ -225,6 +225,30 @@
       "type": "discovery",
       "content": "Research: # Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775244782914,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244836380,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244891787,
+      "type": "discovery",
+      "content": "Research: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775244936083,
+      "type": "discovery",
+      "content": "Research: ## Research Analysis: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma",
+      "importance": 0.7
     }
   ],
   "journal": [
@@ -449,6 +473,30 @@
       "action": "research:wo_1775222160217_2ngij1npl",
       "outcome": "completed",
       "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: # Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: ## 2. Key Findings ### 2.1 Clinical Context - Anti-PD-1 therapy is **standard of care** for recurrent/metastatic non-nasopharyngeal head and neck cancer - In contrast, **no anti-PD-1 agents are regula"
+    },
+    {
+      "timestamp": 1775244782914,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - Focus on randomized clinical trials in the first-line setting - Evaluation of anti-PD-1 therapy both as monotherapy and in combination with chemotherapy **Key Findings:** 1. **First-Line Combination"
+    },
+    {
+      "timestamp": 1775244836380,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: - Focus on first-line treatment settings and previously treated disease **Key Findings:** 1. **First-line Treatment:** Randomized clinical trials demonstrated significant improvements in progression-f"
+    },
+    {
+      "timestamp": 1775244891787,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Report: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: The research methodology involved: 1. Systematic review of recent clinical trials investigating anti-PD-1 therapy in RM-NPC 2. Analysis of randomized clinical trial data, particularly focusing on firs"
+    },
+    {
+      "timestamp": 1775244936083,
+      "action": "research:wo_1775222160217_2ngij1npl",
+      "outcome": "completed",
+      "lesson": "Paper: Clinical trial data of Anti-PD-1/PD-L1 therapy for recurrent or metastatic nasopharyngeal Carcinoma: A review.\nSummary: ## Research Analysis: Anti-PD-1/PD-L1 Therapy for Recurrent or Metastatic Nasopharyngeal Carcinoma\nProposal: **Methodology:** - Review of randomized clinical trials examining anti-PD-1 therapy in RM-NPC - Focus on first-line treatment setting comparing anti-PD-1 + chemotherapy vs chemotherapy alone - Analysi"
     }
   ],
   "strategy": {
