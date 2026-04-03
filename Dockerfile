@@ -1,24 +1,25 @@
 FROM node:20-alpine
 
+# Install Python3 + pip + PyTorch CPU (for training work orders)
+RUN apk add --no-cache python3 py3-pip && \
+    pip3 install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || \
+    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 WORKDIR /app
 
-# Copy package files
+# Copy package files and install deps
 COPY package.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy built CLI
+# Copy source and build
 COPY . .
-
-# Create synapse config directory
-RUN mkdir -p /root/.synapse
-
-# Set environment variables
-ENV NODE_ENV=production
-
 RUN npm run build
 
-# Run the SynapseIA node CLI
-ENTRYPOINT ["node", "dist/index.cjs"]
+# Create data dir for datasets/brain
+RUN mkdir -p /root/.synapseia
+
+ENV NODE_ENV=production
+
+# Run the Synapseia node CLI
+ENTRYPOINT ["node", "dist/index.js"]
 CMD ["start"]
