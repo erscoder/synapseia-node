@@ -65,7 +65,7 @@ export async function startNode(
       createNode: (identity: Identity, bootstrapAddrs: string[]) => Promise<P2PNode>;
     };
     workOrderAgentService: {
-      start: (cfg: {
+      startWorkOrderAgent: (cfg: {
         coordinatorUrl: string;
         peerId: string;
         capabilities: string[];
@@ -74,7 +74,7 @@ export async function startNode(
         intervalMs: number;
         maxIterations?: number;
       }) => Promise<void>;
-      stop: () => void;
+      stopWorkOrderAgent: () => void;
     };
   },
 ): Promise<NodeRuntime> {
@@ -126,7 +126,7 @@ export async function startNode(
 
   // Fire and forget — the agent loop runs indefinitely
   services.workOrderAgentService
-    .start({
+    .startWorkOrderAgent({
       coordinatorUrl: config.coordinatorUrl,
       peerId: config.identity.peerId,
       capabilities: config.capabilities,
@@ -145,7 +145,7 @@ export async function startNode(
     stop: async () => {
       logger.log('🛑 Shutting down node...');
       heartbeatCleanup();
-      services.workOrderAgentService.stop();
+      services.workOrderAgentService.stopWorkOrderAgent();
       if (p2pNode) {
         try {
           await (p2pNode as unknown as { stop?: () => Promise<void> }).stop?.();
