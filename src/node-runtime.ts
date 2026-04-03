@@ -70,7 +70,7 @@ export async function startNode(
       createNode: (identity: Identity, bootstrapAddrs: string[]) => Promise<P2PNode>;
     };
     workOrderAgentService: {
-      startWorkOrderAgent: (cfg: {
+      start: (cfg: {
         coordinatorUrl: string;
         peerId: string;
         capabilities: string[];
@@ -79,7 +79,7 @@ export async function startNode(
         intervalMs: number;
         maxIterations?: number;
       }) => Promise<void>;
-      stopWorkOrderAgent: () => void;
+      stop: () => void;
     };
     a2aServer?: A2AServer;
   },
@@ -140,15 +140,16 @@ export async function startNode(
 
   // ── 4. Work Order Agent ───────────────────────────────────────────────────
   logger.log('..............................');
-  logger.log('🚀 Starting work order agent...');
+  logger.log('🚀 Starting LangGraph work order agent...');
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
   logger.log(`   Model: ${config.llmModel.providerId ? config.llmModel.providerId + '/' : ''}${config.llmModel.modelId}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+  logger.log(`   Mode: langgraph`);
 
-  // Fire and forget — the agent loop runs indefinitely
+  // Fire and forget — the LangGraph agent loop runs indefinitely
   services.workOrderAgentService
-    .startWorkOrderAgent({
+    .start({
       coordinatorUrl: config.coordinatorUrl,
       peerId: config.identity.peerId,
       capabilities: config.capabilities,
@@ -158,7 +159,7 @@ export async function startNode(
       maxIterations: config.maxIterations,
     })
     .catch((err: Error) => {
-      logger.error('❌ Work order agent crashed:', err.message);
+      logger.error('❌ LangGraph agent crashed:', err.message);
     });
 
 
@@ -167,7 +168,7 @@ export async function startNode(
     stop: async () => {
       logger.log('🛑 Shutting down node...');
       heartbeatCleanup();
-      services.workOrderAgentService.stopWorkOrderAgent();
+      services.workOrderAgentService.stop();
       if (a2aRunning && services.a2aServer) {
         try { services.a2aServer.stop(); } catch { /* ignore */ }
       }
