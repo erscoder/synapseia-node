@@ -8,9 +8,9 @@ export default defineConfig({
   outExtension: () => ({ js: '.js' }),
   target: 'es2022', // ES2022 has native decorator support
   clean: true,
-  // Force SWC for decorator metadata support
-  minify: true,
-  swcMinify: true,
+  // Minification can break design:paramtypes — keep off
+  minify: false,
+  swcMinify: false,
   // Copy Python scripts next to dist output so train_micro.py is always findable
   async onSuccess() {
     try {

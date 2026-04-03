@@ -24,7 +24,7 @@ import { A2AModule } from './modules/a2a/a2a.module';
     StakingModule,
     WalletModule,
     InferenceModule,
-    AgentModule.register(),
+    AgentModule,
     A2AModule,  // restored (ReviewAgentHelper dep removed from PeerReviewHandler)
   ],
 })
