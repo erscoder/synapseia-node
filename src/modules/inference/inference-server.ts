@@ -66,7 +66,7 @@ let serverStartTime: number;
  * Parse JSON body from incoming request
  * Exported for testing
  */
-export function parseBody(req: http.IncomingMessage): Promise<any> {
+function parseBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', (chunk) => {
@@ -87,7 +87,7 @@ export function parseBody(req: http.IncomingMessage): Promise<any> {
  * Forward request to Ollama API
  * Exported for testing
  */
-export async function forwardToOllama(request: ChatCompletionRequest): Promise<OllamaChatResponse> {
+async function forwardToOllama(request: ChatCompletionRequest): Promise<OllamaChatResponse> {
   const ollamaRequest: OllamaChatRequest = {
     model: request.model,
     messages: request.messages,
@@ -123,7 +123,7 @@ export async function forwardToOllama(request: ChatCompletionRequest): Promise<O
  * Transform Ollama response to OpenAI format
  * Exported for testing
  */
-export function transformToOpenAI(ollamaResponse: OllamaChatResponse, model: string): ChatCompletionResponse {
+function transformToOpenAI(ollamaResponse: OllamaChatResponse, model: string): ChatCompletionResponse {
   return {
     id: `chatcmpl-${crypto.randomUUID()}`,
     object: 'chat.completion',
@@ -160,7 +160,7 @@ async function notifyCoordinatorInferenceRequest(coordinatorUrl: string, peerId:
  * Handle POST /v1/chat/completions
  * Exported for testing
  */
-export async function handleChatCompletions(
+async function handleChatCompletions(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   peerId: string,
@@ -205,7 +205,7 @@ export async function handleChatCompletions(
  * Handle GET /api/v1/state
  * Exported for testing
  */
-export async function handleState(
+async function handleState(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   config: InferenceServerConfig,
@@ -224,7 +224,7 @@ export async function handleState(
  * Handle GET /health
  * Exported for testing
  */
-export async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const uptime = process.uptime();
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
@@ -249,7 +249,7 @@ function handleNotFound(req: http.IncomingMessage, res: http.ServerResponse): vo
 /**
  * Start inference server
  */
-export function startInferenceServer(config: InferenceServerConfig): { close: () => void; server: http.Server } {
+function startInferenceServer(config: InferenceServerConfig): { close: () => void; server: http.Server } {
   serverStartTime = Date.now();
   const port = config.port !== undefined && config.port !== null ? config.port : 8080;
 

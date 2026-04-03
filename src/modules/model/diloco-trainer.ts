@@ -9,6 +9,7 @@ import { resolve } from 'path';
 import { statSync } from 'fs';
 
 export type SpawnFn = (cmd: string, args: string[], options: Record<string, unknown>) => ChildProcess;
+export type StatFn = (path: string) => { size: number };
 
 export interface DiLoCoHyperparams {
   learningRate?: number;
@@ -25,21 +26,13 @@ export interface DiLoCoHyperparams {
 }
 
 export interface DiLoCoConfig {
-  /** HuggingFace model ID, e.g. "Qwen/Qwen2.5-7B" */
   modelId: string;
-  /** Path to existing LoRA adapter weights (undefined for first round) */
   adapterPath?: string;
-  /** Local path to training corpus */
   datasetPath: string;
-  /** Number of inner-loop steps per outer round */
   innerSteps: number;
-  /** Training hyperparameters */
   hyperparams: DiLoCoHyperparams;
-  /** Compute backend */
   hardware: 'cpu' | 'mps' | 'cuda';
-  /** Use a tiny model for testing instead of the full 7B */
   testMode?: boolean;
-  /** Custom path to the Python script (for testing) */
   pythonScriptPath?: string;
 }
 
@@ -54,163 +47,85 @@ export interface DiLoCoResult {
   valLoss: number;
   innerSteps: number;
   durationMs: number;
-  /** Local path to the SVD-compressed gradient file (.pt) */
   gradientPath: string;
-  /** Size of the gradient file in bytes */
   gradientSizeBytes: number;
 }
 
-/**
- * Run the DiLoCo inner training loop by spawning diloco_train.py.
- *
- * Emits JSON progress lines while training, then a final result line.
- */
-export type StatFn = (path: string) => { size: number };
-
-export async function runDiLoCoInnerLoop(
-  config: DiLoCoConfig,
-  onProgress?: (update: DiLoCoProgressUpdate) => void,
-  spawnFn: SpawnFn = spawn as unknown as SpawnFn,
-  statFn: StatFn = (p) => statSync(p) as { size: number },
-): Promise<DiLoCoResult> {
-  const scriptPath =
-    config.pythonScriptPath ??
-    resolve(process.cwd(), 'scripts/diloco_train.py');
-
-  const startTime = Date.now();
-
-  const payload = {
-    modelId: config.modelId,
-    adapterPath: config.adapterPath ?? null,
-    datasetPath: config.datasetPath,
-    innerSteps: config.innerSteps,
-    hyperparams: config.hyperparams,
-    hardware: config.hardware,
-    testMode: config.testMode ?? false,
-  };
-
-  // Configurable timeout: env DILOCO_TIMEOUT_MS, default 15 minutes = 900000ms
-  const DILOCO_TIMEOUT_MS = parseInt(process.env.DILOCO_TIMEOUT_MS || '900000', 10);
-
-  return new Promise((resolve, reject) => {
-    const proc = spawnFn('python3', [scriptPath], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    let stderr = '';
-    let finalResult: DiLoCoResult | null = null;
-    let timedOut = false;
-
-    // Setup timeout — will kill process if training takes too long
-    const timeoutHandle = setTimeout(() => {
-      timedOut = true;
-      proc.kill?.('SIGTERM');
-      reject(new Error(`DiLoCo training timed out after ${DILOCO_TIMEOUT_MS / 1000}s`));
-    }, DILOCO_TIMEOUT_MS);
-
-    // Send config via stdin
-    proc.stdin!.write(JSON.stringify(payload));
-    proc.stdin!.end();
-
-    proc.stdout!.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n').filter((l) => l.trim());
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>;
-
-          if (parsed['error']) {
-            clearTimeout(timeoutHandle);
-            reject(new Error(String(parsed['error'])));
-            return;
-          }
-
-          if (parsed['step'] !== undefined && parsed['loss'] !== undefined) {
-            if (onProgress) {
-              onProgress({
-                step: parsed['step'] as number,
-                loss: parsed['loss'] as number,
-                lr: (parsed['lr'] as number) ?? 0,
-              });
-            }
-          }
-
-          if (parsed['result']) {
-            const r = parsed['result'] as Record<string, unknown>;
-            const gradientPath = String(r['gradientPath']);
-
-            let gradientSizeBytes = 0;
-            try {
-              gradientSizeBytes = statFn(gradientPath).size;
-            } catch {
-              gradientSizeBytes = 0;
-            }
-
-            finalResult = {
-              finalLoss: Number(r['finalLoss']) || 0,
-              valLoss: Number(r['valLoss']) || 0,
-              innerSteps: Number(r['innerSteps']) || config.innerSteps,
-              durationMs: Date.now() - startTime,
-              gradientPath,
-              gradientSizeBytes,
-            };
-          }
-        } catch {
-          // Ignore non-JSON lines
-        }
-      }
-    });
-
-    proc.stderr!.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timeoutHandle);
-
-      // If we already timed out, don't process further
-      if (timedOut) {
-        return;
-      }
-
-      if (code !== 0) {
-        reject(
-          new Error(
-            `diloco_train.py exited with code ${code}: ${stderr || 'unknown error'}`,
-          ),
-        );
-        return;
-      }
-      if (!finalResult) {
-        reject(
-          new Error('DiLoCo training completed but no result received'),
-        );
-        return;
-      }
-      resolve(finalResult);
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timeoutHandle);
-      reject(new Error(`Failed to spawn diloco_train.py: ${err.message}`));
-    });
-  });
-}
-
-/**
- * Injectable NestJS wrapper around runDiLoCoInnerLoop.
- */
 @Injectable()
 export class DiLoCoTrainerHelper {
-  runDiLoCoInnerLoop(
+  async runDiLoCoInnerLoop(
     config: DiLoCoConfig,
     onProgress?: (update: DiLoCoProgressUpdate) => void,
-    spawnFn?: SpawnFn,
-    statFn?: StatFn,
+    spawnFn: SpawnFn = spawn as unknown as SpawnFn,
+    statFn: StatFn = (p) => statSync(p) as { size: number },
   ): Promise<DiLoCoResult> {
-    return runDiLoCoInnerLoop(config, onProgress, spawnFn, statFn);
+    const scriptPath = config.pythonScriptPath ?? resolve(process.cwd(), 'scripts/diloco_train.py');
+    const startTime = Date.now();
+    const DILOCO_TIMEOUT_MS = parseInt(process.env.DILOCO_TIMEOUT_MS || '900000', 10);
+
+    const payload = {
+      modelId: config.modelId, adapterPath: config.adapterPath ?? null,
+      datasetPath: config.datasetPath, innerSteps: config.innerSteps,
+      hyperparams: config.hyperparams, hardware: config.hardware,
+      testMode: config.testMode ?? false,
+    };
+
+    return new Promise((res, reject) => {
+      const proc = spawnFn('python3', [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      let stderr = '';
+      let finalResult: DiLoCoResult | null = null;
+      let timedOut = false;
+
+      const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        proc.kill?.('SIGTERM');
+        reject(new Error(`DiLoCo training timed out after ${DILOCO_TIMEOUT_MS / 1000}s`));
+      }, DILOCO_TIMEOUT_MS);
+
+      proc.stdin!.write(JSON.stringify(payload));
+      proc.stdin!.end();
+
+      proc.stdout!.on('data', (data: Buffer) => {
+        for (const line of data.toString().split('\n').filter(l => l.trim())) {
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            if (parsed['error']) { clearTimeout(timeoutHandle); reject(new Error(String(parsed['error']))); return; }
+            if (parsed['step'] !== undefined && parsed['loss'] !== undefined && onProgress) {
+              onProgress({ step: parsed['step'] as number, loss: parsed['loss'] as number, lr: (parsed['lr'] as number) ?? 0 });
+            }
+            if (parsed['result']) {
+              const r = parsed['result'] as Record<string, unknown>;
+              const gradientPath = String(r['gradientPath']);
+              let gradientSizeBytes = 0;
+              try { gradientSizeBytes = statFn(gradientPath).size; } catch { /* */ }
+              finalResult = {
+                finalLoss: Number(r['finalLoss']) || 0, valLoss: Number(r['valLoss']) || 0,
+                innerSteps: Number(r['innerSteps']) || config.innerSteps,
+                durationMs: Date.now() - startTime, gradientPath, gradientSizeBytes,
+              };
+            }
+          } catch { /* ignore non-JSON */ }
+        }
+      });
+
+      proc.stderr!.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+      proc.on('close', (code) => {
+        clearTimeout(timeoutHandle);
+        if (timedOut) return;
+        if (code !== 0) { reject(new Error(`diloco_train.py exited with code ${code}: ${stderr || 'unknown error'}`)); return; }
+        if (!finalResult) { reject(new Error('DiLoCo training completed but no result received')); return; }
+        res(finalResult);
+      });
+
+      proc.on('error', (err) => { clearTimeout(timeoutHandle); reject(new Error(`Failed to spawn diloco_train.py: ${err.message}`)); });
+    });
   }
 }
 
-export const _test = {
-  runDiLoCoInnerLoop,
-};
+// Backward-compatible standalone export
+const _dilocoInstance = new DiLoCoTrainerHelper();
+export const runDiLoCoInnerLoop = (
+  config: DiLoCoConfig, onProgress?: (update: DiLoCoProgressUpdate) => void,
+  spawnFn?: SpawnFn, statFn?: StatFn,
+) => _dilocoInstance.runDiLoCoInnerLoop(config, onProgress, spawnFn, statFn);
