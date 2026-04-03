@@ -6,7 +6,7 @@
 import axios from 'axios';
 import logger from '../../utils/logger';
 import { Injectable } from '@nestjs/common';
-import { getLocalModels, MODEL_CATALOG } from '../model/model-catalog';
+import { ModelCatalogHelper, MODEL_CATALOG } from '../model/model-catalog';
 import type { Hardware } from '../hardware/hardware';
 
 /** Model info as expected by coordinator's POST /inference/register */
@@ -37,7 +37,8 @@ export class ModelDiscovery {
     hardware: Hardware,
   ): Promise<void> {
     try {
-      const localModelNames = getLocalModels();
+      const catalogHelper = new ModelCatalogHelper();
+      const localModelNames = catalogHelper.getLocalModels();
       if (localModelNames.length === 0) {
         logger.log('[ModelDiscovery] No local models found, skipping registration');
         return;

@@ -9,7 +9,7 @@ import logger from '../../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../../llm/llm-provider';
 import { EmbeddingHelper } from '../../../shared/embedding';
 import { trainMicroModel } from '../../model/trainer';
-import { proposeMutation } from '../../model/mutation-engine';
+import { MutationEngineHelper } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
 import type { AgentBrain } from '../agent-brain';
@@ -192,7 +192,8 @@ Abstract: ${payload.abstract}`;
     try { payload = JSON.parse(workOrder.description) as TrainingWorkOrderPayload; } catch { return { result: 'Invalid training payload', success: false }; }
 
     const topExperiments = await this.coordinator.fetchTopExperiments(coordinatorUrl);
-    let mutation = await proposeMutation(topExperiments, payload.currentBestLoss, capabilities);
+    const mutationEngine = new MutationEngineHelper();
+    let mutation = await mutationEngine.proposeMutation(topExperiments, payload.currentBestLoss, capabilities);
     if (payload.baseConfig) mutation = { ...mutation, hyperparams: { ...mutation.hyperparams, ...payload.baseConfig } };
 
     let datasetPath = payload.datasetId;
