@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';
 import { EvaluateEconomicsNode } from './nodes/evaluate-economics';
@@ -19,6 +19,7 @@ import { ToolsModule } from './tools.module';
 import { LangGraphLlmService } from './llm.service';
 import { AgentGraphService } from './agent-graph.service';
 import { LlmProviderHelper } from '../../llm/llm-provider';
+import { AgentBrainHelper } from '../agent-brain';
 
 const NODES = [
   FetchWorkOrdersNode,
@@ -44,8 +45,9 @@ const NODES = [
     ...NODES, 
     LangGraphLlmService,
     LlmProviderHelper,
+    AgentBrainHelper,
     AgentGraphService,
   ],
-  exports: [AgentGraphService, LangGraphLlmService, ...NODES],
+  exports: [AgentGraphService, LangGraphLlmService, AgentBrainHelper, ...NODES],
 })
 export class LanggraphModule {}

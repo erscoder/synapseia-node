@@ -5,7 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
-import type { LangGraphLlmService } from '../llm.service';
+import { LangGraphLlmService } from '../llm.service';
 import { 
   buildSelfCritiquePrompt, 
   parseSelfCritiqueResponse, 

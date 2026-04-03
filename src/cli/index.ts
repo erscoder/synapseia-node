@@ -130,7 +130,7 @@ interface StatusOutput {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
 
   const identityService = app.get(IdentityService);
   const hardwareService = app.get(HardwareService);
