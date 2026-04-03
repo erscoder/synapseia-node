@@ -200,7 +200,8 @@ async function bootstrap() {
           walletService.displayCreationWarning(wallet);
         }
         const coordinatorUrl = options.coordinator || config.coordinatorUrl;
-        const model = config.defaultModel || options.model;
+        // Priority: --model flag > LLM_MODEL env > config.defaultModel
+        const model = options.model || process.env.LLM_MODEL || config.defaultModel;
         const inferenceEnabled = options.inference ?? config.inferenceEnabled ?? false;
         const inferenceModels = options.inferenceModels
           ? options.inferenceModels.split(',')
@@ -245,16 +246,15 @@ async function bootstrap() {
         } else {
           const compatibleModels = hardwareService.getCompatibleModels(hardware.gpuVramGb || 0);
           if (compatibleModels.length === 0) {
-            logger.error('Error: No compatible models found for your hardware.');
-            logger.error(
-              'Consider using cloud LLM providers with --model openai-compat/asi1-mini --llm-key <key>'
+            // Low-tier hardware (Tier 0 / Docker containers) — LLM not required for training/research WOs
+            logger.warn('No compatible LLM models for this hardware tier — node will run training and research WOs without local LLM.');
+            selectedModel = null;
+          } else {
+            selectedModel = compatibleModels[0];
+            logger.log(
+              `Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`
             );
-            process.exit(1);
           }
-          selectedModel = compatibleModels[0];
-          logger.log(
-            `Using recommended model: ${selectedModel.name} (${selectedModel.minVram}GB VRAM)`
-          );
         }
 
         // ── Python3 + PyTorch check + optional install ────────────────────
