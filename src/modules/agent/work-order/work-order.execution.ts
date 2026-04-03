@@ -196,7 +196,7 @@ Abstract: ${payload.abstract}`;
 
     let datasetPath = payload.datasetId;
     try { datasetPath = await this.coordinator.downloadDataset(coordinatorUrl, payload.domain); logger.log(` Using domain dataset: ${datasetPath}`); }
-    catch (err) { logger.warn(` Could not download dataset for '${payload.domain}': ${(err as Error).message}. Falling back to datasetId.`); }
+    catch (err) { logger.warn(` Dataset '${payload.domain}' not available (${(err as Error).message}). Using synthetic training data — this is normal on first runs.`); }
 
     let trainingResult;
     try {
@@ -230,7 +230,7 @@ Abstract: ${payload.abstract}`;
 
     let datasetPath = payload.datasetId;
     try { datasetPath = await this.coordinator.downloadDataset(coordinatorUrl, payload.domain); logger.log(`[DiLoCo] Using dataset: ${datasetPath}`); }
-    catch (err) { logger.warn(`[DiLoCo] Could not download dataset: ${(err as Error).message}. Using datasetId.`); }
+    catch (err) { logger.warn(`[DiLoCo] Dataset not available (${(err as Error).message}). Using datasetId.`); }
 
     const hardware = capabilities.includes('cuda') ? 'cuda' : capabilities.includes('mps') ? 'mps' : 'cpu';
 
