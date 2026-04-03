@@ -180,14 +180,19 @@ export class A2AServer implements OnModuleDestroy {
     // Verify sender public key is provided in headers
     const senderPublicKey = (req.headers['x-public-key'] as string) ?? '';
 
+    // Reject unauthenticated requests — X-Public-Key header is mandatory
+    if (!senderPublicKey) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing X-Public-Key header — authentication required' }));
+      return;
+    }
+
     // Verify signature
-    if (senderPublicKey) {
-      const valid = await this.authService.verify(task, senderPublicKey);
-      if (!valid) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid signature or expired request' }));
-        return;
-      }
+    const valid = await this.authService.verify(task, senderPublicKey);
+    if (!valid) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid signature or expired request' }));
+      return;
     }
 
     // Route task

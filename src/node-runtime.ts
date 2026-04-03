@@ -14,6 +14,7 @@ import logger from './utils/logger';
 import type { LLMModel, LLMConfig } from './modules/llm/llm-provider';
 import { P2PNode } from './modules/p2p/p2p';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
+import type { A2AServer } from './modules/a2a/a2a-server.service';
 
 export interface NodeRuntimeConfig {
   /** Resolved peer identity (peerId, publicKey, privateKey) */
@@ -40,6 +41,10 @@ export interface NodeRuntimeConfig {
   lat?: number;
   /** Longitude for geo-location (optional) */
   lng?: number;
+  /** Enable A2A server (default: false) */
+  a2aEnabled?: boolean;
+  /** A2A server port (default: 7373) */
+  a2aPort?: number;
 }
 
 export interface NodeRuntime {
@@ -76,6 +81,7 @@ export async function startNode(
       }) => Promise<void>;
       stopWorkOrderAgent: () => void;
     };
+    a2aServer?: A2AServer;
   },
 ): Promise<NodeRuntime> {
   // ── 1. P2P ────────────────────────────────────────────────────────────────
@@ -116,7 +122,23 @@ export async function startNode(
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
 
-  // ── 3. Work Order Agent ───────────────────────────────────────────────────
+  // ── 3. A2A Server (Sprint D) ──────────────────────────────────────────────
+  let a2aRunning = false;
+  const a2aEnabled = config.a2aEnabled ?? (process.env.A2A_ENABLED === 'true');
+  if (a2aEnabled && services.a2aServer) {
+    const a2aPort = config.a2aPort ?? (Number(process.env.A2A_PORT) || 7373);
+    try {
+      await services.a2aServer.start(a2aPort);
+      a2aRunning = true;
+      logger.log(`🤝 A2A server listening on port ${a2aPort}`);
+    } catch (err) {
+      logger.warn(`⚠️ A2A server failed to start: ${(err as Error).message}`);
+    }
+  } else if (a2aEnabled) {
+    logger.warn('⚠️ A2A_ENABLED=true but A2AServer service not provided — skipping');
+  }
+
+  // ── 4. Work Order Agent ───────────────────────────────────────────────────
   logger.log('..............................');
   logger.log('🚀 Starting work order agent...');
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
@@ -146,6 +168,9 @@ export async function startNode(
       logger.log('🛑 Shutting down node...');
       heartbeatCleanup();
       services.workOrderAgentService.stopWorkOrderAgent();
+      if (a2aRunning && services.a2aServer) {
+        try { services.a2aServer.stop(); } catch { /* ignore */ }
+      }
       if (p2pNode) {
         try {
           await (p2pNode as unknown as { stop?: () => Promise<void> }).stop?.();

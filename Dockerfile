@@ -15,11 +15,8 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Install PyTorch (CPU only, no CUDA) + numpy for tensor operations
-RUN pip3 install --no-cache-dir --break-system-packages \
-    torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cpu \
-    && pip3 install --no-cache-dir --break-system-packages numpy
+# Install PyTorch (matching pre-built version) + numpy (required dependency)
+RUN pip3 install --no-cache-dir --break-system-packages torch numpy
 
 # Create data dir for datasets/brain
 RUN mkdir -p /root/.synapseia
