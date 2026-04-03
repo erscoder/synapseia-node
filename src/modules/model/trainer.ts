@@ -5,8 +5,7 @@
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import logger from '../../utils/logger';
 import type { MutationProposal } from './mutation-engine';
 
@@ -94,7 +93,8 @@ export class TrainerHelper {
 
   private resolveTrainScript(): string {
     try {
-      const moduleDir = dirname(fileURLToPath(import.meta.url));
+      // Works in both CJS (Jest) and ESM (tsup bundles __dirname shim)
+      const moduleDir = resolve(process.cwd(), 'dist');
       const candidates = [
         resolve(moduleDir, '../scripts/train_micro.py'),
         resolve(moduleDir, '../../scripts/train_micro.py'),

@@ -4,23 +4,26 @@ import { AgentLoopHelper, type AgentLoopConfig, type AgentLoopState } from '../a
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
 jest.mock('../../model/mutation-engine', () => ({
-  proposeMutation: jest.fn().mockResolvedValue({
-    type: 'lr_change',
-    reasoning: 'try lower lr',
-    hyperparams: { learningRate: 0.001 },
-  } as never),
+  MutationEngineHelper: jest.fn().mockImplementation(() => ({
+    proposeMutation: jest.fn<() => Promise<any>>().mockResolvedValue({
+      type: 'lr_change',
+      reasoning: 'try lower lr',
+      hyperparams: { learningRate: 0.001 },
+    }),
+  })),
 }));
 
 jest.mock('../../model/trainer', () => ({
-  trainMicroModel: jest.fn().mockResolvedValue({
+  trainMicroModel: jest.fn<() => Promise<any>>().mockResolvedValue({
     valLoss: 0.3,
     finalLoss: 0.28,
     durationMs: 100,
     lossCurve: [0.5, 0.4, 0.3],
     hardwareUsed: 'cpu',
     config: {},
-  } as never),
-  validateTrainingConfig: jest.fn().mockReturnValue({ valid: true } as never),
+  }),
+  validateTrainingConfig: jest.fn<() => { valid: boolean; error?: string }>().mockReturnValue({ valid: true }),
+  isPyTorchAvailable: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
 }));
 
 // mock global fetch

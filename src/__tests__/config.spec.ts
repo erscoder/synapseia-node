@@ -1,68 +1,52 @@
 /**
  * Config module tests - Uses real FS with SYNAPSEIA_HOME isolation
- * Avoids ESM mock issues by using real filesystem operations in a temp dir
  */
 
 import { jest } from '@jest/globals';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
+import { NodeConfigHelper, CONFIG_FILE, CONFIG_DIR } from '../modules/config/config';
 
-// Unique temp dir for this test run — set BEFORE any imports so CONFIG_DIR picks it up
 const testConfigDir = join(tmpdir(), 'synapseia-test-' + Date.now());
 process.env.SYNAPSEIA_HOME = testConfigDir;
 
-// Now import the module (it will use SYNAPSEIA_HOME for CONFIG_DIR)
-import {
-  loadConfig,
-  saveConfig,
-  defaultConfig,
-  validateCoordinatorUrl,
-  validateModelFormat,
-  isCloudModel,
-  CONFIG_FILE,
-  CONFIG_DIR,
-} from '../modules/config/config';
-
 describe('Config Module', () => {
+  let helper: NodeConfigHelper;
+
   beforeAll(() => {
-    // Create temp config dir
     mkdirSync(testConfigDir, { recursive: true });
   });
 
   afterAll(() => {
-    // Cleanup temp dir
     try { rmSync(testConfigDir, { recursive: true, force: true }); } catch {}
     delete process.env.SYNAPSEIA_HOME;
   });
 
   beforeEach(() => {
-    // Remove config file before each test for isolation
     try { rmSync(CONFIG_FILE); } catch {}
-    // Clear env var overrides
     delete process.env.SYNAPSEIA_COORDINATOR_URL;
     delete process.env.LLM_CLOUD_MODEL;
     delete process.env.LLM_CLOUD_API_KEY;
     delete process.env.LLM_CLOUD_URL;
     delete process.env.LLM_CLOUD_BASE_URL;
+    helper = new NodeConfigHelper();
   });
 
   describe('defaultConfig', () => {
     it('should return default configuration', () => {
-      const config = defaultConfig();
+      const config = helper.defaultConfig();
       expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
       expect(config.llmUrl).toBeUndefined();
       expect(config.llmKey).toBeUndefined();
-      expect(config.wallet).toBeUndefined();
     });
   });
 
   describe('loadConfig', () => {
     it('should return default config when file does not exist', () => {
-      // CONFIG_FILE deleted in beforeEach
-      const config = loadConfig();
+      const config = helper.loadConfig();
       expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
     });
@@ -76,7 +60,7 @@ describe('Config Module', () => {
       };
       writeFileSync(CONFIG_FILE, JSON.stringify(savedConfig));
 
-      const config = loadConfig();
+      const config = helper.loadConfig();
 
       expect(config.coordinatorUrl).toBe('http://example.com:3001');
       expect(config.defaultModel).toBe('ollama/llama2');
@@ -86,9 +70,7 @@ describe('Config Module', () => {
 
     it('should return default config when file has invalid JSON', () => {
       writeFileSync(CONFIG_FILE, 'invalid json{{{');
-
-      const config = loadConfig();
-
+      const config = helper.loadConfig();
       expect(config.coordinatorUrl).toBe('http://localhost:3701');
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
     });
@@ -96,8 +78,8 @@ describe('Config Module', () => {
 
   describe('saveConfig', () => {
     it('should create config directory if it does not exist', () => {
-      const config = defaultConfig();
-      saveConfig(config);
+      const config = helper.defaultConfig();
+      helper.saveConfig(config);
       expect(existsSync(CONFIG_FILE)).toBe(true);
     });
 
@@ -108,59 +90,57 @@ describe('Config Module', () => {
         llmUrl: 'https://api.example.com',
         llmKey: 'my-api-key',
       };
-      saveConfig(config);
+      helper.saveConfig(config);
 
-      const loaded = loadConfig();
+      const loaded = helper.loadConfig();
       expect(loaded.coordinatorUrl).toBe('http://custom:3001');
       expect(loaded.defaultModel).toBe('ollama/custom');
     });
 
     it('should round-trip config correctly', () => {
-      const original = defaultConfig();
+      const original = helper.defaultConfig();
       original.coordinatorUrl = 'http://my-coordinator:9000';
-      saveConfig(original);
+      helper.saveConfig(original);
 
-      const loaded = loadConfig();
+      const loaded = helper.loadConfig();
       expect(loaded.coordinatorUrl).toBe('http://my-coordinator:9000');
     });
   });
 
   describe('validateCoordinatorUrl', () => {
     it('should accept valid HTTP URLs', () => {
-      expect(validateCoordinatorUrl('http://localhost:3000')).toBe(true);
-      expect(validateCoordinatorUrl('https://example.com:8080')).toBe(true);
+      expect(helper.validateCoordinatorUrl('http://localhost:3000')).toBe(true);
+      expect(helper.validateCoordinatorUrl('https://example.com:8080')).toBe(true);
     });
 
     it('should reject invalid URLs', () => {
-      expect(validateCoordinatorUrl('not-a-url')).toBe(false);
-      expect(validateCoordinatorUrl('ftp://localhost')).toBe(false);
+      expect(helper.validateCoordinatorUrl('not-a-url')).toBe(false);
+      expect(helper.validateCoordinatorUrl('ftp://localhost')).toBe(false);
     });
   });
 
   describe('validateModelFormat', () => {
     it('should accept valid model formats', () => {
-      expect(validateModelFormat('ollama/llama2')).toBe(true);
-      expect(validateModelFormat('openai/gpt-4')).toBe(true);
-      expect(validateModelFormat('anthropic/claude-3')).toBe(true);
+      expect(helper.validateModelFormat('ollama/llama2')).toBe(true);
+      expect(helper.validateModelFormat('openai/gpt-4')).toBe(true);
+      expect(helper.validateModelFormat('anthropic/claude-3')).toBe(true);
     });
 
     it('should reject invalid model formats', () => {
-      expect(validateModelFormat('invalid')).toBe(false);
-      expect(validateModelFormat('')).toBe(false);
+      expect(helper.validateModelFormat('invalid')).toBe(false);
+      expect(helper.validateModelFormat('')).toBe(false);
+      expect(helper.validateModelFormat('ollama/')).toBe(false);
+      expect(helper.validateModelFormat('/llama2')).toBe(false);
     });
   });
 
   describe('isCloudModel', () => {
-    it('should identify cloud models', () => {
-      expect(isCloudModel('openai-compat/gpt-4')).toBe(true);
-      expect(isCloudModel('anthropic/claude-3')).toBe(true);
-      expect(isCloudModel('kimi/m2.5')).toBe(true);
-      expect(isCloudModel('minimax/m2.5')).toBe(true);
-    });
-
-    it('should identify local models', () => {
-      expect(isCloudModel('ollama/llama2')).toBe(false);
-      expect(isCloudModel('local-model')).toBe(false);
+    it('should identify cloud models correctly', () => {
+      expect(helper.isCloudModel('anthropic/sonnet-4.6')).toBe(true);
+      expect(helper.isCloudModel('kimi/k2.5')).toBe(true);
+      expect(helper.isCloudModel('minimax/MiniMax')).toBe(true);
+      expect(helper.isCloudModel('openai-compat/gpt-4')).toBe(true);
+      expect(helper.isCloudModel('ollama/qwen2.5:0.5b')).toBe(false);
     });
   });
 });

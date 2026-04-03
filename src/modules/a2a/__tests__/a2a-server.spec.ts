@@ -12,6 +12,14 @@ import { EmbeddingHandler } from '../handlers/embedding.handler';
 import { HealthCheckHandler } from '../handlers/health-check.handler';
 import { DelegateResearchHandler } from '../handlers/delegate-research.handler';
 
+jest.mock('../auth/a2a-auth.service', () => ({
+  A2AAuthService: jest.fn().mockImplementation(() => ({
+    verify: (jest.fn() as any).mockReturnValue(true),
+    sign: (jest.fn() as any).mockReturnValue('mock-signature'),
+    verifyEd25519: (jest.fn() as any).mockReturnValue(true),
+  })),
+}));
+
 function makeAgentCardService(): AgentCardService {
   const service = new AgentCardService();
   service.configure({
@@ -153,7 +161,7 @@ describe('A2AServer', () => {
 
       const { status, body } = await fetch('/tasks/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-public-key': 'test-public-key' },
         body: JSON.stringify(taskPayload),
       });
 

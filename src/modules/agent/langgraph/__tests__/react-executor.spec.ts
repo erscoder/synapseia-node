@@ -7,9 +7,20 @@ import { ExecuteResearchNode } from '../nodes/execute-research';
 import type { AgentState, WorkOrder } from '../state';
 
 // Mock dependencies
-jest.mock('../../work-order-agent', () => ({
-  executeResearchWorkOrder: jest.fn(),
-  scoreResearchResult: jest.fn().mockReturnValue(0.85),
+const mockExecuteResearchWorkOrder = jest.fn();
+const mockScoreResearchResult = jest.fn().mockReturnValue(0.85);
+jest.mock('../../work-order/work-order.execution', () => ({
+  WorkOrderExecutionHelper: jest.fn().mockImplementation(() => ({
+    executeResearchWorkOrder: mockExecuteResearchWorkOrder,
+  })),
+}));
+jest.mock('../../work-order/work-order.coordinator', () => ({
+  WorkOrderCoordinatorHelper: jest.fn(),
+}));
+jest.mock('../../work-order/work-order.evaluation', () => ({
+  WorkOrderEvaluationHelper: jest.fn().mockImplementation(() => ({
+    scoreResearchResult: mockScoreResearchResult,
+  })),
 }));
 
 jest.mock('../tools/tool-registry', () => ({
@@ -336,13 +347,12 @@ describe('ExecuteResearchNode', () => {
 
   describe('execute - fallback on error', () => {
     it('should fall back to legacy executor on ReAct error', async () => {
-      const { executeResearchWorkOrder } = await import('../../work-order-agent');
       const workOrder = createMockWorkOrder();
       const state = createMockState({ selectedWorkOrder: workOrder });
 
       mockLlmService.generate.mockRejectedValue(new Error('LLM service error'));
 
-      (executeResearchWorkOrder as jest.Mock).mockResolvedValue({
+      mockExecuteResearchWorkOrder.mockResolvedValue({
         result: {
           summary: 'Legacy summary',
           keyInsights: ['Legacy insight'],
@@ -355,7 +365,7 @@ describe('ExecuteResearchNode', () => {
       const result = await node.execute(state);
 
       expect(result.executionResult?.success).toBe(true);
-      expect(executeResearchWorkOrder).toHaveBeenCalled();
+      expect(mockExecuteResearchWorkOrder).toHaveBeenCalled();
     });
   });
 });

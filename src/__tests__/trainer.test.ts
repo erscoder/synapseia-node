@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { trainMicroModel, validateTrainingConfig, calculateImprovement, _test, type TrainingOptions } from '../modules/model/trainer';
+import { trainMicroModel, validateTrainingConfig, calculateImprovement, type TrainingOptions } from '../modules/model/trainer';
 import type { MutationProposal } from '../modules/model/mutation-engine';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
@@ -514,9 +514,4 @@ describe('Trainer', () => {
     });
   });
 
-  describe('_test exports', () => {
-    it('should export calculateImprovement', () => {
-      expect(_test.calculateImprovement).toBe(calculateImprovement);
-    });
-  });
 });
