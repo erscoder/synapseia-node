@@ -72,16 +72,22 @@ function resolveTrainScript(): string {
  * Check if PyTorch is available (python3 + torch importable).
  * TRAINING WOs require PyTorch — nodes without it should not accept them.
  */
+/** Cached PyTorch availability — checked once, remembered forever (within the process) */
+let _pyTorchCache: boolean | null = null;
+
 export async function isPyTorchAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
+  if (_pyTorchCache !== null) return _pyTorchCache;
+  const result = await new Promise<boolean>((resolve) => {
     const proc = spawn('python3', ['-c', 'import torch; print(torch.__version__)'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     proc.on('close', (code) => resolve(code === 0));
     proc.on('error', () => resolve(false));
-    // Timeout: 5s
-    setTimeout(() => { proc.kill(); resolve(false); }, 5000);
+    // Timeout: 15s (first import torch in Docker can be slow)
+    setTimeout(() => { proc.kill(); resolve(false); }, 15000);
   });
+  _pyTorchCache = result;
+  return result;
 }
 
 // Module-level guard: prevent concurrent training runs in the same process
