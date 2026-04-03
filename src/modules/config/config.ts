@@ -3,42 +3,19 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { Injectable } from '@nestjs/common';
 
-// Agent mode enum for feature flag
 type AgentMode = 'langgraph' | 'legacy';
 
-// Agent mode configuration
-export type AgentModeConfig = {
-  mode: AgentMode;
-};
+export type AgentModeConfig = { mode: AgentMode };
 
-/**
- * Get the current agent mode from environment
- * Default: 'legacy' (maintains backward compatibility)
- */
-export function getAgentMode(): AgentMode {
-  const mode = process.env.AGENT_MODE?.toLowerCase();
-  if (mode === 'langgraph') {
-    return 'langgraph';
-  }
-  return 'legacy';
-}
-
-/**
- * Check if langgraph mode is enabled
- */
-export function isLangGraphMode(): boolean {
-  return getAgentMode() === 'langgraph';
-}
-
-// Config file path
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
 export interface Config {
   coordinatorUrl: string;
   defaultModel: string;
-  name?: string; // Node name (display name)
-  lat?: number; // Latitude for geo-location (dev/testing)
-  lng?: number; // Longitude for geo-location (dev/testing)
+  name?: string;
+  lat?: number;
+  lng?: number;
   llmUrl?: string;
   llmKey?: string;
   wallet?: string;
@@ -53,38 +30,19 @@ export class NodeConfigHelper {
       coordinatorUrl: 'http://localhost:3701',
       defaultModel: process.env.LLM_CLOUD_MODEL ?? 'ollama/qwen2.5:0.5b',
       llmUrl: process.env.LLM_CLOUD_BASE_URL,
-      llmKey: process.env.LLM_CLOUD_API_KEY
+      llmKey: process.env.LLM_CLOUD_API_KEY,
     };
   }
 
   loadConfig(): Config {
-    const base = (() => {
-      if (existsSync(CONFIG_FILE)) {
-        try {
-          return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
-        } catch {
-          return this.defaultConfig();
-        }
+    if (existsSync(CONFIG_FILE)) {
+      try {
+        return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
+      } catch {
+        return this.defaultConfig();
       }
-      return this.defaultConfig();
-    })();
-
-   /*  // Env vars always override saved config
-    if (process.env.LLM_CLOUD_MODEL) {
-      base.defaultModel = process.env.LLM_CLOUD_MODEL;
-      if (!base.llmUrl) base.llmUrl = process.env.LLM_CLOUD_MODEL;
     }
-    if (process.env.LLM_CLOUD_API_KEY) {
-      base.llmKey = process.env.LLM_CLOUD_API_KEY;
-    }
-    if (process.env.LLM_CLOUD_URL) {
-      base.llmUrl = process.env.LLM_CLOUD_URL;
-    }
-    if (process.env.SYNAPSEIA_COORDINATOR_URL) {
-      base.coordinatorUrl = process.env.SYNAPSEIA_COORDINATOR_URL;
-    } */
-
-    return base;
+    return this.defaultConfig();
   }
 
   saveConfig(config: Config): void {
@@ -99,16 +57,11 @@ export class NodeConfigHelper {
   }
 
   validateModelFormat(model: string): boolean {
-    // Format: provider/model-name or provider/model:name
     const parts = model.split('/');
     if (parts.length !== 2) return false;
-
     const [provider, modelName] = parts;
     if (!provider || !modelName) return false;
-
-    // Provider must be alphanumeric
     if (!/^[a-zA-Z0-9-]+$/.test(provider)) return false;
-
     return true;
   }
 
@@ -120,29 +73,11 @@ export class NodeConfigHelper {
   }
 
   getAgentMode(): AgentMode {
-    return getAgentMode();
+    const mode = process.env.AGENT_MODE?.toLowerCase();
+    return mode === 'langgraph' ? 'langgraph' : 'legacy';
   }
 
   isLangGraphMode(): boolean {
-    return isLangGraphMode();
+    return this.getAgentMode() === 'langgraph';
   }
 }
-
-// Backward-compatible standalone exports
-export const defaultConfig = (...args: Parameters<NodeConfigHelper['defaultConfig']>) =>
-  new NodeConfigHelper().defaultConfig(...args);
-
-export const loadConfig = (...args: Parameters<NodeConfigHelper['loadConfig']>) =>
-  new NodeConfigHelper().loadConfig(...args);
-
-export const saveConfig = (...args: Parameters<NodeConfigHelper['saveConfig']>) =>
-  new NodeConfigHelper().saveConfig(...args);
-
-export const validateCoordinatorUrl = (...args: Parameters<NodeConfigHelper['validateCoordinatorUrl']>) =>
-  new NodeConfigHelper().validateCoordinatorUrl(...args);
-
-export const validateModelFormat = (...args: Parameters<NodeConfigHelper['validateModelFormat']>) =>
-  new NodeConfigHelper().validateModelFormat(...args);
-
-export const isCloudModel = (...args: Parameters<NodeConfigHelper['isCloudModel']>) =>
-  new NodeConfigHelper().isCloudModel(...args);

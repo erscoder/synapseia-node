@@ -11,7 +11,7 @@
 
 import { Injectable } from '@nestjs/common';
 import logger from '../../utils/logger';
-import { proposeMutation, type MutationProposal } from '../model/mutation-engine';
+import { MutationEngineHelper, type MutationProposal } from '../model/mutation-engine';
 import { trainMicroModel, validateTrainingConfig, type TrainingResult } from '../model/trainer';
 import type { Experiment } from '../../types';
 
@@ -130,7 +130,8 @@ export class AgentLoopHelper {
     logger.log(`   Best loss so far: ${this.state.bestLoss.toFixed(4)}`);
 
     logger.log('🧠 Proposing mutation via LLM...');
-    const mutation = await proposeMutation(topExperiments, this.state.bestLoss, capabilities);
+    const mutationEngine = new MutationEngineHelper();
+    const mutation = await mutationEngine.proposeMutation(topExperiments, this.state.bestLoss, capabilities);
     logger.log(`   Type: ${mutation.type}`);
     logger.log(`   Reasoning: ${mutation.reasoning.slice(0, 100)}...`);
 

@@ -32,7 +32,7 @@ import { IdentityService } from '../modules/identity/services/identity.service';
 import { HardwareService } from '../modules/hardware/services/hardware.service';
 import { NodeConfigService } from '../modules/config/services/node-config.service';
 import { WalletService } from '../modules/wallet/services/wallet.service';
-import { ModelCatalogService } from '../modules/model/services/model-catalog.service';
+import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { P2pService } from '../modules/p2p/services/p2p.service';
@@ -136,7 +136,7 @@ async function bootstrap() {
   const hardwareService = app.get(HardwareService);
   const configService = app.get(NodeConfigService);
   const walletService = app.get(WalletService);
-  const modelCatalogService = app.get(ModelCatalogService);
+  const modelCatalogService = app.get(ModelCatalogHelper);
   const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
   const p2pService = app.get(P2pService);
@@ -219,11 +219,11 @@ async function bootstrap() {
             model?.startsWith('minimax/');
 
           if (!isCloud) {
-            selectedModel = modelCatalogService.getByName(model);
+            selectedModel = modelCatalogService.getModelByName(model);
             if (!selectedModel) {
               logger.error(`Error: Model '${model}' not found in catalog.`);
               logger.error('Available models:');
-              modelCatalogService.getCatalog().forEach((m) => {
+              modelCatalogService.getModelCatalog().forEach((m) => {
                 logger.error(`  ${m.name} (${m.category}, ${m.minVram}GB VRAM)`);
               });
               process.exit(1);
@@ -758,7 +758,7 @@ async function bootstrap() {
       logger.log('\n🔧 Synapseia Configuration Wizard');
       logger.log('   Use ↑↓ to navigate, Enter to select, Ctrl+C to cancel.\n');
 
-      const catalog = modelCatalogService.getCatalog();
+      const catalog = modelCatalogService.getModelCatalog();
       const hardware = hardwareService.detect();
       const compatibleModels = hardwareService.getCompatibleModels(hardware.gpuVramGb || 0);
 

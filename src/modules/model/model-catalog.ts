@@ -272,163 +272,71 @@ export const CLOUD_MODELS: ModelInfo[] = [
  */
 export const FULL_CATALOG: ModelInfo[] = [...MODEL_CATALOG, ...CLOUD_MODELS];
 
-/**
- * List all models in catalog
- */
-export function listModels(category?: ModelCategory): ModelInfo[] {
-  if (category) {
-    return FULL_CATALOG.filter((m) => m.category === category);
-  }
-  return FULL_CATALOG;
-}
-
-/**
- * Get compatible models for given VRAM
- */
-export function getModelsForVram(vramGb: number): ModelInfo[] {
-  return FULL_CATALOG.filter((m) => m.minVram <= vramGb && !m.isCloud);
-}
-
-/**
- * Get model by name
- */
-export function getModel(name: string): ModelInfo | undefined {
-  return FULL_CATALOG.find((m) => m.name === name);
-}
-
-/**
- * Pull model from Ollama
- */
-export async function pullModel(name: string): Promise<boolean> {
-  try {
-    // Check if Ollama is running
-    execSync('curl -s http://localhost:11434/api/tags', { stdio: 'pipe', timeout: 1000 });
-  } catch {
-    throw new Error('Ollama is not running. Start it with: ollama serve');
-  }
-
-  try {
-    console.log(`Pulling model ${name}...`);
-    execSync(`ollama pull ${name}`, { stdio: 'inherit' });
-    return true;
-  } catch (error) {
-    throw new Error(`Failed to pull model ${name}: ${error}`);
-  }
-}
-
-/**
- * Get models currently available in Ollama
- */
-export function getLocalModels(): string[] {
-  try {
-    const response = execSync('curl -s http://localhost:11434/api/tags', { encoding: 'utf-8' });
-    const data = JSON.parse(response) as OllamaTagsResponse;
-    return data.models.map((m) => m.name);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Check if a model is available locally
- */
-export function isModelAvailable(name: string): boolean {
-  const localModels = getLocalModels();
-  return localModels.includes(name);
-}
-
-/**
- * Get recommended model for tier
- */
-export function getRecommendedModel(tier: number, category?: ModelCategory): ModelInfo | undefined {
-  let models = getModelsForVram(tier * 16); // Rough estimate: tier * 16GB
-  if (category) {
-    models = models.filter((m) => m.category === category);
-  }
-
-  // Sort by recommended tier (ascending) and VRAM (descending)
-  models.sort((a, b) => {
-    if (a.recommendedTier !== b.recommendedTier) {
-      return a.recommendedTier - b.recommendedTier;
-    }
-    return b.minVram - a.minVram;
-  });
-
-  return models[0];
-}
-
-/**
- * Get full model catalog
- */
-export function getModelCatalog(): ModelInfo[] {
-  return [...MODEL_CATALOG];
-}
-
-/**
- * Normalize model name from various formats to catalog format
- * - Removes 'ollama/' prefix
- * - Replaces ':' with '-'
- * - Handles other common separators
- */
-export function normalizeModelName(name: string): string {
-  return name
-    .replace(/^ollama\//, '')
-    .replace(/:/g, '-')
-    .toLowerCase();
-}
-
-/**
- * Get model by name (supports ollama format: ollama/qwen2.5:0.5b)
- */
-export function getModelByName(name: string): ModelInfo | null {
-  const normalized = normalizeModelName(name);
-  console.log('name normalized:', normalized)
-  return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
-}
-
-/**
- * Injectable helper class — wraps all catalog functions for NestJS DI
- */
 @Injectable()
 export class ModelCatalogHelper {
   listModels(category?: ModelCategory): ModelInfo[] {
-    return listModels(category);
+    if (category) return FULL_CATALOG.filter((m) => m.category === category);
+    return FULL_CATALOG;
   }
 
   getModelsForVram(vramGb: number): ModelInfo[] {
-    return getModelsForVram(vramGb);
+    return FULL_CATALOG.filter((m) => m.minVram <= vramGb && !m.isCloud);
   }
 
   getModel(name: string): ModelInfo | undefined {
-    return getModel(name);
+    return FULL_CATALOG.find((m) => m.name === name);
   }
 
-  pullModel(name: string): Promise<boolean> {
-    return pullModel(name);
+  async pullModel(name: string): Promise<boolean> {
+    try {
+      execSync('curl -s http://localhost:11434/api/tags', { stdio: 'pipe', timeout: 1000 });
+    } catch {
+      throw new Error('Ollama is not running. Start it with: ollama serve');
+    }
+    try {
+      console.log(`Pulling model ${name}...`);
+      execSync(`ollama pull ${name}`, { stdio: 'inherit' });
+      return true;
+    } catch (error) {
+      throw new Error(`Failed to pull model ${name}: ${error}`);
+    }
   }
 
   getLocalModels(): string[] {
-    return getLocalModels();
+    try {
+      const response = execSync('curl -s http://localhost:11434/api/tags', { encoding: 'utf-8' });
+      const data = JSON.parse(response) as OllamaTagsResponse;
+      return data.models.map((m) => m.name);
+    } catch {
+      return [];
+    }
   }
 
   isModelAvailable(name: string): boolean {
-    return isModelAvailable(name);
+    return this.getLocalModels().includes(name);
   }
 
   getRecommendedModel(tier: number, category?: ModelCategory): ModelInfo | undefined {
-    return getRecommendedModel(tier, category);
+    let models = this.getModelsForVram(tier * 16);
+    if (category) models = models.filter((m) => m.category === category);
+    models.sort((a, b) => {
+      if (a.recommendedTier !== b.recommendedTier) return a.recommendedTier - b.recommendedTier;
+      return b.minVram - a.minVram;
+    });
+    return models[0];
   }
 
   getModelCatalog(): ModelInfo[] {
-    return getModelCatalog();
+    return [...MODEL_CATALOG];
   }
 
   normalizeModelName(name: string): string {
-    return normalizeModelName(name);
+    return name.replace(/^ollama\//, '').replace(/:/g, '-').toLowerCase();
   }
 
   getModelByName(name: string): ModelInfo | null {
-    return getModelByName(name);
+    const normalized = this.normalizeModelName(name);
+    return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
   }
 }
 
