@@ -14,6 +14,7 @@ import logger from './utils/logger';
 import type { LLMModel, LLMConfig } from './modules/llm/llm-provider';
 import { P2PNode } from './modules/p2p/p2p';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
+import { IpifyService } from './modules/shared/infrastructure/ipify.service';
 import type { A2AServer } from './modules/a2a/a2a-server.service';
 
 export interface NodeRuntimeConfig {
@@ -108,7 +109,7 @@ export async function startNode(
 
   // ── 2. Heartbeat ──────────────────────────────────────────────────────────
   logger.log('💓 Starting heartbeat loop...');
-  const heartbeatHelper = new HeartbeatHelper();
+  const heartbeatHelper = new HeartbeatHelper(new IpifyService());
   const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
     config.coordinatorUrl,
     config.identity,

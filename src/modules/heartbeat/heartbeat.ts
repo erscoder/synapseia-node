@@ -28,11 +28,7 @@ export interface HeartbeatResponse {
 
 @Injectable()
 export class HeartbeatHelper {
-  private readonly ipifyService: IpifyService;
-
-  constructor(ipifyService?: IpifyService) {
-    this.ipifyService = ipifyService ?? new IpifyService();
-  }
+  constructor(private readonly ipifyService: IpifyService) {}
   /**
    * Send heartbeat to coordinator with exponential backoff retry
    */
