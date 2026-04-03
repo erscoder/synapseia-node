@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
-import { P2PNode, TOPICS, createP2PNode } from '../modules/p2p/p2p';
+import { P2PNode, TOPICS, P2pHelper } from '../modules/p2p/p2p';
+const createP2PNode = (...args: Parameters<P2pHelper['createP2PNode']>) => new P2pHelper().createP2PNode(...args);
 import type { Identity } from '../modules/identity/identity';
 import { createLibp2p } from 'libp2p';
 import { bootstrap } from '@libp2p/bootstrap';

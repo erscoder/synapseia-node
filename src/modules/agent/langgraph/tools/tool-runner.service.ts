@@ -68,11 +68,27 @@ export class ToolRunnerService {
       }
       case 'delegate_to_peer': {
         if (!this.delegateToPeerTool) throw new Error('DelegateToPeerTool not available (A2A not enabled)');
-        return this.delegateToPeerTool.execute(params as Record<string, unknown>);
+        return this.delegateToPeerTool.execute(params as {
+          capability: string;
+          taskType: string;
+          payload: Record<string, unknown>;
+          preferredDomain?: string;
+          reason?: string;
+          ourPeerId: string;
+          ourPrivateKeyHex: string;
+        });
       }
       case 'request_peer_review': {
         if (!this.requestPeerReviewTool) throw new Error('RequestPeerReviewTool not available (A2A not enabled)');
-        return this.requestPeerReviewTool.execute(params as Record<string, unknown>);
+        return this.requestPeerReviewTool.execute(params as {
+          content: string;
+          contentType: string;
+          reviewCriteria?: string;
+          preferredDomain?: string;
+          reason?: string;
+          ourPeerId: string;
+          ourPrivateKeyHex: string;
+        });
       }
       default:
         throw new Error(`Unknown tool: ${toolName}`);

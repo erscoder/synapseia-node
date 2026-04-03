@@ -1,9 +1,11 @@
 /**
- * Unit tests for LangGraph node classes (NestJS injectable)
+ * Unit tests for LangGraph node classes
  * Sprint A - LangGraph Foundation
  */
 
-import { jest } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+
+// ── Mock modules ─────────────────────────────────────────────────────────────
 
 jest.mock('../../../../modules/model/trainer.js', () => ({
   trainMicroModel: jest.fn(),
@@ -11,16 +13,61 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
   calculateImprovement: jest.fn(() => 0),
 }));
 
-global.fetch = jest.fn() as unknown as typeof fetch;
+jest.mock('../../work-order/work-order.execution', () => ({
+  WorkOrderExecutionHelper: jest.fn().mockImplementation(() => ({
+    isResearchWorkOrder: jest.fn((wo: any) => wo?.type === 'RESEARCH'),
+  })),
+}));
 
-import type { AgentState } from '../state';
+jest.mock('../../work-order/work-order.coordinator', () => ({
+  WorkOrderCoordinatorHelper: jest.fn().mockImplementation(() => ({
+    fetchAvailableWorkOrders: jest.fn<() => Promise<WorkOrder[]>>().mockResolvedValue([]),
+    acceptWorkOrder: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    completeWorkOrder: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    submitWorkOrderResult: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    submitToResearchQueue: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../../work-order/work-order.evaluation', () => ({
+  WorkOrderEvaluationHelper: jest.fn().mockImplementation(() => ({
+    scoreResearchResult: jest.fn().mockReturnValue(0.85),
+    loadEconomicConfig: jest.fn().mockReturnValue({
+      llmCostPer1kTokens: 0,
+      synPriceUsd: 0.01,
+      estimatedLatencyMs: 100,
+    }),
+    evaluateWorkOrder: jest.fn().mockReturnValue({
+      bountyUsd: 1.0,
+      estimatedCostUsd: 0.01,
+      shouldAccept: true,
+      netValueUsd: 0.99,
+      efficiencyScore: 99,
+    }),
+  })),
+}));
+
+jest.mock('../../../../utils/logger', () => ({
+  __esModule: true,
+  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
+(global.fetch as jest.Mock) = jest.fn();
+
+// ── Imports (after mocks) ───────────────────────────────────────────────────
+
+import type { AgentState, WorkOrder } from '../state';
 import { SelectWorkOrderNode } from '../nodes/select-wo';
 import { FetchWorkOrdersNode } from '../nodes/fetch-work-orders';
 import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
 import { AcceptWorkOrderNode } from '../nodes/accept-wo';
 import { UpdateMemoryNode } from '../nodes/update-memory';
-import { initBrain } from '../../agent-brain';
-import type { WorkOrder } from '../../work-order-agent';
+import { AgentBrainHelper } from '../../agent-brain';
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const brainHelper = new AgentBrainHelper();
+const initBrain = () => brainHelper.initBrain();
 
 function makeState(overrides: Partial<AgentState> = {}): AgentState {
   return {
@@ -39,7 +86,7 @@ function makeState(overrides: Partial<AgentState> = {}): AgentState {
       coordinatorUrl: 'http://localhost:3701',
       peerId: 'peer1',
       capabilities: ['llm'],
-      llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
+      llmModel: { provider: 'ollama', modelId: 'phi4-mini', providerId: '' },
       intervalMs: 5000,
     },
     coordinatorUrl: 'http://localhost:3701',
@@ -79,19 +126,31 @@ describe('FetchWorkOrdersNode', () => {
   let node: FetchWorkOrdersNode;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    // Don't use jest.resetAllMocks() here — we inject mock objects directly
+    // and don't rely on module-level mocks
     node = new FetchWorkOrdersNode();
     node.reset();
   });
 
   it('returns empty array when coordinator returns empty', async () => {
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [] });
+    // Replace the coordinator instance with a fully controlled mock
+    const mockCoordinator = {
+      fetchAvailableWorkOrders: jest.fn<() => Promise<WorkOrder[]>>().mockResolvedValue([]),
+    };
+    (node as any).coordinator = mockCoordinator;
     const result = await node.execute(makeState());
     expect(result.availableWorkOrders).toEqual([]);
   });
 
   it('returns work orders from coordinator', async () => {
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [RESEARCH_WO] });
+    const mockCoordinator = {
+      fetchAvailableWorkOrders: jest.fn<() => Promise<WorkOrder[]>>().mockResolvedValue([RESEARCH_WO]),
+    };
+    const mockExecution = {
+      isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+    };
+    (node as any).coordinator = mockCoordinator;
+    (node as any).execution = mockExecution;
     const result = await node.execute(makeState());
     expect(result.availableWorkOrders).toHaveLength(1);
   });
@@ -103,15 +162,29 @@ describe('FetchWorkOrdersNode', () => {
       type: 'TRAINING',
       description: JSON.stringify({ domain: 'medical', datasetId: 'test', currentBestLoss: 0.5, maxTrainSeconds: 60 }),
     };
+    const mockCoordinator = {
+      fetchAvailableWorkOrders: jest.fn<() => Promise<WorkOrder[]>>().mockResolvedValue([trainingWO]),
+    };
+    const mockExecution = {
+      isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+    };
+    (node as any).coordinator = mockCoordinator;
+    (node as any).execution = mockExecution;
     node.markCompleted(trainingWO);
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [trainingWO] });
     const result = await node.execute(makeState());
     expect(result.availableWorkOrders).toEqual([]);
   });
 
   it('applies research cooldown', async () => {
+    const mockCoordinator = {
+      fetchAvailableWorkOrders: jest.fn<() => Promise<WorkOrder[]>>().mockResolvedValue([RESEARCH_WO]),
+    };
+    const mockExecution = {
+      isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+    };
+    (node as any).coordinator = mockCoordinator;
+    (node as any).execution = mockExecution;
     node.setResearchCooldown(RESEARCH_WO.id);
-    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => [RESEARCH_WO] });
     const result = await node.execute(makeState());
     expect(result.availableWorkOrders).toEqual([]);
   });
@@ -119,6 +192,7 @@ describe('FetchWorkOrdersNode', () => {
 
 describe('EvaluateEconomicsNode', () => {
   const node = new EvaluateEconomicsNode();
+  // Note: No beforeEach — WorkOrderEvaluationHelper mock is set up at module level and should not be reset
 
   it('returns null evaluation when no WO selected', () => {
     const result = node.execute(makeState({ selectedWorkOrder: null }));
@@ -133,18 +207,25 @@ describe('EvaluateEconomicsNode', () => {
 });
 
 describe('AcceptWorkOrderNode', () => {
-  const node = new AcceptWorkOrderNode();
+  let node: AcceptWorkOrderNode;
 
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    node = new AcceptWorkOrderNode();
+    // Inject mock coordinator to bypass fetch
+    const mockCoordinator = {
+      acceptWorkOrder: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    };
+    (node as any).coordinator = mockCoordinator;
+  });
 
   it('accepts work order successfully', async () => {
-    (fetch as any).mockResolvedValueOnce({ ok: true });
     const result = await node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
     expect(result.accepted).toBe(true);
   });
 
   it('returns false when coordinator rejects', async () => {
-    (fetch as any).mockResolvedValueOnce({ ok: false, text: async () => 'error' });
+    (node as any).coordinator.acceptWorkOrder = jest.fn<() => Promise<boolean>>().mockResolvedValue(false);
     const result = await node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
     expect(result.accepted).toBe(false);
   });
@@ -156,7 +237,7 @@ describe('AcceptWorkOrderNode', () => {
 });
 
 describe('UpdateMemoryNode', () => {
-  const node = new UpdateMemoryNode();
+  const node = new UpdateMemoryNode(new AgentBrainHelper());
 
   it('returns brain unchanged when no research result', () => {
     const brain = initBrain();

@@ -53,7 +53,7 @@ import { UpdateMemoryNode } from '../nodes/update-memory';
 import { RetrieveMemoryNode } from '../nodes/retrieve-memory';
 import { PlanExecutionNode } from '../nodes/plan-execution';
 import { SelfCritiqueNode } from '../nodes/self-critique';
-import type { WorkOrderAgentConfig } from '../../work-order-agent';
+import type { WorkOrderAgentConfig } from '../../work-order/work-order.types';
 
 const TEST_CONFIG: WorkOrderAgentConfig = {
   coordinatorUrl: 'http://localhost:3701',
@@ -69,6 +69,7 @@ const mockLlmService = { generate: (jest.fn() as any).mockResolvedValue('[]') };
 const { ToolRunnerService } = require('../tools/tool-runner.service');
 const { ToolRegistry } = require('../tools/tool-registry');
 const { LangGraphLlmService } = require('../llm.service');
+const { AgentBrainHelper } = require('../../agent-brain');
 
 function buildService(): AgentGraphService {
   return new AgentGraphService(
@@ -86,10 +87,11 @@ function buildService(): AgentGraphService {
     new ExecuteDilocoNode(),
     new QualityGateNode(),
     new SubmitResultNode(),
-    new UpdateMemoryNode(),
+    new UpdateMemoryNode(new AgentBrainHelper()),
     new RetrieveMemoryNode(),
     new PlanExecutionNode(mockLlmService as any),
     new SelfCritiqueNode(mockLlmService as any),
+    new AgentBrainHelper(),
   );
 }
 

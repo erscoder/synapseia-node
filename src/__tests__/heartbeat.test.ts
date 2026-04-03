@@ -1,153 +1,84 @@
 /**
  * Heartbeat tests (A14)
- * Tests for sendHeartbeat, startPeriodicHeartbeat, determineCapabilities
+ * Tests for HeartbeatHelper.sendHeartbeat, startPeriodicHeartbeat, determineCapabilities
  */
 
-import { jest } from '@jest/globals';
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
+import { IpifyService } from '../modules/shared/infrastructure/ipify.service';
 
-// Create mock functions before importing
 const mockPost: any = jest.fn();
 
-// Mock axios module - setup before import
 jest.mock('axios', () => {
   const mockCreate = jest.fn(() => ({
     post: mockPost,
   }));
   return {
-    default: {
-      create: mockCreate,
-    },
+    default: { create: mockCreate },
     create: mockCreate,
   };
 });
 
-import axios from 'axios';
-import { sendHeartbeat, startPeriodicHeartbeat, determineCapabilities } from '../modules/heartbeat/heartbeat';
+const mockResolvePublicIp = jest.fn<() => Promise<string>>();
 
-describe('heartbeat', () => {
+jest.mock('../modules/shared/infrastructure/ipify.service', () => ({
+  IpifyService: jest.fn().mockImplementation(() => ({
+    resolvePublicIp: mockResolvePublicIp,
+  })),
+}));
+
+jest.mock('../modules/model/trainer', () => ({
+  isPyTorchAvailable: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+}));
+
+describe('HeartbeatHelper', () => {
+  let helper: HeartbeatHelper;
+  const mockIpifyService = new IpifyService() as any;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockPost.mockReset();
-  });
-
-  it.skip('sends heartbeat with correct payload', async () => {
-    const mockIdentity = {
-      createdAt: 1234567890,
-      peerId: 'test-peer-id',
-      privateKey: 'test-private-key',
-      publicKey: 'test-public-key',
-    };
-
-    const mockHardware = {
-      cpuCores: 10,
-      ramGb: 16,
-      gpuVramGb: 0,
-      tier: 0 as const,
-      hasOllama: true,
-    };
-
-    const mockResponse = {
-      data: {
-        registered: true,
-        peerId: 'test-peer-id',
-      },
-    };
-
-    mockPost.mockResolvedValue(mockResponse);
-
-    const result = await sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware);
-
-    expect(result.registered).toBe(true);
-    expect(mockPost).toHaveBeenCalledWith(
-      '/heartbeat',
-      expect.objectContaining({
-        peerId: 'test-peer-id',
-        capabilities: expect.any(Array),
-      })
-    );
-  });
-
-  it.skip('retries on failure with exponential backoff', async () => {
-    const mockIdentity = {
-      createdAt: 1234567890,
-      peerId: 'test-peer-id',
-      privateKey: 'test-private-key',
-      publicKey: 'test-public-key',
-    };
-
-    const mockHardware = {
-      cpuCores: 10,
-      ramGb: 16,
-      gpuVramGb: 0,
-      tier: 0 as const,
-      hasOllama: true,
-    };
-
-    mockPost
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
-
-    const result = await sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware);
-
-    expect(mockPost).toHaveBeenCalledTimes(3);
-    expect(result.registered).toBe(true);
-  });
-
-  it.skip('throws after 3 failed attempts', async () => {
-    const mockIdentity = {
-      createdAt: 1234567890,
-      peerId: 'test-peer-id',
-      privateKey: 'test-private-key',
-      publicKey: 'test-public-key',
-    };
-
-    const mockHardware = {
-      cpuCores: 10,
-      ramGb: 16,
-      gpuVramGb: 0,
-      tier: 0 as const,
-      hasOllama: true,
-    };
-
-    mockPost.mockRejectedValue(new Error('Network error'));
-
-    await expect(
-      sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware)
-    ).rejects.toThrow('Network error');
-
-    expect(mockPost).toHaveBeenCalledTimes(3);
+    mockResolvePublicIp.mockResolvedValue('1.2.3.4');
+    helper = new HeartbeatHelper(mockIpifyService);
   });
 
   describe('determineCapabilities', () => {
-    it.skip('determines capabilities based on hardware - CPU only', () => {
+    it('determines capabilities for CPU-only hardware', () => {
       const hardware = {
         cpuCores: 4,
         ramGb: 8,
         gpuVramGb: 0,
         tier: 0 as const,
         hasOllama: false,
+        hasCloudLlm: false,
       };
 
-      const capabilities = determineCapabilities(hardware);
+      const capabilities = helper.determineCapabilities(hardware);
 
-      expect(capabilities).toContain('training');
-      expect(capabilities).toContain('research');
+      expect(capabilities).toContain('cpu_training');
+      expect(capabilities).toContain('cpu_inference');
+      expect(capabilities).not.toContain('inference');
+      expect(capabilities).not.toContain('embedding');
+      expect(capabilities).not.toContain('gpu_training');
     });
 
-    it('determines capabilities with inference', () => {
+    it('determines capabilities with Ollama inference', () => {
       const hardware = {
         cpuCores: 4,
         ramGb: 8,
         gpuVramGb: 0,
         tier: 0 as const,
         hasOllama: true,
+        hasCloudLlm: false,
       };
 
-      const capabilities = determineCapabilities(hardware);
+      const capabilities = helper.determineCapabilities(hardware);
 
+      expect(capabilities).toContain('cpu_training');
+      expect(capabilities).toContain('cpu_inference');
       expect(capabilities).toContain('inference');
+      expect(capabilities).toContain('llm');
+      expect(capabilities).toContain('embedding'); // hasOllama && ramGb >= 8
     });
 
     it('determines capabilities with embedding (8GB+ RAM)', () => {
@@ -157,106 +88,150 @@ describe('heartbeat', () => {
         gpuVramGb: 0,
         tier: 0 as const,
         hasOllama: true,
+        hasCloudLlm: false,
       };
 
-      const capabilities = determineCapabilities(hardware);
+      const capabilities = helper.determineCapabilities(hardware);
 
       expect(capabilities).toContain('embedding');
+      expect(capabilities).toContain('inference');
+    });
+
+    it('determines capabilities with GPU training', () => {
+      const hardware = {
+        cpuCores: 8,
+        ramGb: 16,
+        gpuVramGb: 8,
+        tier: 1 as const,
+        hasOllama: false,
+        hasCloudLlm: false,
+      };
+
+      const capabilities = helper.determineCapabilities(hardware);
+
+      expect(capabilities).toContain('gpu_training');
+      expect(capabilities).toContain('cpu_training');
+    });
+
+    it('determines capabilities with cloud LLM', () => {
+      const hardware = {
+        cpuCores: 4,
+        ramGb: 8,
+        gpuVramGb: 0,
+        tier: 0 as const,
+        hasOllama: false,
+        hasCloudLlm: true,
+      };
+
+      const capabilities = helper.determineCapabilities(hardware);
+
+      expect(capabilities).toContain('inference');
+      expect(capabilities).toContain('llm');
     });
   });
 
-  describe('startPeriodicHeartbeat', () => {
-    it.skip('starts periodic heartbeat with default interval', async () => {
-      const mockIdentity = {
-        createdAt: 1234567890,
-        peerId: 'test-peer-id',
-        privateKey: 'test-private-key',
-        publicKey: 'test-public-key',
-      };
+  describe('sendHeartbeat', () => {
+    const mockIdentity = {
+      createdAt: 1234567890,
+      peerId: 'test-peer-id',
+      privateKey: 'test-private-key',
+      publicKey: 'test-public-key',
+      name: 'TestNode',
+    };
 
-      const mockHardware = {
-        cpuCores: 10,
-        ramGb: 16,
-        gpuVramGb: 0,
-        tier: 0 as const,
-        hasOllama: true,
-      };
+    const mockHardware = {
+      cpuCores: 10,
+      ramGb: 16,
+      gpuVramGb: 0,
+      tier: 0 as const,
+      hasOllama: true,
+      hasCloudLlm: false,
+    };
 
-      mockPost.mockResolvedValue({ data: { registered: true } });
+    it('sends heartbeat with correct payload', async () => {
+      mockPost.mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
 
-      const stop = startPeriodicHeartbeat('http://localhost:3701', mockIdentity, mockHardware);
-      
-      // Wait a bit for at least one heartbeat
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      expect(mockPost).toHaveBeenCalled();
-      
-      // Stop the heartbeat
-      stop();
-      
-      const callCount = mockPost.mock.calls.length;
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Should not make more calls after stop
-      expect(mockPost.mock.calls.length).toBe(callCount);
+      const result = await helper.sendHeartbeat(
+        'http://localhost:3701',
+        mockIdentity,
+        mockHardware,
+      );
+
+      expect(result.registered).toBe(true);
+      expect(mockPost).toHaveBeenCalledWith(
+        '/peer/heartbeat',
+        expect.objectContaining({
+          peerId: 'test-peer-id',
+          publicKey: 'test-public-key',
+          capabilities: expect.any(Array),
+        })
+      );
     });
 
-    it('starts periodic heartbeat and returns cleanup function', () => {
-      const mockIdentity = {
-        createdAt: 1234567890,
-        peerId: 'test-peer-id',
-        privateKey: 'test-private-key',
-        publicKey: 'test-public-key',
-      };
-
-      const mockHardware = {
-        cpuCores: 10,
-        ramGb: 16,
-        gpuVramGb: 0,
-        tier: 0 as const,
-        hasOllama: true,
-      };
-
-      mockPost.mockResolvedValue({ data: { registered: true } });
-
-      const stop = startPeriodicHeartbeat('http://localhost:3701', mockIdentity, mockHardware, 1000);
-      
-      expect(typeof stop).toBe('function');
-      
-      stop();
-    });
-
-    it.skip('handles errors in periodic heartbeat', async () => {
-      const mockIdentity = {
-        createdAt: 1234567890,
-        peerId: 'test-peer-id',
-        privateKey: 'test-private-key',
-        publicKey: 'test-public-key',
-      };
-
-      const mockHardware = {
-        cpuCores: 10,
-        ramGb: 16,
-        gpuVramGb: 0,
-        tier: 0 as const,
-        hasOllama: true,
-      };
-
-      // First call succeeds, then fails
+    it('retries on failure with exponential backoff', async () => {
       mockPost
-        .mockResolvedValueOnce({ data: { registered: true } })
-        .mockRejectedValueOnce(new Error('Connection lost'))
-        .mockResolvedValue({ data: { registered: true } });
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
 
-      const stop = startPeriodicHeartbeat('http://localhost:3701', mockIdentity, mockHardware, 50);
-      
-      // Wait for multiple heartbeats
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Should have retried after error
+      const result = await helper.sendHeartbeat(
+        'http://localhost:3701',
+        mockIdentity,
+        mockHardware,
+      );
+
       expect(mockPost).toHaveBeenCalledTimes(3);
-      
-      stop();
+      expect(result.registered).toBe(true);
+    });
+
+    it('throws after 3 failed attempts', async () => {
+      mockPost.mockRejectedValue(new Error('Network error'));
+
+      await expect(
+        helper.sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware)
+      ).rejects.toThrow('Failed to send heartbeat after 3 attempts');
+
+      expect(mockPost).toHaveBeenCalledTimes(3);
+    });
+
+    it('includes geo coordinates when provided', async () => {
+      mockPost.mockResolvedValue({ data: { registered: true } });
+
+      await helper.sendHeartbeat(
+        'http://localhost:3701',
+        mockIdentity,
+        mockHardware,
+        40.4168,
+        -3.7038,
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/peer/heartbeat',
+        expect.objectContaining({
+          lat: 40.4168,
+          lng: -3.7038,
+        })
+      );
+    });
+
+    it('includes wallet address when provided', async () => {
+      mockPost.mockResolvedValue({ data: { registered: true } });
+
+      await helper.sendHeartbeat(
+        'http://localhost:3701',
+        mockIdentity,
+        mockHardware,
+        undefined,
+        undefined,
+        '0x1234567890abcdef',
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/peer/heartbeat',
+        expect.objectContaining({
+          walletAddress: '0x1234567890abcdef',
+        })
+      );
     });
   });
 });
