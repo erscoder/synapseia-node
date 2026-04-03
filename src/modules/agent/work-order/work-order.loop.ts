@@ -123,7 +123,12 @@ export class WorkOrderLoopHelper {
     }
     if (pendingWorkOrders.length === 0) { logger.log(' All work orders completed or on cooldown — waiting'); return { completed: false }; }
 
-    for (const workOrder of pendingWorkOrders) {
+    // Round-robin type selection: prefer the type executed least often this session
+    // so all WO types (RESEARCH, TRAINING, CPU_INFERENCE, etc.) get fair turns
+    const orderedByType = this.selectByTypeRotation(pendingWorkOrders);
+    logger.log(` Type rotation: selected [${orderedByType.map(w => w.type).join(', ')}]`);
+
+    for (const workOrder of orderedByType) {
       logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
       // Economic evaluation
@@ -151,6 +156,12 @@ export class WorkOrderLoopHelper {
 
       logger.log(' Work order accepted');
       this.state.currentWorkOrder = workOrder;
+      // Track type for round-robin rotation
+      this.state.lastAcceptedType = workOrder.type;
+      this.state.typeExecutionCount.set(
+        workOrder.type,
+        (this.state.typeExecutionCount.get(workOrder.type) ?? 0) + 1,
+      );
 
       // Execute
       logger.log(' Executing work order...');
@@ -253,5 +264,44 @@ export class WorkOrderLoopHelper {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Sort work orders so the type executed least often this session comes first.
+   * Ensures fair round-robin across RESEARCH / TRAINING / CPU_INFERENCE / etc.
+   * Within the same type, preserve original order (highest reward first from coordinator).
+   */
+  private selectByTypeRotation(workOrders: WorkOrder[]): WorkOrder[] {
+    const countForType = (type: string) => this.state.typeExecutionCount.get(type) ?? 0;
+
+    // Group by type, preserving intra-group order
+    const groups = new Map<string, WorkOrder[]>();
+    for (const wo of workOrders) {
+      const key = wo.type ?? 'UNKNOWN';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(wo);
+    }
+
+    // Sort type groups by execution count ascending (least executed first)
+    const sortedTypes = [...groups.keys()].sort(
+      (a, b) => countForType(a) - countForType(b),
+    );
+
+    // Flatten: one WO per type, then next WO per type, etc.
+    const result: WorkOrder[] = [];
+    let idx = 0;
+    while (result.length < workOrders.length) {
+      let added = false;
+      for (const type of sortedTypes) {
+        const group = groups.get(type)!;
+        if (idx < group.length) {
+          result.push(group[idx]);
+          added = true;
+        }
+      }
+      if (!added) break;
+      idx++;
+    }
+    return result;
   }
 }
