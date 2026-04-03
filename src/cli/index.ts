@@ -400,10 +400,18 @@ async function bootstrap() {
           logger.log(`Inference: ENABLED  models: ${modelsStr}`);
         }
 
-        const llmModel = llmService.parse(model || 'ollama/qwen2.5:0.5b');
+        // Auto-prefix bare model names with 'ollama/' when no provider prefix is present
+        const rawModel = model || 'ollama/qwen2.5:0.5b';
+        const modelWithPrefix =
+          rawModel.includes('/') ||
+          rawModel.startsWith('openai-compat') ||
+          rawModel.startsWith('anthropic')
+            ? rawModel
+            : `ollama/${rawModel}`;
+        const llmModel = llmService.parse(modelWithPrefix);
         if (!llmModel) {
-          logger.error(`Error: Invalid model format '${model}'`);
-          process.exit(1);
+          // Non-fatal for Tier 0 nodes — they can still do training WOs without LLM
+          logger.warn(`Warning: Invalid model format '${model}' — node will run without LLM capabilities`);
         }
 
         // Use HeartbeatHelper as single source of truth for capabilities
@@ -422,7 +430,7 @@ async function bootstrap() {
             tier: hardware.tier,
             coordinatorUrl,
             capabilities,
-            llmModel,
+            llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: 'ollama' },
             llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
             intervalMs: 30000,
             maxIterations: options.maxIterations,
