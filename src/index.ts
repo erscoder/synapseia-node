@@ -17,12 +17,12 @@ const program = new Command();
 
 program
   .name('synapse')
-  .description('Synapse Node CLI — Join the decentralized compute network')
+  .description('Synapseia Node CLI — Join the decentralized compute network')
   .version('0.0.1');
 
 program
   .command('start')
-  .description('Start Synapse node and begin autonomous research')
+  .description('Start Synapseia node and begin autonomous research')
   .option('--model <string>', 'LLM model to use (e.g., ollama/qwen2.5:0.5b, anthropic/sonnet-4.6, kimi/k2.5)')
   .option('--dataset <string>', 'Path to training dataset')
   .option('--coordinator <string>', 'Coordinator URL')
@@ -32,7 +32,7 @@ program
   .option('--inference', 'Enable inference capability (requires GPU)')
   .option('--cpu', 'Only use CPU (no GPU)')
   .action(async (options) => {
-    logger.log('🧠 Synapse Node CLI');
+    logger.log('🧠 Synapseia Node CLI');
     logger.log('');
 
     // Set defaults
@@ -164,7 +164,7 @@ program
     }
     logger.log('   Model:', options.model || 'ollama/qwen2.5:0.5b');
     logger.log('');
-    logger.log('🚀 Synapse Node running. Press Ctrl+C to stop.\n');
+    logger.log('🚀 Synapseia Node running. Press Ctrl+C to stop.\n');
 
     new AgentLoopHelper().startAgentLoop(config);
 
@@ -181,14 +181,14 @@ program
   .command('status')
   .description('Show node status')
   .action(() => {
-    logger.log('📊 Synapse Node Status\n');
+    logger.log('📊 Synapseia Node Status\n');
     const identityPath = path.join(os.homedir(), '.synapseia');
     if (fs.existsSync(path.join(identityPath, 'identity.json'))) {
       const identity = loadIdentity(identityPath);
       logger.log(`   Peer ID: ${identity.peerId}`);
       logger.log(`   Public Key: ${identity.publicKey.slice(0, 64)}...`);
     } else {
-      logger.log('   Status: Node not configured (run `synapse start` first)');
+      logger.log('   Status: Node not configured (run `synapseia start` first)');
       return;
     }
 
@@ -254,7 +254,7 @@ program
   .action(() => {
     const identityPath = path.join(os.homedir(), '.synapseia');
     if (!fs.existsSync(path.join(identityPath, 'identity.json'))) {
-      logger.log('❌ No identity found. Run `synapse start` first.');
+      logger.log('❌ No identity found. Run `Sypnaseia start` first.');
       return;
     }
 

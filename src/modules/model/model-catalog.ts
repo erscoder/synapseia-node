@@ -1,5 +1,5 @@
 /**
- * Model catalog for SynapseIA Network
+ * Model catalog for Synapseia Network
  * Manages LLM models, compatibility, and pulling from Ollama
  */
 

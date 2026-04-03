@@ -1,5 +1,5 @@
 /**
- * Solana wallet management for Synapse nodes
+ * Solana wallet management for Synapseia nodes
  * Generates and persists Solana keypairs with password-based encryption
  */
 

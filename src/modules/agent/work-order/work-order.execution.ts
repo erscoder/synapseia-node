@@ -297,7 +297,7 @@ Abstract: ${payload.abstract}`;
   // ── Generic ───────────────────────────────────────────────────────────────
 
   private buildWorkOrderPrompt(workOrder: WorkOrder): string {
-    return `You are a SynapseIA network node executing a work order.\n\nTask: ${workOrder.title}\nDescription: ${workOrder.description}\n\nPlease provide a detailed response to complete this task. Be thorough and accurate.\n\nResponse:`;
+    return `You are a Synapseia network node executing a work order.\n\nTask: ${workOrder.title}\nDescription: ${workOrder.description}\n\nPlease provide a detailed response to complete this task. Be thorough and accurate.\n\nResponse:`;
   }
 
   async executeWorkOrder(workOrder: WorkOrder, llmModel: LLMModel, llmConfig?: LLMConfig): Promise<{ result: string; success: boolean }> {
