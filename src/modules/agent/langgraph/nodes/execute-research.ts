@@ -4,7 +4,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { executeResearchWorkOrder, scoreResearchResult } from '../../work-order-agent';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState, WorkOrder, ResearchResult } from '../state';
 import type { ReActThought } from '../tools/types';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -15,6 +17,12 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteResearchNode {
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
+  private readonly evaluation = new WorkOrderEvaluationHelper();
+
   constructor(
     private readonly toolRunner: ToolRunnerService,
     private readonly toolRegistry: ToolRegistry,
@@ -39,7 +47,7 @@ export class ExecuteResearchNode {
             proposal: result.proposal,
             hypothesis: result.summary,
             metricType: 'coherence',
-            metricValue: scoreResearchResult(result),
+            metricValue: this.evaluation.scoreResearchResult(result),
             proof: result.proposal,
           }),
           success: true,
@@ -52,7 +60,7 @@ export class ExecuteResearchNode {
 
       // Fallback: use legacy executor
       logger.log(` Falling back to legacy executor`);
-      const research = await executeResearchWorkOrder(
+      const research = await this.execution.executeResearchWorkOrder(
         selectedWorkOrder, config.llmModel, config.llmConfig, coordinatorUrl, state.peerId,
       );
 
@@ -64,7 +72,7 @@ export class ExecuteResearchNode {
             proposal: research.result.proposal,
             hypothesis: research.result.summary,
             metricType: 'coherence',
-            metricValue: research.success ? scoreResearchResult(research.result) : 0.0,
+            metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0,
             proof: research.result.proposal,
           }),
           success: research.success,

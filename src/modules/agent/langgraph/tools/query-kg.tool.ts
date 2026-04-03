@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import type { ToolDef } from './types';
 
 @Injectable()
@@ -22,7 +23,7 @@ export class QueryKgTool {
   };
 
   async execute(params: { topic: string; missionId?: string }, coordinatorUrl: string): Promise<unknown> {
-    const { fetchKGraphContext } = await import('../../work-order-agent');
-    return fetchKGraphContext(coordinatorUrl, params.topic, params.missionId);
+    const helper = new WorkOrderCoordinatorHelper();
+    return helper.fetchKGraphContext(coordinatorUrl, params.topic, params.missionId);
   }
 }

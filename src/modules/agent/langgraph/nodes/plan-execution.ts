@@ -8,7 +8,7 @@ import type { AgentState, ExecutionStep } from '../state';
 import type { LangGraphLlmService } from '../llm.service';
 import { buildPlanningPrompt, DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 import logger from '../../../../utils/logger';
-import type { ResearchPayload } from '../../work-order-agent';
+import type { ResearchPayload } from '../../work-order/work-order.types';
 
 @Injectable()
 export class PlanExecutionNode {

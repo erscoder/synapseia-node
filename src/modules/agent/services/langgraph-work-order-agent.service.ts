@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AgentGraphService } from '../langgraph/agent-graph.service';
 import { AgentBrainHelper } from '../agent-brain';
 import type { AgentBrain } from '../agent-brain';
-import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order-agent';
+import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order/work-order.types';
 import logger from '../../../utils/logger';
 
 export interface LangGraphAgentState {

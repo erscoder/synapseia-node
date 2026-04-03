@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { executeTrainingWorkOrder } from '../../work-order-agent';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteTrainingNode {
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
+
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, config, coordinatorUrl, peerId, iteration } = state;
     if (!selectedWorkOrder) {
@@ -13,7 +20,7 @@ export class ExecuteTrainingNode {
 
     logger.log(` Executing training: ${selectedWorkOrder.title}`);
     try {
-      const training = await executeTrainingWorkOrder(
+      const training = await this.execution.executeTrainingWorkOrder(
         selectedWorkOrder, coordinatorUrl, peerId, config.capabilities, iteration,
       );
       return { executionResult: { result: training.result, success: training.success } };

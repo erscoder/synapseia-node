@@ -4,8 +4,8 @@
  */
 
 import type { AgentBrain } from '../agent-brain';
-import type { WorkOrderAgentConfig } from '../work-order-agent';
-import type { WorkOrder, ResearchResult, WorkOrderEvaluation } from '../work-order-agent';
+import type { WorkOrderAgentConfig } from '../work-order/work-order.types';
+import type { WorkOrder, ResearchResult, WorkOrderEvaluation } from '../work-order/work-order.types';
 
 // Re-export types used in state
 export type { WorkOrder, ResearchResult, WorkOrderEvaluation, AgentBrain };

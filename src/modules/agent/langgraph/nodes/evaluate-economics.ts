@@ -1,17 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { evaluateWorkOrder, loadEconomicConfig } from '../../work-order-agent';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
 @Injectable()
 export class EvaluateEconomicsNode {
+  private readonly evaluation = new WorkOrderEvaluationHelper();
+
   execute(state: AgentState): Partial<AgentState> {
     const { selectedWorkOrder, config } = state;
     if (!selectedWorkOrder) return { economicEvaluation: null };
 
     const fullModelId = this.buildFullModelId(config);
-    const economicConfig = loadEconomicConfig(fullModelId);
-    const evaluation = evaluateWorkOrder(selectedWorkOrder, economicConfig);
+    const economicConfig = this.evaluation.loadEconomicConfig(fullModelId);
+    const evaluation = this.evaluation.evaluateWorkOrder(selectedWorkOrder, economicConfig);
 
     logger.log(` Economic evaluation: Bounty=${evaluation.bountyUsd.toFixed(4)} USD, Cost=${evaluation.estimatedCostUsd.toFixed(4)} USD → ${evaluation.shouldAccept ? 'ACCEPT' : 'SKIP'}`);
     return { economicEvaluation: evaluation };

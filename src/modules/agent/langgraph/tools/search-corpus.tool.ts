@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import type { ToolDef } from './types';
 
 @Injectable()
@@ -22,9 +23,7 @@ export class SearchCorpusTool {
   };
 
   async execute(params: { topic: string; limit?: number }, coordinatorUrl: string): Promise<unknown> {
-    const { fetchReferenceContext } = await import('../../work-order-agent');
-    // Note: fetchReferenceContext only accepts coordinatorUrl and topic
-    // The limit is hardcoded to 5 in the actual implementation
-    return fetchReferenceContext(coordinatorUrl, params.topic);
+    const helper = new WorkOrderCoordinatorHelper();
+    return helper.fetchReferenceContext(coordinatorUrl, params.topic);
   }
 }
