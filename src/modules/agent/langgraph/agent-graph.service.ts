@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { StateGraph, Annotation } from '@langchain/langgraph';
 import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain, MemoryEntry, ExecutionStep } from './state';
-import type { WorkOrderAgentConfig } from '../work-order-agent';
+import type { WorkOrderAgentConfig } from '../work-order/work-order.types';
 import { AgentBrainHelper } from '../agent-brain';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';

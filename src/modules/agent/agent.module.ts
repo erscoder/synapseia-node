@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentBrainHelper } from './agent-brain';
 import { AgentLoopHelper } from './agent-loop';
-import { WorkOrderAgentHelper } from './work-order-agent';
+
 import { ReviewAgentHelper } from './review-agent';
 import { RoundListenerHelper } from './round-listener';
 import { WorkOrderStateHelper } from './work-order/work-order.state';
@@ -24,8 +24,6 @@ import { WorkOrderLoopHelper } from './work-order/work-order.loop';
     WorkOrderLoopHelper,
     // Agent loop
     AgentLoopHelper,
-    // Legacy facade: backward compat for tests importing from work-order-agent.ts
-    WorkOrderAgentHelper,
   ],
   exports: [
     AgentBrainHelper,
@@ -37,7 +35,6 @@ import { WorkOrderLoopHelper } from './work-order/work-order.loop';
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
-    WorkOrderAgentHelper,
   ],
 })
 export class AgentModule {}

@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { executeCpuInferenceWorkOrder } from '../../work-order-agent';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteInferenceNode {
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
+
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, config, coordinatorUrl } = state;
     if (!selectedWorkOrder) {
@@ -13,7 +20,7 @@ export class ExecuteInferenceNode {
 
     logger.log(` Executing CPU inference: ${selectedWorkOrder.title}`);
     try {
-      const inferenceResult = await executeCpuInferenceWorkOrder(
+      const inferenceResult = await this.execution.executeCpuInferenceWorkOrder(
         selectedWorkOrder, config.llmModel, config.llmConfig, coordinatorUrl,
       );
       const result = JSON.stringify({

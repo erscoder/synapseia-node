@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { executeDiLoCoWorkOrder } from '../../work-order-agent';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteDilocoNode {
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
+
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, config, coordinatorUrl, peerId } = state;
     if (!selectedWorkOrder) {
@@ -13,7 +20,7 @@ export class ExecuteDilocoNode {
 
     logger.log(` Executing DiLoCo training: ${selectedWorkOrder.title}`);
     try {
-      const dilocoResult = await executeDiLoCoWorkOrder(
+      const dilocoResult = await this.execution.executeDiLoCoWorkOrder(
         selectedWorkOrder, coordinatorUrl, peerId, config.capabilities,
       );
       return { executionResult: { result: dilocoResult.result, success: dilocoResult.success } };

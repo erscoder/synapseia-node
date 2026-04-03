@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { fetchAvailableWorkOrders, isResearchWorkOrder } from '../../work-order-agent';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
 
@@ -7,6 +9,11 @@ const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String
 
 @Injectable()
 export class FetchWorkOrdersNode {
+  private readonly coordinator = new WorkOrderCoordinatorHelper();
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
   private readonly researchCooldowns = new Map<string, number>();
   private readonly completedWorkOrderIds = new Set<string>();
 
@@ -14,7 +21,7 @@ export class FetchWorkOrdersNode {
     const { coordinatorUrl, peerId, capabilities } = state;
     logger.log(' Polling for available work orders...');
 
-    const workOrders = await fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    const workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
     if (workOrders.length === 0) {
       logger.log(' No work orders available');
       return { availableWorkOrders: [] };
@@ -24,7 +31,7 @@ export class FetchWorkOrdersNode {
     const now = Date.now();
 
     const pending = workOrders.filter((wo: WorkOrder) => {
-      if (isResearchWorkOrder(wo)) {
+      if (this.execution.isResearchWorkOrder(wo)) {
         const cooldownUntil = this.researchCooldowns.get(wo.id);
         if (cooldownUntil && now < cooldownUntil) {
           const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
@@ -48,7 +55,7 @@ export class FetchWorkOrdersNode {
   }
 
   markCompleted(workOrder: WorkOrder): void {
-    if (!isResearchWorkOrder(workOrder)) {
+    if (!this.execution.isResearchWorkOrder(workOrder)) {
       this.completedWorkOrderIds.add(workOrder.id);
     }
   }

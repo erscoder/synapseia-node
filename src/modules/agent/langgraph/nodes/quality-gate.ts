@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { scoreResearchResult, isResearchWorkOrder } from '../../work-order-agent';
+import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
@@ -8,6 +10,11 @@ const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.1
 
 @Injectable()
 export class QualityGateNode {
+  private readonly evaluation = new WorkOrderEvaluationHelper();
+  private readonly execution = new WorkOrderExecutionHelper(
+    new WorkOrderCoordinatorHelper(),
+    new WorkOrderEvaluationHelper(),
+  );
   private lastSubmissionAt = 0;
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
@@ -18,8 +25,8 @@ export class QualityGateNode {
       return { qualityScore: 0, shouldSubmit: false };
     }
 
-    if (selectedWorkOrder && isResearchWorkOrder(selectedWorkOrder) && researchResult) {
-      const score = scoreResearchResult(researchResult);
+    if (selectedWorkOrder && this.execution.isResearchWorkOrder(selectedWorkOrder) && researchResult) {
+      const score = this.evaluation.scoreResearchResult(researchResult);
       if (score < SUBMISSION_MIN_SCORE) {
         logger.warn(` Research score ${score.toFixed(4)} < ${SUBMISSION_MIN_SCORE} — skipping`);
         return { qualityScore: score, shouldSubmit: false };
@@ -38,7 +45,7 @@ export class QualityGateNode {
     this.lastSubmissionAt = Date.now();
 
     return {
-      qualityScore: researchResult ? scoreResearchResult(researchResult) : 1.0,
+      qualityScore: researchResult ? this.evaluation.scoreResearchResult(researchResult) : 1.0,
       shouldSubmit: true,
     };
   }
