@@ -34,15 +34,12 @@ const AgentStateAnnotation = Annotation.Root({
   shouldSubmit: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   submitted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   accepted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   brain: Annotation<AgentBrain>({ default: () => new AgentBrainHelper().initBrain(), reducer: (_a: any, b: any) => b }),
   iteration: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Annotation<WorkOrderAgentConfig | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
   coordinatorUrl: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   peerId: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   capabilities: Annotation<string[]>({ default: () => [], reducer: (_a, b) => b }),
-  // Sprint B fields
   relevantMemories: Annotation<MemoryEntry[]>({ default: () => [], reducer: (_a, b) => b }),
   executionPlan: Annotation<ExecutionStep[]>({ default: () => [], reducer: (_a, b) => b }),
   currentStepIndex: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
@@ -66,17 +63,14 @@ export class AgentGraphService {
     private readonly qualityGateNode: QualityGateNode,
     private readonly submitResultNode: SubmitResultNode,
     private readonly updateMemoryNode: UpdateMemoryNode,
-    // Sprint B nodes
     private readonly retrieveMemoryNode: RetrieveMemoryNode,
     private readonly planExecutionNode: PlanExecutionNode,
     private readonly selfCritiqueNode: SelfCritiqueNode,
     private readonly agentBrainHelper: AgentBrainHelper,
   ) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   buildGraph(): any {
     const workflow = new StateGraph(AgentStateAnnotation);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = workflow as any;
 
     // ── Nodes ────────────────────────────────────────────────────────────────
@@ -84,7 +78,6 @@ export class AgentGraphService {
     workflow.addNode('selectBestWorkOrder', (s: AgentState) => this.selectWorkOrderNode.execute(s));
     workflow.addNode('evaluateEconomics', (s: AgentState) => this.evaluateEconomicsNode.execute(s));
     workflow.addNode('acceptWorkOrder', (s: AgentState) => this.acceptWorkOrderNode.execute(s));
-    // Sprint B nodes
     workflow.addNode('retrieveMemory', (s: AgentState) => this.retrieveMemoryNode.execute(s));
     workflow.addNode('planExecution', (s: AgentState) => this.planExecutionNode.execute(s));
     workflow.addNode('selfCritique', (s: AgentState) => this.selfCritiqueNode.execute(s));
@@ -112,7 +105,7 @@ export class AgentGraphService {
       { acceptWorkOrder: 'acceptWorkOrder', fetchWorkOrders: 'fetchWorkOrders' },
     );
 
-    // After accepting, retrieve memories (Sprint B)
+    // After accepting, retrieve memories  
     w.addEdge('acceptWorkOrder', 'retrieveMemory');
 
     // After memory retrieval, plan execution for research WOs
@@ -137,7 +130,7 @@ export class AgentGraphService {
       },
     );
 
-    // After execution, self-critique for research WOs (Sprint B)
+    // After execution, self-critique for research WOs 
     w.addEdge('executeResearch', 'selfCritique');
     w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
