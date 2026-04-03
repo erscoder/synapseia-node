@@ -157,10 +157,11 @@ export class WorkOrderLoopHelper {
       logger.log(' Work order accepted');
       this.state.currentWorkOrder = workOrder;
       // Track type for round-robin rotation
-      this.state.lastAcceptedType = workOrder.type;
+      const woType = workOrder.type ?? 'COMPUTATION';
+      this.state.lastAcceptedType = woType;
       this.state.typeExecutionCount.set(
-        workOrder.type,
-        (this.state.typeExecutionCount.get(workOrder.type) ?? 0) + 1,
+        woType,
+        (this.state.typeExecutionCount.get(woType) ?? 0) + 1,
       );
 
       // Execute

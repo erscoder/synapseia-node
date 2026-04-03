@@ -1,9 +1,13 @@
-FROM node:20-alpine
+FROM node:20-slim
 
-# Install Python3 + pip + PyTorch CPU (for training work orders)
-RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || \
-    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install Python3 + pip
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch CPU-only (arm64 compatible)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    torch --index-url https://download.pytorch.org/whl/cpu
 
 WORKDIR /app
 
