@@ -76,6 +76,12 @@ import { AgentBrainHelper } from '../../agent-brain';
 import type { WorkOrder } from '../state';
 
 const brainHelper = new AgentBrainHelper();
+const { WorkOrderExecutionHelper } = require('../../work-order/work-order.execution');
+const { WorkOrderEvaluationHelper } = require('../../work-order/work-order.evaluation');
+const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
+const coordinator = new WorkOrderCoordinatorHelper();
+const evaluation = new WorkOrderEvaluationHelper();
+const execution = new WorkOrderExecutionHelper(coordinator, evaluation);
 const initBrain = () => brainHelper.initBrain();
 
 function makeState(overrides: Partial<AgentState> = {}): AgentState {
@@ -130,7 +136,7 @@ describe('QualityGateNode', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    node = new QualityGateNode();
+    node = new QualityGateNode(execution, evaluation);
     node.resetRateLimit();
   });
 
@@ -212,7 +218,7 @@ describe('SubmitResultNode', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    node = new SubmitResultNode();
+    node = new SubmitResultNode(coordinator);
   });
 
   it('returns submitted=false when no work order', async () => {
@@ -265,6 +271,8 @@ describe('Executor nodes — null work order guard', () => {
     const { LangGraphLlmService } = await import('../llm.service');
     
     const node = new ExecuteResearchNode(
+      execution,
+      evaluation,
       new ToolRunnerService(null as any, null as any, null as any),
       new ToolRegistry(),
       new LangGraphLlmService(null as any),
@@ -274,19 +282,19 @@ describe('Executor nodes — null work order guard', () => {
   });
 
   it('executeTraining returns failure when no work order', async () => {
-    const node = new ExecuteTrainingNode();
+    const node = new ExecuteTrainingNode(execution);
     const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 
   it('executeInference returns failure when no work order', async () => {
-    const node = new ExecuteInferenceNode();
+    const node = new ExecuteInferenceNode(execution);
     const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });
 
   it('executeDiloco returns failure when no work order', async () => {
-    const node = new ExecuteDilocoNode();
+    const node = new ExecuteDilocoNode(execution);
     const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.executionResult?.success).toBe(false);
   });

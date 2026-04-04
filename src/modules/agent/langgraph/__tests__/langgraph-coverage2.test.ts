@@ -72,6 +72,15 @@ jest.mock('../llm.service', () => ({
     generate: jest.fn(),
   })),
 }));
+
+// Get mocked helper classes
+const { WorkOrderExecutionHelper } = require('../../work-order/work-order.execution');
+const { WorkOrderEvaluationHelper } = require('../../work-order/work-order.evaluation');
+const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
+const coordinator = new WorkOrderCoordinatorHelper();
+const evaluation = new WorkOrderEvaluationHelper();
+const execution = new WorkOrderExecutionHelper(coordinator, evaluation);
+
 jest.mock('../../../../utils/logger', () => ({
   __esModule: true,
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -165,7 +174,7 @@ describe('createInitialAgentState', () => {
 // ─── EvaluateEconomicsNode ────────────────────────────────────────────────────
 
 describe('EvaluateEconomicsNode', () => {
-  const node = new EvaluateEconomicsNode();
+  const node = new EvaluateEconomicsNode(evaluation);
 
   it('returns null when no selected WO', () => {
     const result = node.execute(makeState({ selectedWorkOrder: null }));
@@ -198,7 +207,7 @@ describe('FetchWorkOrdersNode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsResearchWorkOrder.mockImplementation((wo: any) => wo?.type === 'RESEARCH');
-    node = new FetchWorkOrdersNode();
+    node = new FetchWorkOrdersNode(coordinator, execution);
     node.reset();
   });
 
@@ -239,7 +248,7 @@ describe('FetchWorkOrdersNode', () => {
 
 describe('ExecuteTrainingNode', () => {
   let node: ExecuteTrainingNode;
-  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteTrainingNode(); });
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteTrainingNode(execution); });
 
   it('calls executeTrainingWorkOrder with correct args', async () => {
     const wo = makeWO('TRAINING');
@@ -260,7 +269,7 @@ describe('ExecuteTrainingNode', () => {
 
 describe('ExecuteInferenceNode', () => {
   let node: ExecuteInferenceNode;
-  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteInferenceNode(); });
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteInferenceNode(execution); });
 
   it('wraps inference result', async () => {
     mockExecuteCpuInferenceWorkOrder.mockResolvedValueOnce({
@@ -281,7 +290,7 @@ describe('ExecuteInferenceNode', () => {
 
 describe('ExecuteDilocoNode', () => {
   let node: ExecuteDilocoNode;
-  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteDilocoNode(); });
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteDilocoNode(execution); });
 
   it('calls executeDiLoCoWorkOrder', async () => {
     const wo = makeWO('DILOCO_TRAINING');

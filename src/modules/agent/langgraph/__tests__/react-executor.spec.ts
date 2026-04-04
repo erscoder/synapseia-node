@@ -58,11 +58,17 @@ jest.mock('../../../../utils/logger', () => ({
   },
 }));
 
+// Get mocked classes (jest.mock makes them available as jest.fn())
+const { WorkOrderExecutionHelper } = require('../../work-order/work-order.execution');
+const { WorkOrderEvaluationHelper } = require('../../work-order/work-order.evaluation');
+
 describe('ExecuteResearchNode', () => {
   let node: ExecuteResearchNode;
   let mockToolRunner: any;
   let mockToolRegistry: any;
   let mockLlmService: any;
+  let mockExecution: any;
+  let mockEvaluation: any;
 
   const createMockState = (overrides: Partial<AgentState> = {}): AgentState => ({
     availableWorkOrders: [],
@@ -142,8 +148,10 @@ describe('ExecuteResearchNode', () => {
     mockLlmService = {
       generate: jest.fn(),
     };
+    mockExecution = new WorkOrderExecutionHelper();
+    mockEvaluation = new WorkOrderEvaluationHelper();
 
-    node = new ExecuteResearchNode(mockToolRunner, mockToolRegistry, mockLlmService);
+    node = new ExecuteResearchNode(mockExecution, mockEvaluation, mockToolRunner, mockToolRegistry, mockLlmService);
   });
 
   describe('execute - no work order selected', () => {
