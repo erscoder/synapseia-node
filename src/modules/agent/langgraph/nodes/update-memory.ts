@@ -11,13 +11,10 @@ import logger from '../../../../utils/logger';
 export class UpdateMemoryNode {
   private readonly execution: WorkOrderExecutionHelper;
 
-  constructor(private readonly agentBrainHelper: AgentBrainHelper) {
-    this.execution = new WorkOrderExecutionHelper(
-      new WorkOrderCoordinatorHelper(),
-      new WorkOrderEvaluationHelper(),
-      new LlmProviderHelper(),
-    );
-  }
+  constructor(
+    private readonly execution: WorkOrderExecutionHelper,
+    private readonly agentBrainHelper: AgentBrainHelper,
+  ) {}
 
   execute(state: AgentState): Partial<AgentState> {
     const { selectedWorkOrder, researchResult, brain } = state;
