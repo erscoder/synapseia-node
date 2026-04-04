@@ -5,426 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775333258580,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333299977,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333355131,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333395971,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333436279,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333477841,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333520693,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333557727,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333615877,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333672187,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333725056,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333761630,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333804516,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333845447,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333900756,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333940292,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775333981640,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334036791,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334072900,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334109362,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334149217,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334188293,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334227678,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334271871,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334313879,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334355947,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334392939,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334436281,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334477326,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334522084,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334582130,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334627391,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334664746,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334724024,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334761682,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334800317,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334839366,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334904433,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334956692,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775334998943,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335041311,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335078593,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335138310,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335185811,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335225412,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335285486,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335339762,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335402966,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335461294,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335515951,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335556615,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335598530,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335641938,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335704948,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335741564,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335783463,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335826470,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335889549,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335928554,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775335967637,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336009350,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336050264,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336108004,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336151747,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336193764,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336236263,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336278640,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336316015,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336367266,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775336407030,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775336466808,
       "type": "discovery",
       "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
@@ -603,429 +183,429 @@
       "type": "discovery",
       "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775337892737,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775337961179,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338021287,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338062176,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338118455,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338161632,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338224887,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338281439,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338338864,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338383245,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338440892,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338482883,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338527958,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338581288,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338638282,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338699425,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338746862,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338811037,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338853688,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338888373,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338929451,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775338973801,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339032191,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339077658,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339116284,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339152529,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339193647,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339230999,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339269458,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339314298,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339384473,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339428615,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339496811,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339555012,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339594447,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339649160,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339692476,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339733512,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339775187,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339834118,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339872131,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339911908,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339951698,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775339991784,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340051143,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340105070,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340162372,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340209132,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340254355,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340325006,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340379978,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340449992,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340491957,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340532730,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340575377,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340621100,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340660213,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340714104,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340755902,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340798578,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340821851,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340852155,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340882781,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340913632,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340944563,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775340975263,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341005711,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341036501,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341067168,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341098319,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775333258580,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333299977,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333355131,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333395971,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. The results (neutrophil engraftment, transfusion independence, fetal hemoglobin increases) 5. Adverse events (69 grade 3-4 events, 6 serious events) I have enough information from the abstract to g"
-    },
-    {
-      "timestamp": 1775333436279,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The paper is about renizgamglogene autogedtemcel (reni-cel), a CRISPR-Cas12a gene-edited therapy that targets HBG1 and HBG2 promoters to treat transfusion-dependent β-thalassemia. Key information from"
-    },
-    {
-      "timestamp": 1775333477841,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The paper is about \"renizgamglogene autogedtemcel\" (reni-cel), which is a CRISPR-Cas12a gene-edited therapy targeting HBG1 and HBG2 promoters to treat transfusion-dependent β-thalassemia. Key informat"
-    },
-    {
-      "timestamp": 1775333520693,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333557727,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:   \"action\": \"use_tool\",   \"toolCall\": {     \"toolName\": \"search_reference_corpus\",     \"params\": {       \"topic\": \"CRISPR-Cas12a gene editing β-thalassemia fetal hemoglobin BCL11A\"     }   } }"
-    },
-    {
-      "timestamp": 1775333615877,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. **Purpose**: Reactivate fetal hemoglobin production for treatment of transfusion-dependent β-thalassemia 5. **Study Design**: Phase 1-2, multicenter, open-label, single-group study 6. **Participant"
-    },
-    {
-      "timestamp": 1775333672187,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333725056,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: Looking at the provided abstract, I have enough information from the paper to complete this analysis. The abstract contains: - Study design: Phase 1-2, multicenter, open-label, single-group study - Th"
-    },
-    {
-      "timestamp": 1775333761630,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Shows promising results with transfusion independence Let me search for related work to provide context. </think> {   \"thought\": \"I need to analyze this paper about CRISPR-Cas12a gene editing for tr"
-    },
-    {
-      "timestamp": 1775333804516,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The user wants me to: 1. Read and understand the paper 2. Summarize key findings and methodology 3. Identify potential applications 4. Write a concise research report However, I notice that I only hav"
-    },
-    {
-      "timestamp": 1775333845447,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333900756,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333940292,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775333981640,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334036791,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334072900,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Disrupting BCL11A binding sites - Reactivating fetal hemoglobin - Phase 1-2 clinical trial for transfusion-dependent β-thalassemia Let me search for related work to provide context. </think> {   \"th"
-    },
-    {
-      "timestamp": 1775334109362,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334149217,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Phase 1-2 multicenter study - 9 participants with transfusion-dependent β-thalassemia - Myeloablative conditioning with busulfan - Primary endpoints: neutrophil engraftment by 42 days, adverse event"
-    },
-    {
-      "timestamp": 1775334188293,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: Given that I have the full abstract already provided, I have substantial information to work with. However, to provide a more comprehensive analysis, I could: 1. Search for related research in the cor"
-    },
-    {
-      "timestamp": 1775334227678,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334271871,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Designed to disrupt BCL11A binding sites in HBG1 and HBG2 promoters - Goal: Reactivate fetal hemoglobin production for treating transfusion-dependent β-thalassemia **Study Design:** - Phase 1-2, mul"
-    },
-    {
-      "timestamp": 1775334313879,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The paper is about \"Renizgamglogene autogedtemcel (reni-cel)\" which is a CRISPR-Cas12a gene-edited therapy designed to treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in H"
-    },
-    {
-      "timestamp": 1775334355947,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334392939,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - For treatment of transfusion-dependent β-thalassemia - Phase 1-2 clinical trial - 9 participants received treatment - Results showed neutrophil engraftment, increased fetal hemoglobin, and transfusi"
-    },
-    {
-      "timestamp": 1775334436281,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334477326,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334522084,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334582130,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334627391,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334664746,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Study design (phase 1-2, multicenter, open-label) - Participants (9 patients, 18-35 years) - Primary endpoints (neutrophil engraftment, adverse events) - Results (all participants achieved transfusi"
-    },
-    {
-      "timestamp": 1775334724024,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Primary endpoints: neutrophil engraftment by day 42, adverse events - All 9 participants had neutrophil and platelet engraftment by day 42 - 6 participants evaluated for transfusion independence at "
-    },
-    {
-      "timestamp": 1775334761682,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334800317,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334839366,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334904433,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334956692,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775334998943,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335041311,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335078593,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335138310,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335185811,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - It's a phase 1-2 multicenter study - 9 participants received the treatment - Results show neutrophil engraftment, increased fetal hemoglobin, and transfusion independence - There were adverse events"
-    },
-    {
-      "timestamp": 1775335225412,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335285486,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. **Population**: 9 participants aged 18-35 with transfusion-dependent β-thalassemia 5. **Methods**: Myeloablative conditioning with busulfan before reni-cel infusion 6. **Results**:    - All partici"
-    },
-    {
-      "timestamp": 1775335339762,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335402966,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335461294,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335515951,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Population (9 participants, 18-35 years old with transfusion-dependent β-thalassemia) - Results (neutrophil/platelet engraftment, transfusion independence, fetal hemoglobin levels) - Safety profile "
-    },
-    {
-      "timestamp": 1775335556615,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335598530,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335641938,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335704948,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335741564,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335783463,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335826470,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335889549,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335928554,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775335967637,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775336009350,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 5. Key findings include successful neutrophil engraftment, increased fetal hemoglobin, and transfusion independence I have the abstract which contains substantial information. Let me think about what "
-    },
-    {
-      "timestamp": 1775336050264,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775336108004,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Myeloablative conditioning with busulfan before reni-cel infusion - Primary endpoints: neutrophil engraftment by 42 days and adverse event frequency/severity **Results:** - 9 participants received r"
-    },
-    {
-      "timestamp": 1775336151747,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775336193764,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. Treatment: myeloablative conditioning with busulfan before reni-cel infusion 5. Results: neutrophil and platelet engraftment by day 42, all 9 participants became transfusion-free 6. Safety: 69 grad"
-    },
-    {
-      "timestamp": 1775336236263,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775336278640,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775336316015,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 5. Phase 1-2 clinical trial with 9 participants 6. Results show successful engraftment, increased fetal hemoglobin, and transfusion independence Let me use the knowledge graph to get broader context a"
-    },
-    {
-      "timestamp": 1775336367266,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Goal: Reactivate fetal hemoglobin production - Results: All participants achieved transfusion independence, neutrophil and platelet engraftment by 42 days - Safety: 69 grade 3-4 adverse events, 6 se"
-    },
-    {
-      "timestamp": 1775336407030,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
     {
       "timestamp": 1775336466808,
       "action": "research:wo_1775308626282_geyumoypl",
@@ -1205,6 +785,426 @@
       "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
       "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775337892737,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775337961179,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338021286,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338062176,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - The therapy (renizgamglogene autogedtemcel/reni-cel) - Study design (phase 1-2, multicenter, open-label) - Participants (9 patients, 18-35 years old) - Results (neutrophil engraftment, transfusion i"
+    },
+    {
+      "timestamp": 1775338118455,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338161632,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338224887,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338281439,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338338864,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: I have the abstract which contains: - Study design: Phase 1-2, multicenter, open-label, single-group study - Therapy: Renizgamglogene autogedtemcel (reni-cel) - CRISPR-Cas12a gene-edited autologous HS"
+    },
+    {
+      "timestamp": 1775338383245,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338440892,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338482883,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338527958,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338581288,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The abstract already contains most of the key information: - Study design: Phase 1-2, multicenter, open-label, single-group study - Treatment: Renizgamglogene autogedtemcel (reni-cel) - CRISPR-Cas12a "
+    },
+    {
+      "timestamp": 1775338638282,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338699425,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338746862,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338811037,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338853688,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338888373,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:   \"action\": \"use_tool\",   \"toolCall\": {     \"toolName\": \"search_reference_corpus\",     \"params\": {       \"query\": \"CRISPR-Cas12a gene editing HBG1 HBG2 promoters beta-thalassemia fetal hemoglobin\"    "
+    },
+    {
+      "timestamp": 1775338929451,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775338973801,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339032191,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 3. Identify potential applications 4. Write a concise research report From the abstract, I can extract: **Study Design:** - Phase 1-2, multicenter, open-label, single-group study - Investigational the"
+    },
+    {
+      "timestamp": 1775339077658,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339116284,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339152529,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:   \"action\": \"use_tool\",   \"toolCall\": { \"toolName\": \"search_reference_corpus\", \"params\": { \"query\": \"CRISPR gene editing β-thalassemia fetal hemoglobin HBG BCL11A\" } } }"
+    },
+    {
+      "timestamp": 1775339193647,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339230999,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339269458,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Treatment for transfusion-dependent β-thalassemia - Phase 1-2 clinical trial with 9 participants - Results show transfusion independence and rapid neutrophil engraftment I should search for related "
+    },
+    {
+      "timestamp": 1775339314298,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339384473,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339428615,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339496811,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339555012,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339594447,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339649160,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339692476,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339733512,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339775187,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339834118,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339872131,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339911908,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775339951698,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Participants: 9 patients with transfusion-dependent β-thalassemia - Results: All participants achieved transfusion independence, neutrophil and platelet engraftment by 42 days - Safety: Adverse even"
+    },
+    {
+      "timestamp": 1775339991784,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340051143,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 3. Patient population (18-35 years, transfusion-dependent beta-thalassemia) 4. Treatment protocol (myeloablative conditioning with busulfan) 5. Results (9 participants, neutrophil/platelet engraftment"
+    },
+    {
+      "timestamp": 1775340105070,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. Write a concise research report - I need to structure this properly The abstract provides: - Study design: phase 1-2, multicenter, open-label, single-group study - Participants: 18-35 years old wit"
+    },
+    {
+      "timestamp": 1775340162372,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340209132,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340254355,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340325006,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340379978,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:    - Phase 1-2 clinical trial    - CRISPR-Cas12a gene editing of HBG1/HBG2 promoters    - Goal: Reactivate fetal hemoglobin production    - 9 participants with transfusion-dependent β-thalassemia    -"
+    },
+    {
+      "timestamp": 1775340449992,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The abstract is already provided, so I have the key information. Let me think about what additional context might be helpful: The paper is about: - Renizgamglogene autogedtemcel (reni-cel) - an invest"
+    },
+    {
+      "timestamp": 1775340491957,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340532729,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340575377,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340621100,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340660213,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340714104,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. **Participants**: 9 participants aged 18-35 with transfusion-dependent β-thalassemia 5. **Key Results**:    - All participants had neutrophil and platelet engraftment by day 42    - All 9 participa"
+    },
+    {
+      "timestamp": 1775340755902,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340798578,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340821851,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340852155,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340882781,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340913632,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340944563,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775340975263,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341005711,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341036501,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341067168,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341098319,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: No summary generated\nProposal: No proposal generated"
     }
   ],
   "strategy": {
