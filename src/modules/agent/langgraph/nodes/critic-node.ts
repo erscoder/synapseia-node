@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { AgentState } from '../agent-graph.service';
+import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import logger from '../../../../utils/logger';
@@ -53,7 +53,7 @@ Respond only with valid JSON.`;
 
     try {
       const output = await this.llmProvider.generateLLM(
-        state.config?.model ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
+        state.config?.llmModel ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
         prompt,
         undefined,
         undefined,
