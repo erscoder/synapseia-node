@@ -6,6 +6,7 @@ import { PeerReviewHandler } from './handlers/peer-review.handler';
 import { EmbeddingHandler } from './handlers/embedding.handler';
 import { HealthCheckHandler } from './handlers/health-check.handler';
 import { DelegateResearchHandler } from './handlers/delegate-research.handler';
+import { KnowledgeQueryHandler } from './handlers/knowledge-query.handler';
 import { A2AClientModule } from './client/client.module';
 import { AuthModule } from './auth/auth.module';
 
@@ -19,6 +20,7 @@ import { AuthModule } from './auth/auth.module';
     EmbeddingHandler,
     HealthCheckHandler,
     DelegateResearchHandler,
+    KnowledgeQueryHandler,
   ],
   exports: [
     A2AServer,

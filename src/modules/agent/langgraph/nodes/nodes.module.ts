@@ -17,10 +17,17 @@ import { SelfCritiqueNode } from './self-critique';
 import { ResearcherNode } from './researcher-node';
 import { CriticNode } from './critic-node';
 import { SynthesizerNode } from './synthesizer-node';
+import { ToolsModule } from '../tools/tools.module';
+import { LangGraphLlmService } from '../llm.service';
+import { LlmProviderHelper } from '../../../llm/llm-provider';
+import { AgentBrainHelper } from '../../agent-brain';
 
 @Module({
-  imports: [WorkOrderModule],
+  imports: [WorkOrderModule, ToolsModule],
   providers: [
+    LangGraphLlmService,
+    LlmProviderHelper,
+    AgentBrainHelper,
     FetchWorkOrdersNode,
     SelectWorkOrderNode,
     EvaluateEconomicsNode,

@@ -11,6 +11,7 @@ import { PeerReviewHandler } from './handlers/peer-review.handler';
 import { EmbeddingHandler } from './handlers/embedding.handler';
 import { HealthCheckHandler } from './handlers/health-check.handler';
 import { DelegateResearchHandler } from './handlers/delegate-research.handler';
+import { KnowledgeQueryHandler } from './handlers/knowledge-query.handler';
 
 @Injectable()
 export class TaskRouter {
@@ -19,6 +20,7 @@ export class TaskRouter {
     private readonly embeddingHandler: EmbeddingHandler,
     private readonly healthCheckHandler: HealthCheckHandler,
     private readonly delegateResearchHandler: DelegateResearchHandler,
+    private readonly knowledgeQueryHandler: KnowledgeQueryHandler,
   ) {}
 
   /**
@@ -61,8 +63,7 @@ export class TaskRouter {
         return this.delegateResearchHandler.handle(task.payload);
 
       case 'knowledge_query':
-        // Fallback: not implemented yet
-        throw new Error(`knowledge_query handler not yet implemented`);
+        return this.knowledgeQueryHandler.handle(task.payload);
 
       default: {
         const _exhaustive: never = task.type;

@@ -5,60 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775337405395,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337447043,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337489986,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337534284,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337582369,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337620488,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337660970,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337703961,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337743794,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775337783501,
       "type": "discovery",
       "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
@@ -603,63 +549,63 @@
       "type": "discovery",
       "content": "Research: No summary generated",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775343541703,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants a JSON output that contains two top-level keys: the first is a \"researcher_analysis\" perhaps? Actually the user says: \"You are a rigorous peer reviewer. A researcher has analyze",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775343702617,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants us to produce a JSON block that contains \"summary\", \"keyInsights\", and \"proposal\". The instruction says \"Produce the FINAL ResearchResult, incorporating the critique:\" and then ",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775343896649,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user gave a prompt:\n\n```\nYou are a rigorous peer reviewer. A researcher has analyzed this paper:\n\nPaper: Train micro-transformer: trading\n\nResearcher's analysis:\n- Summary: \n- Key Insights",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344076849,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user requests: \"You are a rigorous peer reviewer. A researcher has analyzed this paper: ... The researcher's analysis is incomplete: the summary is malformed JSON snippet, missing key insi",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344203137,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user is requesting a response in a very specific format: JSON with fields \"summary\", \"keyInsights\", \"proposal\". The user wants the analysis \"refined\" based on the critique, but the user or",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344309788,
+      "type": "discovery",
+      "content": "Research: <think>We need to parse the request. The user says: \"Produce the FINAL ResearchResult, incorporating the critique:\" and then provides JSON template: summary, keyInsights, proposal. They want us to res",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344451638,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user asks:\n\n> Produce the FINAL ResearchResult, incorporating the critique:\n\nThen they show a JSON skeleton with placeholder fields: summary, keyInsights, proposal.\n\nWe need to produce a J",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344510429,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user asks: \"You are a research analyst. Analyze the following paper thoroughly.\n\nPaper: Train micro-transformer: medical\nAbstract: {\"domain\":\"medical\",\"datasetId\":\"synthetic://text8-sample",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775344609151,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants me to produce a final research result in JSON format. Based on the critique, I need to provide:\n1. A refined summary (2-3 sentences)\n2. Key insights (at least 3)\n3. A proposal f",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775337405395,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337447043,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: The paper is about: - Renizgamglogene autogedtemcel (reni-cel) - an investigational CRISPR-Cas12a gene-edited therapy - It disrupts BCL11A binding sites in HBG1 and HBG2 promoters - This reactivates f"
-    },
-    {
-      "timestamp": 1775337489986,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337534284,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337582369,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337620488,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Disrupting BCL11A binding sites - Reactivating fetal hemoglobin - Treatment for transfusion-dependent β-thalassemia - Phase 1-2 clinical trial - 9 participants received treatment - Results: neutroph"
-    },
-    {
-      "timestamp": 1775337660970,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337703961,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337743794,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
     {
       "timestamp": 1775337783501,
       "action": "research:wo_1775308626282_geyumoypl",
@@ -1205,6 +1151,60 @@
       "action": "research:wo_training_1775341121197_77oi8sp",
       "outcome": "completed",
       "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775343541703,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: <think>\nThe user wants a JSON output that contains two top-level keys: the first is a \"researcher_analysis\" perhaps? Actually the user says: \"You are a rigorous peer reviewer. A researcher has analyze\nProposal: "
+    },
+    {
+      "timestamp": 1775343702617,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: <think>\nThe user wants us to produce a JSON block that contains \"summary\", \"keyInsights\", and \"proposal\". The instruction says \"Produce the FINAL ResearchResult, incorporating the critique:\" and then \nProposal: "
+    },
+    {
+      "timestamp": 1775343896649,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: <think>\nThe user gave a prompt:\n\n```\nYou are a rigorous peer reviewer. A researcher has analyzed this paper:\n\nPaper: Train micro-transformer: trading\n\nResearcher's analysis:\n- Summary: \n- Key Insights\nProposal: "
+    },
+    {
+      "timestamp": 1775344076849,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: <think>\nThe user requests: \"You are a rigorous peer reviewer. A researcher has analyzed this paper: ... The researcher's analysis is incomplete: the summary is malformed JSON snippet, missing key insi\nProposal: "
+    },
+    {
+      "timestamp": 1775344203137,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user is requesting a response in a very specific format: JSON with fields \"summary\", \"keyInsights\", \"proposal\". The user wants the analysis \"refined\" based on the critique, but the user or\nProposal: "
+    },
+    {
+      "timestamp": 1775344309788,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>We need to parse the request. The user says: \"Produce the FINAL ResearchResult, incorporating the critique:\" and then provides JSON template: summary, keyInsights, proposal. They want us to res\nProposal: "
+    },
+    {
+      "timestamp": 1775344451638,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user asks:\n\n> Produce the FINAL ResearchResult, incorporating the critique:\n\nThen they show a JSON skeleton with placeholder fields: summary, keyInsights, proposal.\n\nWe need to produce a J\nProposal: "
+    },
+    {
+      "timestamp": 1775344510429,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user asks: \"You are a research analyst. Analyze the following paper thoroughly.\n\nPaper: Train micro-transformer: medical\nAbstract: {\"domain\":\"medical\",\"datasetId\":\"synthetic://text8-sample\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775344609151,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to produce a final research result in JSON format. Based on the critique, I need to provide:\n1. A refined summary (2-3 sentences)\n2. Key insights (at least 3)\n3. A proposal f\nProposal: "
     }
   ],
   "strategy": {

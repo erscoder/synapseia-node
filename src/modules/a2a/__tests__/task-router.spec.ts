@@ -8,6 +8,7 @@ import { PeerReviewHandler } from '../handlers/peer-review.handler';
 import { EmbeddingHandler } from '../handlers/embedding.handler';
 import { HealthCheckHandler } from '../handlers/health-check.handler';
 import { DelegateResearchHandler } from '../handlers/delegate-research.handler';
+import { KnowledgeQueryHandler } from '../handlers/knowledge-query.handler';
 import { AgentCardService } from '../agent-card.service';
 import type { A2ATask } from '../types';
 
@@ -19,6 +20,9 @@ const mockEmbeddingHandler = {
   handle: jest.fn(),
 };
 const mockDelegateResearchHandler = {
+  handle: jest.fn(),
+};
+const mockKnowledgeQueryHandler = {
   handle: jest.fn(),
 };
 
@@ -61,6 +65,7 @@ describe('TaskRouter', () => {
       mockEmbeddingHandler as unknown as EmbeddingHandler,
       healthCheckHandler,
       mockDelegateResearchHandler as unknown as DelegateResearchHandler,
+      mockKnowledgeQueryHandler as unknown as KnowledgeQueryHandler,
     );
   });
 
@@ -110,13 +115,18 @@ describe('TaskRouter', () => {
       expect(mockDelegateResearchHandler.handle).toHaveBeenCalledWith(task.payload);
     });
 
-    it('should return error for unknown task type', async () => {
-      const task = makeTask('knowledge_query' as A2ATask['type']);
+    it('should route knowledge_query to KnowledgeQueryHandler', async () => {
+      const task = makeTask('knowledge_query', { topic: 'BRCA1 cancer research' });
+      (mockKnowledgeQueryHandler.handle as jest.Mock).mockResolvedValueOnce({
+        context: 'Found 3 papers about BRCA1...',
+        topic: 'BRCA1 cancer research',
+        missionId: null,
+      });
 
       const result = await router.route(task);
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('knowledge_query handler not yet implemented');
+      expect(result.success).toBe(true);
+      expect(mockKnowledgeQueryHandler.handle).toHaveBeenCalledWith(task.payload);
     });
 
     it('should include taskId in result', async () => {
