@@ -68,7 +68,7 @@ Respond only with valid JSON.`;
       const output = await this.llmProvider.generateLLM(
         state.config?.llmModel ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
         prompt,
-        undefined,
+        state.config?.llmConfig,
         undefined,
       );
       logger.log(`[ResearcherNode] Generated research output (${output.length} chars)`);
