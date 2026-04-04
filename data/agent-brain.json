@@ -5,66 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775319863259,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775319938413,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320007336,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320071817,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320138013,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320191559,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320246152,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320348060,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320409562,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775320475101,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775320524602,
       "type": "discovery",
       "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
@@ -603,69 +543,69 @@
       "type": "discovery",
       "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775328020240,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328097843,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328167563,
+      "type": "discovery",
+      "content": "Research: This phase 1-2 clinical trial investigated renizgamglogene autogedtemcel (reni-cel), a CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy, in nine participants with transfusion-dependent β-thalassemia. The therapy targets BCL11A binding sites in HBG1 and HBG2 promoters to reactivate fetal hemoglobin (HbF) production. All participants achieved transfusion independence with rapid neutrophil engraftment and sustained hemoglobin levels >12 g/dL total and >11 g/dL fetal hemoglobin between months 6-18. Adverse events were generally consistent with myeloablative conditioning, with no unexpected safety signals.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328223093,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328288776,
+      "type": "discovery",
+      "content": "Research: # Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328344014,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328432267,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328535614,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328611287,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775328682513,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775319863259,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: 3. **Engraftment**: All participants achieved neutrophil and platelet engraftment by day 42. 4. **Safety**: 69 grade 3-4 adverse events reported; 6 serious adverse events (infections, pyrexia, pneumon"
-    },
-    {
-      "timestamp": 1775319938413,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### 2. Study Design & Methodology **Participants:** - 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like; 5 non-β0/β0 **Intervention:**"
-    },
-    {
-      "timestamp": 1775320007336,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775320071817,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Participants: 9 patients aged 18-35 with transfusion-dependent β-thalassemia **Key Findings:** 1. All 9 participants had neutrophil and platelet engraftment by day 42 2. Rapid increases in total and"
-    },
-    {
-      "timestamp": 1775320138013,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775320191559,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2, Multicenter, Open-Label Study ### Study Objective The study evaluated renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic st"
-    },
-    {
-      "timestamp": 1775320246152,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants: 9 individuals aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like and 5 non-β0/β0 genotypes **Treatment Protocol:** - Myeloablative"
-    },
-    {
-      "timestamp": 1775320348060,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - All participants became transfusion-free at their last follow-up visit - 6 evaluable participants at 12+ months maintained transfusion independence - Mean total hemoglobin exceeded 12 g/dL and fetal"
-    },
-    {
-      "timestamp": 1775320409562,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Sponsor:** Editas Medicine - **Study Type:** Phase 1-2, multicenter, open-label, single-group clinical trial ### Summary of Key Findings **Primary Outcomes:** 1. **Engraftment Success:** All nine "
-    },
-    {
-      "timestamp": 1775320475101,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:    - Phase 1-2 clinical trial 2. **Key Information from Abstract:**    - **Objective**: Treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in HBG1/HBG2 promoters to reactivat"
-    },
     {
       "timestamp": 1775320524602,
       "action": "research:wo_1775308626282_geyumoypl",
@@ -1205,6 +1145,66 @@
       "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
       "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2, multicenter, open-label, single-group study ### Study Design and Methodology - **Participants:** 9 patients aged 18-35 years with transfusion-dependent β-thalassemia (4 with β0/β0 or β"
+    },
+    {
+      "timestamp": 1775328020240,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Publication Source:** PubMed (ID: 41931048) ### Study Design and Methodology - **Trial Phase:** Phase 1-2, multicenter, open-label, single-group study - **Participant Criteria:** 9 patients aged 18-"
+    },
+    {
+      "timestamp": 1775328097843,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775328167563,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: This phase 1-2 clinical trial investigated renizgamglogene autogedtemcel (reni-cel), a CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy, in nine participants with transfusion-depen\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775328223093,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal:   - 4 participants with β0/β0 or β0/β0-like genotypes   - 5 participants with non-β0/β0 genotypes - **Treatment Protocol**:    - Myeloablative conditioning with busulfan prior to infusion   - Autologo"
+    },
+    {
+      "timestamp": 1775328288776,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: # Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Sponsor:** Editas Medicine ## 2. Key Findings ### Clinical Efficacy - **Transfusion Independence:** All 9 participants achieved transfusion-free status at their last follow-up visit - **Durability:*"
+    },
+    {
+      "timestamp": 1775328344014,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Sponsor:** Editas Medicine ### Key Findings **1. Efficacy Results:** - All 9 participants achieved transfusion independence at their last follow-up visit - Six evaluable participants maintained tr"
+    },
+    {
+      "timestamp": 1775328432267,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: --- ### Study Overview **Objective:** Evaluate the safety and efficacy of reni-cel, a CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy, in treating transfusion-dependent β-thalasse"
+    },
+    {
+      "timestamp": 1775328535614,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - All participants became transfusion-free at their last follow-up visit - 6 participants evaluable at ≥12 months maintained transfusion independence - Mean total hemoglobin levels exceeded 12 g/dL be"
+    },
+    {
+      "timestamp": 1775328611287,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775328682513,
+      "action": "research:wo_1775308626282_geyumoypl",
+      "outcome": "completed",
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     }
   ],
   "strategy": {
