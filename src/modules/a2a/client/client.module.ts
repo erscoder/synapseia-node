@@ -15,7 +15,7 @@ import { A2AAuthService } from '../auth/a2a-auth.service';
 
 @Module({
   providers: [
-    A2AAuthService,   // moved here to break circular dep with A2AModule
+    A2AAuthService,   
     A2AClientService,
     PeerRegistryService,
     CircuitBreakerService,

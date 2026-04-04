@@ -7,15 +7,12 @@ import { EmbeddingHandler } from './handlers/embedding.handler';
 import { HealthCheckHandler } from './handlers/health-check.handler';
 import { DelegateResearchHandler } from './handlers/delegate-research.handler';
 import { A2AClientModule } from './client/client.module';
-
-// NOTE: A2AAuthService lives in A2AClientModule to break circular dep:
-// A2AModule → A2AClientModule → A2AClientService → A2AAuthService
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [A2AClientModule],
+  imports: [A2AClientModule, AuthModule],
   providers: [
     AgentCardService,
-    // A2AAuthService provided by A2AClientModule (imported above)
     A2AServer,
     TaskRouter,
     PeerReviewHandler,

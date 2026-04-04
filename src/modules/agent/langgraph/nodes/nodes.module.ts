@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { WorkOrderModule } from '../../work-order/work-order.module';
 import { FetchWorkOrdersNode } from './fetch-work-orders';
 import { SelectWorkOrderNode } from './select-wo';
 import { EvaluateEconomicsNode } from './evaluate-economics';
@@ -18,6 +19,7 @@ import { CriticNode } from './critic-node';
 import { SynthesizerNode } from './synthesizer-node';
 
 @Module({
+  imports: [WorkOrderModule],
   providers: [
     FetchWorkOrdersNode,
     SelectWorkOrderNode,

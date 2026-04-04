@@ -307,13 +307,34 @@ describe('ExecuteDilocoNode', () => {
   });
 });
 
-// ─── ExecuteResearchNode (mocked) ────────────────────────────────────────────
+// ─── ExecuteResearchNode ─────────────────────────────────────────────────────────
 
-// NOTE: ExecuteResearchNode tests are skipped — the class creates
-// WorkOrderExecutionHelper internally (class property), making it unmockable
-// without modifying source. These are tested via integration tests.
-describe('ExecuteResearchNode (skipped)', () => {
-  it('placeholder', () => {
-    expect(true).toBe(true);
+describe('ExecuteResearchNode', () => {
+  let node: ExecuteResearchNode;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Get the module-level mocked instances
+    const mockExec = new WorkOrderExecutionHelper();
+    const mockEval = new WorkOrderEvaluationHelper();
+    // Import mocked tool classes
+    const { ToolRunnerService } = require('../tools/tool-runner.service');
+    const { ToolRegistry } = require('../tools/tool-registry');
+    const { LangGraphLlmService } = require('../llm.service');
+    node = new ExecuteResearchNode(
+      mockExec as any,
+      mockEval as any,
+      new ToolRunnerService(null, null, null),
+      new ToolRegistry(),
+      new LangGraphLlmService(null),
+    );
   });
+
+  it('returns failure when no work order selected', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('No work order selected');
+  });
+
+
 });
