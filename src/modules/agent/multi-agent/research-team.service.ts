@@ -8,6 +8,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { LlmProviderHelper } from '../../llm/llm-provider.js';
 import type { LLMConfig, LLMModel } from '../../llm/llm-provider.js';
 
 /**
@@ -41,9 +42,7 @@ export interface TeamResearchResult {
 @Injectable()
 export class ResearchTeamService {
   constructor(
-    private readonly llmProvider: {
-      generateLLM(model: LLMModel, prompt: string, config?: LLMConfig, options?: { temperature?: number }): Promise<string>;
-    },
+    private readonly llmProvider: LlmProviderHelper,
   ) {}
 
   /**
