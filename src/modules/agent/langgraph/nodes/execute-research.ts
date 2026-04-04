@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
+import { LlmProviderHelper } from '../../../llm/llm-provider';
 import type { AgentState, WorkOrder, ResearchResult } from '../state';
 import type { ReActThought } from '../tools/types';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -20,6 +21,7 @@ export class ExecuteResearchNode {
   private readonly execution = new WorkOrderExecutionHelper(
     new WorkOrderCoordinatorHelper(),
     new WorkOrderEvaluationHelper(),
+    new LlmProviderHelper(),
   );
   private readonly evaluation = new WorkOrderEvaluationHelper();
 

@@ -12,7 +12,7 @@ import { WorkOrderExecutionHelper } from './work-order/work-order.execution';
 import { WorkOrderLoopHelper } from './work-order/work-order.loop';
 import { LanggraphModule } from './langgraph/langgraph.module';
 import { LangGraphWorkOrderAgentService } from './services/langgraph-work-order-agent.service';
-import { ResearchTeamService } from './multi-agent';
+
 
 @Module({
   imports: [LanggraphModule, LlmModule],
@@ -30,8 +30,7 @@ import { ResearchTeamService } from './multi-agent';
     AgentLoopHelper,
     // LangGraph agent loop
     LangGraphWorkOrderAgentService,
-    // Multi-agent
-    ResearchTeamService,
+
   ],
   exports: [
     AgentBrainHelper,

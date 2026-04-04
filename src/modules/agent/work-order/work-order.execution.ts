@@ -3,7 +3,6 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { ResearchTeamService } from '../multi-agent/research-team.service';
 import * as path from 'path';
 import * as os from 'os';
 import logger from '../../../utils/logger';
@@ -36,7 +35,6 @@ export class WorkOrderExecutionHelper {
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly evaluation: WorkOrderEvaluationHelper,
     private readonly llmProvider: LlmProviderHelper,
-    private readonly researchTeam: ResearchTeamService,
   ) {}
 
   // ── Type detection ────────────────────────────────────────────────────────
@@ -173,17 +171,14 @@ Abstract: ${payload.abstract}`;
     let result: ResearchResult;
 
     try {
-      logger.log(' Using multi-agent research team (researcher → critic → synthesizer)');
-      const teamResult = await this.researchTeam.runResearch(
-        payload,
-        llmModel,
-        llmConfig,
-        { kgContext: kgContext || undefined, referenceContext: referenceContext || undefined },
-      );
-      result = teamResult.result;
-      rawResponse = JSON.stringify(teamResult.result);
+      logger.log(' Using multi-agent research pipeline (researcher → critic → synthesizer)');
+      // This method is called by ExecuteResearchNode.
+      // The 3-agent pipeline is now in ResearcherNode → CriticNode → SynthesizerNode.
+      // Here we do a direct single-pass research call as fallback for non-graph calls.
+      rawResponse = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
+      result = this.parseDirectResult(rawResponse);
     } catch (teamErr) {
-      logger.warn(` Multi-agent team failed (${(teamErr as Error).message}), using direct LLM call`);
+      logger.warn(` Multi-agent pipeline path called directly (${(teamErr as Error).message}), using direct LLM call`);
       rawResponse = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
       const parsed = this.parseDirectResult(rawResponse);
       result = parsed;

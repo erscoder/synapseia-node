@@ -18,6 +18,9 @@ import { UpdateMemoryNode } from './nodes/update-memory';
 import { RetrieveMemoryNode } from './nodes/retrieve-memory';
 import { PlanExecutionNode } from './nodes/plan-execution';
 import { SelfCritiqueNode } from './nodes/self-critique';
+import { ResearcherNode } from './nodes/researcher-node';
+import { CriticNode } from './nodes/critic-node';
+import { SynthesizerNode } from './nodes/synthesizer-node';
 import logger from '../../../utils/logger';
 
 /**
@@ -47,6 +50,10 @@ const AgentStateAnnotation = Annotation.Root({
   selfCritiquePassed: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   selfCritiqueFeedback: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   retryCount: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
+  // Multi-agent research pipeline state
+  researcherOutput: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  criticOutput: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  researchPayload: Annotation<{ title: string; abstract: string } | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
 });
 
 @Injectable()
@@ -66,6 +73,9 @@ export class AgentGraphService {
     private readonly retrieveMemoryNode: RetrieveMemoryNode,
     private readonly planExecutionNode: PlanExecutionNode,
     private readonly selfCritiqueNode: SelfCritiqueNode,
+    private readonly researcherNode: ResearcherNode,
+    private readonly criticNode: CriticNode,
+    private readonly synthesizerNode: SynthesizerNode,
     private readonly agentBrainHelper: AgentBrainHelper,
   ) {}
 
@@ -81,6 +91,10 @@ export class AgentGraphService {
     workflow.addNode('retrieveMemory', (s: AgentState) => this.retrieveMemoryNode.execute(s));
     workflow.addNode('planExecution', (s: AgentState) => this.planExecutionNode.execute(s));
     workflow.addNode('selfCritique', (s: AgentState) => this.selfCritiqueNode.execute(s));
+    // Multi-agent research pipeline (3-agent team)
+    workflow.addNode('researcher', (s: AgentState) => this.researcherNode.execute(s));
+    workflow.addNode('critic', (s: AgentState) => this.criticNode.execute(s));
+    workflow.addNode('synthesizer', (s: AgentState) => this.synthesizerNode.execute(s));
     // Execution nodes
     workflow.addNode('executeResearch', (s: AgentState) => this.executeResearchNode.execute(s));
     workflow.addNode('executeTraining', (s: AgentState) => this.executeTrainingNode.execute(s));
@@ -115,23 +129,25 @@ export class AgentGraphService {
     w.addConditionalEdges('planExecution',
       (s: AgentState) => {
         switch (s.selectedWorkOrder?.type) {
-          case 'RESEARCH':       return 'executeResearch';
+          case 'RESEARCH':       return 'researcher';
           case 'TRAINING':       return 'executeTraining';
           case 'CPU_INFERENCE':  return 'executeInference';
           case 'DILOCO_TRAINING':return 'executeDiloco';
-          default:               return 'executeResearch';
+          default:               return 'researcher';
         }
       },
       {
-        executeResearch: 'executeResearch',
+        researcher: 'researcher',
         executeTraining: 'executeTraining',
         executeInference: 'executeInference',
         executeDiloco: 'executeDiloco',
       },
     );
 
-    // After execution, self-critique for research WOs 
-    w.addEdge('executeResearch', 'selfCritique');
+    // Multi-agent research pipeline chain: researcher → critic → synthesizer → selfCritique
+    w.addEdge('researcher', 'critic');
+    w.addEdge('critic', 'synthesizer');
+    w.addEdge('synthesizer', 'selfCritique');
     w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
     w.addEdge('executeDiloco', 'qualityGate');

@@ -14,11 +14,15 @@ import { UpdateMemoryNode } from './nodes/update-memory';
 import { RetrieveMemoryNode } from './nodes/retrieve-memory';
 import { PlanExecutionNode } from './nodes/plan-execution';
 import { SelfCritiqueNode } from './nodes/self-critique';
+import { ResearcherNode } from './nodes/researcher-node';
+import { CriticNode } from './nodes/critic-node';
+import { SynthesizerNode } from './nodes/synthesizer-node';
 // Sprint C - ReAct Tool Calling
 import { ToolsModule } from './tools.module';
 import { LangGraphLlmService } from './llm.service';
 import { AgentGraphService } from './agent-graph.service';
 import { LlmProviderHelper } from '../../llm/llm-provider';
+import { WorkOrderCoordinatorHelper } from '../work-order/work-order.coordinator';
 import { AgentBrainHelper } from '../agent-brain';
 
 const NODES = [
@@ -37,17 +41,22 @@ const NODES = [
   RetrieveMemoryNode,
   PlanExecutionNode,
   SelfCritiqueNode,
+  // Multi-agent research pipeline
+  ResearcherNode,
+  CriticNode,
+  SynthesizerNode,
 ];
 
 @Module({
   imports: [ToolsModule],
   providers: [
-    ...NODES, 
+    ...NODES,
     LangGraphLlmService,
     LlmProviderHelper,
+    WorkOrderCoordinatorHelper,
     AgentBrainHelper,
     AgentGraphService,
   ],
-  exports: [AgentGraphService, LangGraphLlmService, AgentBrainHelper, ...NODES],
+  exports: [AgentGraphService, LangGraphLlmService, AgentBrainHelper, ...NODES, WorkOrderCoordinatorHelper],
 })
 export class LanggraphModule {}

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
@@ -13,6 +14,7 @@ export class FetchWorkOrdersNode {
   private readonly execution = new WorkOrderExecutionHelper(
     new WorkOrderCoordinatorHelper(),
     new WorkOrderEvaluationHelper(),
+    new LlmProviderHelper(),
   );
   private readonly researchCooldowns = new Map<string, number>();
   private readonly completedWorkOrderIds = new Set<string>();
