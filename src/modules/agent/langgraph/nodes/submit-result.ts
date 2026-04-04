@@ -5,7 +5,8 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class SubmitResultNode {
-  private readonly coordinator = new WorkOrderCoordinatorHelper();
+  constructor(private readonly coordinator: WorkOrderCoordinatorHelper) {}
+
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, executionResult, researchResult, coordinatorUrl, peerId } = state;

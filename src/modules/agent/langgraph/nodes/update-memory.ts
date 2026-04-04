@@ -9,7 +9,6 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class UpdateMemoryNode {
-  private readonly execution: WorkOrderExecutionHelper;
 
   constructor(
     private readonly execution: WorkOrderExecutionHelper,

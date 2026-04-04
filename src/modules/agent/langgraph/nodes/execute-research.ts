@@ -18,18 +18,14 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteResearchNode {
-  private readonly execution = new WorkOrderExecutionHelper(
-    new WorkOrderCoordinatorHelper(),
-    new WorkOrderEvaluationHelper(),
-    new LlmProviderHelper(),
-  );
-  private readonly evaluation = new WorkOrderEvaluationHelper();
-
   constructor(
+    private readonly execution: WorkOrderExecutionHelper,
+    private readonly evaluation: WorkOrderEvaluationHelper,
     private readonly toolRunner: ToolRunnerService,
     private readonly toolRegistry: ToolRegistry,
     private readonly llmService: LangGraphLlmService,
   ) {}
+
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, config, coordinatorUrl } = state;

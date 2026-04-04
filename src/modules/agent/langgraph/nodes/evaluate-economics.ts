@@ -5,7 +5,8 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class EvaluateEconomicsNode {
-  private readonly evaluation = new WorkOrderEvaluationHelper();
+  constructor(private readonly evaluation: WorkOrderEvaluationHelper) {}
+
 
   execute(state: AgentState): Partial<AgentState> {
     const { selectedWorkOrder, config } = state;
