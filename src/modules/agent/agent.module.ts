@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LlmModule } from '../llm/llm.module';
 import { AgentBrainHelper } from './agent-brain';
 import { AgentLoopHelper } from './agent-loop';
 
@@ -14,7 +15,7 @@ import { LangGraphWorkOrderAgentService } from './services/langgraph-work-order-
 import { ResearchTeamService } from './multi-agent';
 
 @Module({
-  imports: [LanggraphModule],
+  imports: [LanggraphModule, LlmModule],
   providers: [
     AgentBrainHelper,
     ReviewAgentHelper,
