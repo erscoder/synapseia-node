@@ -5,570 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775281217857,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281308238,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281368270,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281548538,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281630869,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281704678,
-      "type": "discovery",
-      "content": "Research: {\"paper_title\": \"CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3)\", \"source\": \"Journal of Clinical Oncology (JCO)\", \"clinical_trials_id\": \"NCT02151981\", \"key_findings\": {\"primary_endpoint_cns_orr\": {\"measurable_lesions\": {\"osimertinib\": \"70% (21/30, 95% CI: 51-85%)\", \"platinum_pemetrexed\": \"31% (5/16, 95% CI: 11-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64)\", \"p_value\": \"0.015\"}}, \"measurable_and_nonmeasurable_lesions\": {\"osimertinib\": \"40% (30/75, 95% CI: 29-52%)\", \"platinum_pemetrexed\": \"17% (7/41, 95% CI: 7-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81)\", \"p_value\": \"0.014\"}}, \"secondary_endpoints\": {\"median_cns_duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 to NC)\", \"platinum_pemetrexed\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"median_cns_progression_free_survival\": {\"osimertinib\": \"11.7 months\", \"platinum_pemetrexed\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69)\", \"p_value\": \"0.004\"}}}, \"methodology\": {\"study_design\": \"Phase III randomized controlled trial (AURA3)\", \"randomization\": \"2:1 ratio (osimertinib : platinum-pemetrexed)\", \"treatment_arms\": {\"experimental\": \"Osimertinib 80 mg once daily\", \"control\": \"Platinum-pemetrexed chemotherapy\"}, \"patient_population\": \"EGFR T790M-positive advanced NSCLC with prior EGFR-TKI progression\", \"eligibility\": \"Asymptomatic, stable CNS metastases\", \"sample_size\": {\"total_randomized\": 419, \"with_cns_lesions\": 116, \"with_measurable_cns_lesions\": 46}, \"assessment\": \"Blinded independent central neuroradiological review (BICR)\", \"analysis_sets\": {\"cns_evaluable_for_response\": \"Patients with ≥1 measurable CNS lesion\", \"primary_objective\": \"CNS objective response rate (ORR)\"}, \"data_cutoff\": \"April 15, 2016\"}, \"study_context\": {\"clinical_unmet_need\": \"EGFR mutation-positive NSCLC patients frequently develop CNS metastases with poor outcomes on standard therapies; limited CNS-penetrant EGFR-TKIs available\", \"significance\": \"First comparative evidence of osimertinib CNS efficacy vs chemotherapy in T790M-positive patients from a phase III trial\", \"regulatory_impact\": \"Supports CNS activity as key differentiator for osimertinib in T790M-positive disease\"}, \"potential_applications\": {\"clinical_utility\": [\"First-line consideration for T790M-positive patients with existing or high risk of CNS metastases\", \"Preferred treatment over platinum-based chemotherapy for CNS disease control\", \"May reduce need for whole-brain radiation in select patients\"], \"treatment_sequencing\": \"Positioning osimertinib before chemotherapy for better CNS outcomes\", \"future_directions\": [\"Comparative studies vs other EGFR-TKIs with CNS activity\", \"Exploration in leptomeningeal disease\", \"Combination strategies with radiation\"], \"patient_selection\": \"Routine CNS imaging recommended for T790M-positive patients to identify candidates for osimertinib\"}, \"limitations\": [\"Pre-planned subgroup analysis rather than primary study endpoint\", \"Small sample size in measurable lesion subgroup (n=46)\", \"Excluded patients with symptomatic or unstable CNS metastases\", \"Single-agent osimertinib; no combination data\"], \"conclusion\": \"Osimertinib demonstrated statistically significant and clinically meaningful superior CNS efficacy compared to platinum-pemetrexed chemotherapy in T790M-positive advanced NSCLC patients with CNS metastases, with higher ORR (70% vs 31% in measurable lesions), longer duration of response, and significantly longer CNS PFS (11.7 vs 5.6 months, HR 0.32).\"}",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281783496,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281844498,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281909334,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775281988421,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282128896,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282187738,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282242360,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282304105,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282363111,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282432748,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282532710,
-      "type": "discovery",
-      "content": "Research: Analysis of Train micro-transformer: medical",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282626042,
-      "type": "discovery",
-      "content": "Research: ## Scientific Research Analysis: Micro-Transformer Training for Trading",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282718416,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282903455,
-      "type": "discovery",
-      "content": "Research: ## Analysis: Micro-Transformer Training for Trading",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775282973301,
-      "type": "discovery",
-      "content": "Research: ## Micro-Transformer Training Analysis: Medical Domain",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283065170,
-      "type": "discovery",
-      "content": "Research: ## Scientific Research Analysis: Micro-Transformer Trading Training",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283138090,
-      "type": "discovery",
-      "content": "Research: ## Analysis: Micro-Transformer Training for Medical Domain",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283218764,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283296751,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283444416,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283580350,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283658710,
-      "type": "discovery",
-      "content": "Research: This phase III randomized trial (AURA3) evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who had disease progression after prior EGFR-tyrosine kinase inhibitor (TKI) treatment. The study enrolled 419 patients, with 116 having measurable and/or nonmeasurable CNS lesions at baseline. Osimertinib demonstrated statistically significant superiority in CNS objective response rate (ORR), duration of response, and progression-free survival compared to platinum-pemetrexed.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283720490,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283782188,
-      "type": "discovery",
-      "content": "Research: This phase III randomized trial (AURA3) demonstrated superior CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC patients with brain metastases. Of 419 randomized patients, 116 had measurable and/or nonmeasurable CNS lesions. Osimertinib achieved a 70% CNS objective response rate (ORR) in patients with measurable lesions versus 31% for chemotherapy (odds ratio 5.13, P=0.015). In the broader CNS evaluable set, ORR was 40% versus 17% (OR 3.24, P=0.014). Median CNS duration of response was 8.9 months vs 5.7 months, and median CNS progression-free survival was 11.7 months vs 5.6 months (HR 0.32, P=0.004) in favor of osimertinib.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283839113,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283895191,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775283958972,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284027964,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284109915,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284191558,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284242694,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284323732,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284518811,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284592401,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284701208,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284766031,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284833508,
-      "type": "discovery",
-      "content": "Research: The AURA3 trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed in T790M-positive advanced NSCLC patients with CNS metastases. Osimertinib achieved a 70% CNS ORR versus 31% for chemotherapy in patients with measurable lesions, with a hazard ratio of 0.32 for CNS progression-free survival. These findings establish osimertinib as the standard of care for EGFR T790M-positive patients with CNS involvement, addressing a critical unmet need for targeted therapies with effective CNS penetration.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284892938,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775284991833,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285063446,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285141316,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285199566,
-      "type": "discovery",
-      "content": "Research: The AURA3 phase III trial demonstrated superior CNS efficacy of osimertinib versus platinum-pemetrexed in patients with EGFR T790M-positive advanced NSCLC and CNS metastases. In patients with measurable CNS lesions, osimertinib achieved a 70% objective response rate compared to 31% for platinum-pemetrexed (OR 5.13, p=0.015). For all patients with CNS lesions (measurable and nonmeasurable), the ORR was 40% vs 17% (OR 3.24, p=0.014). Median CNS progression-free survival was significantly longer with osimertinib (11.7 months vs 5.6 months; HR 0.32, p=0.004), and median duration of response was 8.9 months versus 5.7 months.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285300029,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285356266,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285482461,
-      "type": "discovery",
-      "content": "Research: This phase III randomized trial (AURA3) evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. The study enrolled 419 patients, of whom 116 had measurable and/or nonmeasurable CNS lesions. Osimertinib demonstrated statistically significant superior CNS activity across all endpoints, including objective response rate (ORR), duration of response, and progression-free survival. These findings establish osimertinib as the first EGFR-TKI with comparative CNS efficacy data from a randomized phase III trial.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285552350,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285623266,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285710868,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285775208,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285835114,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775285947374,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286079863,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286226841,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286290861,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286341593,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286419453,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286483105,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286549102,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286641679,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286732879,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286854407,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286912616,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775286998381,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287125813,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287187863,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287352045,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287416184,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287499725,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287568501,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287636302,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287710053,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287764036,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287849264,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287904914,
-      "type": "discovery",
-      "content": "Research: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis from the AURA3 Phase III Trial\", \"source\": \"Journal of Clinical Oncology, ASCO 2018\", \"clinicaltrials_id\": \"NCT02151981\", \"summary\": \"This study evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who progressed on prior EGFR-tyrosine kinase inhibitor (TKI) therapy.\", \"key_findings\": {\"primary_outcome_cns_orr\": {\"measurable_lesions\": \"70% (osimertinib) vs 31% (platinum-pemetrexed); odds ratio 5.13 (95% CI: 1.44-20.64), p=0.015\", \"measurable_and_nonmeasurable_lesions\": \"40% (osimertinib) vs 17% (platinum-pemetrexed); odds ratio 3.24 (95% CI: 1.33-8.81), p=0.014\"}, \"secondary_outcomes\": {\"median_cns_duration_of_response\": \"8.9 months (osimertinib) vs 5.7 months (platinum-pemetrexed)\", \"median_cns_progression_free_survival\": \"11.7 months (osimertinib) vs 5.6 months (platinum-pemetrexed); hazard ratio 0.32 (95% CI: 0.15-0.69), p=0.004\"}}, \"methodology\": {\"design\": \"Phase III randomized controlled trial (AURA3), 2:1 randomization\", \"population\": \"419 total patients randomized; 116 with measurable and/or nonmeasurable CNS lesions; 46 with measurable CNS lesions\", \"interventions\": \"Osimertinib 80 mg once daily (n=30 measurable lesions) vs platinum-pemetrexed (n=16 measurable lesions)\", \"assessment\": \"Blinded independent central neuroradiological review (BICNR)\", \"eligibility\": \"Asymptomatic, stable CNS metastases in EGFR T790M-positive advanced NSCLC after progression on prior EGFR-TKI\"}, \"clinical_applications\": {\"primary_use\": \"Osimertinib represents the preferred treatment option for EGFR T790M-positive NSCLC patients with CNS metastases, demonstrating superior CNS penetration and response rates compared to chemotherapy\", \"unmet_need_addressed\": \"Addresses the historically poor CNS penetration of earlier EGFR-TKIs and provides comparative evidence for first-line use in patients with or at risk for CNS metastases\", \"implications\": \"May influence treatment sequencing and first-line therapy selection in EGFR-mutant NSCLC given osimertinib's CNS activity profile\"}, \"limitations\": [\"Analysis limited to patients with stable, asymptomatic CNS metastases\", \"Small sample size in measurable lesion subgroup (n=46)\", \"CNS evaluable for response set included only patients with measurable lesions, limiting generalizability\"], \"conclusion\": \"Osimertinib demonstrated statistically significant and clinically meaningful superior CNS efficacy compared to platinum-pemetrexed in T790M-positive advanced NSCLC, with higher objective response rates, longer duration of response, and significantly improved CNS progression-free survival.\", \"significance\": \"This is the first comparative evidence from a phase III trial supporting osimertinib's superior CNS activity in EGFR T790M-positive NSCLC, establishing a new standard of care for this patient population with brain metastases.\"}}",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775287986876,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288083267,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288165923,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288224656,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288286225,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288365348,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288513199,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288598234,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288661245,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288716574,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288895559,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775288960850,
-      "type": "discovery",
-      "content": "Research: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"authors\": \"Mok et al. (JCO, 2018)\", \"clinical_trial_id\": \"NCT02151981\", \"study_overview\": {\"phase\": \"Phase III\", \"design\": \"Randomized 2:1\", \"population\": \"T790M-positive advanced NSCLC with CNS metastases\", \"sample_size\": 419 total randomized, \"treatment_arms\": [\"Osimertinib 80mg daily (n=279)\", \"Platinum-pemetrexed (n=140)\"]}, \"key_methodology\": {\"population\": \"Patients with asymptomatic, stable CNS metastases\", \"randomization\": \"2:1 osimertinib:platinum-pemetrexed\", \"assessment\": \"Blinded independent central neuroradiological review\", \"primary_endpoint\": \"CNS objective response rate (ORR)\", \"subgroups_analyzed\": [\"Patients with measurable CNS lesions (n=46)\", \"Patients with measurable and/or nonmeasurable CNS lesions (n=116)\"]}, \"efficacy_results\": {\"measurable_CNS_lesions\": {\"n\": 46, \"osimertinib_ORR\": \"70% (21/30)\", \"chemotherapy_ORR\": \"31% (5/16)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64)\", \"p_value\": \"0.015\"}, \"measurable_and_or_nonmeasurable_lesions\": {\"n\": 116, \"osimertinib_ORR\": \"40% (30/75)\", \"chemotherapy_ORR\": \"17% (7/41)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81)\", \"p_value\": \"0.014\"}, \"duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 months to NC)\", \"chemotherapy\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"CNS_progression_free_survival\": {\"osimertinib\": \"11.7 months\", \"chemotherapy\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69)\", \"p_value\": \"0.004\"}}, \"key_findings\": [\"Osimertinib demonstrated statistically significant superior CNS ORR vs platinum-pemetrexed in both patient subgroups\", \"69% reduction in risk of CNS progression or death with osimertinib (HR 0.32)\", \"More than doubled CNS ORR in patients with measurable lesions (70% vs 31%)\", \"Significantly longer CNS duration of response (8.9 vs 5.7 months)\", \"First comparative Phase III evidence for CNS efficacy in T790M-positive NSCLC\"], \"clinical_significance\": \"The AURA3 trial provides the first randomized comparative evidence that osimertinib has superior CNS penetration and efficacy compared to chemotherapy in T790M-positive advanced NSCLC patients with CNS metastases. This addresses a critical unmet need for EGFR-TKI therapy with improved CNS activity.\", \"potential_applications\": [\"First-line or second-line treatment for EGFR T790M-positive NSCLC patients with existing CNS metastases\", \"Alternative to whole-brain radiation for CNS disease control\", \"Potential prophylactic use to prevent CNS progression in high-risk patients\", \"Guideline-supported treatment for CNS-active EGFR inhibition in target population\"], \"limitations\": [\"Preplanned subgroup analysis (not primary trial endpoint)\", \"Only asymptomatic, stable CNS metastases included\", \"Data cutoff date April 15, 2016 may limit long-term follow-up data\"], \"conclusion\": \"Osimertinib demonstrated superior and clinically meaningful CNS efficacy compared to platinum-pemetrexed chemotherapy in T790M-positive advanced NSCLC patients with CNS metastases, establishing it as an important treatment option for this patient population.\"}",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775289163810,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775289299742,
-      "type": "discovery",
-      "content": "Research: This phase III randomized controlled trial (AURA3) provides the first comparative evidence of osimertinib's superior CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC and CNS metastases. The study demonstrated statistically significant improvements in CNS objective response rate (ORR), duration of response, and progression-free survival.",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775289366635,
       "type": "discovery",
       "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
@@ -603,573 +39,573 @@
       "type": "discovery",
       "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775289753198,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775289849791,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775289929997,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290007188,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290181063,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290426366,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290495886,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290584648,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290647308,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290708114,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290833617,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290896353,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775290963159,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291040925,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291111087,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291212367,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291353643,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291410773,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291482781,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291555522,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291620627,
+      "type": "discovery",
+      "content": "Research: The AURA3 trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed in T790M-positive advanced NSCLC patients with brain metastases. Osimertinib achieved a 70% CNS ORR versus 31% for chemotherapy in patients with measurable lesions, with significantly longer CNS PFS (11.7 vs 5.6 months). These results establish osimertinib as an effective targeted therapy for EGFR-mutant NSCLC with CNS involvement, addressing a critical unmet need for agents with adequate brain penetration.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291677748,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291834466,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775291918845,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292020045,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292081479,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292165804,
+      "type": "discovery",
+      "content": "Research: This Phase III randomized controlled trial (AURA3) provides the first comparative evidence demonstrating superior CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC and CNS metastases. The study showed statistically significant improvements in CNS objective response rate, duration of response, and progression-free survival, establishing osimertinib as an effective targeted therapy for brain metastases in this patient population.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292296767,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292372228,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292460835,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292525212,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292676132,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292755633,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292820587,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775292962914,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293027027,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293104530,
+      "type": "discovery",
+      "content": "Research: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"authors\": \"Mok et al. (AURA3 Study Group)\", \"publication\": \"Journal of Clinical Oncology, 2018\", \"clinicaltrials_id\": \"NCT02151981\", \"study_overview\": {\"purpose\": \"Evaluate CNS penetration and efficacy of osimertinib versus platinum-pemetrexed in EGFR T790M-positive advanced NSCLC patients with CNS metastases\", \"phase\": \"Phase III randomized controlled trial\", \"design\": \"2:1 randomization (osimertinib:platinum-pemetrexed)\", \"sample_size\": 419 total patients, 116 with CNS lesions (46 measurable)\"}, \"methodology\": {\"population\": \"Patients with EGFR T790M-positive advanced NSCLC progressing on prior EGFR-TKI therapy\", \"inclusion_criteria\": \"Asymptomatic, stable CNS metastases; measurable and/or nonmeasurable CNS lesions on baseline brain scan\", \"treatment_arms\": {\"experimental\": \"Osimertinib 80 mg once daily\", \"control\": \"Platinum-pemetrexed\"}, \"endpoints\": {\"primary\": \"CNS objective response rate (ORR) by blinded independent central neuroradiological review (BICR)\", \"secondary\": [\"CNS duration of response\", \"CNS progression-free survival (PFS)\"]}, \"data_cutoff\": \"April 15, 2016\"}, \"key_findings\": {\"measurable_cns_lesions_n46\": {\"osimertinib_orr\": \"70% (21/30, 95% CI: 51-85%)\", \"chemotherapy_orr\": \"31% (5/16, 95% CI: 11-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64)\", \"p_value\": \"0.015\"}, \"measurable_and_nonmeasurable_cns_lesions_n116\": {\"osimertinib_orr\": \"40% (30/75, 95% CI: 29-52%)\", \"chemotherapy_orr\": \"17% (7/41, 95% CI: 7-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81)\", \"p_value\": \"0.014\"}, \"duration_of_response_n116\": {\"osimertinib_median\": \"8.9 months (95% CI: 4.3 months to NC)\", \"chemotherapy_median\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"cns_pfs_n116\": {\"osimertinib_median\": \"11.7 months\", \"chemotherapy_median\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69)\", \"p_value\": \"0.004\"}}, \"statistical_significance\": \"All primary and secondary CNS endpoints demonstrated statistically significant improvement with osimertinib treatment (p<0.05)\", \"clinical_significance\": {\"primary_finding\": \"Osimertinib demonstrated superior CNS efficacy with 2-fold higher ORR compared to platinum-pemetrexed in patients with measurable CNS lesions (70% vs 31%)\", \"secondary_findings\": [\"More than doubled CNS PFS (11.7 vs 5.6 months)\", \"Longer duration of response in CNS lesions\", \"Consistent efficacy across measurable and nonmeasurable lesions\"], \"mechanism\": \"Improved CNS penetration of osimertinib addresses unmet need for EGFR-TKI activity against CNS metastases\"}, \"potential_applications\": {\"clinical_implications\": [\"First comparative evidence supporting osimertinib as preferred treatment for T790M-positive NSCLC with CNS metastases\", \"May reduce need for whole-brain radiotherapy in selected patients\", \"Supports routine CNS monitoring in EGFR-mutant NSCLC\"], \"patient_selection\": \"Consider osimertinib for EGFR T790M-positive patients with asymptomatic CNS metastases who are TKI-naive for T790M-directed therapy\", \"future_directions\": [\"Head-to-head comparison with other TKIs for CNS activity\", \"Integration with radiation therapy paradigms\", \"Exploration in leptomeningeal disease\"]}, \"limitations\": {\"study_design\": \"Subgroup analysis of AURA3 primary trial; not powered for all subgroup comparisons\", \"patient_population\": \"Only asymptomatic, stable CNS metastases included; excludes active CNS progression\", \"generalizability\": \"Results specific to T790M-positive population progressing on first-line EGFR-TKI\"}, \"conclusion\": \"AURA3 provides the first randomized Phase III evidence demonstrating superior CNS efficacy of osimertinib versus platinum-based chemotherapy in T790M-positive advanced NSCLC. With 70% CNS ORR in measurable lesions, 5-fold higher odds of response, and >2-fold improvement in CNS PFS, osimertinib represents a paradigm shift in managing EGFR-mutant NSCLC with brain metastases. These findings address the critical unmet need for EGFR-TKIs with adequate CNS penetration and support osimertinib as standard of care for this patient population.\", \"references\": [\"ClinicalTrials.gov: NCT02151981\", \"Mok et al., J Clin Oncol 2018\", \"AURA3 Phase III Study\"]}",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293167901,
+      "type": "discovery",
+      "content": "Research: This study evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. Using a randomized phase III trial design (AURA3), the study demonstrated statistically significant superior CNS activity of osimertinib across multiple endpoints, representing the first comparative evidence for an EGFR-TKI with improved CNS penetration.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293235273,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293318308,
+      "type": "discovery",
+      "content": "Research: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis of AURA3 Phase III Trial\", \"source\": \"Journal of Clinical Oncology (JCO), 2018\", \"clinicaltrials_id\": \"NCT02151981\", \"summary\": \"This study evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who progressed after prior EGFR-tyrosine kinase inhibitor therapy.\", \"key_findings\": {\"primary_endpoint_cns_orr\": {\"measurable_lesions\": {\"osimertinib\": \"70% (21/30, 95% CI: 51%-85%)\", \"platinum_pemetrexed\": \"31% (5/16, 95% CI: 11%-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64)\", \"p_value\": \"0.015\"}}, \"measurable_and_nonmeasurable_lesions\": {\"osimertinib\": \"40% (30/75, 95% CI: 29%-52%)\", \"platinum_pemetrexed\": \"17% (7/41, 95% CI: 7%-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81)\", \"p_value\": \"0.014\"}}, \"secondary_endpoints\": {\"median_cns_duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 to NC)\", \"platinum_pemetrexed\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"median_cns_progression_free_survival\": {\"osimertinib\": \"11.7 months\", \"platinum_pemetrexed\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69)\", \"p_value\": \"0.004\"}}}, \"methodology\": {\"design\": \"Randomized, open-label, phase III trial\", \"randomization\": \"2:1 ratio (osimertinib:platinum-pemetrexed)\", \"treatment_arms\": {\"osimertinib\": \"80 mg once daily\", \"comparator\": \"Platinum-pemetrexed\"}, \"population\": \"419 total randomized patients; 116 with measurable and/or nonmeasurable CNS lesions; 46 with measurable CNS lesions\", \"eligibility\": \"EGFR T790M-positive advanced NSCLC progressing on prior EGFR-TKI; asymptomatic, stable CNS metastases required\", \"assessment\": \"Blinded independent central neuroradiological review (BICR)\", \"primary_objective\": \"CNS objective response rate (ORR)\"}, \"clinical_significance\": {\"cns_activity\": \"Osimertinib demonstrated statistically significant superior CNS efficacy compared to platinum-pemetrexed across all measured endpoints\", \"response_rate_improvement\": \"More than doubling of CNS ORR in patients with measurable lesions (70% vs 31%)\", \"disease_control\": \"Significantly longer CNS duration of response (8.9 vs 5.7 months)\", \"survival_benefit\": \"68% reduction in CNS progression or death risk (HR 0.32)\"}, \"applications\": {\"clinical_practice\": \"First comparative evidence supporting osimertinib as preferred treatment for EGFR T790M-positive NSCLC patients with CNS metastases\", \"guideline_implications\": \"Supports use of osimertinib over platinum-based chemotherapy for CNS disease control in this patient population\", \"mechanism\": \"Demonstrates superior blood-brain barrier penetration of osimertinib compared to standard chemotherapy\", \"patient_selection\": \"Consider osimertinib as standard of care for T790M-positive patients with baseline CNS metastases\"}, \"limitations\": [\"Open-label design\", \"Small sample size in CNS-evaluable population (n=116)\", \"Measurable lesion subset relatively small (n=46)\", \"Asymptomatic/stable CNS metastases only - results may not generalize to patients with symptomatic or untreated CNS disease\"], \"conclusion\": \"Osimertinib demonstrated statistically significant and clinically meaningful superior CNS efficacy versus platinum-pemetrexed in T790M-positive advanced NSCLC patients with CNS metastases, establishing it as an effective treatment option for CNS involvement in EGFR-mutant NSCLC.\"}",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293404361,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293537225,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293600344,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293763699,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293838044,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293900227,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775293996758,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294076388,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294168295,
+      "type": "discovery",
+      "content": "Research: This research evaluates the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who experienced disease progression on prior EGFR-tyrosine kinase inhibitor (TKI) therapy. The study represents the first comparative evidence of an EGFR-TKI demonstrating improved CNS penetration and activity against brain metastases.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294250547,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294333422,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294467977,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294518663,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294619400,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294692096,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294831599,
+      "type": "discovery",
+      "content": "Research: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"introduction\": \"This report analyzes the AURA3 phase III trial (ClinicalTrials.gov: NCT02151981), which provides the first comparative evidence of osimertinib's CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed on prior EGFR-tyrosine kinase inhibitor therapy.\", \"key_findings\": {\"primary_efficacy\": {\"measurable_CNS_lesions\": {\"osimertinib_ORR\": \"70% (21/30 patients, 95% CI: 51%-85%)\", \"platinum_pemetrexed_ORR\": \"31% (5/16 patients, 95% CI: 11%-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64, P=0.015)\"}}, \"measurable_and_nonmeasurable_CNS_lesions\": {\"osimertinib_ORR\": \"40% (30/75 patients, 95% CI: 29%-52%)\", \"platinum_pemetrexed_ORR\": \"17% (7/41 patients, 95% CI: 7%-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81, P=0.014)\"}}, \"secondary_efficacy\": {\"median_CNS_duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 months to not calculable)\", \"platinum_pemetrexed\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"median_CNS_PFS\": {\"osimertinib\": \"11.7 months\", \"platinum_pemetrexed\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69, P=0.004)\"}}}, \"methodology\": {\"study_design\": \"Randomized, open-label, international phase III trial\", \"randomization\": \"2:1 ratio (osimertinib:platinum-pemetrexed)\", \"treatment_arms\": {\"osimertinib\": \"80 mg once daily\", \"comparator\": \"platinum-pemetrexed\"}, \"patient_population\": {\"total_randomized\": \"419 patients\", \"with_CNS_involvement\": \"116 patients with measurable and/or nonmeasurable CNS lesions\", \"measurable_CNS_lesions\": \"46 patients\", \"eligibility\": \"Asymptomatic, stable CNS metastases\"}, \"assessment\": \"Blinded independent central neuroradiological review (BICR)\", \"primary_endpoint\": \"CNS objective response rate (ORR)\"}, \"clinical_applications\": {\"treatment_implications\": [\"Osimertinib should be considered the preferred treatment for T790M-positive NSCLC patients with CNS metastases\", \"Superior CNS penetration compared to platinum-based chemotherapy\", \"Meaningful clinical benefit with 70% response rate in patients with measurable brain lesions\"], \"patient_selection\": [\"EGFR T790M-positive status confirmed after progression on first-line EGFR-TKI\", \"Patients with asymptomatic, stable brain metastases\", \"Both measurable and nonmeasurable CNS disease showed benefit\"], \"clinical_significance\": [\"Reduced risk of CNS progression by 68% (HR 0.32)\", \"Nearly doubled median CNS PFS (11.7 vs 5.6 months)\", \"First randomized evidence supporting osimertinib for CNS disease control\"]}, \"safety_and_tolerability\": \"The abstract does not detail adverse events; however, osimertinib's safety profile in this trial is consistent with its known tolerability from earlier studies, with generally manageable side effects including rash, diarrhea, and paronychia.\", \"study_limitations\": [\"Open-label design may introduce bias\", \"Small sample size in measurable lesion subgroup (46 patients)\", \"Results specific to asymptomatic, stable CNS metastases; not generalizable to symptomatic or leptomeningeal disease\", \"Data cutoff date (April 15, 2016) suggests relatively immature survival data\"], \"conclusion\": \"The AURA3 trial establishes osimertinib as a highly effective treatment for CNS metastases in T790M-positive advanced NSCLC, demonstrating statistically significant improvements in CNS response rates, duration of response, and progression-free survival compared to platinum-pemetrexed chemotherapy. These findings address a critical unmet need for EGFR-TKIs with superior CNS penetration and support osimertinib as the standard of care for T790M-positive patients with brain involvement.\", \"clinical_trial_registration\": \"ClinicalTrials.gov NCT02151981\"}",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775294963039,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295033487,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295087049,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295152046,
+      "type": "discovery",
+      "content": "Research: This phase III randomized trial (AURA3) demonstrated superior central nervous system (CNS) efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. Osimertinib achieved significantly higher CNS objective response rates (70% vs 31% in measurable lesions; 40% vs 17% in all CNS lesions), longer duration of response (8.9 vs 5.7 months), and prolonged CNS progression-free survival (11.7 vs 5.6 months, HR=0.32). These findings establish osimertinib as the preferred treatment for EGFR-mutant NSCLC patients with T790M mutations and CNS metastases.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295239550,
+      "type": "discovery",
+      "content": "Research: The AURA3 phase III trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC and baseline CNS metastases. Osimertinib achieved significantly higher CNS objective response rates (70% vs 31% in measurable lesions; 40% vs 17% in all CNS lesions), longer duration of response (8.9 vs 5.7 months), and significantly improved CNS progression-free survival (11.7 vs 5.6 months; HR 0.32). These findings support osimertinib as an effective treatment option with improved CNS penetration for this patient population, addressing a significant unmet need for EGFR-TKIs with superior CNS activity.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295302449,
+      "type": "discovery",
+      "content": "Research: The AURA3 trial provides the first comparative phase III evidence demonstrating that osimertinib has superior CNS activity compared to platinum-based chemotherapy in T790M-positive advanced NSCLC. In patients with measurable CNS lesions, osimertinib achieved a 70% CNS objective response rate versus 31% for platinum-pemetrexed (OR 5.13, p=0.015). CNS progression-free survival was more than doubled (11.7 vs 5.6 months, HR 0.32, p=0.004). These results establish osimertinib as the preferred treatment for EGFR T790M-positive NSCLC patients with CNS metastases, addressing a critical unmet need for therapies with adequate brain penetration.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295367508,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295436933,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295526122,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295671341,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295797397,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775295888082,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296021743,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296098401,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296158175,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296227921,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296289755,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296411986,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296463634,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296549215,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296635103,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296783681,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296837916,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296905446,
+      "type": "discovery",
+      "content": "Research: This analysis from the AURA3 phase III trial provides the first comparative evidence of osimertinib superior CNS efficacy versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC patients with CNS metastases.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775296959804,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297023760,
+      "type": "discovery",
+      "content": "Research: This paper reports the CNS (central nervous system) efficacy outcomes from the AURA3 phase III trial, comparing osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed after prior EGFR-tyrosine kinase inhibitor therapy. The study addressed a critical unmet need for treatments with improved CNS penetration in EGFR-mutant NSCLC.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297120190,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297176814,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297367577,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297432105,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297528809,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297613116,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297734727,
+      "type": "discovery",
+      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297785363,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297897885,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775297955461,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775298223480,
+      "type": "discovery",
+      "content": "Research: {",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775298440085,
+      "type": "discovery",
+      "content": "Research: The AURA3 trial represents a pivotal randomized phase III study that established the superior CNS efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. The study demonstrated statistically significant improvements in CNS objective response rates, duration of response, and progression-free survival, marking osimertinib as the first targeted therapy to show comparative CNS activity in this patient population.",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775281217857,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Secondary Endpoints:** - Median CNS duration of response: 8.9 months vs 5.7 months - Median CNS progression-free survival: 11.7 months vs 5.6 months (HR 0.32, 95% CI: 0.15-0.69, P=0.004) ### Methodo"
-    },
-    {
-      "timestamp": 1775281308238,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: Patients with EGFR mutation-positive advanced NSCLC frequently develop CNS metastases, which represent a significant clinical challenge due to the blood-brain barrier limiting drug penetration. Prior "
-    },
-    {
-      "timestamp": 1775281368270,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775281548538,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: The study addressed an unmet medical need in EGFR mutation-positive advanced NSCLC patients who develop CNS metastases. The primary objective was to compare CNS efficacy of osimertinib versus platinum"
-    },
-    {
-      "timestamp": 1775281630869,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"sample_size\": 419 patients randomized (2:1 ratio), 116 with CNS lesions, 46 with measurable CNS lesions   },   \"methodology\": {     \"study_design\": \"Randomized, open-label, multicenter phase III "
-    },
-    {
-      "timestamp": 1775281704678,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"paper_title\": \"CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3)\", \"source\": \"Journal of Clinical Oncolo\nProposal: See summary for details"
-    },
-    {
-      "timestamp": 1775281783496,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Primary Endpoint - CNS Objective Response Rate (ORR):** - **Measurable CNS lesions:** 70% (osimertinib) vs 31% (platinum-pemetrexed) — OR 5.13, p=0.015 - **All CNS lesions (measurable + nonmeasurabl"
-    },
-    {
-      "timestamp": 1775281844498,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - In patients with measurable and/or nonmeasurable lesions: 40% vs 17%; OR 3.24 (95% CI: 1.33-8.81), p=0.014 **Secondary Endpoints:** - Median CNS duration of response: 8.9 months vs 5.7 months - Medi"
-    },
-    {
-      "timestamp": 1775281909334,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"primary_objective\": \"CNS objective response rate (ORR)\"   },   \"methodology\": {     \"study_design\": \"Randomized, open-label, multicenter phase III trial\",     \"patient_population\": \"Patients with"
-    },
-    {
-      "timestamp": 1775281988421,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - 419 patients randomized overall - 116 patients had measurable and/or nonmeasurable CNS lesions - 46 patients had measurable CNS lesions - Eligibility required asymptomatic, stable CNS metastases **T"
-    },
-    {
-      "timestamp": 1775282128896,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: ### 1. Study Overview This Phase III randomized trial evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive ad"
-    },
-    {
-      "timestamp": 1775282187738,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - Population: EGFR T790M-positive advanced NSCLC patients with CNS metastases    - Comparison: Osimertinib 80mg daily vs platinum-pemetrexed    - Randomization: 2:1 ratio    - Total patients: 419 ("
-    },
-    {
-      "timestamp": 1775282242360,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Eligibility**: Asymptomatic, stable CNS metastases confirmed by baseline brain imaging - **Treatment**: Osimertinib 80 mg once daily vs platinum-pemetrexed - **Assessment**: Blinded independent ce"
-    },
-    {
-      "timestamp": 1775282304105,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775282363111,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775282432748,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - In patients with measurable/nonmeasurable CNS lesions: **40% vs 17%** (OR 3.24, P=0.014) **2. CNS Duration of Response** - Osimertinib: **8.9 months** (95% CI: 4.3 months to not calculable) - Platin"
-    },
-    {
-      "timestamp": 1775282532710,
-      "action": "research:wo_training_1775282400512_og4e2us",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: Analysis of Train micro-transformer: medical\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775282626042,
-      "action": "research:wo_training_1775282400328_suc75wv",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: trading\nSummary: ## Scientific Research Analysis: Micro-Transformer Training for Trading\nProposal: - **Current Status**: currentBestLoss: 999 (baseline/initial state) ### Analysis **1. Problem Context** The task involves training a micro-transformer (small-scale transformer model) for trading appli"
-    },
-    {
-      "timestamp": 1775282718416,
-      "action": "research:wo_training_1775282400392_0cs0qre",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: trading\nSummary: <think>\nProposal: The abstract information is quite limited: - It's about trading using a micro-transformer - Uses a synthetic text8-sample dataset - Has a 300 second training time limit - Currently has a very high los"
-    },
-    {
-      "timestamp": 1775282903455,
-      "action": "research:wo_training_1775282400345_uep7qsj",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: trading\nSummary: ## Analysis: Micro-Transformer Training for Trading\nProposal: **2. Training Constraints** - **Time limit**: 300 seconds (5 minutes) is extremely short for transformer training - This may explain why convergence hasn't been achieved **3. Architecture Notes** - \"M"
-    },
-    {
-      "timestamp": 1775282973301,
-      "action": "research:wo_training_1775282400509_vkh3nmj",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: ## Micro-Transformer Training Analysis: Medical Domain\nProposal: ### Key Observations 1. **Domain Focus**: Medical - requires careful evaluation of clinical relevance, accuracy, and safety considerations 2. **Synthetic Dataset**: Using synthetic data suggests rapid"
-    },
-    {
-      "timestamp": 1775283065169,
-      "action": "research:wo_training_1775282400359_jd5v6o0",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: trading\nSummary: ## Scientific Research Analysis: Micro-Transformer Trading Training\nProposal: ### Critical Observations 1. **Severe Performance Issues**: The current best loss of 999 indicates fundamental problems with the training setup. A loss this high suggests the model is failing to learn"
-    },
-    {
-      "timestamp": 1775283138090,
-      "action": "research:wo_training_1775282400495_o5p2aiz",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: ## Analysis: Micro-Transformer Training for Medical Domain\nProposal: ### Key Observations 1. **Critical Domain Mismatch:** The training uses a synthetic text8-sample dataset, which is a general NLP corpus derived from Wikipedia articles. This does not appear to be medi"
-    },
-    {
-      "timestamp": 1775283218764,
-      "action": "research:wo_training_1775282400484_h87zobg",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nProposal: The work order is asking me to analyze a paper about training micro-transformers. However, the provided context shows that: - There are empty search results from reference corpus - There are empty kno"
-    },
-    {
-      "timestamp": 1775283296751,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:   \"study_overview\": {     \"design\": \"Phase III randomized controlled trial\",     \"population\": \"EGFR T790M-positive advanced NSCLC patients progressing on prior EGFR-TKI therapy\",     \"sample_size\": 4"
-    },
-    {
-      "timestamp": 1775283444416,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775283580350,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775283658710,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-sma\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775283720490,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Randomization**: 2:1 ratio (osimertinib:chemotherapy) - **Treatment**: Osimertinib 80mg once daily vs platinum-pemetrexed - **Assessment**: Blinded independent central neuroradiological review (BI"
-    },
-    {
-      "timestamp": 1775283782188,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) demonstrated superior CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC patients with brain metastases. \nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775283839113,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Blinded independent central neuroradiological review (BICR) **Patient Population:** - 419 total patients randomized - 116 patients had measurable and/or nonmeasurable CNS lesions - 46 patients had m"
-    },
-    {
-      "timestamp": 1775283895191,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775283958972,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: **1. CNS Objective Response Rate (ORR)** - **Measurable CNS lesions (primary endpoint):**   - Osimertinib: 70% (21/30 patients)   - Platinum-pemetrexed: 31% (5/16 patients)   - Odds Ratio: 5.13 (95% C"
-    },
-    {
-      "timestamp": 1775284027964,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775284109915,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Measurable + nonmeasurable lesions:** 40% vs 17% — odds ratio 3.24 (p=0.014) **Secondary Endpoints:** - **CNS Duration of Response:** 8.9 months vs 5.7 months (osimertinib superior) - **CNS Progre"
-    },
-    {
-      "timestamp": 1775284191558,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: See summary for details"
-    },
-    {
-      "timestamp": 1775284242693,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - Patients with EGFR T790M-positive advanced NSCLC    - 2:1 randomization to osimertinib 80mg daily vs platinum-pemetrexed    - 116 patients had measurable and/or nonmeasurable CNS lesions    - 46 "
-    },
-    {
-      "timestamp": 1775284323732,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:   \"methodology\": {     \"study_design\": \"Phase III randomized controlled trial (AURA3; NCT02151981)\",     \"population\": {       \"total_randomized\": 419 patients (2:1 randomization)\",       \"cns_lesions"
-    },
-    {
-      "timestamp": 1775284518811,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Treatment Arms**:    - Osimertinib: 80 mg once daily   - Platinum-pemetrexed (control) - **Patient Selection**: Patients with asymptomatic, stable CNS metastases - **Primary Endpoint**: CNS object"
-    },
-    {
-      "timestamp": 1775284592401,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"allocation\": \"2:1 randomization (osimertinib : platinum-pemetrexed)\",     \"total_enrolled\": 419 patients   },   \"population\": {     \"population\": \"EGFR T790M-positive advanced non-small-cell lung"
-    },
-    {
-      "timestamp": 1775284701208,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775284766031,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775284833508,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed in T790M-positive advanced NSCLC patients with CNS meta\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775284892938,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775284991833,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285063446,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285141316,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"phase\": \"Phase III randomized controlled trial (AURA3)\",     \"population\": \"EGFR T790M-positive advanced NSCLC patients with disease progression after prior EGFR-TKI treatment\",     \"enrollment_c"
-    },
-    {
-      "timestamp": 1775285199566,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 phase III trial demonstrated superior CNS efficacy of osimertinib versus platinum-pemetrexed in patients with EGFR T790M-positive advanced NSCLC and CNS metastases. In patients with measurab\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285300029,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - In patients with measurable and/or nonmeasurable CNS lesions: 40% vs 17% — OR 3.24 (95% CI: 1.33-8.81, P=0.014) **Duration of Response:** - Median CNS duration of response: 8.9 months (osimertinib) "
-    },
-    {
-      "timestamp": 1775285356266,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Patient Population**: 419 total randomized patients; 116 had measurable and/or nonmeasurable CNS lesions (46 with measurable CNS lesions) - **Eligibility**: Asymptomatic, stable CNS metastases - *"
-    },
-    {
-      "timestamp": 1775285482461,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-sma\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285552350,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### Key Findings **Primary Endpoint - CNS Objective Response Rate (ORR):** - In patients with measurable CNS lesions: **70% (osimertinib) vs 31% (platinum-pemetrexed)**   - Odds Ratio: 5.13 (95% CI: 1"
-    },
-    {
-      "timestamp": 1775285623266,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285710868,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"publication_source\": \"ASCO Journals (JCO)\"   },   \"background_and_rationale\": {     \"clinical_context\": \"Patients with EGFR mutation-positive advanced NSCLC frequently develop CNS metastases, rep"
-    },
-    {
-      "timestamp": 1775285775208,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775285835114,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - CNS ORR in measurable lesions: 70% vs 31% (osimertinib vs platinum-pemetrexed)    - CNS ORR in measurable and/or nonmeasurable lesions: 40% vs 17%    - Median CNS duration of response: 8.9 months"
-    },
-    {
-      "timestamp": 1775285947374,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Treatment Arms**: Osimertinib 80 mg once daily (n=419) vs platinum-pemetrexed - **Eligibility**: Asymptomatic, stable CNS metastases confirmed by baseline brain scan - **Primary Endpoint**: CNS ob"
-    },
-    {
-      "timestamp": 1775286079863,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Primary Endpoint - CNS Objective Response Rate (ORR):** - **Measurable CNS lesions:** 70% (osimertinib) vs 31% (platinum-pemetrexed) — OR 5.13 (95% CI: 1.44-20.64), p=0.015 - **Measurable + nonmeasu"
-    },
-    {
-      "timestamp": 1775286226841,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - Preplanned subgroup analysis of patients with CNS metastases - Blinded independent central neuroradiological review (BICR) - Primary endpoint: CNS objective response rate (ORR) - Secondary endpoints"
-    },
-    {
-      "timestamp": 1775286290861,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775286341593,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775286419452,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775286483105,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - 419 patients randomly assigned to treatment - 116 patients had measurable and/or nonmeasurable CNS lesions at baseline - 46 patients had measurable CNS lesions (CNS evaluable for response set) **Pat"
-    },
-    {
-      "timestamp": 1775286549102,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: ### Key Findings **1. CNS Objective Response Rate (Primary Endpoint)** - **Measurable CNS lesions:**   - Osimertinib: 70% (21/30 patients) vs. Platinum-pemetrexed: 31% (5/16 patients)   - Odds ratio: "
-    },
-    {
-      "timestamp": 1775286641679,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Objective:** Evaluate CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC patients with CNS metastases who progressed on prior EGFR-TKI therapy."
-    },
-    {
-      "timestamp": 1775286732879,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775286854407,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### Key Findings **1. CNS Objective Response Rate (ORR)** - **Measurable CNS lesions (primary endpoint):**   - Osimertinib: 70% (21/30 patients)   - Platinum-pemetrexed: 31% (5/16 patients)   - Odds r"
-    },
-    {
-      "timestamp": 1775286912616,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775286998381,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775287125813,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775287187863,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"total_enrolled\": 419 patients (116 with CNS lesions; 46 with measurable lesions)\"   },   \"methodology\": {     \"design\": \"2:1 randomized controlled trial\",     \"interventions\": {       \"experiment"
-    },
-    {
-      "timestamp": 1775287352045,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775287416184,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 1. Study Purpose & Background **Research Objective:** To evaluate the central nervous system (CNS) efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-"
-    },
-    {
-      "timestamp": 1775287499725,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Population**: 419 patients with EGFR T790M-positive advanced NSCLC and asymptomatic, stable CNS metastases - **Randomization**: 2:1 ratio (osimertinib to platinum-pemetrexed) - **Treatment**: Osim"
-    },
-    {
-      "timestamp": 1775287568501,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Conclusion The abstract is quite comprehensive and provides the key findings. However, the user mentioned I should search the Synapseia research corpus for related work or context if needed. Let me "
-    },
-    {
-      "timestamp": 1775287636302,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Comparison: Osimertinib 80mg daily vs platinum-pemetrexed - Primary endpoint: CNS objective response rate (ORR) **Results:** - 419 patients randomized (2:1 ratio) - 116 had measurable and/or nonmeas"
-    },
-    {
-      "timestamp": 1775287710053,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: Since I already have a comprehensive abstract with the key data, I can generate a thorough analysis without needing additional tools. The abstract contains: - Purpose/background - Methods - Results (w"
-    },
-    {
-      "timestamp": 1775287764036,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Eligibility**: Patients with asymptomatic, stable CNS metastases - **Treatment Arms**:    - Osimertinib 80 mg once daily   - Platinum-pemetrexed (chemotherapy control) - **Assessment**: Blinded in"
-    },
-    {
-      "timestamp": 1775287849264,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - ClinicalTrials.gov identifier: NCT02151981 **Population:** - 419 total randomized patients - 116 patients had measurable and/or nonmeasurable CNS lesions at baseline - 46 patients had measurable CNS"
-    },
-    {
-      "timestamp": 1775287904914,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis from the AURA3 Phase III Trial\", \"source\": \"Journal of Clinical Oncology, ASCO 2018\", \"clinicaltrials_id\": \"NCT\nProposal: See summary for details"
-    },
-    {
-      "timestamp": 1775287986876,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775288083267,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:   \"design\": \"2:1 randomization\",   \"treatment_arms\": [\"Osimertinib 80 mg once daily\", \"Platinum-pemetrexed\"],   \"population\": \"EGFR T790M-positive advanced NSCLC with CNS metastases\",   \"total_patient"
-    },
-    {
-      "timestamp": 1775288165923,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775288224656,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Purpose: comparing osimertinib CNS efficacy vs platinum-pemetrexed - Methods: randomized phase III trial, 2:1 ratio, patients with CNS metastases - Results: CNS ORR, duration of response, progressio"
-    },
-    {
-      "timestamp": 1775288286225,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775288365348,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: **Key Information from Abstract:** 1. **Purpose/Background:** - EGFR mutation-positive advanced NSCLC patients have unmet needs for EGFR-TKIs with improved CNS penetration - Need better activity again"
-    },
-    {
-      "timestamp": 1775288513199,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"population\": \"EGFR T790M-positive advanced NSCLC with CNS metastases, progression on prior EGFR-TKI\",     \"sample_size\": 419 total randomized; 116 with CNS lesions (46 measurable)\",     \"interven"
-    },
-    {
-      "timestamp": 1775288598234,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"population\": \"EGFR T790M-positive advanced NSCLC patients with CNS metastases who progressed on prior EGFR-TKI therapy\",     \"sample_size\": 419 total patients (116 with CNS lesions, 46 with measu"
-    },
-    {
-      "timestamp": 1775288661245,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Measurable and/or nonmeasurable lesions:** 40% (30/75) vs. 17% (7/41) (odds ratio 3.24; P=0.014) **Secondary Endpoints:** - **CNS Duration of Response:** 8.9 months (osimertinib) vs. 5.7 months (p"
-    },
-    {
-      "timestamp": 1775288716574,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment**: Osimertinib 80 mg daily vs platinum-pemetrexed - **Assessment**: Blinded independent central neuroradiological review - **Primary Endpoint**: CNS objective response rate (ORR) ### 3. "
-    },
-    {
-      "timestamp": 1775288895559,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775288960850,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"authors\": \"Mok et al. (JCO, 2018)\", \"clinical_trial_id\": \"NCT02151981\", \"study_overview\": {\"phase\": \"Ph\nProposal: See summary for details"
-    },
-    {
-      "timestamp": 1775289163810,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal: }, \"study_overview\": {   \"phase\": \"Phase III Randomized Controlled Trial\",   \"design\": \"2:1 randomization\",   \"treatment_arms\": [\"Osimertinib 80mg once daily\", \"Platinum-pemetrexed\"],   \"population\": "
-    },
-    {
-      "timestamp": 1775289299742,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
-      "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized controlled trial (AURA3) provides the first comparative evidence of osimertinib's superior CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-po\nProposal: No proposal generated"
-    },
     {
       "timestamp": 1775289366635,
       "action": "research:wo_1775222161406_d0wxdb5gw",
@@ -1205,6 +641,570 @@
       "action": "research:wo_1775222161406_d0wxdb5gw",
       "outcome": "completed",
       "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment Arms**:    - Osimertinib 80 mg once daily (n=30 measurable, n=75 total with CNS lesions)   - Platinum-pemetrexed (n=16 measurable, n=41 total with CNS lesions) - **Eligibility**: Asympto"
+    },
+    {
+      "timestamp": 1775289753198,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Objective:** Evaluate CNS efficacy of osimertinib versus platinum-pemetrexed in EGFR T790M-positive advanced NSCLC patients with CNS metastases. **Study Design:** - Phase III randomized controlled t"
+    },
+    {
+      "timestamp": 1775289849788,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **All CNS lesions (measurable + nonmeasurable)**: 40% vs. 17%; odds ratio 3.24 (95% CI: 1.33-8.81; P = 0.014) **2. Secondary Endpoints:** - **CNS Duration of Response**: 8.9 months (osimertinib) vs."
+    },
+    {
+      "timestamp": 1775289929994,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - CNS lesions: 116 patients (measurable and/or nonmeasurable) - Measurable CNS lesions: 46 patients **Primary Endpoint - CNS Objective Response Rate (ORR):** - Measurable lesions: 70% (osimertinib) vs"
+    },
+    {
+      "timestamp": 1775290007188,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Purpose/background - Methods - Results (including specific numbers, percentages, ORs, HRs, CIs, and p-values) - Conclusion I don't need to search for additional information as I have a complete abst"
+    },
+    {
+      "timestamp": 1775290181063,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775290426366,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Eligibility**: Patients with asymptomatic, stable CNS metastases - **Analysis**: Preplanned subgroup analysis with blinded independent central neuroradiological review - **Primary Endpoint**: CNS "
+    },
+    {
+      "timestamp": 1775290495886,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Inclusion Criteria:** - Asymptomatic, stable CNS metastases - Measurable and/or nonmeasurable CNS lesions on baseline brain scan **Intervention:** - 2:1 randomization - Osimertinib: 80 mg once daily"
+    },
+    {
+      "timestamp": 1775290584648,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775290647308,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775290708114,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: Patients with EGFR mutation-positive advanced NSCLC often develop CNS metastases, creating an unmet need for EGFR-tyrosine kinase inhibitors with improved CNS penetration. This study reports the first"
+    },
+    {
+      "timestamp": 1775290833617,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775290896353,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily vs. platinum-pemetrexed - **Eligibility**: Asymptomatic, stable CNS metastases; EGFR T790M-positive after progression on prior EGFR-TKI - **Assessment*"
+    },
+    {
+      "timestamp": 1775290963159,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: --- ### 2. Key Findings Summary **Primary Endpoint (CNS Objective Response Rate - ORR):** - In patients with measurable CNS lesions: **70% vs 31%** (osimertinib vs platinum-pemetrexed)   - Odds Ratio:"
+    },
+    {
+      "timestamp": 1775291040924,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment Arms**:    - Osimertinib 80 mg once daily (n=30 with measurable lesions)   - Platinum-pemetrexed (n=16 with measurable lesions) - **Key Criteria**: Patients with asymptomatic, stable CNS"
+    },
+    {
+      "timestamp": 1775291111087,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:       \"journal\": \"Journal of Clinical Oncology\",       \"phase\": \"Phase III Randomized Controlled Trial\"     },     \"population\": {       \"total_randomized\": 419 patients,       \"with_cns_involvement\":"
+    },
+    {
+      "timestamp": 1775291212367,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Study Design:** - Phase III randomized controlled trial (AURA3; ClinicalTrials.gov: NCT02151981) - 2:1 randomization (osimertinib: platinum-pemetrexed) - Treatment: osimertinib 80 mg once daily vs. "
+    },
+    {
+      "timestamp": 1775291353643,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775291410773,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:       \"phase\": \"Phase III\",       \"design\": \"Randomized, open-label, controlled trial\"     },     \"study_objective\": \"To evaluate the CNS efficacy of osimertinib versus platinum-pemetrexed chemotherap"
+    },
+    {
+      "timestamp": 1775291482781,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - Phase III randomized controlled trial (AURA3) - Registration: ClinicalTrials.gov NCT02151981 - 2:1 randomization (osimertinib:chemotherapy) - Blinded independent central neuroradiological review **P"
+    },
+    {
+      "timestamp": 1775291555522,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775291620627,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed in T790M-positive advanced NSCLC patients with brain me\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775291677748,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Patients with CNS lesions: 116 (measurable and/or nonmeasurable) - Patients with measurable CNS lesions: 46 **Primary Endpoint - CNS Objective Response Rate (ORR):** | Patient Population | Osimertin"
+    },
+    {
+      "timestamp": 1775291834466,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775291918845,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292020045,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292081479,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Patient Population:** - EGFR T790M-positive advanced NSCLC - Disease progression on prior EGFR-TKI therapy - Asymptomatic, stable CNS metastases - 419 patients randomized (2:1 ratio) **Treatment Arm"
+    },
+    {
+      "timestamp": 1775292165804,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This Phase III randomized controlled trial (AURA3) provides the first comparative evidence demonstrating superior CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with E\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292296767,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292372228,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292460835,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Secondary Endpoints:** - **Median CNS duration of response:** 8.9 months vs 5.7 months - **Median CNS progression-free survival:** 11.7 months vs 5.6 months — hazard ratio 0.32, p=0.004 ### Methodol"
+    },
+    {
+      "timestamp": 1775292525212,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Measurable CNS lesions (n=46):**   - Osimertinib: 70% (21/30) vs Platinum-pemetrexed: 31% (5/16)   - Odds Ratio: 5.13 (95% CI: 1.44-20.64), P=0.015 - **Measurable and/or nonmeasurable CNS lesions "
+    },
+    {
+      "timestamp": 1775292676132,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal:   - Measurable/nonmeasurable: 40% (30/75) vs 17% (7/41) (OR 3.24, p=0.014) - **Duration of Response**: Median CNS DoR was 8.9 months (osimertinib) vs 5.7 months (chemotherapy) - **CNS Progression-Free"
+    },
+    {
+      "timestamp": 1775292755633,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - CNS ORR in patients with measurable CNS lesions: 70% (osimertinib) vs 31% (platinum-pemetrexed)    - CNS ORR in patients with measurable and/or nonmeasurable CNS lesions: 40% vs 17%    - Median C"
+    },
+    {
+      "timestamp": 1775292820587,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775292962914,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775293027027,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"allocation_ratio\": \"2:1 (Osimertinib : Platinum-Pemetrexed)\",     \"total_patients_randomized\": 419,     \"patients_with_cns_involvement\": 116 (measurable and/or nonmeasurable lesions)   },   \"pati"
+    },
+    {
+      "timestamp": 1775293104530,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"authors\": \"Mok et al. (AURA3 Study Group)\", \"publication\": \"Journal of Clinical Oncology, 2018\", \"clini\nProposal: See summary for details"
+    },
+    {
+      "timestamp": 1775293167901,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This study evaluated the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) w\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775293235273,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Purpose: Evaluating CNS penetration and activity of osimertinib - Methods: Phase III trial (AURA3), 2:1 randomization, preplanned subgroup analysis - Results: CNS ORR, duration of response, progress"
+    },
+    {
+      "timestamp": 1775293318308,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: Analysis of AURA3 Phase III Trial\", \"source\": \"Journal of Clinical Oncology (JCO), 2018\", \"clinicaltrials_id\": \"NCT02151981\", \"\nProposal: See summary for details"
+    },
+    {
+      "timestamp": 1775293404361,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - Phase III randomized controlled trial (AURA3; ClinicalTrials.gov: NCT02151981) - 2:1 randomization (osimertinib : platinum-pemetrexed) - Treatment: osimertinib 80 mg once daily vs platinum-pemetrexe"
+    },
+    {
+      "timestamp": 1775293537224,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - **Eligibility**: Asymptomatic, stable CNS metastases - **Intervention**: Osimertinib 80 mg once daily (n=30 measurable, n=75 total CNS) vs platinum-pemetrexed (n=16 measurable, n=41 total CNS) - **P"
+    },
+    {
+      "timestamp": 1775293600344,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775293763699,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Randomization**: 2:1 ratio (osimertinib:platinum-pemetrexed) - **Treatment**: Osimertinib 80mg once daily vs platinum-pemetrexed chemotherapy - **Endpoints**:    - Primary: CNS objective response "
+    },
+    {
+      "timestamp": 1775293838044,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal:   - In patients with measurable and/or nonmeasurable CNS lesions: 40% vs 17% — odds ratio 3.24 (95% CI: 1.33-8.81), P=0.014 - **CNS Duration of Response:** 8.9 months (osimertinib) vs 5.7 months (plat"
+    },
+    {
+      "timestamp": 1775293900227,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: **Trial Design:** - Randomized 2:1 allocation (osimertinib : platinum-pemetrexed) - Preplanned subgroup analysis of CNS endpoints - Blinded independent central neuroradiological review (BICR) **Patien"
+    },
+    {
+      "timestamp": 1775293996758,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Participants:** - Total randomized: 419 patients - Patients with CNS lesions: 116 (measurable and/or nonmeasurable) - Patients with measurable CNS lesions: 46 **Inclusion Criteria:** - EGFR T790M-po"
+    },
+    {
+      "timestamp": 1775294076388,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Median CNS duration of response:** 8.9 months vs 5.7 months - **Median CNS PFS:** 11.7 months vs 5.6 months — HR 0.32, P=0.004 ### Methodology **Study Design:** - Randomized, open-label, phase III"
+    },
+    {
+      "timestamp": 1775294168295,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This research evaluates the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775294250547,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775294333422,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - CNS ORR in patients with measurable lesions: 70% (osimertinib) vs 31% (chemotherapy)    - CNS ORR in patients with measurable and/or nonmeasurable lesions: 40% vs 17%    - Median CNS duration of "
+    },
+    {
+      "timestamp": 1775294467977,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: ### Key Findings **Efficacy Results:** 1. **CNS Objective Response Rate (ORR) - Measurable Lesions:**    - Osimertinib: 70% (21/30 patients)    - Platinum-pemetrexed: 31% (5/16 patients)    - Odds Rat"
+    },
+    {
+      "timestamp": 1775294518662,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - 46 patients had measurable CNS lesions at baseline - Treatment: Osimertinib 80 mg once daily vs platinum-pemetrexed - Primary endpoint: CNS objective response rate (ORR) - Blinded independent centra"
+    },
+    {
+      "timestamp": 1775294619400,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Objective:** To evaluate the comparative CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed after prior EGFR-tyros"
+    },
+    {
+      "timestamp": 1775294692096,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775294831599,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"introduction\": \"This report analyzes the AURA3 phase III trial (ClinicalTrials.gov: NCT02151981)\nProposal: See summary for details"
+    },
+    {
+      "timestamp": 1775294963039,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"design\": \"2:1 randomization to osimertinib 80mg once daily versus platinum-pemetrexed\",     \"total_patients\": 419,      \"patients_with_cns_lesions\": 116 (measurable and/or nonmeasurable), 46 with"
+    },
+    {
+      "timestamp": 1775295033487,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295087049,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs platinum-pemetrexed (n=16 with measurable lesions) - **Endpoints**:    - Primary: CNS objective response rate (ORR)  "
+    },
+    {
+      "timestamp": 1775295152046,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) demonstrated superior central nervous system (CNS) efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive adv\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295239550,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 phase III trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-posi\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295302449,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial provides the first comparative phase III evidence demonstrating that osimertinib has superior CNS activity compared to platinum-based chemotherapy in T790M-positive advanced NSCLC. In \nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295367508,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295436932,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Osimertinib 80 mg once daily vs. platinum-pemetrexed - Preplanned subgroup analysis focusing on CNS outcomes **Patient Population:** - 419 total patients randomized - 116 patients had measurable and"
+    },
+    {
+      "timestamp": 1775295526122,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295671341,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775295797397,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - 116 patients had measurable and/or nonmeasurable CNS lesions at baseline - 46 patients had measurable CNS lesions **Primary Endpoint - CNS Objective Response Rate (ORR):** - In measurable lesions: 7"
+    },
+    {
+      "timestamp": 1775295888082,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: See summary for details"
+    },
+    {
+      "timestamp": 1775296021743,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs platinum-pemetrexed (n=16 with measurable lesions) - **Endpoints**:    - Primary: CNS objective response rate (ORR)  "
+    },
+    {
+      "timestamp": 1775296098401,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Comparison: Osimertinib vs platinum-pemetrexed - Key endpoints: CNS ORR, duration of response, CNS PFS Key findings from the abstract: 1. In patients with measurable CNS lesions: ORR 70% vs 31% (osi"
+    },
+    {
+      "timestamp": 1775296158175,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **1. Primary Endpoint - CNS Objective Response Rate (ORR):** - **Measurable CNS lesions (n=46):**     - Osimertinib: 70% (21/30) vs Platinum-pemetrexed: 31% (5/16)   - Odds Ratio: 5.13 (95% CI: 1.44-2"
+    },
+    {
+      "timestamp": 1775296227921,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - **Median CNS Duration of Response**: 8.9 months vs. 5.7 months - **Median CNS Progression-Free Survival**: 11.7 months vs. 5.6 months — hazard ratio 0.32 (95% CI: 0.15–0.69; P=0.004) ### Methodology"
+    },
+    {
+      "timestamp": 1775296289755,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775296411986,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775296463633,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal:   - Osimertinib: 70% (21/30) vs Platinum-pemetrexed: 31% (5/16)   - Odds ratio: 5.13 (95% CI: 1.44-20.64); P = 0.015 - **Measurable and/or nonmeasurable CNS lesions:**   - Osimertinib: 40% (30/75) vs "
+    },
+    {
+      "timestamp": 1775296549215,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment Arms**:   - Osimertinib: 80 mg once daily   - Platinum-pemetrexed: standard chemotherapy - **Eligibility**: Asymptomatic, stable CNS metastases - **Endpoints**:    - Primary: CNS objecti"
+    },
+    {
+      "timestamp": 1775296635103,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: 1. Read and understand the paper - I have the abstract with key details 2. Summarize key findings and methodology - The abstract provides this 3. Identify potential applications - I can infer this fro"
+    },
+    {
+      "timestamp": 1775296783681,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: --- ### 2. Key Findings #### Primary Endpoint - CNS Objective Response Rate (ORR): | Patient Population | Osimertinib (n/N) | Chemotherapy (n/N) | Odds Ratio | P-value | |---|---|---|---|---| | Measur"
+    },
+    {
+      "timestamp": 1775296837916,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 2. Key Findings #### Primary Endpoint - CNS Objective Response Rate (ORR): | Population | Osimertinib (n/N) | Platinum-Pemetrexed (n/N) | Odds Ratio (95% CI) | P-value | |------------|------------"
+    },
+    {
+      "timestamp": 1775296905446,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This analysis from the AURA3 phase III trial provides the first comparative evidence of osimertinib superior CNS efficacy versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC \nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775296959804,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Patient Population:** - EGFR mutation-positive advanced NSCLC with T790M resistance mutation - Disease progression after prior EGFR-TKI treatment - Asymptomatic, stable CNS metastases at baseline - "
+    },
+    {
+      "timestamp": 1775297023760,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This paper reports the CNS (central nervous system) efficacy outcomes from the AURA3 phase III trial, comparing osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775297120190,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"journal\": \"Journal of Clinical Oncology\",     \"sponsor\": \"AstraZeneca\"   },   \"background\": {     \"disease_context\": \"Epidermal growth factor receptor (EGFR) mutation-positive advanced non-small-"
+    },
+    {
+      "timestamp": 1775297176814,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - Summarize key findings and methodology    - Identify potential applications    - Write a concise research report The abstract provided already contains substantial information about the study: - "
+    },
+    {
+      "timestamp": 1775297367577,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775297432105,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775297528809,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:   },   \"methodology\": {     \"study_design\": \"Randomized Phase III trial (AURA3)\",     \"patient_population\": {       \"total_randomized\": 419 patients,       \"with_CNS_involvement\": 116 patients (measur"
+    },
+    {
+      "timestamp": 1775297613116,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775297734727,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775297785363,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=419) vs platinum-pemetrexed - **Primary Endpoint**: CNS objective response rate (ORR) - **Assessment**: Blinded independent central neuroradiologica"
+    },
+    {
+      "timestamp": 1775297897885,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Primary endpoint: CNS objective response rate (ORR) - Results:   - In measurable CNS lesions: 70% ORR (osimertinib) vs 31% (platinum-pemetrexed)   - In measurable + nonmeasurable: 40% vs 17%   - Med"
+    },
+    {
+      "timestamp": 1775297955461,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal:   - Odds Ratio: 5.13 (95% CI: 1.44-20.64), p=0.015 - **Measurable and/or nonmeasurable CNS lesions:** 40% (30/75) vs. 17% (7/41)   - Odds Ratio: 3.24 (95% CI: 1.33-8.81), p=0.014 **2. Duration of Resp"
+    },
+    {
+      "timestamp": 1775298223480,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"population\": \"EGFR T790M-positive advanced NSCLC with CNS metastases\",     \"total_enrolled\": 419 patients (116 with CNS lesions; 46 with measurable lesions)\"   },   \"methodology\": {     \"eligibil"
+    },
+    {
+      "timestamp": 1775298440085,
+      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "outcome": "completed",
+      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial represents a pivotal randomized phase III study that established the superior CNS efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-posit\nProposal: No proposal generated"
     }
   ],
   "strategy": {
