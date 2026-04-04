@@ -8,11 +8,8 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class ExecuteDilocoNode {
-  private readonly execution = new WorkOrderExecutionHelper(
-    new WorkOrderCoordinatorHelper(),
-    new WorkOrderEvaluationHelper(),
-    new LlmProviderHelper(),
-  );
+  constructor(private readonly execution: WorkOrderExecutionHelper) {}
+
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, config, coordinatorUrl, peerId } = state;

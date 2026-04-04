@@ -10,12 +10,12 @@ const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String
 
 @Injectable()
 export class FetchWorkOrdersNode {
-  private readonly coordinator = new WorkOrderCoordinatorHelper();
-  private readonly execution = new WorkOrderExecutionHelper(
-    new WorkOrderCoordinatorHelper(),
-    new WorkOrderEvaluationHelper(),
-    new LlmProviderHelper(),
-  );
+  constructor(
+    private readonly coordinator: WorkOrderCoordinatorHelper,
+    private readonly execution: WorkOrderExecutionHelper,
+  ) {}
+
+
   private readonly researchCooldowns = new Map<string, number>();
   private readonly completedWorkOrderIds = new Set<string>();
 

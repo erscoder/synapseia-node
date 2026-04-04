@@ -11,12 +11,12 @@ const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.1
 
 @Injectable()
 export class QualityGateNode {
-  private readonly evaluation = new WorkOrderEvaluationHelper();
-  private readonly execution = new WorkOrderExecutionHelper(
-    new WorkOrderCoordinatorHelper(),
-    new WorkOrderEvaluationHelper(),
-    new LlmProviderHelper(),
-  );
+  constructor(
+    private readonly execution: WorkOrderExecutionHelper,
+    private readonly evaluation: WorkOrderEvaluationHelper,
+  ) {}
+
+
   private lastSubmissionAt = 0;
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
