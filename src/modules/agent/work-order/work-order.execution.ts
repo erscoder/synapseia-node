@@ -3,6 +3,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { ResearchTeamService } from '../multi-agent/research-team.service';
 import * as path from 'path';
 import * as os from 'os';
 import logger from '../../../utils/logger';
@@ -32,6 +33,7 @@ const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 @Injectable()
 export class WorkOrderExecutionHelper {
   private readonly llmProvider = new LlmProviderHelper();
+  private readonly researchTeam = new ResearchTeamService(this.llmProvider);
 
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
@@ -116,6 +118,21 @@ Title: ${payload.title}
 Abstract: ${payload.abstract}`;
   }
 
+  private parseDirectResult(raw: string): ResearchResult {
+    try {
+      let jsonStr = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/) || jsonStr.match(/```(?:json)?\s*([\s\S]*)/);
+      if (fenceMatch) jsonStr = fenceMatch[1].trim();
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
+      const parsed = JSON.parse(jsonStr) as ResearchResult;
+      if (!parsed.summary || !Array.isArray(parsed.keyInsights) || !parsed.proposal) throw new Error('Invalid structure');
+      return parsed;
+    } catch {
+      return { summary: 'Failed to parse LLM response', keyInsights: [], proposal: raw.slice(0, 500) };
+    }
+  }
+
   async executeResearchWorkOrder(
     workOrder: WorkOrder,
     llmModel: LLMModel,
@@ -149,41 +166,48 @@ Abstract: ${payload.abstract}`;
       }
     }
 
+    // Use multi-agent team (researcher → critic → synthesizer) with shared memory.
+    // Falls back to direct LLM call on team failure.
     const prompt = this.buildResearchPrompt(payload, kgContext || undefined, referenceContext || undefined);
     const startMs = Date.now();
-    const rawResponse = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
-    const latencyMs = Date.now() - startMs;
+    let rawResponse = '';
+    let result: ResearchResult;
 
     try {
-      let jsonStr = rawResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/) || jsonStr.match(/```(?:json)?\s*([\s\S]*)/);
-      if (fenceMatch) jsonStr = fenceMatch[1].trim();
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
-      const result = JSON.parse(jsonStr) as ResearchResult;
-      if (!result.summary || !Array.isArray(result.keyInsights) || !result.proposal) throw new Error('Invalid research result structure');
-      logger.log(` Research complete, summary: ${result.summary.slice(0, 100)}...`);
-
-      if (hyperConfig && coordinatorUrl && peerId) {
-        const qualityScore = Math.min(10, Math.max(0,
-          (result.keyInsights.length >= 3 ? 3 : result.keyInsights.length) +
-          (result.summary.length > 200 ? 3 : 1) +
-          (result.proposal.length > 100 ? 3 : 1),
-        ));
-        await this.coordinator.reportHyperparamExperiment(coordinatorUrl, peerId, hyperConfig, qualityScore, latencyMs);
-        logger.log(` Reported experiment quality: ${qualityScore}/10 (strategy: ${strategy})`);
-      }
-
-      const metricValue = this.evaluation.scoreResearchResult(result);
-      if (coordinatorUrl && peerId && metricValue > 0.7) {
-        await this.coordinator.uploadInsightToNetwork(coordinatorUrl, peerId, topic, result.summary, result.keyInsights, metricValue);
-      }
-
-      return { result, rawResponse, success: true, hyperparams: hyperConfig ?? undefined };
-    } catch (error) {
-      logger.error(' Failed to parse research result:', (error as Error).message);
-      return { result: { summary: 'Failed to parse LLM response', keyInsights: [], proposal: rawResponse.slice(0, 500) }, rawResponse, success: false, hyperparams: hyperConfig ?? undefined };
+      logger.log(' Using multi-agent research team (researcher → critic → synthesizer)');
+      const teamResult = await this.researchTeam.runResearch(
+        payload,
+        llmModel,
+        llmConfig,
+        { kgContext: kgContext || undefined, referenceContext: referenceContext || undefined },
+      );
+      result = teamResult.result;
+      rawResponse = JSON.stringify(teamResult.result);
+    } catch (teamErr) {
+      logger.warn(` Multi-agent team failed (${(teamErr as Error).message}), using direct LLM call`);
+      rawResponse = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig, hyperConfig ? { temperature: hyperConfig.temperature } : undefined);
+      const parsed = this.parseDirectResult(rawResponse);
+      result = parsed;
     }
+    const latencyMs = Date.now() - startMs;
+    logger.log(` Research complete, summary: ${result.summary.slice(0, 100)}...`);
+
+    if (hyperConfig && coordinatorUrl && peerId) {
+      const qualityScore = Math.min(10, Math.max(0,
+        (result.keyInsights.length >= 3 ? 3 : result.keyInsights.length) +
+        (result.summary.length > 200 ? 3 : 1) +
+        (result.proposal.length > 100 ? 3 : 1),
+      ));
+      await this.coordinator.reportHyperparamExperiment(coordinatorUrl, peerId, hyperConfig, qualityScore, latencyMs);
+      logger.log(` Reported experiment quality: ${qualityScore}/10 (strategy: ${strategy})`);
+    }
+
+    const metricValue = this.evaluation.scoreResearchResult(result);
+    if (coordinatorUrl && peerId && metricValue > 0.7) {
+      await this.coordinator.uploadInsightToNetwork(coordinatorUrl, peerId, topic, result.summary, result.keyInsights, metricValue);
+    }
+
+    return { result, rawResponse, success: true, hyperparams: hyperConfig ?? undefined };
   }
 
   saveResearchToBrain(brain: AgentBrain, workOrder: WorkOrder, result: ResearchResult): void {
