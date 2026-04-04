@@ -860,6 +860,9 @@ async function bootstrap() {
             ];
           }
 
+          // Minimum model for the multi-agent research pipeline (coordinator pattern)
+          const MIN_MODEL_FOR_RESEARCH = 'qwen2.5-3b';
+
           const ans = await safePrompt(() =>
             select({
               message: modelMode === 'cloud' ? 'Select cloud LLM provider:' : 'Select a model:',
@@ -869,6 +872,30 @@ async function bootstrap() {
           if (ans === null) { logger.log('\nCancelled.'); return; }
           if (ans === BACK) { step = 'modelMode'; continue; }
           config.defaultModel = ans;
+
+          // Warn if Ollama model is too small for the research coordinator
+          if (modelMode !== 'cloud') {
+            const selectedModel = catalog.find((m) => m.name === ans);
+            const meetsMin = !selectedModel || (selectedModel.minVram ?? 0) >= 4;
+            if (!meetsMin) {
+              logger.log('');
+              logger.warn(`⚠️  '${ans}' is below the recommended minimum (${MIN_MODEL_FOR_RESEARCH}).`);
+              logger.warn('   The multi-agent research pipeline works better with qwen2.5-3b or larger.');
+              // Check if there are compatible models >= 3b
+              const canUpgrade = compatibleModels.some(
+                (m) => m.minVram >= 4 && m.name !== ans
+              );
+              if (canUpgrade) {
+                logger.log('   Consider upgrading to a stronger local model, or use cloud LLM.');
+              } else {
+                logger.warn('   No local model meets the minimum. Switching to cloud LLM.');
+                modelMode = 'cloud';
+                step = 'modelPick';
+                continue;
+              }
+            }
+          }
+
           step = 'llmConfig';
           continue;
         }

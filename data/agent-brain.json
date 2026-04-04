@@ -5,1206 +5,1206 @@
   ],
   "memory": [
     {
-      "timestamp": 1775293763699,
+      "timestamp": 1775319863259,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775293838044,
+      "timestamp": 1775319938413,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775293900227,
+      "timestamp": 1775320007336,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775293996758,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775294076388,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775294168295,
-      "type": "discovery",
-      "content": "Research: This research evaluates the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who experienced disease progression on prior EGFR-tyrosine kinase inhibitor (TKI) therapy. The study represents the first comparative evidence of an EGFR-TKI demonstrating improved CNS penetration and activity against brain metastases.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775294250547,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775294333422,
+      "timestamp": 1775320071817,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294467977,
+      "timestamp": 1775320138013,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294518663,
+      "timestamp": 1775320191559,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294619400,
+      "timestamp": 1775320246152,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294692096,
+      "timestamp": 1775320348060,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294831599,
+      "timestamp": 1775320409562,
       "type": "discovery",
-      "content": "Research: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"introduction\": \"This report analyzes the AURA3 phase III trial (ClinicalTrials.gov: NCT02151981), which provides the first comparative evidence of osimertinib's CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed on prior EGFR-tyrosine kinase inhibitor therapy.\", \"key_findings\": {\"primary_efficacy\": {\"measurable_CNS_lesions\": {\"osimertinib_ORR\": \"70% (21/30 patients, 95% CI: 51%-85%)\", \"platinum_pemetrexed_ORR\": \"31% (5/16 patients, 95% CI: 11%-59%)\", \"odds_ratio\": \"5.13 (95% CI: 1.44-20.64, P=0.015)\"}}, \"measurable_and_nonmeasurable_CNS_lesions\": {\"osimertinib_ORR\": \"40% (30/75 patients, 95% CI: 29%-52%)\", \"platinum_pemetrexed_ORR\": \"17% (7/41 patients, 95% CI: 7%-32%)\", \"odds_ratio\": \"3.24 (95% CI: 1.33-8.81, P=0.014)\"}}, \"secondary_efficacy\": {\"median_CNS_duration_of_response\": {\"osimertinib\": \"8.9 months (95% CI: 4.3 months to not calculable)\", \"platinum_pemetrexed\": \"5.7 months (95% CI: 4.4-5.7 months)\"}, \"median_CNS_PFS\": {\"osimertinib\": \"11.7 months\", \"platinum_pemetrexed\": \"5.6 months\", \"hazard_ratio\": \"0.32 (95% CI: 0.15-0.69, P=0.004)\"}}}, \"methodology\": {\"study_design\": \"Randomized, open-label, international phase III trial\", \"randomization\": \"2:1 ratio (osimertinib:platinum-pemetrexed)\", \"treatment_arms\": {\"osimertinib\": \"80 mg once daily\", \"comparator\": \"platinum-pemetrexed\"}, \"patient_population\": {\"total_randomized\": \"419 patients\", \"with_CNS_involvement\": \"116 patients with measurable and/or nonmeasurable CNS lesions\", \"measurable_CNS_lesions\": \"46 patients\", \"eligibility\": \"Asymptomatic, stable CNS metastases\"}, \"assessment\": \"Blinded independent central neuroradiological review (BICR)\", \"primary_endpoint\": \"CNS objective response rate (ORR)\"}, \"clinical_applications\": {\"treatment_implications\": [\"Osimertinib should be considered the preferred treatment for T790M-positive NSCLC patients with CNS metastases\", \"Superior CNS penetration compared to platinum-based chemotherapy\", \"Meaningful clinical benefit with 70% response rate in patients with measurable brain lesions\"], \"patient_selection\": [\"EGFR T790M-positive status confirmed after progression on first-line EGFR-TKI\", \"Patients with asymptomatic, stable brain metastases\", \"Both measurable and nonmeasurable CNS disease showed benefit\"], \"clinical_significance\": [\"Reduced risk of CNS progression by 68% (HR 0.32)\", \"Nearly doubled median CNS PFS (11.7 vs 5.6 months)\", \"First randomized evidence supporting osimertinib for CNS disease control\"]}, \"safety_and_tolerability\": \"The abstract does not detail adverse events; however, osimertinib's safety profile in this trial is consistent with its known tolerability from earlier studies, with generally manageable side effects including rash, diarrhea, and paronychia.\", \"study_limitations\": [\"Open-label design may introduce bias\", \"Small sample size in measurable lesion subgroup (46 patients)\", \"Results specific to asymptomatic, stable CNS metastases; not generalizable to symptomatic or leptomeningeal disease\", \"Data cutoff date (April 15, 2016) suggests relatively immature survival data\"], \"conclusion\": \"The AURA3 trial establishes osimertinib as a highly effective treatment for CNS metastases in T790M-positive advanced NSCLC, demonstrating statistically significant improvements in CNS response rates, duration of response, and progression-free survival compared to platinum-pemetrexed chemotherapy. These findings address a critical unmet need for EGFR-TKIs with superior CNS penetration and support osimertinib as the standard of care for T790M-positive patients with brain involvement.\", \"clinical_trial_registration\": \"ClinicalTrials.gov NCT02151981\"}",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775294963039,
+      "timestamp": 1775320475101,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320524602,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320595637,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320649145,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320711935,
+      "type": "discovery",
+      "content": "Research: {\"paper_title\":\"CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\",\"authors\":\"Not specified in abstract\",\"source\":\"PubMed (NCT05444894)\",\"publication_date\":\"2024\",\"study_type\":\"Phase 1-2, multicenter, open-label, single-group clinical trial\",\"summary\":\"This study evaluates renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in HBG1 and HBG2 promoters, thereby reactivating fetal hemoglobin production.\",\"key_findings\":{\"participants\":9 patients (ages 18-35) with transfusion-dependent β-thalassemia,\"genotypes\":\"4 β0/β0 or β0/β0-like; 5 non-β0/β0\",\"follow_up\":\"Median 17.5 months (range 3.8-23.4 months)\",\"engraftment\":\"100% neutrophil and platelet engraftment by day 42\",\"transfusion_independence\":\"All 9 participants became transfusion-free; 6 evaluable at 12+ months remained transfusion-independent\",\"hemoglobin_levels\":\"Mean total Hb >12 g/dL and fetal Hb >11 g/dL between months 6-18\",\"safety\":\"69 grade 3/4 adverse events reported; 6 serious adverse events (infections, pyrexia, pneumonitis) in 4 participants; 1 patient with decreased lymphocytes attributed to reni-cel\"},\"methodology\":\"Participants received myeloablative conditioning with busulfan before reni-cel infusion. Primary endpoints were neutrophil engraftment by day 42 and adverse event frequency/severity. The study was terminated early based on sponsor's reassessment of clinical development priorities, and reported results were not prespecified.\",\"potential_applications\":[\"Treatment of transfusion-dependent β-thalassemia\",\"Potential application to other hemoglobinopathies (e.g., sickle cell disease)\",\"Autologous gene therapy approach minimizing graft-versus-host disease risk\",\"Possible expansion to younger patient populations\"],\"conclusions\":\"Reni-cel treatment demonstrated rapid neutrophil engraftment, significant fetal hemoglobin expression, and complete transfusion independence in all participants. Adverse events were consistent with myeloablative conditioning. These findings support continued investigation of Cas12a gene editing of HBG1/HBG2 promoters for β-thalassemia treatment.\",\"limitations\":[\"Small sample size (n=9)\",\"Non-prespecified analysis due to early study termination\",\"Limited long-term follow-up data\",\"Single-arm study design without control group\"],\"research_significance\":\"This represents one of the first clinical applications of CRISPR-Cas12a technology for hemoglobin disorders, demonstrating the potential of gene editing to achieve functional cure of β-thalassemia through fetal hemoglobin reactivation. The high rate of transfusion independence with manageable safety profile is clinically meaningful for patients with limited treatment options.\"}",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320760959,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320926342,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775320996430,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321056814,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321258667,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321349187,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321432775,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321502617,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321565224,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321636887,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321711063,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321808544,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321865573,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775321945662,
       "type": "discovery",
       "content": "Research: {",
       "importance": 0.7
     },
     {
-      "timestamp": 1775295033487,
+      "timestamp": 1775322038754,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775295087049,
+      "timestamp": 1775322101541,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: # Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775295152046,
-      "type": "discovery",
-      "content": "Research: This phase III randomized trial (AURA3) demonstrated superior central nervous system (CNS) efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC) who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. Osimertinib achieved significantly higher CNS objective response rates (70% vs 31% in measurable lesions; 40% vs 17% in all CNS lesions), longer duration of response (8.9 vs 5.7 months), and prolonged CNS progression-free survival (11.7 vs 5.6 months, HR=0.32). These findings establish osimertinib as the preferred treatment for EGFR-mutant NSCLC patients with T790M mutations and CNS metastases.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295239550,
-      "type": "discovery",
-      "content": "Research: The AURA3 phase III trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC and baseline CNS metastases. Osimertinib achieved significantly higher CNS objective response rates (70% vs 31% in measurable lesions; 40% vs 17% in all CNS lesions), longer duration of response (8.9 vs 5.7 months), and significantly improved CNS progression-free survival (11.7 vs 5.6 months; HR 0.32). These findings support osimertinib as an effective treatment option with improved CNS penetration for this patient population, addressing a significant unmet need for EGFR-TKIs with superior CNS activity.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295302449,
-      "type": "discovery",
-      "content": "Research: The AURA3 trial provides the first comparative phase III evidence demonstrating that osimertinib has superior CNS activity compared to platinum-based chemotherapy in T790M-positive advanced NSCLC. In patients with measurable CNS lesions, osimertinib achieved a 70% CNS objective response rate versus 31% for platinum-pemetrexed (OR 5.13, p=0.015). CNS progression-free survival was more than doubled (11.7 vs 5.6 months, HR 0.32, p=0.004). These results establish osimertinib as the preferred treatment for EGFR T790M-positive NSCLC patients with CNS metastases, addressing a critical unmet need for therapies with adequate brain penetration.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295367508,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295436933,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295526122,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295671341,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295797397,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775295888082,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296021743,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296098401,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296158175,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296227921,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296289755,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296411986,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296463634,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296549215,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296635103,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296783681,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296837916,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296905446,
-      "type": "discovery",
-      "content": "Research: This analysis from the AURA3 phase III trial provides the first comparative evidence of osimertinib superior CNS efficacy versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC patients with CNS metastases.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775296959804,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775297023760,
-      "type": "discovery",
-      "content": "Research: This paper reports the CNS (central nervous system) efficacy outcomes from the AURA3 phase III trial, comparing osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed after prior EGFR-tyrosine kinase inhibitor therapy. The study addressed a critical unmet need for treatments with improved CNS penetration in EGFR-mutant NSCLC.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775297120190,
+      "timestamp": 1775322242534,
       "type": "discovery",
       "content": "Research: {",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297176814,
+      "timestamp": 1775322315676,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297367577,
+      "timestamp": 1775322395121,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297432105,
+      "timestamp": 1775322453472,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297528809,
+      "timestamp": 1775322534105,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775322627553,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775322686882,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775322749791,
       "type": "discovery",
       "content": "Research: {",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297613116,
+      "timestamp": 1775322811547,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297734727,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775297785363,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775297897885,
+      "timestamp": 1775322877095,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775297955461,
+      "timestamp": 1775322947254,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298223480,
+      "timestamp": 1775323109737,
       "type": "discovery",
-      "content": "Research: {",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298440085,
+      "timestamp": 1775323191937,
       "type": "discovery",
-      "content": "Research: The AURA3 trial represents a pivotal randomized phase III study that established the superior CNS efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer who had progressed on prior EGFR-tyrosine kinase inhibitor therapy. The study demonstrated statistically significant improvements in CNS objective response rates, duration of response, and progression-free survival, marking osimertinib as the first targeted therapy to show comparative CNS activity in this patient population.",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298528746,
+      "timestamp": 1775323252917,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298581195,
+      "timestamp": 1775323322263,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298638583,
+      "timestamp": 1775323386046,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: Reni-cel demonstrates promising proof-of-concept for CRISPR-Cas12a-mediated gene editing of HBG1/HBG2 promoters in treating transfusion-dependent β-thalassemia. All patients achieved transfusion independence with rapid engraftment and significant increases in fetal hemoglobin. While adverse events were consistent with myeloablative conditioning and serious events were manageable, the early trial termination limits conclusions. The data support continued investigation of Cas12a gene editing approaches for β-hemoglobinopathies.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298725857,
+      "timestamp": 1775323532488,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298796958,
+      "timestamp": 1775323707473,
       "type": "discovery",
-      "content": "Research: The AURA3 phase III trial provides landmark evidence demonstrating that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating CNS metastases in EGFR T790M-positive advanced NSCLC. The 70% CNS ORR versus 31% for chemotherapy (p=0.015) and more than doubling of CNS PFS (11.7 vs 5.6 months, HR 0.32, p=0.004) establish osimertinib as the preferred treatment for this patient population. These findings address the critical unmet need for EGFR-targeted therapies with effective CNS penetration and represent a paradigm shift in managing EGFR-mutant NSCLC with brain metastases.",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298867841,
+      "timestamp": 1775323774607,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: This study evaluates renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia by reactivating fetal hemoglobin production through disruption of BCL11A binding sites in HBG1 and HBG2 promoters.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775298996840,
+      "timestamp": 1775323829809,
       "type": "discovery",
-      "content": "Research: This phase III randomized controlled trial (AURA3) demonstrated that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating CNS metastases in EGFR T790M-positive advanced NSCLC patients. Osimertinib achieved a 70% CNS objective response rate versus 31% for chemotherapy in patients with measurable CNS lesions, with a hazard ratio of 0.32 for CNS progression-free survival.",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299085488,
+      "timestamp": 1775323905706,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299162573,
+      "timestamp": 1775323966881,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299228839,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775299376864,
+      "timestamp": 1775324053893,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299443465,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775299502646,
-      "type": "discovery",
-      "content": "Research: This phase III randomized trial (AURA3) evaluated the CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed on prior EGFR-TKI therapy. The study demonstrated statistically significant superior CNS activity of osimertinib across all primary endpoints.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775299560015,
+      "timestamp": 1775324122483,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299632410,
+      "timestamp": 1775324204377,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299690874,
+      "timestamp": 1775324293322,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775299766898,
+      "timestamp": 1775324373305,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300030078,
+      "timestamp": 1775324450611,
       "type": "discovery",
-      "content": "Research: {",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300113636,
+      "timestamp": 1775324615134,
       "type": "discovery",
-      "content": "Research: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300167109,
+      "timestamp": 1775324670741,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300218028,
+      "timestamp": 1775324823225,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300279643,
+      "timestamp": 1775324902187,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300495174,
+      "timestamp": 1775324964510,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300537342,
+      "timestamp": 1775325051648,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325110265,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325204708,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325326900,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325427510,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325489269,
+      "type": "discovery",
+      "content": "Research: This Phase 1-2 clinical trial evaluated renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in the HBG1 and HBG2 promoters to reactivate fetal hemoglobin production.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325545912,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325719036,
+      "type": "discovery",
+      "content": "Research: Analysis of Train micro-transformer: medical",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325803198,
+      "type": "discovery",
+      "content": "Research: Analysis of Train micro-transformer: trading",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325892958,
+      "type": "discovery",
+      "content": "Research: Analysis of Train micro-transformer: trading",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775325967760,
+      "type": "discovery",
+      "content": "Research: ## Micro-Transformer Medical Training Analysis",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775326031726,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300600755,
+      "timestamp": 1775326121916,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: Analysis of Train micro-transformer: medical",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300697434,
+      "timestamp": 1775326235519,
       "type": "discovery",
-      "content": "Research: {",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775300811417,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775300859379,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301019900,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301085543,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301152118,
-      "type": "discovery",
-      "content": "Research: {",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301209844,
-      "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301275715,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301334693,
-      "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775301384542,
+      "timestamp": 1775326291485,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301465148,
+      "timestamp": 1775326356892,
       "type": "discovery",
-      "content": "Research: The AURA3 trial CNS efficacy analysis provides the first comparative evidence that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating brain metastases from T790M-positive NSCLC. With a 70% CNS ORR versus 31% for chemotherapy and an 11.7-month median CNS PFS compared to 5.6 months, osimertinib represents a paradigm shift in managing EGFR-mutant NSCLC with CNS involvement. The excellent CNS penetration of osimertinib addresses a critical unmet need, as brain metastases historically confer poor prognosis and limited treatment options in this population.",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301515114,
+      "timestamp": 1775326436831,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Phase III Trial",
+      "content": "Research: This study evaluates renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in the HBG1 and HBG2 promoters, thereby reactivating fetal hemoglobin production.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301652981,
+      "timestamp": 1775326511853,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301757427,
+      "timestamp": 1775326570064,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301818565,
+      "timestamp": 1775326655269,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301904392,
+      "timestamp": 1775326714987,
       "type": "discovery",
-      "content": "Research: The AURA3 phase III trial demonstrated statistically significant and clinically meaningful superior CNS efficacy of osimertinib over platinum-pemetrexed chemotherapy in T790M-positive advanced NSCLC patients with brain metastases. Osimertinib achieved 70% CNS ORR versus 31% for chemotherapy in patients with measurable lesions, with a 68% reduction in CNS progression risk. These findings establish osimertinib as the preferred treatment option for EGFR T790M-positive patients with CNS involvement, addressing a critical unmet need for targeted therapies with effective CNS penetration.",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775301978849,
+      "timestamp": 1775326773705,
       "type": "discovery",
       "content": "Research: <think>",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302058660,
+      "timestamp": 1775326839207,
       "type": "discovery",
-      "content": "Research: The AURA3 trial provides the first randomized Phase III evidence demonstrating superior CNS efficacy of osimertinib over platinum-based chemotherapy in T790M-positive advanced NSCLC patients with brain metastases. Osimertinib achieved 70% CNS ORR versus 31% for chemotherapy in patients with measurable lesions, with a hazard ratio of 0.32 for CNS progression-free survival. These results establish osimertinib as the preferred treatment for EGFR T790M-positive patients with CNS involvement.",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302116231,
+      "timestamp": 1775326917570,
       "type": "discovery",
-      "content": "Research: {\"summary\": \"The AURA3 trial provides the first comparative evidence of osimertinib's superior CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed on prior EGFR-TKI therapy. The phase III randomized trial enrolled 419 patients, of which 116 had CNS metastases. Osimertinib demonstrated significantly higher CNS objective response rates (70% vs 31% in measurable lesions; 40% vs 17% in all CNS lesions), longer CNS duration of response (8.9 vs 5.7 months), and significantly improved CNS progression-free survival (11.7 vs 5.6 months; HR 0.32).\", \"methodology\": \"AURA3 was a phase III randomized controlled trial (2:1 ratio) comparing osimertinib 80 mg once daily versus platinum-pemetrexed chemotherapy. Eligible patients had EGFR T790M-positive advanced NSCLC with asymptomatic, stable CNS metastases. The primary endpoint was CNS objective response rate assessed by blinded independent central neuroradiological review. Analysis included 46 patients with measurable CNS lesions and 116 with measurable and/or nonmeasurable lesions.\", \"key_findings\": {\"efficacy\": {\"measurable_CNS_lesions_ORR\": \"70% (osimertinib) vs 31% (chemotherapy); OR 5.13, P=0.015\", \"all_CNS_lesions_ORR\": \"40% (osimertinib) vs 17% (chemotherapy); OR 3.24, P=0.014\", \"CNS_duration_of_response\": \"8.9 months vs 5.7 months\", \"CNS_PFS\": \"11.7 months vs 5.6 months; HR 0.32, P=0.004\"}, \"population\": {\"total_randomized\": 419, \"CNS_metastases_patients\": 116, \"measurable_lesions\": 46, \"T790M_status\": \"All patients EGFR T790M-positive\"}}, \"clinical_applications\": {\"primary_use\": \"Osimertinib as preferred first-line treatment option for T790M-positive NSCLC patients with CNS metastases\", \"supportive_evidence\": \"Demonstrates superior CNS penetration and activity compared to standard chemotherapy\", \"clinical_utility\": \"Addresses unmet need for EGFR-TKIs with improved CNS penetration in EGFR mutation-positive NSCLC\"}, \"research_report\": \"**Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)**",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302165726,
+      "timestamp": 1775326970021,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302238765,
+      "timestamp": 1775327021872,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302290080,
+      "timestamp": 1775327075331,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302342306,
+      "timestamp": 1775327172681,
       "type": "discovery",
-      "content": "Research: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     },
     {
-      "timestamp": 1775302427290,
+      "timestamp": 1775327232561,
       "type": "discovery",
-      "content": "Research: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327305491,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327374340,
+      "type": "discovery",
+      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327436211,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327496661,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327571312,
+      "type": "discovery",
+      "content": "Research: This paper reports on a phase 1-2 clinical trial of renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in the HBG1 and HBG2 promoters to reactivate fetal hemoglobin (HbF) production.",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327738044,
+      "type": "discovery",
+      "content": "Research: <think>",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327854656,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775327947790,
+      "type": "discovery",
+      "content": "Research: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia",
       "importance": 0.7
     }
   ],
   "journal": [
     {
-      "timestamp": 1775293763699,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775319863259,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Randomization**: 2:1 ratio (osimertinib:platinum-pemetrexed) - **Treatment**: Osimertinib 80mg once daily vs platinum-pemetrexed chemotherapy - **Endpoints**:    - Primary: CNS objective response "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: 3. **Engraftment**: All participants achieved neutrophil and platelet engraftment by day 42. 4. **Safety**: 69 grade 3-4 adverse events reported; 6 serious adverse events (infections, pyrexia, pneumon"
     },
     {
-      "timestamp": 1775293838044,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775319938413,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal:   - In patients with measurable and/or nonmeasurable CNS lesions: 40% vs 17% — odds ratio 3.24 (95% CI: 1.33-8.81), P=0.014 - **CNS Duration of Response:** 8.9 months (osimertinib) vs 5.7 months (plat"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### 2. Study Design & Methodology **Participants:** - 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like; 5 non-β0/β0 **Intervention:**"
     },
     {
-      "timestamp": 1775293900227,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320007336,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: **Trial Design:** - Randomized 2:1 allocation (osimertinib : platinum-pemetrexed) - Preplanned subgroup analysis of CNS endpoints - Blinded independent central neuroradiological review (BICR) **Patien"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775293996758,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320071817,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Participants:** - Total randomized: 419 patients - Patients with CNS lesions: 116 (measurable and/or nonmeasurable) - Patients with measurable CNS lesions: 46 **Inclusion Criteria:** - EGFR T790M-po"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Participants: 9 patients aged 18-35 with transfusion-dependent β-thalassemia **Key Findings:** 1. All 9 participants had neutrophil and platelet engraftment by day 42 2. Rapid increases in total and"
     },
     {
-      "timestamp": 1775294076388,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320138013,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Median CNS duration of response:** 8.9 months vs 5.7 months - **Median CNS PFS:** 11.7 months vs 5.6 months — HR 0.32, P=0.004 ### Methodology **Study Design:** - Randomized, open-label, phase III"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775294168295,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320191559,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This research evaluates the central nervous system (CNS) efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced non-small-cell lung cancer (NSCLC\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2, Multicenter, Open-Label Study ### Study Objective The study evaluated renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic st"
     },
     {
-      "timestamp": 1775294250547,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320246152,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants: 9 individuals aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like and 5 non-β0/β0 genotypes **Treatment Protocol:** - Myeloablative"
     },
     {
-      "timestamp": 1775294333422,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320348060,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - CNS ORR in patients with measurable lesions: 70% (osimertinib) vs 31% (chemotherapy)    - CNS ORR in patients with measurable and/or nonmeasurable lesions: 40% vs 17%    - Median CNS duration of "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - All participants became transfusion-free at their last follow-up visit - 6 evaluable participants at 12+ months maintained transfusion independence - Mean total hemoglobin exceeded 12 g/dL and fetal"
     },
     {
-      "timestamp": 1775294467977,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320409562,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: ### Key Findings **Efficacy Results:** 1. **CNS Objective Response Rate (ORR) - Measurable Lesions:**    - Osimertinib: 70% (21/30 patients)    - Platinum-pemetrexed: 31% (5/16 patients)    - Odds Rat"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Sponsor:** Editas Medicine - **Study Type:** Phase 1-2, multicenter, open-label, single-group clinical trial ### Summary of Key Findings **Primary Outcomes:** 1. **Engraftment Success:** All nine "
     },
     {
-      "timestamp": 1775294518662,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320475101,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - 46 patients had measurable CNS lesions at baseline - Treatment: Osimertinib 80 mg once daily vs platinum-pemetrexed - Primary endpoint: CNS objective response rate (ORR) - Blinded independent centra"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal:    - Phase 1-2 clinical trial 2. **Key Information from Abstract:**    - **Objective**: Treat transfusion-dependent β-thalassemia by disrupting BCL11A binding sites in HBG1/HBG2 promoters to reactivat"
     },
     {
-      "timestamp": 1775294619400,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320524602,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Objective:** To evaluate the comparative CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed after prior EGFR-tyros"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Treatment Protocol**: Myeloablative conditioning with busulfan prior to reni-cel infusion - **Primary Endpoints**: Neutrophil engraftment by day 42, frequency and severity of adverse events - **Fo"
     },
     {
-      "timestamp": 1775294692096,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320595637,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: --- ### 2. Key Findings #### 2.1 Clinical Efficacy - **Transfusion Independence:** All 9 participants achieved transfusion-free status at their last follow-up visit - **Long-term Outcomes:** All 6 eva"
     },
     {
-      "timestamp": 1775294831599,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320649145,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"report_title\": \"CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC: AURA3 Trial Analysis\", \"introduction\": \"This report analyzes the AURA3 phase III trial (ClinicalTrials.gov: NCT02151981)\nProposal: See summary for details"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants: 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Treatment regimen: Myeloablative conditioning with busulfan followed by reni-cel infusion **Patient Demographics:"
     },
     {
-      "timestamp": 1775294963039,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320711935,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"design\": \"2:1 randomization to osimertinib 80mg once daily versus platinum-pemetrexed\",     \"total_patients\": 419,      \"patients_with_cns_lesions\": 116 (measurable and/or nonmeasurable), 46 with"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: {\"paper_title\":\"CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\",\"authors\":\"Not specified in abstract\",\"source\":\"PubMed (NCT05444894)\",\"publication_date\":\"2024\",\"study_typ\nProposal: See summary for details"
     },
     {
-      "timestamp": 1775295033487,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320760959,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Efficacy**: All 9 participants achieved transfusion-free status at last follow-up (median 17.5 months) - **Hemoglobin Levels**: Mean total hemoglobin >12 g/dL and fetal hemoglobin >11 g/dL between"
     },
     {
-      "timestamp": 1775295087049,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320926342,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs platinum-pemetrexed (n=16 with measurable lesions) - **Endpoints**:    - Primary: CNS objective response rate (ORR)  "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2 Clinical Trial ### Study Design & Methodology **Objective:** Evaluate the safety and efficacy of reni-cel, a CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy, in par"
     },
     {
-      "timestamp": 1775295152046,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775320996430,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) demonstrated superior central nervous system (CNS) efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive adv\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Sponsor:** Editas Medicine   **Source:** PubMed (PMID: 41931048) --- ### Background and Objective β-Thalassemia is a genetic blood disorder characterized by defective β-globin production, requiring "
     },
     {
-      "timestamp": 1775295239550,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321056814,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 phase III trial provides the first comparative evidence demonstrating that osimertinib has superior CNS efficacy compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-posi\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### Study Overview This Phase 1-2 multicenter, open-label, single-group clinical trial evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy desig"
     },
     {
-      "timestamp": 1775295302449,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321258666,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial provides the first comparative phase III evidence demonstrating that osimertinib has superior CNS activity compared to platinum-based chemotherapy in T790M-positive advanced NSCLC. In \nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### Methodology Summary The study evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalassemia. The"
     },
     {
-      "timestamp": 1775295367508,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321349187,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Treatment Protocol**:    - Myeloablative conditioning with busulfan before infusion   - Autologous hematopoietic stem cells edited ex vivo using CRISPR-Cas12a   - Disruption of BCL11A binding site"
     },
     {
-      "timestamp": 1775295436932,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321432774,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Osimertinib 80 mg once daily vs. platinum-pemetrexed - Preplanned subgroup analysis focusing on CNS outcomes **Patient Population:** - 419 total patients randomized - 116 patients had measurable and"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Sponsor:** Editas Medicine **Status:** Terminated early due to sponsor's reassessment of clinical development priorities ### 2. Key Findings #### Clinical Efficacy: - **100% transfusion-free rate**:"
     },
     {
-      "timestamp": 1775295526122,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321502617,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775295671341,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321565224,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - 100% transfusion independence achieved across all participants at their last follow-up visit - Among 6 evaluable participants at ≥12 months, all remained transfusion-independent - Mean total hemoglo"
     },
     {
-      "timestamp": 1775295797397,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321636887,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - 116 patients had measurable and/or nonmeasurable CNS lesions at baseline - 46 patients had measurable CNS lesions **Primary Endpoint - CNS Objective Response Rate (ORR):** - In measurable lesions: 7"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - ClinicalTrials.gov: NCT05444894 (EdiThal) - Funded by Editas Medicine **Participants:** - 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/"
     },
     {
-      "timestamp": 1775295888082,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321711063,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: See summary for details"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### 2. Methodology **Therapeutic Approach:** - **Product:** Renizgamglogene autogedtemcel (reni-cel) - **Technology:** CRISPR-Cas12a gene editing - **Target:** Disruption of BCL11A binding sites in HB"
     },
     {
-      "timestamp": 1775296021743,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321808544,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs platinum-pemetrexed (n=16 with measurable lesions) - **Endpoints**:    - Primary: CNS objective response rate (ORR)  "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775296098401,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321865573,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Comparison: Osimertinib vs platinum-pemetrexed - Key endpoints: CNS ORR, duration of response, CNS PFS Key findings from the abstract: 1. In patients with measurable CNS lesions: ORR 70% vs 31% (osi"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775296158175,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775321945662,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **1. Primary Endpoint - CNS Objective Response Rate (ORR):** - **Measurable CNS lesions (n=46):**     - Osimertinib: 70% (21/30) vs Platinum-pemetrexed: 31% (5/16)   - Odds Ratio: 5.13 (95% CI: 1.44-2"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: {\nProposal:   },   \"methodology\": {     \"approach\": \"CRISPR-Cas12a gene editing of autologous hematopoietic stem cells\",     \"target\": \"BCL11A binding sites in HBG1 and HBG2 promoters\",     \"mechanism\": \"Disrupti"
     },
     {
-      "timestamp": 1775296227921,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322038754,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - **Median CNS Duration of Response**: 8.9 months vs. 5.7 months - **Median CNS Progression-Free Survival**: 11.7 months vs. 5.6 months — hazard ratio 0.32 (95% CI: 0.15–0.69; P=0.004) ### Methodology"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775296289755,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322101541,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: # Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Sponsor:** Editas Medicine ## Study Overview This clinical trial evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfu"
     },
     {
-      "timestamp": 1775296411986,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322242534,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: {\nProposal:     \"participants\": \"9 patients aged 18-35 years with transfusion-dependent β-thalassemia (4 β0/β0 or β0/β0-like; 5 non-β0/β0 genotypes)\",     \"median_follow_up\": \"17.5 months (range: 3.8-23.4 months)"
     },
     {
-      "timestamp": 1775296463633,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322315676,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal:   - Osimertinib: 70% (21/30) vs Platinum-pemetrexed: 31% (5/16)   - Odds ratio: 5.13 (95% CI: 1.44-20.64); P = 0.015 - **Measurable and/or nonmeasurable CNS lesions:**   - Osimertinib: 40% (30/75) vs "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Myeloablative conditioning with busulfan before reni-cel infusion - Primary endpoints: neutrophil engraftment by 42 days and adverse events - Study terminated early by sponsor - Results: All 9 parti"
     },
     {
-      "timestamp": 1775296549215,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322395121,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment Arms**:   - Osimertinib: 80 mg once daily   - Platinum-pemetrexed: standard chemotherapy - **Eligibility**: Asymptomatic, stable CNS metastases - **Endpoints**:    - Primary: CNS objecti"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### Study Overview This Phase 1-2 clinical trial evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-t"
     },
     {
-      "timestamp": 1775296635103,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322453472,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: 1. Read and understand the paper - I have the abstract with key details 2. Summarize key findings and methodology - The abstract provides this 3. Identify potential applications - I can infer this fro"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2 ### Key Findings **Therapeutic Agent:** Renizgamglogene autogedtemcel (reni-cel) is an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to t"
     },
     {
-      "timestamp": 1775296783681,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322534105,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: --- ### 2. Key Findings #### Primary Endpoint - CNS Objective Response Rate (ORR): | Patient Population | Osimertinib (n/N) | Chemotherapy (n/N) | Odds Ratio | P-value | |---|---|---|---|---| | Measur"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775296837916,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322627553,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 2. Key Findings #### Primary Endpoint - CNS Objective Response Rate (ORR): | Population | Osimertinib (n/N) | Platinum-Pemetrexed (n/N) | Odds Ratio (95% CI) | P-value | |------------|------------"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775296905446,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322686882,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This analysis from the AURA3 phase III trial provides the first comparative evidence of osimertinib superior CNS efficacy versus platinum-pemetrexed chemotherapy in EGFR T790M-positive advanced NSCLC \nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### 2. Key Findings **Efficacy Results:** - All 9 participants achieved transfusion independence at their last follow-up visit - 6 evaluable participants (at 12+ months) maintained transfusion indepen"
     },
     {
-      "timestamp": 1775296959804,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322749791,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Patient Population:** - EGFR mutation-positive advanced NSCLC with T790M resistance mutation - Disease progression after prior EGFR-TKI treatment - Asymptomatic, stable CNS metastases at baseline - "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: {\nProposal:       \"hemoglobin_levels\": \"Mean total hemoglobin >12 g/dL and fetal hemoglobin >11 g/dL between months 6-18\",       \"median_followup\": \"17.5 months (range, 3.8 to 23.4)\"     },     \"safety\": {       "
     },
     {
-      "timestamp": 1775297023760,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322811547,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This paper reports the CNS (central nervous system) efficacy outcomes from the AURA3 phase III trial, comparing osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Treatment Protocol**:    - Myeloablative conditioning with busulfan prior to reni-cel infusion   - Autologous hematopoietic stem cell infusion with CRISPR-Cas12a editing - **Primary Endpoints**: N"
     },
     {
-      "timestamp": 1775297120190,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322877095,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"journal\": \"Journal of Clinical Oncology\",     \"sponsor\": \"AstraZeneca\"   },   \"background\": {     \"disease_context\": \"Epidermal growth factor receptor (EGFR) mutation-positive advanced non-small-"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. **Study Design**: Phase 1-2, multicenter, open-label, single-group study 5. **Participants**: 9 participants aged 18-35 years with transfusion-dependent β-thalassemia 6. **Treatment**: Myeloablativ"
     },
     {
-      "timestamp": 1775297176814,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775322947254,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal:    - Summarize key findings and methodology    - Identify potential applications    - Write a concise research report The abstract provided already contains substantial information about the study: - "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - The 6 participants evaluable at 12+ months remained transfusion-free - Mean total hemoglobin levels exceeded 12 g/dL between months 6-18 - Mean fetal hemoglobin levels exceeded 11 g/dL during the sa"
     },
     {
-      "timestamp": 1775297367577,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323109737,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775297432105,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323191937,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** Phase 1-2 ### 2. Key Findings **Patient Population:** - 9 participants aged 18-35 years with transfusion-dependent β-thalassemia - 4 participants with β0/β0 or β0/β0-like genotypes - 5 part"
     },
     {
-      "timestamp": 1775297528809,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323252917,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:   },   \"methodology\": {     \"study_design\": \"Randomized Phase III trial (AURA3)\",     \"patient_population\": {       \"total_randomized\": 419 patients,       \"with_CNS_involvement\": 116 patients (measur"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### 2. Key Findings - **Participant Demographics:** 9 participants (ages 18-35) with transfusion-dependent β-thalassemia; 4 with β0/β0 or β0/β0-like genotypes and 5 with non-β0/β0 genotypes - **Engraf"
     },
     {
-      "timestamp": 1775297613116,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323322263,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Genotypes**: Four β0/β0 or β0/β0-like and five non-β0/β0 genotypes - **Treatment Protocol**:    - Myeloablative conditioning with busulfan prior to reni-cel infusion   - Autologous hematopoietic s"
     },
     {
-      "timestamp": 1775297734727,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323386046,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Reni-cel demonstrates promising proof-of-concept for CRISPR-Cas12a-mediated gene editing of HBG1/HBG2 promoters in treating transfusion-dependent β-thalassemia. All patients achieved transfusion indep\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775297785363,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323532488,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=419) vs platinum-pemetrexed - **Primary Endpoint**: CNS objective response rate (ORR) - **Assessment**: Blinded independent central neuroradiologica"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775297897885,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323707473,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Primary endpoint: CNS objective response rate (ORR) - Results:   - In measurable CNS lesions: 70% ORR (osimertinib) vs 31% (platinum-pemetrexed)   - In measurable + nonmeasurable: 40% vs 17%   - Med"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants (n=9) aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like; 5 non-β0/β0 **Intervention:** - Myeloablative conditioning with busulfan "
     },
     {
-      "timestamp": 1775297955461,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323774607,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal:   - Odds Ratio: 5.13 (95% CI: 1.44-20.64), p=0.015 - **Measurable and/or nonmeasurable CNS lesions:** 40% (30/75) vs. 17% (7/41)   - Odds Ratio: 3.24 (95% CI: 1.33-8.81), p=0.014 **2. Duration of Resp"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: This study evaluates renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalass\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775298223480,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323829809,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"population\": \"EGFR T790M-positive advanced NSCLC with CNS metastases\",     \"total_enrolled\": 419 patients (116 with CNS lesions; 46 with measurable lesions)\"   },   \"methodology\": {     \"eligibil"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Targeted disruption of BCL11A binding sites in HBG1 and HBG2 promoters - Goal: Reactivate expression of γ-globin (fetal hemoglobin) to compensate for defective β-globin **Study Design:** - Phase 1-2"
     },
     {
-      "timestamp": 1775298440085,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323905706,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial represents a pivotal randomized phase III study that established the superior CNS efficacy of osimertinib compared to platinum-pemetrexed chemotherapy in patients with EGFR T790M-posit\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775298528746,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775323966881,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Genotypes**: Four β0/β0 or β0/β0-like; five non-β0/β0 genotypes - **Treatment Protocol**: Myeloablative conditioning with busulfan before reni-cel infusion - **Primary Endpoints**: Neutrophil engr"
     },
     {
-      "timestamp": 1775298581195,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324053893,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Treatment Arms**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs. platinum-pemetrexed (n=16 with measurable lesions) - **Assessment**: Blinded independent central neuroradiological"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 3. Results (9 participants, all achieved transfusion independence) 4. Safety profile (adverse events consistent with myeloablative conditioning) I have already attempted to search the reference corpus"
     },
     {
-      "timestamp": 1775298638583,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324122483,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: **Study Design:** - Phase III randomized controlled trial (ClinicalTrials.gov: NCT02151981) - 2:1 randomization ratio - Treatment arms: Osimertinib 80 mg once daily vs. platinum-pemetrexed **Patient P"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. Myeloablative conditioning with busulfan before infusion 5. Primary endpoints: neutrophil engraftment by 42 days, adverse events 6. 9 participants received treatment 7. Results: All participants ha"
     },
     {
-      "timestamp": 1775298725857,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324204377,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Participants**: 9 patients aged 18-35 years with transfusion-dependent β-thalassemia (4 β0/β0 or β0/β0-like; 5 non-β0/β0 genotypes) - **Treatment Protocol**: Myeloablative conditioning with busulf"
     },
     {
-      "timestamp": 1775298796958,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324293322,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 phase III trial provides landmark evidence demonstrating that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating CNS metastases in EGFR T790M-positive advance\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants: 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Genotype distribution: 4 β0/β0 or β0/β0-like; 5 non-β0/β0 **Treatment Protocol:** - Myeloablative conditioning wi"
     },
     {
-      "timestamp": 1775298867841,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324373305,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775298996840,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324450611,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized controlled trial (AURA3) demonstrated that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating CNS metastases in EGFR T790M-positive advanced N\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775299085488,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324615134,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775299162573,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324670741,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - Platinum-pemetrexed (n=16 with measurable lesions, n=41 with measurable/nonmeasurable) - Randomization: 2:1 ratio **Eligibility:** Patients with asymptomatic, stable CNS metastases **Assessment:** B"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Genotype Distribution:** 4 β0/β0 or β0/β0-like; 5 non-β0/β0 genotypes - **Intervention:** Myeloablative conditioning with busulfan followed by reni-cel infusion - **Gene Editing Target:** Disrupti"
     },
     {
-      "timestamp": 1775299228839,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324823225,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: --- ### 2. Methodology **Target:** Disruption of BCL11A binding sites in HBG1 and HBG2 promoters using CRISPR-Cas12a **Intervention:** - Autologous hematopoietic stem-cell therapy - Myeloablative cond"
     },
     {
-      "timestamp": 1775299376864,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324902187,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Comparison: Osimertinib 80mg daily vs platinum-pemetrexed - Primary endpoint: CNS objective response rate (ORR) - Sample: 419 total patients, 116 with CNS lesions (46 measurable) - Results:   - Meas"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Phase:** Phase 1-2 --- ### Study Overview This clinical trial investigated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat trans"
     },
     {
-      "timestamp": 1775299443465,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775324964510,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - Phase III randomized controlled trial (AURA3; ClinicalTrials.gov: NCT02151981) - 2:1 randomization ratio - Treatment arms: Osimertinib 80 mg once daily vs. platinum-pemetrexed **Patient Population:*"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Rapid increases in total and fetal hemoglobin levels observed - 100% transfusion-free status at last follow-up across all participants - Six evaluable participants at ≥12 months maintained transfusi"
     },
     {
-      "timestamp": 1775299502646,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325051648,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: This phase III randomized trial (AURA3) evaluated the CNS efficacy of osimertinib versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed on prior EG\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775299560015,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325110265,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Conclusion about osimertinib's superior CNS efficacy The user wants me to: 1. Read and understand the paper 2. Summarize key findings and methodology 3. Identify potential applications 4. Write a co"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Sponsor**: Editas Medicine ### Study Overview This paper reports preliminary results from a Phase 1-2 clinical trial evaluating reni-cel, an investigational CRISPR-Cas12a gene-edited autologous he"
     },
     {
-      "timestamp": 1775299632409,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325204708,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Primary Endpoint - CNS Objective Response Rate (ORR):** - In patients with measurable CNS lesions: **70% (osimertinib) vs 31% (platinum-pemetrexed)**   - Odds Ratio: 5.13 (95% CI: 1.44-20.64), P = 0"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2, multicenter, open-label clinical trial --- ### Key Findings **1. Efficacy Results:** - **100% transfusion-free rate:** All 9 participants achieved transfusion independence at their las"
     },
     {
-      "timestamp": 1775299690874,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325326900,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### Study Design and Methodology **Objective**: Evaluate CNS efficacy of osimertinib versus platinum-pemetrexed in EGFR T790M-positive advanced NSCLC patients with CNS metastases. **Population**: - To"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Intervention:** - Autologous hematopoietic stem cells were harvested from participants - Cells were gene-edited using CRISPR-Cas12a technology to disrupt BCL11A binding sites in HBG1 and HBG2 promot"
     },
     {
-      "timestamp": 1775299766898,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325427510,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: See summary for details"
     },
     {
-      "timestamp": 1775300030078,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325489269,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"total_enrolled\": 419 patients (randomized 2:1), with 116 having CNS lesions (46 measurable)\"   },   \"key_findings\": {     \"primary_endpoint_cns_response\": {       \"measurable_CNS_lesions\": {     "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: This Phase 1-2 clinical trial evaluated renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775300113635,
-      "action": "research:wo_1775222161372_ymzyk7h9k",
+      "timestamp": 1775325545911,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nSummary: Analysis of AVIFAVIR for Treatment of Patients With Moderate Coronavirus Disease 2019 (COVID-19): Interim Results of a Phase II/III Multicenter Randomized Clinical Trial\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775300167109,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325719036,
+      "action": "research:wo_training_1775325600452_tku8uu0",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - Osimertinib 80 mg once daily vs. platinum-pemetrexed - Preplanned subgroup analysis focusing on CNS outcomes **Patient Population:** - 419 total patients randomized - 116 patients had measurable and"
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: Analysis of Train micro-transformer: medical\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775300218028,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325803198,
+      "action": "research:wo_training_1775325600326_a03uc10",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: - **Treatment Arms**: Osimertinib 80 mg daily (n=30 measurable, n=75 total CNS) vs platinum-pemetrexed - **Assessment**: Blinded independent central neuroradiological review (BICR) - **Primary Endpoin"
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: Analysis of Train micro-transformer: trading\nProposal: See summary for details"
     },
     {
-      "timestamp": 1775300279643,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325892958,
+      "action": "research:wo_training_1775325600363_3hqb1ib",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: --- ### 2. Study Design and Methodology **Patient Population:** - EGFR mutation-positive advanced NSCLC patients with T790M mutation - Disease progression after prior EGFR-tyrosine kinase inhibitor (T"
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: Analysis of Train micro-transformer: trading\nProposal: See summary for details"
     },
     {
-      "timestamp": 1775300495174,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775325967760,
+      "action": "research:wo_training_1775325600461_8j8hzja",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: **Secondary Endpoint Results:** - Median CNS duration of response: 8.9 months vs 5.7 months - Median CNS progression-free survival: 11.7 months vs 5.6 months (HR 0.32, P=0.004) ### 2. Methodology Summ"
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: ## Micro-Transformer Medical Training Analysis\nProposal: ### Current Performance Assessment The current best loss of **999** is extremely high, indicating the model has not yet begun to converge effectively. This is typical for early-stage training on medic"
     },
     {
-      "timestamp": 1775300537342,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326031725,
+      "action": "research:wo_training_1775325600462_72v8wx0",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Primary endpoint: CNS objective response rate (ORR) Results: - 116 patients with measurable and/or nonmeasurable CNS lesions, 46 with measurable lesions - CNS ORR (measurable lesions): 70% (osimerti"
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nProposal: - It's about medical domain - Uses a synthetic dataset (text8-sample) - Has a time constraint of 300 seconds - Currently has a very high loss (999) which indicates training hasn't converged or is just"
     },
     {
-      "timestamp": 1775300600755,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326121916,
+      "action": "research:wo_training_1775325600452_u9ghwq8",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: Analysis of Train micro-transformer: medical\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775300697434,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326235519,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal:     \"study_objective\": \"To provide the first comparative evidence of osimertinib CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC who progressed"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Objective:** Evaluate safety and efficacy of reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy, in participants with transfusion-dependent β-thalassem"
     },
     {
-      "timestamp": 1775300811417,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326291485,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: #### Primary Efficacy Outcomes (CNS Objective Response Rate): | Population | Osimertinib | Platinum-Pemetrexed | Odds Ratio | P-value | |------------|-------------|---------------------|------------|-"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. Results show transfusion independence in all participants 5. Rapid neutrophil engraftment and increases in fetal hemoglobin I have enough information from the abstract to provide a comprehensive an"
     },
     {
-      "timestamp": 1775300859379,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326356892,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily vs. platinum-pemetrexed - **Endpoints**:    - Primary: CNS objective response rate (ORR)   - Secondary: CNS duration of response, CNS progression-free "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775301019900,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326436831,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: This study evaluates renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat transfusion-dependent β-thalass\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775301085543,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326511853,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 1. Study Background & Purpose **Unmet Need:** - Patients with EGFR mutation-positive advanced NSCLC often develop CNS (brain) metastases - Existing EGFR-tyrosine kinase inhibitors have limited CNS"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775301152118,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326570064,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\nProposal: \"registration\": \"2:1 randomization (osimertinib:platinum-pemetrexed)\", \"sample_size\": 419, \"total_patients_with_cns_lesions\": 116 (measurable and/or nonmeasurable), 46 with measurable lesions }, \"key_"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Treatment Protocol**: Myeloablative conditioning with busulfan before reni-cel infusion - **Primary Endpoints**: Neutrophil engraftment by day 42; frequency and severity of adverse events - **Mech"
     },
     {
-      "timestamp": 1775301209844,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326655269,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Follow-up:** Median duration of 17.5 months (range: 3.8 to 23.4 months) - **Engraftment:** All participants achieved neutrophil and platelet engraftment by day 42 - **Efficacy:** All 9 participant"
     },
     {
-      "timestamp": 1775301275715,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326714987,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 2. Study Design & Methodology **Objective:** Evaluate CNS efficacy of osimertinib versus platinum-pemetrexed in EGFR T790M-positive advanced NSCLC patients with CNS metastases. **Study Design:** P"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775301334693,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326773705,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 2. Key Findings **Patient Population:** - Total randomized: 419 patients - Patients with CNS lesions: 116 (measurable and/or nonmeasurable) - Patients with measurable CNS lesions: 46 **Primary Eff"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: - Technology: CRISPR-Cas12a gene editing - Target: BCL11A binding sites in HBG1 and HBG2 promoters - Purpose: Reactivate fetal hemoglobin production - Study Design: Phase 1-2, multicenter, open-label,"
     },
     {
-      "timestamp": 1775301384542,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326839207,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: 4. Write a concise research report The abstract already contains most of the key information: - Study: AURA3 phase III trial - Population: EGFR T790M-positive advanced NSCLC with CNS metastases - Meth"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Publication Source:** PubMed (ID: 41931048) ### Study Overview This phase 1-2 clinical trial evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell the"
     },
     {
-      "timestamp": 1775301465148,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326917570,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial CNS efficacy analysis provides the first comparative evidence that osimertinib significantly outperforms platinum-pemetrexed chemotherapy in treating brain metastases from T790M-positi\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775301515114,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775326970021,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Phase III Trial\nProposal: **Secondary Endpoints:** - Median CNS duration of response: 8.9 months vs 5.7 months - Median CNS progression-free survival: 11.7 months vs 5.6 months — HR 0.32 (95% CI: 0.15–0.69), p=0.004 ### Method"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### Study Overview This phase 1-2 multicenter, open-label, single-group clinical trial evaluated reni-cel, an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy desig"
     },
     {
-      "timestamp": 1775301652981,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327021872,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### 2. Study Background & Rationale Patients with epidermal growth factor receptor (EGFR) mutation-positive advanced non-small-cell lung cancer (NSCLC) frequently develop CNS metastases, which are ass"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Primary Outcomes**:   - All 9 participants achieved neutrophil and platelet engraftment by day 42   - All participants achieved transfusion independence at their last follow-up   - 6 evaluable par"
     },
     {
-      "timestamp": 1775301757427,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327075331,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - All participants were transfusion-free at their last follow-up visit - Among 6 participants evaluable at ≥12 months, all remained transfusion-independent - Mean total hemoglobin levels exceeded 12 g"
     },
     {
-      "timestamp": 1775301818565,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327172681,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: ### Background & Clinical Need - Patients with EGFR mutation-positive advanced NSCLC frequently develop CNS (brain) metastases - Standard EGFR tyrosine kinase inhibitors (TKIs) have limited CNS penetr"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - 100% transfusion independence achieved (9/9 participants) - Among 6 participants evaluable at ≥12 months, all remained transfusion-independent - Mean total hemoglobin >12 g/dL and fetal hemoglobin >"
     },
     {
-      "timestamp": 1775301904392,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327232561,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 phase III trial demonstrated statistically significant and clinically meaningful superior CNS efficacy of osimertinib over platinum-pemetrexed chemotherapy in T790M-positive advanced NSCLC p\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: 3. **Engraftment**: All participants achieved neutrophil and platelet engraftment by day 42 after infusion. 4. **Safety Profile**: 69 grade 3-4 adverse events reported across 9 participants. Six serio"
     },
     {
-      "timestamp": 1775301978849,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327305491,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: <think>\nProposal: - Primary endpoint: CNS objective response rate (ORR) - Results:   - Measurable CNS lesions: 70% ORR (osimertinib) vs 31% (chemotherapy)   - Measurable and/or nonmeasurable: 40% vs 17%   - CNS DoR: 8."
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Six evaluable participants maintained transfusion independence at 12+ months - Mean total hemoglobin exceeded 12 g/dL and fetal hemoglobin exceeded 11 g/dL between months 6-18 - Median follow-up dur"
     },
     {
-      "timestamp": 1775302058660,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327374340,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: The AURA3 trial provides the first randomized Phase III evidence demonstrating superior CNS efficacy of osimertinib over platinum-based chemotherapy in T790M-positive advanced NSCLC patients with brai\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775302116231,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327436210,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: {\"summary\": \"The AURA3 trial provides the first comparative evidence of osimertinib's superior CNS efficacy versus platinum-pemetrexed chemotherapy in patients with EGFR T790M-positive advanced NSCLC \nProposal: See summary for details"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: ### Study Overview This Phase 1-2 clinical trial investigated renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed"
     },
     {
-      "timestamp": 1775302165726,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327496661,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC (AURA3 Trial)\nProposal: - **Eligibility:** Asymptomatic, stable CNS metastases - **Intervention:** Osimertinib 80 mg once daily (n=279) vs platinum-pemetrexed (n=140) - **Assessment:** Blinded independent central neuroradiol"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - **Genotypes**: 4 with β0/β0 or β0/β0-like genotypes; 5 with non-β0/β0 genotypes - **Conditioning**: Myeloablative busulfan conditioning before reni-cel infusion - **Target**: Disruption of BCL11A bi"
     },
     {
-      "timestamp": 1775302238765,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327571312,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in T790M-Positive Advanced NSCLC\nProposal: **Key Findings** 1. **CNS Objective Response Rate (Measurable Lesions):**    - Osimertinib: 70% (21/30 patients; 95% CI: 51%-85%)    - Platinum-pemetrexed: 31% (5/16 patients; 95% CI: 11%-59%)    - Od"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: This paper reports on a phase 1-2 clinical trial of renizgamglogene autogedtemcel (reni-cel), an investigational CRISPR-Cas12a gene-edited autologous hematopoietic stem-cell therapy designed to treat \nProposal: No proposal generated"
     },
     {
-      "timestamp": 1775302290080,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327738044,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 with measurable lesions) vs platinum-pemetrexed (n=16 with measurable lesions) - **Endpoints**:    - Primary: CNS objective response rate (ORR)  "
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 3. **Study Design**: Phase 1-2, multicenter, open-label, single-group study 4. **Participants**: 9 participants aged 18-35 with transfusion-dependent β-thalassemia 5. **Treatment**: Myeloablative cond"
     },
     {
-      "timestamp": 1775302342306,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327854656,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: ## Research Report: CNS Efficacy of Osimertinib in AURA3 Trial\nProposal: - **Intervention**: Osimertinib 80 mg once daily (n=30 measurable, n=75 total CNS) vs platinum-pemetrexed (n=16 measurable, n=41 total CNS) - **Endpoints**: Primary - CNS objective response rate (ORR)"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: - Participants: 9 patients aged 18-35 years with transfusion-dependent β-thalassemia - Genotypes: Four β0/β0 or β0/β0-like; five non-β0/β0 genotypes **Intervention:** - Myeloablative conditioning with"
     },
     {
-      "timestamp": 1775302427290,
-      "action": "research:wo_1775222161406_d0wxdb5gw",
+      "timestamp": 1775327947790,
+      "action": "research:wo_1775308626282_geyumoypl",
       "outcome": "completed",
-      "lesson": "Paper: CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nSummary: Analysis of CNS Efficacy of Osimertinib in Patients With T790M-Positive Advanced Non-Small-Cell Lung Cancer: Data From a Randomized Phase III Trial (AURA3).\nProposal: No proposal generated"
+      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: ## Research Report: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat β-Thalassemia\nProposal: **Phase:** 1-2, multicenter, open-label, single-group study ### Study Design and Methodology - **Participants:** 9 patients aged 18-35 years with transfusion-dependent β-thalassemia (4 with β0/β0 or β"
     }
   ],
   "strategy": {
