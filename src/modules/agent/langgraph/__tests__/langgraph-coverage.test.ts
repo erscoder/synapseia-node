@@ -246,12 +246,16 @@ describe('SubmitResultNode', () => {
     expect(result.submitted).toBe(true);
   });
 
-  // Skipped: Jest ESM cannot reliably mock fetch via WorkOrderCoordinatorHelper
-  // in this test context — requires significant refactoring to inject mock coordinator
-  it.skip('returns submitted=false when coordinator errors', async () => {
-    (fetchSpy as any).mockResolvedValueOnce({ ok: false, text: async () => 'error' });
-
-    const result = await node.execute(makeState({
+  // Coordinator mock failure test — override the module-level mock
+  it('returns submitted=false when coordinator errors', async () => {
+    // Override only the submit method to reject, keeping module-level mock for other methods
+    const failingCoordinator = {
+      ...coordinator,
+      submitWorkOrderResult: (jest.fn() as any).mockRejectedValue(new Error('Coordinator error')),
+      completeWorkOrder: (jest.fn() as any).mockResolvedValue(false),
+    };
+    const failingNode = new SubmitResultNode(failingCoordinator as any);
+    const result = await failingNode.execute(makeState({
       selectedWorkOrder: { ...makeResearchWO(), id: `wo_err_${Date.now()}` },
       executionResult: { result: 'result', success: true },
     }));
