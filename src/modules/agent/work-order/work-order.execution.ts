@@ -32,12 +32,11 @@ const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
 @Injectable()
 export class WorkOrderExecutionHelper {
-  private readonly llmProvider = new LlmProviderHelper();
-  private readonly researchTeam = new ResearchTeamService(this.llmProvider);
-
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly evaluation: WorkOrderEvaluationHelper,
+    private readonly llmProvider: LlmProviderHelper,
+    private readonly researchTeam: ResearchTeamService,
   ) {}
 
   // ── Type detection ────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 /**
- * ResearchTeamService — multi-agent research pipeline using open-multi-agent.
+ * ResearchTeamService — multi-agent research pipeline.
  *
  * Pipeline: researcher → critic → synthesizer
  * - Shared memory: critic reads researcher's output; synthesizer reads both
@@ -7,6 +7,7 @@
  * - Fallback: direct LLM call if team fails
  */
 
+import { Injectable } from '@nestjs/common';
 import type { LLMConfig, LLMModel } from '../../llm/llm-provider.js';
 
 /**
@@ -37,6 +38,7 @@ export interface TeamResearchResult {
   proposal: string;
 }
 
+@Injectable()
 export class ResearchTeamService {
   constructor(
     private readonly llmProvider: {
@@ -107,7 +109,7 @@ ${contextBlock ? contextBlock + '\n\n' : ''}Provide a structured analysis in JSO
   "summary": "2-3 sentence summary of the paper's main contribution and significance",
   "keyInsights": [
     "Concrete finding or contribution 1",
-    "Concrete finding or contribution 2", 
+    "Concrete finding or contribution 2",
     "Concrete finding or contribution 3"
   ],
   "proposal": "A specific, testable next step or experiment building on this research"
