@@ -151,6 +151,15 @@ export class ExecuteResearchNode {
       // Strip <think>...</think> blocks (reasoning models)
       jsonStr = jsonStr.replace(/[\s\S]*?<\/think>/gi, '');
 
+      // Sanitize control characters inside JSON string values (tabs, newlines, etc.)
+      // eslint-disable-next-line no-control-regex
+      jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
+        if (ch === '\n') return '\\n';
+        if (ch === '\r') return '\\r';
+        if (ch === '\t') return '\\t';
+        return '';
+      });
+
       const parsed = JSON.parse(jsonStr) as ReActThought;
 
       // Validate required fields
@@ -213,6 +222,15 @@ export class ExecuteResearchNode {
         .replace(/```\s*$/g, '')
         .replace(/[\s\S]*?<\/think>/gi, '')
         .trim();
+
+      // Sanitize control characters
+      // eslint-disable-next-line no-control-regex
+      jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
+        if (ch === '\n') return '\\n';
+        if (ch === '\r') return '\\r';
+        if (ch === '\t') return '\\t';
+        return '';
+      });
 
       // Extract JSON object
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
