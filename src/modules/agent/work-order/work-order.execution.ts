@@ -71,11 +71,20 @@ export class WorkOrderExecutionHelper {
   }
 
   extractResearchPayload(workOrder: WorkOrder): ResearchPayload | null {
+    // Try JSON format first
     try {
       const p = JSON.parse(workOrder.description);
       if (p.title && p.abstract) return { title: p.title, abstract: p.abstract };
-      return null;
-    } catch { return null; }
+    } catch { /* not JSON */ }
+
+    // Fallback: use WO title + description as plain text
+    if (workOrder.title && workOrder.description) {
+      return {
+        title: workOrder.title,
+        abstract: workOrder.description.slice(0, 2000),
+      };
+    }
+    return null;
   }
 
   // ── Research ──────────────────────────────────────────────────────────────
