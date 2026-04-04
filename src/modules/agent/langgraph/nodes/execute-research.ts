@@ -192,7 +192,19 @@ export class ExecuteResearchNode {
     return wo.description ?? '';
   }
 
-  private buildResearchResult(answer: string, title: string): ResearchResult {
+  private buildResearchResult(answer: string | Record<string, unknown>, title: string): ResearchResult {
+    // Ensure answer is a string
+    if (typeof answer !== 'string') {
+      // If it's already a structured object, try to use it directly
+      if (answer && typeof answer === 'object') {
+        return {
+          summary: String((answer as any).summary || `Analysis of ${title}`),
+          keyInsights: Array.isArray((answer as any).keyInsights) ? (answer as any).keyInsights : [],
+          proposal: String((answer as any).proposal || (answer as any).hypothesis || 'See summary'),
+        };
+      }
+      answer = String(answer);
+    }
     // Try to parse as JSON result
     try {
       // Strip markdown and thinking blocks
@@ -218,7 +230,8 @@ export class ExecuteResearchNode {
       };
     } catch {
       // Fallback: create structured result from raw answer
-      const lines = answer.split('\n').filter(l => l.trim());
+      const answerStr = typeof answer === 'string' ? answer : JSON.stringify(answer);
+      const lines = answerStr.split('\n').filter(l => l.trim());
       return {
         summary: lines[0] || `Analysis of ${title}`,
         keyInsights: lines.slice(1, 6),
