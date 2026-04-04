@@ -70,8 +70,15 @@ const { ToolRunnerService } = require('../tools/tool-runner.service');
 const { ToolRegistry } = require('../tools/tool-registry');
 const { LangGraphLlmService } = require('../llm.service');
 const { AgentBrainHelper } = require('../../agent-brain');
+const { LlmProviderHelper } = require('../../../llm/llm-provider');
+const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
+const { ResearcherNode } = require('../nodes/researcher-node');
+const { CriticNode } = require('../nodes/critic-node');
+const { SynthesizerNode } = require('../nodes/synthesizer-node');
 
 function buildService(): AgentGraphService {
+  const llmProvider = new LlmProviderHelper();
+  const coordinator = new WorkOrderCoordinatorHelper();
   return new AgentGraphService(
     new FetchWorkOrdersNode(),
     new SelectWorkOrderNode(),
@@ -91,6 +98,9 @@ function buildService(): AgentGraphService {
     new RetrieveMemoryNode(),
     new PlanExecutionNode(mockLlmService as any),
     new SelfCritiqueNode(mockLlmService as any),
+    new ResearcherNode(llmProvider, coordinator),
+    new CriticNode(llmProvider, coordinator),
+    new SynthesizerNode(llmProvider, coordinator),
     new AgentBrainHelper(),
   );
 }

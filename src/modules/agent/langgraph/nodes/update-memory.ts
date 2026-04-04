@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
+import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { AgentBrainHelper } from '../../agent-brain';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
@@ -14,6 +15,7 @@ export class UpdateMemoryNode {
     this.execution = new WorkOrderExecutionHelper(
       new WorkOrderCoordinatorHelper(),
       new WorkOrderEvaluationHelper(),
+      new LlmProviderHelper(),
     );
   }
 

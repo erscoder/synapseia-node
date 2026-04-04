@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { LlmProviderHelper } from '../../../llm/llm-provider';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
@@ -14,6 +15,7 @@ export class QualityGateNode {
   private readonly execution = new WorkOrderExecutionHelper(
     new WorkOrderCoordinatorHelper(),
     new WorkOrderEvaluationHelper(),
+    new LlmProviderHelper(),
   );
   private lastSubmissionAt = 0;
 

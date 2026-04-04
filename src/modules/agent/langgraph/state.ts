@@ -91,6 +91,12 @@ export interface AgentState {
   selfCritiqueFeedback?: string;
   /** Number of retries attempted */
   retryCount?: number;
+  /** Multi-agent research pipeline: raw output from the researcher agent */
+  researcherOutput?: string;
+  /** Multi-agent research pipeline: output from the critic agent */
+  criticOutput?: string;
+  /** Multi-agent research pipeline: parsed payload for the current research */
+  researchPayload?: { title: string; abstract: string } | null;
 }
 
 /**
