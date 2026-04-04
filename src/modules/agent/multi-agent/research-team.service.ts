@@ -22,7 +22,7 @@ class SimpleMemory {
   }
 
   read(agent: string, key: string): string {
-    return this.store.get(agent)?.get(key) ?? '';
+    return this.store.get(agent)?.[key] ?? '';
   }
 }
 
