@@ -264,6 +264,7 @@ export class HardwareHelper {
     if (!allModels || allModels.length === 0) {
       // Default model catalog (subset of full catalog)
       const defaultModels: ModelInfo[] = [
+        { name: 'qwen2.5-3b', minVram: 4, recommendedTier: 2 },
         { name: 'qwen2.5-0.5b', minVram: 1, recommendedTier: 1 },
         { name: 'gemma-3-1b-web', minVram: 2, recommendedTier: 1 },
         { name: 'phi-2', minVram: 2, recommendedTier: 1 },
