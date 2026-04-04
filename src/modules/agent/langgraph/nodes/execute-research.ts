@@ -151,6 +151,9 @@ export class ExecuteResearchNode {
       // Strip <think>...</think> blocks (reasoning models)
       jsonStr = jsonStr.replace(/[\s\S]*?<\/think>/gi, '');
 
+      // Strip leading literal \n sequences (LLM sometimes outputs \n before JSON)
+      jsonStr = jsonStr.replace(/^\\n+/, '');
+
       // Sanitize control characters inside JSON string values (tabs, newlines, etc.)
       // eslint-disable-next-line no-control-regex
       jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
