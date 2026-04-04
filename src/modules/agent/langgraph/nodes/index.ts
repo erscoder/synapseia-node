@@ -1,4 +1,7 @@
 export { FetchWorkOrdersNode } from './fetch-work-orders';
+export { ResearcherNode } from './researcher-node';
+export { CriticNode } from './critic-node';
+export { SynthesizerNode } from './synthesizer-node';
 export { SelectWorkOrderNode } from './select-wo';
 export { EvaluateEconomicsNode } from './evaluate-economics';
 export { AcceptWorkOrderNode } from './accept-wo';
