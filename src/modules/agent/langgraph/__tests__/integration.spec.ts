@@ -72,6 +72,8 @@ const { LangGraphLlmService } = require('../llm.service');
 const { AgentBrainHelper } = require('../../agent-brain');
 const { LlmProviderHelper } = require('../../../llm/llm-provider');
 const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
+const { WorkOrderEvaluationHelper } = require('../../work-order/work-order.evaluation');
+const { WorkOrderExecutionHelper } = require('../../work-order/work-order.execution');
 const { ResearcherNode } = require('../nodes/researcher-node');
 const { CriticNode } = require('../nodes/critic-node');
 const { SynthesizerNode } = require('../nodes/synthesizer-node');
@@ -79,29 +81,31 @@ const { SynthesizerNode } = require('../nodes/synthesizer-node');
 function buildService(): AgentGraphService {
   const llmProvider = new LlmProviderHelper();
   const coordinator = new WorkOrderCoordinatorHelper();
+  const evaluation = new WorkOrderEvaluationHelper();
+  const execution = new WorkOrderExecutionHelper(coordinator, evaluation, llmProvider);
+  const toolRunner = new ToolRunnerService(null, null, null);
+  const toolRegistry = new ToolRegistry();
+  const llmService = new LangGraphLlmService(null);
+  const agentBrain = new AgentBrainHelper();
   return new AgentGraphService(
-    new FetchWorkOrdersNode(),
+    new FetchWorkOrdersNode(coordinator, execution),
     new SelectWorkOrderNode(),
-    new EvaluateEconomicsNode(),
-    new AcceptWorkOrderNode(),
-    new ExecuteResearchNode(
-      new ToolRunnerService(null, null, null),
-      new ToolRegistry(),
-      new LangGraphLlmService(null),
-    ),
-    new ExecuteTrainingNode(),
-    new ExecuteInferenceNode(),
-    new ExecuteDilocoNode(),
-    new QualityGateNode(),
-    new SubmitResultNode(),
-    new UpdateMemoryNode(new AgentBrainHelper()),
+    new EvaluateEconomicsNode(evaluation),
+    new AcceptWorkOrderNode(coordinator),
+    new ExecuteResearchNode(execution, evaluation, toolRunner, toolRegistry, llmService),
+    new ExecuteTrainingNode(execution),
+    new ExecuteInferenceNode(execution),
+    new ExecuteDilocoNode(execution),
+    new QualityGateNode(execution, evaluation),
+    new SubmitResultNode(coordinator),
+    new UpdateMemoryNode(execution, agentBrain),
     new RetrieveMemoryNode(),
     new PlanExecutionNode(mockLlmService as any),
     new SelfCritiqueNode(mockLlmService as any),
     new ResearcherNode(llmProvider, coordinator),
     new CriticNode(llmProvider, coordinator),
     new SynthesizerNode(llmProvider, coordinator),
-    new AgentBrainHelper(),
+    agentBrain,
   );
 }
 

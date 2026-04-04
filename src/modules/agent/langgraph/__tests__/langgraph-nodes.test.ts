@@ -64,8 +64,16 @@ import { AcceptWorkOrderNode } from '../nodes/accept-wo';
 import { UpdateMemoryNode } from '../nodes/update-memory';
 import { AgentBrainHelper } from '../../agent-brain';
 
+// Mocked helpers (constructed after jest.mock calls above)
+const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
+const { WorkOrderEvaluationHelper } = require('../../work-order/work-order.evaluation');
+const { WorkOrderExecutionHelper } = require('../../work-order/work-order.execution');
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+const coordinator = new WorkOrderCoordinatorHelper();
+const evaluation = new WorkOrderEvaluationHelper();
+const execution = new WorkOrderExecutionHelper(coordinator, evaluation);
 const brainHelper = new AgentBrainHelper();
 const initBrain = () => brainHelper.initBrain();
 
@@ -128,7 +136,7 @@ describe('FetchWorkOrdersNode', () => {
   beforeEach(() => {
     // Don't use jest.resetAllMocks() here — we inject mock objects directly
     // and don't rely on module-level mocks
-    node = new FetchWorkOrdersNode();
+    node = new FetchWorkOrdersNode(coordinator, execution);
     node.reset();
   });
 
@@ -191,7 +199,7 @@ describe('FetchWorkOrdersNode', () => {
 });
 
 describe('EvaluateEconomicsNode', () => {
-  const node = new EvaluateEconomicsNode();
+  const node = new EvaluateEconomicsNode(evaluation);
   // Note: No beforeEach — WorkOrderEvaluationHelper mock is set up at module level and should not be reset
 
   it('returns null evaluation when no WO selected', () => {
@@ -211,7 +219,7 @@ describe('AcceptWorkOrderNode', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    node = new AcceptWorkOrderNode();
+    node = new AcceptWorkOrderNode(coordinator);
     // Inject mock coordinator to bypass fetch
     const mockCoordinator = {
       acceptWorkOrder: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
@@ -237,7 +245,7 @@ describe('AcceptWorkOrderNode', () => {
 });
 
 describe('UpdateMemoryNode', () => {
-  const node = new UpdateMemoryNode(new AgentBrainHelper());
+  const node = new UpdateMemoryNode(execution, brainHelper);
 
   it('returns brain unchanged when no research result', () => {
     const brain = initBrain();

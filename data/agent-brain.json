@@ -5,48 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775337054066,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337113425,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337158451,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337216440,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337256087,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337322501,
-      "type": "discovery",
-      "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775337364136,
-      "type": "discovery",
-      "content": "Research: <think>",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775337405395,
       "type": "discovery",
       "content": "Research: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.",
@@ -603,51 +561,51 @@
       "type": "discovery",
       "content": "Research: No summary generated",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775341495657,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341526203,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341556758,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341587817,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341618264,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341648828,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775341679330,
+      "type": "discovery",
+      "content": "Research: No summary generated",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775337054066,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337113425,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337158451,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337216440,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337256087,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337322501,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: Analysis of CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nProposal: No proposal generated"
-    },
-    {
-      "timestamp": 1775337364136,
-      "action": "research:wo_1775308626282_geyumoypl",
-      "outcome": "completed",
-      "lesson": "Paper: CRISPR-Cas12a Gene Editing of HBG1 and HBG2 Promoters to Treat &#x3b2;-Thalassemia.\nSummary: <think>\nProposal: 4. Primary endpoints: Neutrophil engraftment by 42 days and adverse events 5. Results:    - All 9 participants had neutrophil and platelet engraftment by 42 days    - All participants became transfusi"
-    },
     {
       "timestamp": 1775337405395,
       "action": "research:wo_1775308626282_geyumoypl",
@@ -1202,6 +1160,48 @@
     },
     {
       "timestamp": 1775341465062,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341495657,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341526203,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341556758,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341587817,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341618264,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341648828,
+      "action": "research:wo_training_1775341121197_77oi8sp",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
+    },
+    {
+      "timestamp": 1775341679330,
       "action": "research:wo_training_1775341121197_77oi8sp",
       "outcome": "completed",
       "lesson": "Paper: Train micro-transformer: trading\nSummary: No summary generated\nProposal: No proposal generated"
