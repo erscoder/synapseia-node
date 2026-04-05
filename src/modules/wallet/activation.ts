@@ -133,19 +133,26 @@ export async function waitForActivationDeposit(
   walletAddress: string,
   onPoll: (balance: number) => void,
 ): Promise<{ received: boolean }> {
-  logger.log('\n╔══════════════════════════════════════════════════════════════╗');
-  logger.log('║                   ⚠️  NODE ACTIVATION REQUIRED                ║');
-  logger.log('╠══════════════════════════════════════════════════════════════╣');
-  logger.log('║ To receive SYN rewards, your wallet needs a SPL token        ║');
-  logger.log('║ account. This requires a one-time SOL deposit for rent.     ║');
-  logger.log(`║                                                              ║`);
-  logger.log(`║  Please deposit ${ACTIVATION_DEPOSIT_SOL} SOL to activate your node.              ║`);
-  logger.log(`║                                                              ║`);
-  logger.log(`║  Your wallet address: ${walletAddress}   ║`);
-  logger.log('║                                                              ║');
-  logger.log('║  The node will check every 30 seconds until confirmed.       ║');
-  logger.log('║  You can also transfer SOL manually and restart the node.     ║');
-  logger.log('╚══════════════════════════════════════════════════════════════╝\n');
+  logger.log("");
+  logger.log("  ╔══════════════════════════════════════════════════════╗");
+  logger.log("  ║              ⚠️  NODE ACTIVATION REQUIRED               ║");
+  logger.log("  ╠══════════════════════════════════════════════════════╣");
+  logger.log("  ║ To receive SYN rewards your wallet needs a SPL       ║");
+  logger.log("  ║ token account. One-time SOL deposit required for     ║");
+  logger.log("  ║ rent exemption.                                     ║");
+  logger.log("  ║                                                        ║");
+  logger.log("  ║  Please deposit 0.05 SOL to activate your node.      ║");
+  logger.log("  ║                                                        ║");
+  const shortAddr = walletAddress.length > 44
+    ? walletAddress.slice(0, 8) + '...' + walletAddress.slice(-6)
+    : walletAddress;
+  logger.log(`  ║  Wallet: ${shortAddr}                                 ║`);
+  logger.log("  ║                                                        ║");
+  logger.log("  ║  Checking every 30s until deposit confirmed...        ║");
+  logger.log("  ║  Transfer SOL, then restart node to activate.        ║");
+  logger.log("  ║                                                        ║");
+  logger.log("  ╚══════════════════════════════════════════════════════╝");
+  logger.log("");
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
