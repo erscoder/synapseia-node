@@ -5,6 +5,8 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^libp2p$': '<rootDir>/src/__mocks__/libp2p.ts',
     '^@libp2p/(.*)$': '<rootDir>/src/__mocks__/@libp2p/$1.ts',
+    '^@noble/ed25519$': '<rootDir>/src/__mocks__/@noble/ed25519.ts',
+    '^@noble/hashes$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
   },
   transform: {
     '^.+\\.tsx?$': [

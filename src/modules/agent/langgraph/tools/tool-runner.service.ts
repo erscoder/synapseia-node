@@ -37,14 +37,10 @@ export class ToolRunnerService {
   private async executeWithTimeout(call: ToolCall): Promise<unknown> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
-
     try {
-      const result = await this.executeTool(call);
+      return await this.executeTool(call);
+    } finally {
       clearTimeout(timeoutId);
-      return result;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
     }
   }
 
