@@ -13,10 +13,13 @@ import { GenerateEmbeddingTool } from './generate-embedding.tool';
 import { DelegateToPeerTool } from './delegate-peer.tool';
 import { RequestPeerReviewTool } from './request-peer-review.tool';
 import { A2AClientModule } from '../../../a2a/client/client.module';
+import { IdentityModule } from '../../../identity/identity.module';
+import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 
 @Module({
-  imports: [A2AClientModule],
+  imports: [A2AClientModule, IdentityModule],
   providers: [
+    WorkOrderCoordinatorHelper,
     SearchCorpusTool,
     QueryKgTool,
     GenerateEmbeddingTool,
