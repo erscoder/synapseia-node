@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createLibp2p } from 'libp2p';
+import { setMaxListeners } from 'events';
 import logger from '../../utils/logger';
 import { tcp } from '@libp2p/tcp';
 import { noise } from '@libp2p/noise';
@@ -69,6 +70,14 @@ export class P2PNode {
     const addrs: string[] = this.node.getMultiaddrs().map((a: any) => a.toString() as string);
     logger.log('[P2P] Node started | peerId:', peerId);
     if (addrs.length > 0) logger.log('[P2P] Listening on:', addrs.join(', '));
+
+    // Bump AbortSignal listeners limit — libp2p/ping creates many internally
+    try {
+      setMaxListeners(20, this.node as any);
+      logger.log(`[P2P] setMaxListeners(20) on node (ping service uses AbortSignals)`);
+    } catch (err) {
+      // Not a real EventTarget in test mocks — skip
+    }
 
     // Log peer discovery and connection events
     this.node.addEventListener('peer:discovery', (evt: any) => {

@@ -65,14 +65,17 @@ export class A2AClientService {
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
-
-      const res = await fetch(`${targetUrl}/tasks/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: signedTask }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      let res: Response;
+      try {
+        res = await fetch(`${targetUrl}/tasks/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task: signedTask }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!res.ok) {
         const text = await res.text();
