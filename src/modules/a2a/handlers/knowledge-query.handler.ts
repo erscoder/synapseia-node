@@ -16,7 +16,7 @@ export interface KnowledgeQueryPayload {
 
 @Injectable()
 export class KnowledgeQueryHandler {
-  private readonly coordinatorHelper = new WorkOrderCoordinatorHelper();
+  constructor(private readonly coordinatorHelper: WorkOrderCoordinatorHelper) {}
 
   /**
    * Handle a knowledge_query A2A task.

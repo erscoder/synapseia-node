@@ -22,12 +22,16 @@ export class QualityGateNode {
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, executionResult, researchResult } = state;
 
-    if (!executionResult?.success) {
-      logger.warn(' Execution failed — skipping submission');
+    // Research WOs: executionResult is not set (produced by executor nodes, not research pipeline)
+    // For research, success means researchResult exists and has quality score
+    const isResearch = selectedWorkOrder && this.execution.isResearchWorkOrder(selectedWorkOrder);
+    if (!isResearch && !executionResult?.success) {
+      logger.warn(' QualityGate: execution failed — skipping submission');
       return { qualityScore: 0, shouldSubmit: false };
     }
 
-    if (selectedWorkOrder && this.execution.isResearchWorkOrder(selectedWorkOrder) && researchResult) {
+    // For research WOs, check quality via research result
+    if (isResearch && researchResult) {
       const score = this.evaluation.scoreResearchResult(researchResult);
       if (score < SUBMISSION_MIN_SCORE) {
         logger.warn(` Research score ${score.toFixed(4)} < ${SUBMISSION_MIN_SCORE} — skipping`);
