@@ -5,96 +5,6 @@
   ],
   "memory": [
     {
-      "timestamp": 1775365804751,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user wants me to produce a final JSON output that addresses the critique. The critique indicated the original analysis was extremely deficient (1/10 quality score) with:\n- Truncated abstra",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775365914751,
-      "type": "discovery",
-      "content": "Research: <think>\nWe have a user request: \"Produce the FINAL ResearchResult, incorporating the critique: ...\" They gave a snippet:\n\n```\n```json\n{\n  \"summary\": \"Refined 2-3 sentence summary, addressing critique\"",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366019664,
-      "type": "discovery",
-      "content": "Research: <think>The user wants: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nPaper: Train micro-transformer: medical\n\nResearcher's analysis:\n- Summary: - Summar",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366150741,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user request is: \"Train micro-transformer: medical\". The user gave an abstract in JSON: {\"domain\":\"medical\",\"datasetId\":\"synthetic://text8-sample\",\"maxTrainSec\". This appears truncated.\n\nT",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366221665,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user wants me to produce a refined ResearchResult JSON based on the critique provided. The critique indicates the original analysis was critically incomplete (1/10), with empty Key Insight",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366324099,
-      "type": "discovery",
-      "content": "Research: <think>The user says: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\" Then they provide a specific scenario: they have a researcher analysis (which is blan",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366477978,
-      "type": "discovery",
-      "content": "Research: <think>\nWe need to interpret the user's request carefully. The user says: \"You are a rigorous peer reviewer. A researcher has analyzed this paper:\n\nPaper: Train micro-transformer: medical\n\nResearcher'",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366582032,
-      "type": "discovery",
-      "content": "Research: <think>The user is asking the assistant to \"Produce the FINAL ResearchResult, incorporating the critique\" after having received a prior JSON that was a peer-review style critique. However, the user re",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366660382,
-      "type": "discovery",
-      "content": "Research: <think>\nThe researcher needs to produce a proper peer review analysis. Looking at the original request, this appears to be about a paper titled \"Train micro-transformer: medical\" with a dataset of \"sy",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366743911,
-      "type": "discovery",
-      "content": "Research: <think>The user gave an instruction to produce a response: \"Produce the FINAL ResearchResult, incorporating the critique:\" and a JSON object template with fields summary, keyInsights, proposal. Also s",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366819660,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user wants me to produce a final ResearchResult JSON based on the critique provided. The critique indicates that the original analysis was severely deficient, with empty fields and incompl",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366896820,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user wants me to produce a final research result based on the critique I provided. However, I need to be realistic here - the original \"paper\" is essentially empty (just a title and trunca",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775366996506,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user says: \"You are a research analyst. Analyze the following paper thoroughly... [paper] ... Peer review critique... Criticall evaluate this analysis. Identify weaknesses... Respond with ",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775367103926,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user has provided a detailed prompt: they want a JSON response with a refined analysis. They say \"Produce the FINAL ResearchResult, incorporating the critique:\" and then show a JSON skelet",
-      "importance": 0.7
-    },
-    {
-      "timestamp": 1775367210793,
-      "type": "discovery",
-      "content": "Research: <think>\nThe user message ends with:\n\n\"Produce the FINAL ResearchResult, incorporating the critique:\n\n```json\n{\n  \"summary\": \"Refined 2-3 sentence summary, addressing critique\",\n  \"keyInsights\": [\n    ",
-      "importance": 0.7
-    },
-    {
       "timestamp": 1775367284178,
       "type": "discovery",
       "content": "Research: <think>\nThe user is asking me to produce a peer review assessment and final research result. Looking at the provided context, I can see:\n\n1. The researcher's analysis is severely incomplete - summary ",
@@ -603,99 +513,99 @@
       "type": "discovery",
       "content": "Research: <think>The user wants me to evaluate a researcher's analysis and produce a refined final research result. The analysis provided is essentially empty/placeholder text, and the paper abstract is truncat",
       "importance": 0.7
+    },
+    {
+      "timestamp": 1775376655737,
+      "type": "discovery",
+      "content": "Research: <think>The user requests: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nThey then provide the start of a response that looks like a JSON with assessment",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775376733730,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user is asking me to produce a final ResearchResult JSON based on the critique I provided. However, looking at this situation carefully:\n\n1. The researcher's analysis was essentially empty",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775376839034,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user originally gave a prompt that looked like: \"You are a rigorous peer reviewer. A researcher has analyzed this paper...\" and the researcher gave a placeholder analysis with only a title",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775376953538,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants us to respond with a JSON containing \"summary\", \"keyInsights\", \"proposal\". The prompt is a bit confusing. The user says: \"You are a rigorous peer reviewer. A researcher has anal",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377050750,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user is giving instructions that are contradictory. They ask: \"Produce the FINAL ResearchResult, incorporating the critique: ... Respond only with valid JSON.\" But the previous content inc",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377203310,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user originally gave a prompt: \"You are a research analyst. Analyze the following paper thoroughly. ... Peer review critique: ...\". Then it provided a JSON format for assessment, concerns,",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377315290,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user gave a prompt: \"You are a rigorous peer reviewer. A researcher has analyzed this paper: ...\" and they gave a structure for assessment (assessment, concerns, suggestions). The user als",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377426697,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user asks: \"Produce the FINAL ResearchResult, incorporating the critique:\" and provides a JSON template with summary, keyInsights, proposal. The user previously gave a critique with concer",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377510384,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user is asking me to evaluate a researcher's analysis of a paper. Looking at the provided content, I can see:\n\n1. The paper section contains: `{\"domain\":\"medical\",\"data` - this appears to ",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377625849,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants a final output: \"Produce the FINAL ResearchResult, incorporating the critique: ...\" So they want us to generate a JSON object with the fields: summary (2-3 sentences), keyInsigh",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377697433,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user wants me to provide a final research result based on the critique provided. The critique indicates that the original analysis was completely empty (only structural placeholders), so I",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377764826,
+      "type": "discovery",
+      "content": "Research: <think>\nThe user is asking me to produce a final research result based on a critique of an incomplete analysis. However, the original \"analysis\" was essentially empty - there was no actual paper conte",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775377902227,
+      "type": "discovery",
+      "content": "Research: <think>\nWe need to parse the instruction. The user gave the following:\n\n> Provide the JSON: The user wants us to respond with a JSON containing \"summary\", \"keyInsights\", and \"proposal\". However, the p",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775378025698,
+      "type": "discovery",
+      "content": "Research: ",
+      "importance": 0.7
+    },
+    {
+      "timestamp": 1775378171030,
+      "type": "discovery",
+      "content": "Research: <think>The user asks: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nWe have a preceding context where the user (maybe the system) gave a template: \"Pape",
+      "importance": 0.7
     }
   ],
   "journal": [
-    {
-      "timestamp": 1775365804751,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to produce a final JSON output that addresses the critique. The critique indicated the original analysis was extremely deficient (1/10 quality score) with:\n- Truncated abstra\nProposal: "
-    },
-    {
-      "timestamp": 1775365914751,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nWe have a user request: \"Produce the FINAL ResearchResult, incorporating the critique: ...\" They gave a snippet:\n\n```\n```json\n{\n  \"summary\": \"Refined 2-3 sentence summary, addressing critique\"\nProposal: "
-    },
-    {
-      "timestamp": 1775366019664,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user wants: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nPaper: Train micro-transformer: medical\n\nResearcher's analysis:\n- Summary: - Summar\nProposal: "
-    },
-    {
-      "timestamp": 1775366150740,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user request is: \"Train micro-transformer: medical\". The user gave an abstract in JSON: {\"domain\":\"medical\",\"datasetId\":\"synthetic://text8-sample\",\"maxTrainSec\". This appears truncated.\n\nT\nProposal: "
-    },
-    {
-      "timestamp": 1775366221665,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to produce a refined ResearchResult JSON based on the critique provided. The critique indicates the original analysis was critically incomplete (1/10), with empty Key Insight\nProposal: "
-    },
-    {
-      "timestamp": 1775366324099,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user says: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\" Then they provide a specific scenario: they have a researcher analysis (which is blan\nProposal: "
-    },
-    {
-      "timestamp": 1775366477978,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nWe need to interpret the user's request carefully. The user says: \"You are a rigorous peer reviewer. A researcher has analyzed this paper:\n\nPaper: Train micro-transformer: medical\n\nResearcher'\nProposal: "
-    },
-    {
-      "timestamp": 1775366582032,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user is asking the assistant to \"Produce the FINAL ResearchResult, incorporating the critique\" after having received a prior JSON that was a peer-review style critique. However, the user re\nProposal: "
-    },
-    {
-      "timestamp": 1775366660382,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe researcher needs to produce a proper peer review analysis. Looking at the original request, this appears to be about a paper titled \"Train micro-transformer: medical\" with a dataset of \"sy\nProposal: "
-    },
-    {
-      "timestamp": 1775366743911,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user gave an instruction to produce a response: \"Produce the FINAL ResearchResult, incorporating the critique:\" and a JSON object template with fields summary, keyInsights, proposal. Also s\nProposal: "
-    },
-    {
-      "timestamp": 1775366819660,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to produce a final ResearchResult JSON based on the critique provided. The critique indicates that the original analysis was severely deficient, with empty fields and incompl\nProposal: "
-    },
-    {
-      "timestamp": 1775366896820,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to produce a final research result based on the critique I provided. However, I need to be realistic here - the original \"paper\" is essentially empty (just a title and trunca\nProposal: "
-    },
-    {
-      "timestamp": 1775366996506,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user says: \"You are a research analyst. Analyze the following paper thoroughly... [paper] ... Peer review critique... Criticall evaluate this analysis. Identify weaknesses... Respond with \nProposal: "
-    },
-    {
-      "timestamp": 1775367103926,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user has provided a detailed prompt: they want a JSON response with a refined analysis. They say \"Produce the FINAL ResearchResult, incorporating the critique:\" and then show a JSON skelet\nProposal: "
-    },
-    {
-      "timestamp": 1775367210793,
-      "action": "research:wo_training_1775341121231_kdol9p5",
-      "outcome": "completed",
-      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user message ends with:\n\n\"Produce the FINAL ResearchResult, incorporating the critique:\n\n```json\n{\n  \"summary\": \"Refined 2-3 sentence summary, addressing critique\",\n  \"keyInsights\": [\n    \nProposal: "
-    },
     {
       "timestamp": 1775367284178,
       "action": "research:wo_training_1775341121231_kdol9p5",
@@ -1205,6 +1115,96 @@
       "action": "research:wo_training_1775341121231_kdol9p5",
       "outcome": "completed",
       "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user wants me to evaluate a researcher's analysis and produce a refined final research result. The analysis provided is essentially empty/placeholder text, and the paper abstract is truncat\nProposal: "
+    },
+    {
+      "timestamp": 1775376655737,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user requests: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nThey then provide the start of a response that looks like a JSON with assessment\nProposal: "
+    },
+    {
+      "timestamp": 1775376733730,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user is asking me to produce a final ResearchResult JSON based on the critique I provided. However, looking at this situation carefully:\n\n1. The researcher's analysis was essentially empty\nProposal: "
+    },
+    {
+      "timestamp": 1775376839034,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user originally gave a prompt that looked like: \"You are a rigorous peer reviewer. A researcher has analyzed this paper...\" and the researcher gave a placeholder analysis with only a title\nProposal: "
+    },
+    {
+      "timestamp": 1775376953538,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants us to respond with a JSON containing \"summary\", \"keyInsights\", \"proposal\". The prompt is a bit confusing. The user says: \"You are a rigorous peer reviewer. A researcher has anal\nProposal: "
+    },
+    {
+      "timestamp": 1775377050750,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user is giving instructions that are contradictory. They ask: \"Produce the FINAL ResearchResult, incorporating the critique: ... Respond only with valid JSON.\" But the previous content inc\nProposal: "
+    },
+    {
+      "timestamp": 1775377203310,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user originally gave a prompt: \"You are a research analyst. Analyze the following paper thoroughly. ... Peer review critique: ...\". Then it provided a JSON format for assessment, concerns,\nProposal: "
+    },
+    {
+      "timestamp": 1775377315290,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user gave a prompt: \"You are a rigorous peer reviewer. A researcher has analyzed this paper: ...\" and they gave a structure for assessment (assessment, concerns, suggestions). The user als\nProposal: "
+    },
+    {
+      "timestamp": 1775377426697,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user asks: \"Produce the FINAL ResearchResult, incorporating the critique:\" and provides a JSON template with summary, keyInsights, proposal. The user previously gave a critique with concer\nProposal: "
+    },
+    {
+      "timestamp": 1775377510384,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user is asking me to evaluate a researcher's analysis of a paper. Looking at the provided content, I can see:\n\n1. The paper section contains: `{\"domain\":\"medical\",\"data` - this appears to \nProposal: "
+    },
+    {
+      "timestamp": 1775377625849,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants a final output: \"Produce the FINAL ResearchResult, incorporating the critique: ...\" So they want us to generate a JSON object with the fields: summary (2-3 sentences), keyInsigh\nProposal: "
+    },
+    {
+      "timestamp": 1775377697433,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user wants me to provide a final research result based on the critique provided. The critique indicates that the original analysis was completely empty (only structural placeholders), so I\nProposal: "
+    },
+    {
+      "timestamp": 1775377764826,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nThe user is asking me to produce a final research result based on a critique of an incomplete analysis. However, the original \"analysis\" was essentially empty - there was no actual paper conte\nProposal: "
+    },
+    {
+      "timestamp": 1775377902227,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>\nWe need to parse the instruction. The user gave the following:\n\n> Provide the JSON: The user wants us to respond with a JSON containing \"summary\", \"keyInsights\", and \"proposal\". However, the p\nProposal: "
+    },
+    {
+      "timestamp": 1775378025698,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: \nProposal: "
+    },
+    {
+      "timestamp": 1775378171030,
+      "action": "research:wo_training_1775341121231_kdol9p5",
+      "outcome": "completed",
+      "lesson": "Paper: Train micro-transformer: medical\nSummary: <think>The user asks: \"You are a research synthesizer. Combine a researcher's analysis with peer review critique.\"\n\nWe have a preceding context where the user (maybe the system) gave a template: \"Pape\nProposal: "
     }
   ],
   "strategy": {
