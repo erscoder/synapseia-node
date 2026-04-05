@@ -132,8 +132,9 @@ export class AgentGraphService {
           case 'RESEARCH':       return 'researcher';
           case 'TRAINING':       return 'executeTraining';
           case 'CPU_INFERENCE':  return 'executeInference';
+          case 'GPU_INFERENCE':  return 'executeInference';
           case 'DILOCO_TRAINING':return 'executeDiloco';
-          default:               return 'researcher';
+          default:               return 'executeTraining';
         }
       },
       {

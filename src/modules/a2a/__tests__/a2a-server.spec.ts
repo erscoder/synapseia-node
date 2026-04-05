@@ -11,6 +11,7 @@ import { PeerReviewHandler } from '../handlers/peer-review.handler';
 import { EmbeddingHandler } from '../handlers/embedding.handler';
 import { HealthCheckHandler } from '../handlers/health-check.handler';
 import { DelegateResearchHandler } from '../handlers/delegate-research.handler';
+import { KnowledgeQueryHandler } from '../handlers/knowledge-query.handler';
 
 jest.mock('../auth/a2a-auth.service', () => ({
   A2AAuthService: jest.fn().mockImplementation(() => ({
@@ -37,12 +38,14 @@ function makeTaskRouter(agentCardService: AgentCardService): TaskRouter {
   const embeddingHandler = new EmbeddingHandler();
   const healthCheckHandler = new HealthCheckHandler(agentCardService);
   const delegateResearchHandler = new DelegateResearchHandler();
+  const knowledgeQueryHandler = { handle: jest.fn() } as unknown as KnowledgeQueryHandler;
 
   return new TaskRouter(
     peerReviewHandler,
     embeddingHandler,
     healthCheckHandler,
     delegateResearchHandler,
+    knowledgeQueryHandler,
   );
 }
 
