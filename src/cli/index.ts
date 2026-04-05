@@ -40,6 +40,7 @@ import { startNode } from '../node-runtime';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance';
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
+import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE } from '../modules/config/config';
 import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';  
@@ -431,6 +432,20 @@ async function bootstrap() {
         if (llmUrl && !capabilities.includes('llm')) {
           capabilities.push('llm');
           logger.log('LLM capability added via --llm-url');
+        }
+
+        // ── SYN token account activation ─────────────────────────────────────
+        logger.log('\nChecking SYN token account activation...');
+        const { Keypair } = await import('@solana/web3.js');
+        const walletKeypair = Keypair.fromSecretKey(new Uint8Array(wallet.secretKey));
+        const activation = await activateNode(wallet.publicKey, walletKeypair);
+        if (!activation.activated) {
+          logger.error('❌ Activation failed — cannot start node without SYN token account');
+          logger.error(`   Error: ${activation.error}`);
+          process.exit(1);
+        }
+        if (activation.synTokenAccount) {
+          logger.log(`✅ SYN token account: ${activation.synTokenAccount}`);
         }
 
         // ── Hand off to the node runtime ──────────────────────────────────
