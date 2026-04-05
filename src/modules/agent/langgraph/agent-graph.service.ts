@@ -37,7 +37,7 @@ const AgentStateAnnotation = Annotation.Root({
   shouldSubmit: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   submitted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
   accepted: Annotation<boolean>({ default: () => false, reducer: (_a, b) => b }),
-  brain: Annotation<AgentBrain>({ default: () => new AgentBrainHelper().initBrain(), reducer: (_a: any, b: any) => b }),
+  brain: Annotation<AgentBrain | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
   iteration: Annotation<number>({ default: () => 0, reducer: (_a, b) => b }),
   config: Annotation<WorkOrderAgentConfig | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
   coordinatorUrl: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),

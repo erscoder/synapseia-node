@@ -18,14 +18,19 @@ export class LangGraphWorkOrderAgentService {
   private currentWorkOrder: WorkOrder | null = null;
   private iteration = 0;
   private totalWorkOrdersCompleted = 0;
-  private brain: AgentBrain;
+  private brain: AgentBrain | null = null;
+
+  private getBrain(): AgentBrain {
+    if (!this.brain) {
+      this.brain = this.agentBrainHelper.initBrain();
+    }
+    return this.brain;
+  }
 
   constructor(
     private readonly agentGraphService: AgentGraphService,
     private readonly agentBrainHelper: AgentBrainHelper,
-  ) {
-    this.brain = this.agentBrainHelper.initBrain();
-  }
+  ) {}
 
   start(config: WorkOrderAgentConfig): Promise<void> {
     if (this.isRunning) throw new Error('LangGraph agent is already running');
@@ -64,7 +69,7 @@ export class LangGraphWorkOrderAgentService {
     iteration: number,
     brain?: AgentBrain,
   ): Promise<{ workOrder?: WorkOrder; completed: boolean; researchResult?: ResearchResult }> {
-    const result = await this.agentGraphService.runIteration(config, iteration, brain ?? this.brain);
+    const result = await this.agentGraphService.runIteration(config, iteration, brain ?? this.getBrain());
 
     if (result.completed && result.workOrder) {
       this.totalWorkOrdersCompleted++;
