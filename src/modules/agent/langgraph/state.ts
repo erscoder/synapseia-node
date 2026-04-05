@@ -58,7 +58,7 @@ export interface AgentState {
 
   // Memory
   /** The agent's brain/memory for learning */
-  brain: AgentBrain;
+  brain?: AgentBrain | null;
 
   // Control
   /** Current iteration number */

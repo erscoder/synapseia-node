@@ -134,24 +134,21 @@ export async function waitForActivationDeposit(
   onPoll: (balance: number) => void,
 ): Promise<{ received: boolean }> {
   logger.log("");
-  logger.log("  ╔══════════════════════════════════════════════════════╗");
-  logger.log("  ║              ⚠️  NODE ACTIVATION REQUIRED               ║");
-  logger.log("  ╠══════════════════════════════════════════════════════╣");
-  logger.log("  ║ To receive SYN rewards your wallet needs a SPL       ║");
-  logger.log("  ║ token account. One-time SOL deposit required for     ║");
-  logger.log("  ║ rent exemption.                                     ║");
-  logger.log("  ║                                                        ║");
-  logger.log("  ║  Please deposit 0.05 SOL to activate your node.      ║");
-  logger.log("  ║                                                        ║");
-  const shortAddr = walletAddress.length > 44
-    ? walletAddress.slice(0, 8) + '...' + walletAddress.slice(-6)
-    : walletAddress;
-  logger.log(`  ║  Wallet: ${shortAddr}                                 ║`);
-  logger.log("  ║                                                        ║");
+  logger.log("  ╔═══════════════════════════════════════════════════════╗");
+  logger.log("  ║              ⚠️  NODE ACTIVATION REQUIRED              ║");
+  logger.log("  ╠═══════════════════════════════════════════════════════╣");
+  logger.log("  ║ To receive SYN rewards your wallet needs a SPL        ║");
+  logger.log("  ║ token account. One-time SOL deposit required for      ║");
+  logger.log("  ║ rent exemption.                                       ║");
+  logger.log("  ║                                                       ║");
+  logger.log("  ║  Please deposit 0.05 SOL to activate your node.       ║");
+  logger.log("  ║                                                       ║");
+  logger.log(`  ║  Wallet: ${walletAddress} ║`);
+  logger.log("  ║                                                       ║");
   logger.log("  ║  Checking every 30s until deposit confirmed...        ║");
-  logger.log("  ║  Transfer SOL, then restart node to activate.        ║");
-  logger.log("  ║                                                        ║");
-  logger.log("  ╚══════════════════════════════════════════════════════╝");
+  logger.log("  ║  Transfer SOL, then restart node to activate.         ║");
+  logger.log("  ║                                                       ║");
+  logger.log("  ╚═══════════════════════════════════════════════════════╝");
   logger.log("");
 
   // eslint-disable-next-line no-constant-condition
