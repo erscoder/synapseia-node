@@ -11,9 +11,12 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 
-# Copy source and build
-COPY . .
-RUN npm run build
+# Copy pre-built dist from host (skips expensive tsup build inside Docker)
+COPY dist ./dist
+
+# Copy remaining source (needed at runtime for dynamic imports in some modules)
+COPY src ./src
+COPY scripts ./scripts
 
 # Install PyTorch (matching pre-built version) + numpy (required dependency)
 RUN pip3 install --no-cache-dir --break-system-packages torch numpy

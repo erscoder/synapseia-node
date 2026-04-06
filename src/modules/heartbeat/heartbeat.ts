@@ -1,12 +1,14 @@
-import axios from 'axios';
-import logger from '../../utils/logger';
 import { Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { lastValueFrom, map } from 'rxjs';
+import logger from '../../utils/logger';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
 import { isPyTorchAvailable } from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
+import { buildAuthHeaders } from '../../utils/node-auth';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -28,11 +30,32 @@ export interface HeartbeatResponse {
 
 @Injectable()
 export class HeartbeatHelper {
-  constructor(private readonly ipifyService: IpifyService) {}
+  constructor(
+    private readonly ipifyService: IpifyService,
+    private readonly httpService?: HttpService,
+  ) {}
   /**
    * Send heartbeat to coordinator with exponential backoff retry
    */
+  /**
+   * Send signed heartbeat to coordinator.
+   * If keypair is available, signs the request with Ed25519.
+   */
   async sendHeartbeat(
+    coordinatorUrl: string,
+    identity: Identity,
+    hardware: Hardware,
+    lat?: number,
+    lng?: number,
+    walletAddress?: string | null,
+  ): Promise<HeartbeatResponse> {
+    return this._sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng, walletAddress);
+  }
+
+  /**
+   * Internal: supports optional pre-built auth headers for testing.
+   */
+  private async _sendHeartbeat(
     coordinatorUrl: string,
     identity: Identity,
     hardware: Hardware,
@@ -61,19 +84,43 @@ export class HeartbeatHelper {
 
     let lastError: Error | null = null;
 
+    // Build auth headers if keypair is available
+    let authHeaders: Record<string, string> = {};
+    if (identity.privateKey && identity.publicKey) {
+      try {
+        authHeaders = await buildAuthHeaders({
+          method: 'POST',
+          path: '/peer/heartbeat',
+          body: payload,
+          privateKey: Buffer.from(identity.privateKey, 'hex'),
+          publicKey: Buffer.from(identity.publicKey, 'hex'),
+          peerId: identity.peerId,
+        });
+      } catch (signErr) {
+        logger.warn('[Heartbeat] Failed to sign heartbeat:', (signErr as Error).message);
+      }
+    }
+
     // Exponential backoff: 1s, 2s, 4s
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const client = axios.create({
-          baseURL: coordinatorUrl,
-          timeout: 5000,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const response = await client.post<HeartbeatResponse>('/peer/heartbeat', payload);
-        return response.data;
+        let response: HeartbeatResponse;
+        if (this.httpService) {
+          response = await lastValueFrom(
+            this.httpService.post<HeartbeatResponse>('/peer/heartbeat', payload, {
+              baseURL: coordinatorUrl,
+              timeout: 5000,
+              headers: { 'Content-Type': 'application/json', ...authHeaders },
+            }).pipe(map(res => res.data)),
+          );
+        } else {
+          // Fallback: use raw axios for standalone CLI usage
+          const { default: axios } = await import('axios');
+          const client = axios.create({ baseURL: coordinatorUrl, timeout: 5000, headers: { 'Content-Type': 'application/json', ...authHeaders } });
+          const axiosRes = await client.post<HeartbeatResponse>('/peer/heartbeat', payload);
+          response = axiosRes.data;
+        }
+        return response;
       } catch (error) {
         lastError = error as Error;
         logger.warn(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
@@ -176,7 +223,7 @@ export class HeartbeatHelper {
         }
         // Sprint D: Discovery feedback — register available models with coordinator
         try {
-          await modelDiscovery.registerModels(coordinatorUrl, identity.peerId, hardware);
+          await modelDiscovery.registerModels(coordinatorUrl, identity.peerId, hardware, identity);
         } catch (discErr) {
           logger.warn('Model discovery registration failed:', (discErr as Error).message);
         }
