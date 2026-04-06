@@ -9,9 +9,10 @@ import { RoundListenerHelper } from '../round-listener';
 import { ReviewAgentHelper } from '../review-agent';
 import { AgentBrainHelper } from '../agent-brain';
 import { ToolsModule } from '../langgraph/tools/tools.module';
+import { IdentityModule } from '../../identity/identity.module';
 
 @Module({
-  imports: [LlmModule, ToolsModule ],
+  imports: [LlmModule, ToolsModule, IdentityModule],
   providers: [
     RoundListenerHelper,
     ReviewAgentHelper,

@@ -9,6 +9,8 @@ import type { ToolDef } from './types';
 
 @Injectable()
 export class QueryKgTool {
+  constructor(private readonly coordinatorHelper: WorkOrderCoordinatorHelper) {}
+
   readonly def: ToolDef = {
     name: 'query_knowledge_graph',
     description: 'Query the knowledge graph for broader scientific context about a topic or concept.',
@@ -23,7 +25,6 @@ export class QueryKgTool {
   };
 
   async execute(params: { topic: string; missionId?: string }, coordinatorUrl: string): Promise<unknown> {
-    const helper = new WorkOrderCoordinatorHelper();
-    return helper.fetchKGraphContext(coordinatorUrl, params.topic, params.missionId);
+    return this.coordinatorHelper.fetchKGraphContext(coordinatorUrl, params.topic, params.missionId);
   }
 }

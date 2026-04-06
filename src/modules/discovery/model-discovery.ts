@@ -8,6 +8,8 @@ import logger from '../../utils/logger';
 import { Injectable } from '@nestjs/common';
 import { ModelCatalogHelper, MODEL_CATALOG } from '../model/model-catalog';
 import type { Hardware } from '../hardware/hardware';
+import type { Identity } from '../identity/identity';
+import { buildAuthHeaders } from '../../utils/node-auth';
 
 /** Model info as expected by coordinator's POST /inference/register */
 export interface CoordinatorModelInfo {
@@ -35,6 +37,7 @@ export class ModelDiscovery {
     coordinatorUrl: string,
     peerId: string,
     hardware: Hardware,
+    identity?: Identity,
   ): Promise<void> {
     try {
       const catalogHelper = new ModelCatalogHelper();
@@ -54,9 +57,27 @@ export class ModelDiscovery {
 
       const payload: ModelRegistrationPayload = { peerId, models };
 
+      // Build auth headers if identity is available
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (identity?.privateKey && identity?.publicKey) {
+        try {
+          const auth = await buildAuthHeaders({
+            method: 'POST',
+            path: '/inference/register',
+            body: payload,
+            privateKey: Buffer.from(identity.privateKey, 'hex'),
+            publicKey: Buffer.from(identity.publicKey, 'hex'),
+            peerId: identity.peerId,
+          });
+          Object.assign(headers, auth);
+        } catch (signErr) {
+          logger.warn('[ModelDiscovery] Failed to sign request:', (signErr as Error).message);
+        }
+      }
+
       await axios.post(`${coordinatorUrl}/inference/register`, payload, {
         timeout: 5000,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
 
       this.lastRegisteredHash = hash;

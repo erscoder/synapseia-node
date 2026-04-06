@@ -9,6 +9,8 @@ import type { ToolDef } from './types';
 
 @Injectable()
 export class SearchCorpusTool {
+  constructor(private readonly coordinatorHelper: WorkOrderCoordinatorHelper) {}
+
   readonly def: ToolDef = {
     name: 'search_reference_corpus',
     description: 'Search the Synapseia research corpus for papers related to a topic. Use when you need scientific context or related work.',
@@ -23,7 +25,6 @@ export class SearchCorpusTool {
   };
 
   async execute(params: { topic: string; limit?: number }, coordinatorUrl: string): Promise<unknown> {
-    const helper = new WorkOrderCoordinatorHelper();
-    return helper.fetchReferenceContext(coordinatorUrl, params.topic);
+    return this.coordinatorHelper.fetchReferenceContext(coordinatorUrl, params.topic);
   }
 }

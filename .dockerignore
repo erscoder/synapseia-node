@@ -6,7 +6,7 @@ npm-debug.log
 yarn-error.log
 
 # Build artifacts
-dist
+# dist  # MUST be included — we copy the pre-built dist from host
 build
 *.tsbuildinfo
 

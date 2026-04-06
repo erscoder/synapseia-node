@@ -2,18 +2,96 @@
  * WorkOrderCoordinatorHelper — all HTTP calls to the coordinator API.
  * Handles: fetch/accept/complete work orders, submit results, download datasets,
  * upload insights, hyperparams, and reference/knowledge-graph context.
+ *
+ * Supports Ed25519 signing for authenticated node requests.
+ * Use setIdentity(keypair, publicKey, peerId) to enable signing.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit, Inject, Optional } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { buildAuthHeaders } from '../../../utils/node-auth';
 import logger from '../../../utils/logger';
 import type { WorkOrder, ResearchResult, TrainingWorkOrderPayload, ResearchPayload } from './work-order.types';
 import type { Experiment } from '../../../types';
+import { IdentityService } from '../../../modules/identity/services/identity.service';
 
 @Injectable()
-export class WorkOrderCoordinatorHelper {
+export class WorkOrderCoordinatorHelper implements OnModuleInit {
+  private _keypair?: Uint8Array;
+  private _publicKey?: Uint8Array;
+  private _peerId?: string;
+
+  constructor(
+    @Optional() private readonly identityService?: IdentityService,
+  ) {}
+
+  async onModuleInit(): Promise<void> {
+    if (this.identityService) {
+      try {
+        const identity = await this.identityService.getOrCreate();
+        if (identity?.privateKey && identity?.publicKey) {
+          // Keys are stored as hex strings in identity.json — convert to Uint8Array
+          this._keypair = Buffer.from(identity.privateKey, 'hex');
+          this._publicKey = Buffer.from(identity.publicKey, 'hex');
+          this._peerId = identity.peerId;
+          logger.info('[WorkOrderCoordinatorHelper] Ed25519 signing enabled for peerId:', this._peerId?.slice(0, 16) + '...');
+        }
+      } catch (err) {
+        logger.warn('[WorkOrderCoordinatorHelper] Failed to load identity for signing:', (err as Error).message);
+      }
+    }
+  }
+
+  /**
+   * Configure Ed25519 identity for signed requests.
+   * Call this once after the node has loaded its keypair.
+   */
+  setIdentity(keypair: Uint8Array, publicKey: Uint8Array, peerId: string): void {
+    this._keypair = keypair;
+    this._publicKey = publicKey;
+    this._peerId = peerId;
+  }
+
+  get peerId(): string | undefined {
+    return this._peerId;
+  }
+
+  /**
+   * Build signed fetch options if identity is configured.
+   * Falls back to unsigned if no identity is set.
+   */
+  private async signedFetch(
+    url: string,
+    method: string,
+    body: unknown,
+  ): Promise<{ url: string; init: RequestInit }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    if (this._keypair && this._publicKey && this._peerId) {
+      const parsedUrl = new URL(url);
+      const pathStr = parsedUrl.pathname + parsedUrl.search;
+      const auth = await buildAuthHeaders({
+        method,
+        path: pathStr,
+        body,
+        privateKey: this._keypair,
+        publicKey: this._publicKey,
+        peerId: this._peerId,
+      });
+      Object.assign(headers, auth);
+    }
+
+    return {
+      url,
+      init: {
+        method,
+        headers,
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      },
+    };
+  }
   // ── Work order lifecycle ──────────────────────────────────────────────────
 
   async fetchAvailableWorkOrders(coordinatorUrl: string, peerId: string, capabilities: string[]): Promise<WorkOrder[]> {
@@ -36,8 +114,9 @@ export class WorkOrderCoordinatorHelper {
     const url = `${coordinatorUrl}/work-orders/${workOrderId}/accept`;
     logger.log(` [Accept] POST ${url}`);
     try {
-      const body = JSON.stringify({ workOrderId, assigneeAddress: peerId, nodeCapabilities });
-      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      const body = { workOrderId, assigneeAddress: peerId, nodeCapabilities };
+      const { url: fetchUrl, init } = await this.signedFetch(url, 'POST', body);
+      const response = await fetch(fetchUrl, init);
       if (!response.ok) {
         const error = await response.text();
         logger.warn(` [Accept] HTTP ${response.status} for ${workOrderId}: ${error}`);
@@ -68,11 +147,9 @@ export class WorkOrderCoordinatorHelper {
       return true;
     }
     try {
-      const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workOrderId, assigneeAddress: peerId, result, success }),
-      });
+      const body = { workOrderId, assigneeAddress: peerId, result, success };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, 'POST', body);
+      const response = await fetch(fetchUrl, init);
       if (!response.ok) {
         logger.warn(` Failed to complete work order ${workOrderId}:`, await response.text());
         return false;
@@ -97,19 +174,17 @@ export class WorkOrderCoordinatorHelper {
     hyperparams?: Record<string, unknown>,
   ): Promise<boolean> {
     try {
-      const response = await fetch(`${coordinatorUrl}/research-queue/results`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paperId: workOrderId,
-          peerId,
-          nodeId: peerId,
-          summary: result.summary,
-          keyInsights: result.keyInsights,
-          applicationProposal: result.proposal,
-          ...(hyperparams ? { hyperparams } : {}),
-        }),
-      });
+      const body = {
+        paperId: workOrderId,
+        peerId,
+        nodeId: peerId,
+        summary: result.summary,
+        keyInsights: result.keyInsights,
+        applicationProposal: result.proposal,
+        ...(hyperparams ? { hyperparams } : {}),
+      };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/research-queue/results`, 'POST', body);
+      const response = await fetch(fetchUrl, init);
       if (!response.ok) { logger.warn(` Failed to submit research result:`, await response.text()); return false; }
       logger.log(` Research result submitted successfully`);
       return true;
@@ -135,11 +210,8 @@ export class WorkOrderCoordinatorHelper {
     }
     try {
       const payload = { nodeId, topic, hypothesis, keyInsights, metricValue, ...(roundId ? { roundId } : {}), ...(submissionId ? { submissionId } : {}) };
-      const response = await fetch(`${coordinatorUrl.replace(/\/$/, '')}/insights`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl.replace(/\/$/, '')}/insights`, 'POST', payload);
+      const response = await fetch(fetchUrl, init);
       if (!response.ok) {
         logger.warn(`[InsightUpload] Failed to upload insight: ${response.status} ${await response.text().catch(() => 'unknown error')}`);
         return false;
@@ -198,11 +270,9 @@ export class WorkOrderCoordinatorHelper {
     latencyMs: number,
   ): Promise<void> {
     try {
-      await fetch(`${coordinatorUrl}/hyperparams/experiments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ peerId, config: { ...config, chunkSize: config.chunkSize ?? 512 }, qualityScore, latencyMs, tokenCost: 0, papersTested: 1 }),
-      });
+      const body = { peerId, config: { ...config, chunkSize: config.chunkSize ?? 512 }, qualityScore, latencyMs, tokenCost: 0, papersTested: 1 };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/hyperparams/experiments`, 'POST', body);
+      await fetch(fetchUrl, init);
     } catch { /* non-critical */ }
   }
 
@@ -231,16 +301,14 @@ export class WorkOrderCoordinatorHelper {
     durationMs: number,
   ): Promise<void> {
     try {
-      await fetch(`${coordinatorUrl}/hyperparams/experiments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          peerId,
-          config: { id: config?.id ?? `train_${Date.now()}`, temperature: 0, promptTemplate: 'training', analysisDepth: 'training', chunkSize: 512, ...config },
-          qualityScore: Math.max(0, Math.min(10, 10 * Math.exp(-valLoss))),
-          latencyMs: durationMs, tokenCost: 0, papersTested: 1,
-        }),
-      });
+      const body = {
+        peerId,
+        config: { id: config?.id ?? `train_${Date.now()}`, temperature: 0, promptTemplate: 'training', analysisDepth: 'training', chunkSize: 512, ...config },
+        qualityScore: Math.max(0, Math.min(10, 10 * Math.exp(-valLoss))),
+        latencyMs: durationMs, tokenCost: 0, papersTested: 1,
+      };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/hyperparams/experiments`, 'POST', body);
+      await fetch(fetchUrl, init);
     } catch { /* non-critical */ }
   }
 
@@ -253,11 +321,9 @@ export class WorkOrderCoordinatorHelper {
     durationMs: number,
   ): Promise<void> {
     try {
-      await fetch(`${coordinatorUrl}/experiments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ peerId, domain: payload.domain, datasetId: payload.datasetId, valLoss, finalLoss, durationMs, improved: valLoss < payload.currentBestLoss, createdAt: Date.now() }),
-      });
+      const body = { peerId, domain: payload.domain, datasetId: payload.datasetId, valLoss, finalLoss, durationMs, improved: valLoss < payload.currentBestLoss, createdAt: Date.now() };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/experiments`, 'POST', body);
+      await fetch(fetchUrl, init);
     } catch { /* non-critical */ }
   }
 

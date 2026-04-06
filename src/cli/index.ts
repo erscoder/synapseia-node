@@ -15,7 +15,7 @@ import { homedir as dotenvHomedir } from 'os';
     dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '..', '.env'),
   ];
   for (const f of candidates) {
-    if (dotenvExists(f)) { dotenvConfig({ path: f }); break; }
+    if (dotenvExists(f)) { dotenvConfig({ path: f, debug: false }); break; }
   }
 })();
 import logger from '../utils/logger';
@@ -766,6 +766,10 @@ async function bootstrap() {
       if (options.setName) {
         config.name = options.setName;
         configService.save(config);
+        // Also update identity.json so heartbeat sends the new name
+        const identityService = app.get(IdentityService);
+        const identityDir = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+        identityService.update({ name: options.setName }, identityDir);
         logger.log(`✅ Node name set to: ${options.setName}`);
         return;
       }
