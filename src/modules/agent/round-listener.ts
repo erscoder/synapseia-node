@@ -11,6 +11,7 @@ import { ReviewAgentHelper, type LLMReviewConfig } from './review-agent';
 interface RoundWinner {
   rank: number;
   nodeId: string;
+  nodeName?: string;
   rewardAmount: string;
   submissionId: string;
 }
@@ -70,11 +71,17 @@ export class RoundListenerHelper {
           `(submission: ${myResult.submissionId})`
         );
       } else if (event.winners.length > 0) {
-        const winner = event.winners[0];
+        const winnersList = event.winners
+          .slice(0, 3)
+          .map(w => {
+            const name = w.nodeName ?? `${w.nodeId.slice(0, 8)}...`;
+            const emoji = w.rank === 1 ? '🥇' : w.rank === 2 ? '🥈' : '🥉';
+            return `${emoji} ${name}`;
+          })
+          .join(' | ');
         logger.log(
           `[RoundListener] Round ended — you did not place. ` +
-          `Winner: ${winner.nodeId.slice(0, 8)}... ` +
-          `(${lamportsToSyn(winner.rewardAmount)} SYN)`
+          `Winners: ${winnersList}`
         );
       } else {
         logger.log('[RoundListener] Round ended with no winners (no submissions).');
