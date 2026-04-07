@@ -384,14 +384,18 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     }
 
     const content = await response.text();
-    fs.writeFileSync(corpusPath, content, 'utf-8');
+    // CPU training: truncate corpus to MAX_TRAINING_CORPUS_CHARS to prevent timeouts.
+    // 50K chars is enough for meaningful training on micro-transformers (CPU ~1-2min/epoch).
+    const MAX_TRAINING_CORPUS_CHARS = 50_000;
+    const truncated = content.length > MAX_TRAINING_CORPUS_CHARS ? content.slice(0, MAX_TRAINING_CORPUS_CHARS) : content;
+    fs.writeFileSync(corpusPath, truncated, 'utf-8');
     const newMeta: { etag?: string; lastModified?: string } = {};
     const newEtag = response.headers.get('etag');
     const newLastModified = response.headers.get('last-modified');
     if (newEtag) newMeta.etag = newEtag;
     if (newLastModified) newMeta.lastModified = newLastModified;
     fs.writeFileSync(metaPath, JSON.stringify(newMeta), 'utf-8');
-    logger.log(`[Dataset] '${domain}' corpus downloaded → ${corpusPath} (${content.length} chars)`);
+    logger.log(`[Dataset] '${domain}' corpus downloaded → ${corpusPath} (${truncated.length} chars${content.length > MAX_TRAINING_CORPUS_CHARS ? `, truncated from ${content.length}` : ''})`);
     return corpusPath;
   }
 }
