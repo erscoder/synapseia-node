@@ -7,8 +7,15 @@
  * - path: URL path (e.g. /peer/heartbeat)
  * - bodyHash: SHA-256 of JSON-stringified body, base64-encoded
  */
-import { sign } from '@noble/ed25519';
+import * as ed from '@noble/ed25519';
+import { sha512 } from '@noble/hashes/sha512';
 import { sha256 } from '@noble/hashes/sha256';
+
+// @noble/ed25519 v2.x requires sha512Sync to be configured before use.
+// Without this, sign() throws "hashes.sha512Sync not set".
+ed.etc.sha512Sync = (...msgs) => sha512(...msgs);
+
+const { sign } = ed;
 
 export interface AuthHeaders {
   'X-Peer-Id': string;
