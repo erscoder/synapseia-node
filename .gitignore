@@ -1,6 +1,33 @@
+# dependencies
+node_modules/
 
-coverage/
-node_modules
+# build output
 dist/
-CLAUDE.md
+
+# test coverage
+coverage/
+coverage-langgraph
+
+# environment files — NEVER commit
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+
+# logs
+*.log
+
+# memory & progress
+memory/
+PROGRESS.md
+
+# keypairs — never commit
+*keypair
+*.json.secret
+
+# devnet
+.devnet/
+
+# claude memory
 **/CLAUDE.md
