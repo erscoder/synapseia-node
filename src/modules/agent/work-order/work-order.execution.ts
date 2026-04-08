@@ -237,7 +237,7 @@ Abstract: ${payload.abstract}`;
 
     const improved = trainingResult.valLoss < payload.currentBestLoss;
     await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, trainingResult.valLoss, trainingResult.durationMs);
-    await this.coordinator.submitTrainingToExperiments(coordinatorUrl, peerId, payload, trainingResult.valLoss, trainingResult.finalLoss, trainingResult.durationMs);
+    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, payload, trainingResult.valLoss, trainingResult.finalLoss, trainingResult.durationMs);
 
     logger.log(` Training complete — valLoss=${trainingResult.valLoss.toFixed(4)}, improved=${improved}`);
     return { result: JSON.stringify({ valLoss: trainingResult.valLoss, finalLoss: trainingResult.finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: trainingResult.valLoss }), success: true };

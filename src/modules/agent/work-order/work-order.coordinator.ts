@@ -312,18 +312,32 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     } catch { /* non-critical */ }
   }
 
-  async submitTrainingToExperiments(
+  async submitTrainingResult(
     coordinatorUrl: string,
     peerId: string,
     payload: TrainingWorkOrderPayload,
-    valLoss: number,
-    finalLoss: number,
+    valLossBefore: number,
+    valLossAfter: number,
     durationMs: number,
   ): Promise<void> {
     try {
-      const body = { peerId, domain: payload.domain, datasetId: payload.datasetId, valLoss, finalLoss, durationMs, improved: valLoss < payload.currentBestLoss, createdAt: Date.now() };
-      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/experiments`, 'POST', body);
-      await fetch(fetchUrl, init);
+      const body = {
+        peerId,
+        domain: payload.domain,
+        datasetId: payload.datasetId,
+        valLossBefore,
+        valLossAfter,
+        durationMs,
+        improved: valLossAfter < payload.currentBestLoss,
+        timestamp: Date.now(),
+      };
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/micro-training/results`, 'POST', body);
+      const response = await fetch(fetchUrl, init);
+      if (!response.ok) {
+        logger.warn(`[MicroTraining] Failed to submit: ${response.status} ${await response.text()}`);
+      } else {
+        logger.log(`[MicroTraining] Result submitted successfully`);
+      }
     } catch { /* non-critical */ }
   }
 
