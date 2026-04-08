@@ -148,30 +148,37 @@ export class WorkOrderEvaluationHelper {
     const bountySyn = parseSynToLamports(workOrder.rewardAmount);
     const bountyUsd = (Number(bountySyn) / 1e9) * config.synPriceUsd;
 
-    if (!this.isResearchWorkOrder(workOrder)) {
-      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Non-research WO: no compute cost estimation needed' };
+    const isResearch = this.isResearchWorkOrder(workOrder);
+
+    if (!isResearch) {
+      // Non-research (training/inference): always accept — coordinator handles economics
+      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Non-research WO: always accept' };
     }
 
+    // Research WOs: always accept if valid — research is the primary value, even low-SYN research is better than idle
     const payload = this.extractResearchPayload(workOrder);
     if (!payload) {
       return { shouldAccept: false, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: 0, reason: 'Invalid research payload' };
     }
 
     const estimatedCostUsd = this.estimateLLMCost(payload.abstract, config);
+
+    // Research: accept regardless of cost (even if using cloud LLM).
+    // If Ollama or zero cost: log acceptance. If cloud LLM: still accept but log the cost.
     if (config.llmType === 'ollama') {
-      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Local Ollama model: zero API cost, always accept' };
+      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Research: Ollama — accept' };
     }
     if (estimatedCostUsd === 0) {
-      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Zero cost estimate, accepting' };
+      return { shouldAccept: true, bountySyn, bountyUsd, estimatedCostUsd: 0, profitRatio: Infinity, reason: 'Research: zero cost — accept' };
     }
 
+    // Research WOs with cloud LLM: accept even if not hugely profitable.
+    // Log the economics for visibility but don't reject.
     const profitRatio = bountyUsd / estimatedCostUsd;
-    const shouldAccept = profitRatio >= config.minProfitRatio;
     return {
-      shouldAccept, bountySyn, bountyUsd, estimatedCostUsd, profitRatio,
-      reason: shouldAccept
-        ? `Profitable: ratio ${profitRatio.toFixed(2)}x >= ${config.minProfitRatio}x minimum`
-        : `Not profitable: ratio ${profitRatio.toFixed(2)}x < ${config.minProfitRatio}x minimum`,
+      shouldAccept: true,
+      bountySyn, bountyUsd, estimatedCostUsd, profitRatio,
+      reason: `Research: accepting despite ratio ${profitRatio.toFixed(2)}x (cost=${estimatedCostUsd.toFixed(4)} USD, bounty=${bountyUsd.toFixed(4)} USD)`,
     };
   }
 
