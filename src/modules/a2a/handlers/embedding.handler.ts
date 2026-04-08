@@ -6,7 +6,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { EmbeddingHelper } from '../../../shared/embedding';
+import { EmbeddingHelper } from './embedding.helper';
 
 export interface EmbeddingPayload {
   text: string;

@@ -8,8 +8,8 @@
 
 import { EmbeddingHandler } from '../../handlers/embedding.handler';
 
-// Mock the shared embedding module
-jest.mock('../../../../shared/embedding', () => ({
+// Mock the local embedding helper
+jest.mock('../../handlers/embedding.helper', () => ({
   EmbeddingHelper: jest.fn().mockImplementation(() => ({
     generateEmbedding: jest.fn(),
   })),
@@ -38,7 +38,7 @@ describe('EmbeddingHandler', () => {
 
     it('should return error object if Ollama is unavailable', async () => {
       // Override the handler's EmbeddingHelper to throw
-      const { EmbeddingHelper } = require('../../../../shared/embedding');
+      const { EmbeddingHelper } = require('../../handlers/embedding.helper');
       (EmbeddingHelper as jest.Mock).mockImplementationOnce(() => ({
         generateEmbedding: jest.fn().mockRejectedValue(new Error('Connection refused')),
       }));
@@ -53,7 +53,7 @@ describe('EmbeddingHandler', () => {
 
     it('should return embedding result with model and dimensions', async () => {
       // Override to return a mock embedding
-      const { EmbeddingHelper } = require('../../../../shared/embedding');
+      const { EmbeddingHelper } = require('../../handlers/embedding.helper');
       (EmbeddingHelper as jest.Mock).mockImplementationOnce(() => ({
         generateEmbedding: jest.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4]),
       }));
@@ -68,7 +68,7 @@ describe('EmbeddingHandler', () => {
     });
 
     it('should use provided model', async () => {
-      const { EmbeddingHelper } = require('../../../../shared/embedding');
+      const { EmbeddingHelper } = require('../../handlers/embedding.helper');
       (EmbeddingHelper as jest.Mock).mockImplementationOnce(() => ({
         generateEmbedding: jest.fn().mockResolvedValue([0.5]),
       }));
