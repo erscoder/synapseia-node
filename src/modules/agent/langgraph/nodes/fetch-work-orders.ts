@@ -20,7 +20,7 @@ export class FetchWorkOrdersNode {
   private readonly completedWorkOrderIds = new Set<string>();
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
-    const { coordinatorUrl, peerId, capabilities } = state;
+    const { coordinatorUrl, peerId, capabilities, rejectedWorkOrderIds = [] } = state;
     logger.log(' Polling for available work orders...');
 
     const workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
@@ -33,6 +33,11 @@ export class FetchWorkOrdersNode {
     const now = Date.now();
 
     const pending = workOrders.filter((wo: WorkOrder) => {
+      // Skip work orders already rejected by economic evaluation
+      if (rejectedWorkOrderIds.includes(wo.id)) {
+        logger.log(` WO "${wo.title}" rejected by economics — skipping`);
+        return false;
+      }
       if (this.execution.isResearchWorkOrder(wo)) {
         const cooldownUntil = this.researchCooldowns.get(wo.id);
         if (cooldownUntil && now < cooldownUntil) {
@@ -49,7 +54,7 @@ export class FetchWorkOrdersNode {
       logger.log(` Skipping ${workOrders.length - pending.length} WO(s) — ${pending.length} remaining`);
     }
     if (pending.length === 0) {
-      logger.log(' All work orders completed or on cooldown — waiting');
+      logger.log(' All work orders skipped (completed / cooldown / rejected by economics) — waiting');
       return { availableWorkOrders: [] };
     }
 

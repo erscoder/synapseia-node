@@ -54,6 +54,7 @@ const AgentStateAnnotation = Annotation.Root({
   researcherOutput: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   criticOutput: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   researchPayload: Annotation<{ title: string; abstract: string } | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
+  rejectedWorkOrderIds: Annotation<string[]>({ default: () => [], reducer: (_a, b) => b }),
 });
 
 @Injectable()
@@ -210,6 +211,7 @@ export class AgentGraphService {
       selfCritiquePassed: false,
       selfCritiqueFeedback: '',
       retryCount: 0,
+      rejectedWorkOrderIds: [],
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

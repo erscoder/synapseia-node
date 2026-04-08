@@ -97,6 +97,8 @@ export interface AgentState {
   criticOutput?: string;
   /** Multi-agent research pipeline: parsed payload for the current research */
   researchPayload?: { title: string; abstract: string } | null;
+  /** Work order IDs that were rejected by economic evaluation — skip on next fetch */
+  rejectedWorkOrderIds?: string[];
 }
 
 /**

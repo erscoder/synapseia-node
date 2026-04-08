@@ -107,18 +107,45 @@ export async function startNode(
     logger.warn(`⚠️P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
   }
 
-  // ── 2. Heartbeat ──────────────────────────────────────────────────────────
-  logger.log('💓 Starting heartbeat loop...');
+  // ── 2. Heartbeat — send initial one before accepting work orders ─────────
   const heartbeatHelper = new HeartbeatHelper(new IpifyService());
+  const hardware = { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama'), hasCloudLlm: !!config.llmConfig?.baseUrl };
+
+  logger.log('💓 Sending initial heartbeat (validating with coordinator)...');
+  try {
+    const response = await heartbeatHelper.sendHeartbeat(
+      config.coordinatorUrl,
+      config.identity,
+      hardware,
+      config.lat,
+      config.lng,
+      config.walletAddress,
+    );
+    logger.log(`   ✓ Heartbeat OK — registered: ${response.registered}, peerId: ${response.peerId}`);
+  } catch (err) {
+    logger.warn(`   ⚠️ Initial heartbeat failed (will retry periodically): ${(err as Error).message}`);
+  }
+
+  // Register models with coordinator (needed for WO routing)
+  try {
+    const { ModelDiscovery } = await import('./modules/discovery/model-discovery');
+    const modelDiscovery = new ModelDiscovery();
+    await modelDiscovery.registerModels(config.coordinatorUrl, config.identity.peerId, hardware, config.identity);
+    logger.log('   ✓ Models registered with coordinator');
+  } catch (err) {
+    logger.warn(`   ⚠️ Model registration failed (non-critical): ${(err as Error).message}`);
+  }
+
+  // Start periodic heartbeat in background
   const heartbeatCleanup = heartbeatHelper.startPeriodicHeartbeat(
     config.coordinatorUrl,
     config.identity,
-    { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama'), hasCloudLlm: !!config.llmConfig?.baseUrl },
+    hardware,
     config.intervalMs ?? 30000,
     p2pNode ?? undefined,
     config.lat,
     config.lng,
-    config.walletAddress, // Solana wallet address for reward payouts
+    config.walletAddress,
   );
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);

@@ -118,7 +118,8 @@ export class TrainerHelper {
       runNumber = 1,
     } = options;
 
-    const TRAINING_TIMEOUT_MS = parseInt(process.env.TRAINING_TIMEOUT_MS || '600000', 10);
+    // Training can be slow in container environments (CPU-constrained). Default: 20 min.
+    const TRAINING_TIMEOUT_MS = parseInt(process.env.TRAINING_TIMEOUT_MS || '1200000', 10);
 
     let killProcess: (() => void) | null = null;
     const settledHolder = { current: false };
@@ -128,6 +129,7 @@ export class TrainerHelper {
       const lossCurve: number[] = [];
 
       logger.log(`Spawning: python3 ${pythonScriptPath}`);
+      logger.log(`Training timeout: ${(TRAINING_TIMEOUT_MS / 1000).toFixed(0)}s (TRAINING_TIMEOUT_MS env var overrides)`);
       logger.log(`Script exists: ${existsSync(pythonScriptPath)}`);
 
       const pythonProcess = spawn('python3', [pythonScriptPath], {
