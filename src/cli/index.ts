@@ -10,6 +10,11 @@ import { existsSync as dotenvExists } from 'fs';
 import { join as dotenvJoin, dirname as dotenvDirname } from 'path';
 import { fileURLToPath as dotenvFileUrlToPath } from 'url';
 import { homedir as dotenvHomedir } from 'os';
+import { setMaxListeners } from 'events';
+
+// Suppress AbortSignal/EventTarget MaxListeners warning — LangGraph + libp2p create many
+// abort signals internally and Node.js 22 emits warnings when >10 listeners accumulate.
+setMaxListeners(Infinity);
 
 (function loadDotEnv() {
   const candidates = [

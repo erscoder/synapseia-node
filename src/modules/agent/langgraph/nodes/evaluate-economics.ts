@@ -17,7 +17,16 @@ export class EvaluateEconomicsNode {
     const evaluation = this.evaluation.evaluateWorkOrder(selectedWorkOrder, economicConfig);
 
     logger.log(` Economic evaluation: Bounty=${evaluation.bountyUsd.toFixed(4)} USD, Cost=${evaluation.estimatedCostUsd.toFixed(4)} USD → ${evaluation.shouldAccept ? 'ACCEPT' : 'SKIP'}`);
-    return { economicEvaluation: evaluation };
+
+    // Track rejected work orders to avoid infinite loops
+    const rejectedIds = [...(state.rejectedWorkOrderIds ?? [])];
+    if (!evaluation.shouldAccept && state.selectedWorkOrder) {
+      if (!rejectedIds.includes(state.selectedWorkOrder.id)) {
+        rejectedIds.push(state.selectedWorkOrder.id);
+      }
+    }
+
+    return { economicEvaluation: evaluation, rejectedWorkOrderIds: rejectedIds };
   }
 
   private buildFullModelId(config: AgentState['config']): string | undefined {
