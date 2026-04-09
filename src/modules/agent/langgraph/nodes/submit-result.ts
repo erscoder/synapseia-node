@@ -12,12 +12,15 @@ export class SubmitResultNode {
     const { selectedWorkOrder, executionResult, researchResult, coordinatorUrl, peerId } = state;
     if (!selectedWorkOrder || !executionResult) return { submitted: false };
 
+    const completedIds = new Set<string>(state.completedWorkOrderIds ?? []);
+    const updatedIds = [...completedIds];
+
     logger.log(' Reporting result...');
     const completed = await this.coordinator.completeWorkOrder(
       coordinatorUrl, selectedWorkOrder.id, peerId,
       executionResult.result, executionResult.success,
-      new Set<string>(),
-      () => {},
+      completedIds,
+      (id: string) => updatedIds.push(id),
       () => {},
       (s: string) => BigInt(Math.floor(parseFloat(s) * 1e9)),
     );
@@ -32,6 +35,6 @@ export class SubmitResultNode {
       logger.log(' Failed to report completion');
     }
 
-    return { submitted: completed };
+    return { submitted: completed, completedWorkOrderIds: updatedIds };
   }
 }

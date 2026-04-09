@@ -120,8 +120,11 @@ export class AgentGraphService {
       { acceptWorkOrder: 'acceptWorkOrder', fetchWorkOrders: 'fetchWorkOrders' },
     );
 
-    // After accepting, retrieve memories  
-    w.addEdge('acceptWorkOrder', 'retrieveMemory');
+    // After accepting: only continue if coordinator confirmed acceptance
+    w.addConditionalEdges('acceptWorkOrder',
+      (s: AgentState) => s.accepted ? 'retrieveMemory' : '__end__',
+      { retrieveMemory: 'retrieveMemory', __end__: '__end__' },
+    );
 
     // After memory retrieval, plan execution for research WOs
     w.addEdge('retrieveMemory', 'planExecution');
@@ -153,6 +156,7 @@ export class AgentGraphService {
     w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
     w.addEdge('executeDiloco', 'qualityGate');
+    w.addEdge('executeResearch', 'qualityGate');
 
     // After self-critique, decide whether to retry or proceed to quality gate
     w.addConditionalEdges('selfCritique',

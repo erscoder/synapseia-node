@@ -13,7 +13,7 @@ import { sha256 } from '@noble/hashes/sha256';
 
 // @noble/ed25519 v2.x requires sha512Sync to be configured before use.
 // Without this, sign() throws "hashes.sha512Sync not set".
-ed.etc.sha512Sync = (...msgs) => sha512(...msgs);
+ed.etc.sha512Sync = sha512 as unknown as (...msgs: Uint8Array[]) => Uint8Array;
 
 const { sign } = ed;
 

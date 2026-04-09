@@ -80,6 +80,8 @@ export class RewardsHelper {
     rewards: RewardCalculation[],
     totalPoolAmount: number,
   ): RewardCalculation[] {
+    if (rewards.length === 0) return [];
+
     const totalWeight = rewards.reduce((sum, r) => sum + r.weight, 0);
 
     // If total weight is 0, distribute equally

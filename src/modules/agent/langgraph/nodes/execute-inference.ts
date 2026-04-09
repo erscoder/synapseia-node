@@ -12,16 +12,19 @@ export class ExecuteInferenceNode {
 
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
-    const { selectedWorkOrder, config, coordinatorUrl } = state;
+    const { selectedWorkOrder, config } = state;
     if (!selectedWorkOrder) {
       return { executionResult: { result: 'No work order selected', success: false } };
     }
 
-    logger.log(` Executing CPU inference: ${selectedWorkOrder.title}`);
+    const isGpu = this.execution.isGpuInferenceWorkOrder(selectedWorkOrder);
+    const label = isGpu ? 'GPU' : 'CPU';
+
+    logger.log(` Executing ${label} inference: ${selectedWorkOrder.title}`);
     try {
-      const inferenceResult = await this.execution.executeCpuInferenceWorkOrder(
-        selectedWorkOrder, config.llmModel, config.llmConfig, coordinatorUrl,
-      );
+      const inferenceResult = isGpu
+        ? await this.execution.executeGpuInferenceWorkOrder(selectedWorkOrder, config.llmModel, config.llmConfig)
+        : await this.execution.executeCpuInferenceWorkOrder(selectedWorkOrder, config.llmModel, config.llmConfig);
       const result = JSON.stringify({
         ...inferenceResult,
         metricType: 'latency',
@@ -30,8 +33,8 @@ export class ExecuteInferenceNode {
       return { executionResult: { result, success: true } };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(` CPU inference failed: ${msg}`);
-      return { executionResult: { result: `CPU inference failed: ${msg}`, success: false } };
+      logger.error(` ${label} inference failed: ${msg}`);
+      return { executionResult: { result: `${label} inference failed: ${msg}`, success: false } };
     }
   }
 }

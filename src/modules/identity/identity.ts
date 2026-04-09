@@ -107,16 +107,16 @@ export class IdentityHelper {
    * @returns Hex signature (64 bytes = 128 hex chars)
    */
   async sign(message: string, privateKeyHex: string): Promise<string> {
-    // Use HMAC-SHA256 for signing (CJS compatible, no ESM issues)
-    // NOTE: This is not true Ed25519. For production crypto, consider using
-    // @noble/ed25519 or a proper Ed25519 implementation.
-    // BUG-1: Coordinator uses Ed25519 for verification, which won't match.
-    // This is a known limitation documented in BUGS-SPRINT10.md.
+    // Use Node.js native Ed25519 (compatible with @noble/ed25519 used in node-auth.ts)
+    // Raw 32-byte Ed25519 private key must be wrapped in PKCS8 DER format for Node.js crypto
     const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
     const messageBytes = Buffer.from(message, 'utf-8');
-    const hmac = crypto.createHmac('sha256', privateKeyBytes);
-    hmac.update(messageBytes);
-    return hmac.digest('hex');
+    // ASN.1 DER PKCS8 header for Ed25519 (RFC 8410)
+    const pkcs8Header = Buffer.from('302e020100300506032b657004220420', 'hex');
+    const derKey = Buffer.concat([pkcs8Header, privateKeyBytes]);
+    const keyObject = crypto.createPrivateKey({ key: derKey, format: 'der', type: 'pkcs8' });
+    const signature = crypto.sign(null, messageBytes, keyObject);
+    return signature.toString('hex');
   }
 
   /**

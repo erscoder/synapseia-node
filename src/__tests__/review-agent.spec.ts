@@ -59,7 +59,8 @@ describe('ReviewAgentHelper', () => {
       const result = await helper.fetchEvaluationAssignments(COORDINATOR_URL, PEER_ID);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        `${COORDINATOR_URL}/evaluations/assignments?nodeId=${PEER_ID}`
+        `${COORDINATOR_URL}/evaluations/assignments?nodeId=${PEER_ID}`,
+        expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/json' }) })
       );
       expect(result).toEqual(mockAssignments);
     });
@@ -162,7 +163,6 @@ describe('ReviewAgentHelper', () => {
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
-            'X-Node-ID': PEER_ID,
           }),
         })
       );

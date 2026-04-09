@@ -93,7 +93,7 @@ export class LlmProviderHelper {
       if (modelId) return { provider: 'cloud', providerId: 'minimax', modelId };
     }
     if (modelStr.startsWith('kimi/') || modelStr.startsWith('moonshot/')) {
-      const modelId = modelStr.split('/')[0];
+      const modelId = modelStr.split('/')[1];
       if (modelId) return { provider: 'cloud', providerId: 'moonshot', modelId };
     }
 
@@ -283,7 +283,7 @@ export class LlmProviderHelper {
   private async checkMinimax(model: LLMModel, apiKey: string): Promise<LLMStatus> {
     try {
       const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const response = await fetch('https://api.minimax.chat/v1/text/chatcompletion_v2', {
+      const response = await fetch('https://api.minimax.io/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({ model: model.modelId, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 }),

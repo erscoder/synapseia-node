@@ -7,9 +7,10 @@ import { RoundListenerHelper } from './round-listener';
 import { WorkOrderModule } from './work-order/work-order.module';
 import { LanggraphModule } from './langgraph/langgraph.module';
 import { LangGraphWorkOrderAgentService } from './services/langgraph-work-order-agent.service';
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
-  imports: [WorkOrderModule, LanggraphModule, LlmModule],
+  imports: [WorkOrderModule, LanggraphModule, LlmModule, IdentityModule],
   providers: [
     AgentBrainHelper,
     ReviewAgentHelper,

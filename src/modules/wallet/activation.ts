@@ -30,6 +30,7 @@ const SYN_TOKEN_MINT =
   process.env.SYN_TOKEN_MINT || 'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8';
 const ACTIVATION_DEPOSIT_SOL = 0.05;
 const POLL_INTERVAL_MS = 30_000;
+const MAX_ACTIVATION_POLLS = 120; // 120 × 30s = 1 hour max
 
 export interface ActivationStatus {
   activated: boolean;
@@ -151,8 +152,7 @@ export async function waitForActivationDeposit(
   logger.log("  ╚═══════════════════════════════════════════════════════╝");
   logger.log("");
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (let poll = 0; poll < MAX_ACTIVATION_POLLS; poll++) {
     const balance = await getSolBalance(walletAddress);
     onPoll(balance);
 
@@ -162,10 +162,13 @@ export async function waitForActivationDeposit(
     }
 
     const needed = ACTIVATION_DEPOSIT_SOL - balance;
-    logger.log(`[Activation] Current balance: ${balance.toFixed(4)} SOL — waiting for ${needed.toFixed(4)} more SOL...`);
+    logger.log(`[Activation] Current balance: ${balance.toFixed(4)} SOL — waiting for ${needed.toFixed(4)} more SOL... (${MAX_ACTIVATION_POLLS - poll - 1} polls remaining)`);
 
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
+
+  logger.warn('[Activation] Timed out waiting for activation deposit after 1 hour');
+  return { received: false };
 }
 
 /**

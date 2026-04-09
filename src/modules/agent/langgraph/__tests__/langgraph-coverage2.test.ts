@@ -27,6 +27,7 @@ jest.mock('../../work-order/work-order.execution', () => ({
     executeDiLoCoWorkOrder: mockExecuteDiLoCoWorkOrder,
     executeResearchWorkOrder: mockExecuteResearchWorkOrder,
     isResearchWorkOrder: mockIsResearchWorkOrder,
+    isGpuInferenceWorkOrder: jest.fn().mockReturnValue(false),
   })),
 }));
 jest.mock('../../work-order/work-order.coordinator', () => ({
@@ -49,6 +50,8 @@ jest.mock('../../work-order/work-order.evaluation', () => ({
       shouldAccept: true,
       netValueUsd: 0.99,
       efficiencyScore: 99,
+      profitRatio: 100,
+      reason: 'profitable',
     })),
   })),
 }));

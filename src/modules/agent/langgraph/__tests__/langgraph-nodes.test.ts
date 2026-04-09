@@ -43,6 +43,8 @@ jest.mock('../../work-order/work-order.evaluation', () => ({
       shouldAccept: true,
       netValueUsd: 0.99,
       efficiencyScore: 99,
+      profitRatio: 100,
+      reason: 'profitable',
     }),
   })),
 }));

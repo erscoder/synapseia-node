@@ -377,12 +377,20 @@ export class HardwareHelper {
     const caps: string[] = [];
     if (hardware.cpuCores > 0) caps.push('cpu');
     if (hardware.gpuVramGb > 0) caps.push('gpu');
-    if (this.canTrain()) caps.push('training');
+    if (this.canTrain()) {
+      caps.push('training');
+      // GPU + training → can do GPU-accelerated training (DiLoCo, fine-tuning)
+      if (hardware.gpuVramGb > 0) caps.push('gpu_training');
+    }
     if (this.canDiLoCo(hardware)) {
       if (!caps.includes('diloco')) caps.push('diloco');
       if (!caps.includes('gpu')) caps.push('gpu');
     }
-    if (this.canInference()) caps.push('cpu_inference');
+    if (this.canInference()) {
+      caps.push('cpu_inference');
+      // GPU + inference → can serve GPU-accelerated inference
+      if (hardware.gpuVramGb > 0) caps.push('gpu_inference');
+    }
     return caps;
   }
 }
