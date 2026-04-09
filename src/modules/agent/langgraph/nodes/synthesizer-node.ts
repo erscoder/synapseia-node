@@ -84,12 +84,15 @@ Respond only with valid JSON.`;
         } catch { /* ignore */ }
       }
 
+      const researchResult = {
+        summary: final.summary,
+        keyInsights: final.keyInsights,
+        proposal: final.proposal,
+      };
       return {
-        researchResult: {
-          summary: final.summary,
-          keyInsights: final.keyInsights,
-          proposal: final.proposal,
-        },
+        researchResult,
+        // Required by SubmitResultNode to proceed with submission
+        executionResult: { success: true, result: JSON.stringify(researchResult) },
         qualityScore: 0,
       };
     } catch (err) {
@@ -101,12 +104,14 @@ Respond only with valid JSON.`;
   private fallbackResult(state: AgentState): Partial<AgentState> {
     const output = state.researcherOutput;
     const parsed = this.parseResearchResult(output || '');
+    const researchResult = {
+      summary: parsed.summary || 'No summary generated',
+      keyInsights: parsed.keyInsights,
+      proposal: parsed.proposal || 'No proposal generated',
+    };
     return {
-      researchResult: {
-        summary: parsed.summary || 'No summary generated',
-        keyInsights: parsed.keyInsights,
-        proposal: parsed.proposal || 'No proposal generated',
-      },
+      researchResult,
+      executionResult: { success: true, result: JSON.stringify(researchResult) },
       qualityScore: 0,
     };
   }

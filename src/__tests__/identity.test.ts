@@ -397,7 +397,7 @@ describe('identity', () => {
       const signature = await sign(message, privateKeyHex);
 
       expect(typeof signature).toBe('string');
-      expect(signature.length).toBe(64); // HMAC-SHA256 signature = 32 bytes = 64 hex chars
+      expect(signature.length).toBe(128); // Ed25519 signature = 64 bytes = 128 hex chars
     });
 
     it('should produce different signatures for different messages', async () => {

@@ -21,9 +21,9 @@ import type {
   DiLoCoWorkOrderPayload,
   CpuInferenceWorkOrderPayload,
   CpuInferenceResultPayload,
-  EMBEDDING_MODEL,
+  GpuInferenceWorkOrderPayload,
 } from './work-order.types';
-import { EMBEDDING_MODEL as EMBED_MODEL } from './work-order.types';
+import { EMBEDDING_MODEL as EMBED_MODEL, GPU_INFERENCE_MODEL } from './work-order.types';
 import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 
@@ -320,6 +320,66 @@ Abstract: ${payload.abstract}`;
 
     const latencyMs = Date.now() - startMs;
     logger.log(`[CpuInference] task=${payload.task} done in ${latencyMs}ms, tokens=${tokensProcessed}`);
+    return { output, tokensProcessed, latencyMs, modelUsed };
+  }
+
+  // ── GPU Inference ──────────────────────────────────────────────────────────
+
+  isGpuInferenceWorkOrder(workOrder: WorkOrder): boolean {
+    if ((workOrder.type as string) === 'GPU_INFERENCE') return true;
+    if (workOrder.requiredCapabilities.includes('gpu_inference')) return true;
+    try {
+      const p = JSON.parse(workOrder.description) as Partial<GpuInferenceWorkOrderPayload>;
+      return typeof p.task === 'string' && ['generate', 'summarize', 'embedding_large'].includes(p.task) && typeof p.input === 'string';
+    } catch { return false; }
+  }
+
+  async executeGpuInferenceWorkOrder(workOrder: WorkOrder, llmModel: LLMModel, llmConfig?: LLMConfig): Promise<CpuInferenceResultPayload> {
+    const startMs = Date.now();
+    let payload: GpuInferenceWorkOrderPayload;
+    try { payload = JSON.parse(workOrder.description) as GpuInferenceWorkOrderPayload; } catch { throw new Error('Invalid GPU inference payload'); }
+
+    const tokens = payload.input.split(/\s+/).filter(Boolean);
+    const tokensProcessed = tokens.length;
+    let output: number[] | string;
+    let modelUsed: string;
+
+    if (payload.task === 'embedding_large') {
+      // Large-model embedding via Ollama with GPU-accelerated model
+      const embeddingHelper = new EmbeddingHelper();
+      const resolvedModel = payload.modelHint ?? GPU_INFERENCE_MODEL;
+      modelUsed = `ollama/${resolvedModel}`;
+      logger.log(`[GpuInference] Generating large embedding with ${resolvedModel}`);
+      output = await embeddingHelper.generateEmbedding(payload.input.slice(0, 8000), resolvedModel);
+      logger.log(`[GpuInference] Large embedding: ${(output as number[]).length} dimensions`);
+    } else if (payload.task === 'summarize') {
+      // Summarization via LLM (GPU-accelerated, longer context)
+      modelUsed = llmModel.modelId ?? 'unknown';
+      const prompt = `Summarize the following text in 3-5 concise bullet points. Focus on key findings and methodology.\n\nText:\n${payload.input.slice(0, 4000)}\n\nSummary:`;
+      try {
+        const raw = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig);
+        output = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        logger.log(`[GpuInference] Summarization complete: ${output.length} chars`);
+      } catch (err) {
+        logger.warn(`[GpuInference] Summarize failed: ${(err as Error).message}`);
+        throw err;
+      }
+    } else {
+      // Generate: open-ended LLM generation (analysis, hypothesis, Q&A)
+      modelUsed = llmModel.modelId ?? 'unknown';
+      const prompt = `You are a research analyst. Based on the following text, provide a detailed analysis with key insights.\n\nText:\n${payload.input.slice(0, 4000)}\n\nAnalysis:`;
+      try {
+        const raw = await this.llmProvider.generateLLM(llmModel, prompt, llmConfig);
+        output = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        logger.log(`[GpuInference] Generation complete: ${output.length} chars`);
+      } catch (err) {
+        logger.warn(`[GpuInference] Generation failed: ${(err as Error).message}`);
+        throw err;
+      }
+    }
+
+    const latencyMs = Date.now() - startMs;
+    logger.log(`[GpuInference] task=${payload.task} done in ${latencyMs}ms, tokens=${tokensProcessed}`);
     return { output, tokensProcessed, latencyMs, modelUsed };
   }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AgentGraphService } from '../langgraph/agent-graph.service';
 import { AgentBrainHelper } from '../agent-brain';
+import { RoundListenerHelper } from '../round-listener';
 import type { AgentBrain } from '../agent-brain';
 import type { WorkOrder, ResearchResult, WorkOrderAgentConfig } from '../work-order/work-order.types';
 import logger from '../../../utils/logger';
@@ -30,6 +31,7 @@ export class LangGraphWorkOrderAgentService {
   constructor(
     private readonly agentGraphService: AgentGraphService,
     private readonly agentBrainHelper: AgentBrainHelper,
+    private readonly roundListenerHelper: RoundListenerHelper,
   ) {}
 
   start(config: WorkOrderAgentConfig): Promise<void> {
@@ -39,6 +41,7 @@ export class LangGraphWorkOrderAgentService {
     logger.log('🚀 Starting LangGraph work order agent');
     logger.log(`   Coordinator: ${config.coordinatorUrl}`);
     logger.log(`   Mode: langgraph`);
+    this.roundListenerHelper.startRoundListener(config.coordinatorUrl, config.peerId);
     return this.runLoop(config, intervalMs ?? 30_000, maxIterations);
   }
 

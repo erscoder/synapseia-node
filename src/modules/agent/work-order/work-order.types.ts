@@ -27,6 +27,7 @@ export interface WorkOrder {
   createdAt: number;
   expiresAt?: number;
   type?: 'TRAINING' | 'RESEARCH' | 'INFERENCE' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'COMPUTATION' | 'DATA_PROCESSING';
+  metadata?: Record<string, string>;
 }
 
 export interface ResearchPayload {
@@ -115,5 +116,18 @@ export interface CpuInferenceResultPayload {
   modelUsed: string;
 }
 
+export interface GpuInferenceWorkOrderPayload {
+  task: 'generate' | 'summarize' | 'embedding_large';
+  input: string;
+  modelHint?: string;
+  domain?: string;
+  maxTokens?: number;
+}
+
+export type GpuInferenceResultPayload = CpuInferenceResultPayload;
+
 /** Model used for Ollama embeddings in CPU_INFERENCE work orders */
 export const EMBEDDING_MODEL = 'locusai/all-minilm-l6-v2';
+
+/** Default large model for GPU_INFERENCE (requires ≥6GB VRAM) */
+export const GPU_INFERENCE_MODEL = 'qwen2.5:7b';

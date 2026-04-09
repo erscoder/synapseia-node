@@ -76,7 +76,7 @@ export class HeartbeatHelper {
       walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts
       tier: hardware.tier,
       capabilities,
-      uptime: Math.floor((Date.now() - startTime) / 1000), // Seconds since process start
+      uptime: Math.floor(process.uptime()), // Seconds since process start
       lat,
       lng,
       publicIp: publicIp ?? undefined,

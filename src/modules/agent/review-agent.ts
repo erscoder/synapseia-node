@@ -5,9 +5,11 @@
  * uses the LLM to score on 4 dimensions, and POSTs evaluations.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, OnModuleInit } from '@nestjs/common';
 import logger from '../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../llm/llm-provider';
+import { IdentityService } from '../identity/services/identity.service';
+import { buildAuthHeaders } from '../../utils/node-auth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,27 +48,61 @@ export interface ReviewScores {
 // ─── Injectable Service ───────────────────────────────────────────────────────
 
 @Injectable()
-export class ReviewAgentHelper {
+export class ReviewAgentHelper implements OnModuleInit {
   private readonly llmProvider = new LlmProviderHelper();
   private static readonly POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private _keypair?: Uint8Array;
+  private _publicKey?: Uint8Array;
+  private _peerId?: string;
+
+  constructor(@Optional() private readonly identityService?: IdentityService) {}
+
+  async onModuleInit(): Promise<void> {
+    if (this.identityService) {
+      try {
+        const identity = this.identityService.getOrCreate();
+        if (identity?.privateKey && identity?.publicKey) {
+          this._keypair = Buffer.from(identity.privateKey, 'hex');
+          this._publicKey = Buffer.from(identity.publicKey, 'hex');
+          this._peerId = identity.peerId;
+        }
+      } catch (err) {
+        logger.warn('[ReviewAgent] Failed to load identity for signing:', (err as Error).message);
+      }
+    }
+  }
+
+  private async buildHeaders(method: string, path: string, body: unknown): Promise<Record<string, string>> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this._keypair && this._publicKey && this._peerId) {
+      const auth = await buildAuthHeaders({ method, path, body, privateKey: this._keypair, publicKey: this._publicKey, peerId: this._peerId });
+      Object.assign(headers, auth);
+    }
+    return headers;
+  }
 
   async fetchEvaluationAssignments(
     coordinatorUrl: string,
     nodeId: string,
   ): Promise<EvaluationAssignment[]> {
     try {
-      const url = `${coordinatorUrl}/evaluations/assignments?nodeId=${encodeURIComponent(nodeId)}`;
-      const response = await fetch(url);
+      const path = `/evaluations/assignments?nodeId=${encodeURIComponent(nodeId)}`;
+      const url = `${coordinatorUrl}${path}`;
+      const headers = await this.buildHeaders('GET', path, {});
+      const response = await fetch(url, { headers });
       if (!response.ok) {
         if (response.status === 404) return [];
         logger.warn(`[ReviewAgent] Failed to fetch assignments: ${response.status}`);
         return [];
       }
-      const data = await response.json() as EvaluationAssignment[] | { assignments?: EvaluationAssignment[] };
-      return Array.isArray(data) ? data : (data.assignments ?? []);
+      const data = await response.json() as EvaluationAssignment[] | { assignments?: EvaluationAssignment[]; pending?: EvaluationAssignment[]; completed?: EvaluationAssignment[] };
+      if (Array.isArray(data)) return data;
+      // Coordinator returns { pending, completed } shape
+      if ('pending' in data) return [...(data.pending ?? []), ...(data.completed ?? [])];
+      return data.assignments ?? [];
     } catch (err) {
       logger.warn(`[ReviewAgent] fetchEvaluationAssignments error: ${(err as Error).message}`);
       return [];
@@ -167,21 +203,21 @@ Respond ONLY with valid JSON (no markdown):
   ): Promise<boolean> {
     try {
       const overallScore = (scores.accuracy + scores.novelty + scores.methodology + scores.conclusions) / 4;
+      // coordinator expects qualityScore (0-1), justification (min 20 chars)
+      const qualityScore = Math.round((overallScore / 10) * 100) / 100;
+      const justification = scores.commentary.length >= 20
+        ? scores.commentary
+        : `${scores.commentary} (accuracy:${scores.accuracy} novelty:${scores.novelty} methodology:${scores.methodology})`.slice(0, 500);
+      const evalBody = {
+        submissionId: assignment.submissionId,
+        qualityScore,
+        justification,
+      };
+      const headers = await this.buildHeaders('POST', '/evaluations', evalBody);
       const response = await fetch(`${coordinatorUrl}/evaluations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Node-ID': peerId },
-        body: JSON.stringify({
-          submissionId: assignment.submissionId,
-          roundId: assignment.roundId,
-          evaluatorNodeId: peerId,
-          score: overallScore,
-          accuracy: scores.accuracy,
-          novelty: scores.novelty,
-          methodology: scores.methodology,
-          conclusions: scores.conclusions,
-          commentary: scores.commentary,
-          dimensions: { accuracy: scores.accuracy, novelty: scores.novelty, methodology: scores.methodology, conclusions: scores.conclusions },
-        }),
+        headers,
+        body: JSON.stringify(evalBody),
       });
 
       if (!response.ok) {
@@ -189,7 +225,7 @@ Respond ONLY with valid JSON (no markdown):
         logger.warn(`[ReviewAgent] Failed to post evaluation for ${assignment.submissionId}: ${response.status} ${body}`);
         return false;
       }
-      logger.log(`[ReviewAgent] Evaluation posted for submission ${assignment.submissionId} (score: ${overallScore.toFixed(2)})`);
+      logger.log(`[ReviewAgent] Evaluation posted for submission ${assignment.submissionId} (qualityScore: ${qualityScore.toFixed(2)})`);
       return true;
     } catch (err) {
       logger.warn(`[ReviewAgent] postEvaluation error: ${(err as Error).message}`);

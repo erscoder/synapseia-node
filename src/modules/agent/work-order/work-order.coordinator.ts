@@ -183,7 +183,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
         applicationProposal: result.proposal,
         ...(hyperparams ? { hyperparams } : {}),
       };
-      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/research-queue/results`, 'POST', body);
+      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/papers/results`, 'POST', body);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) { logger.warn(` Failed to submit research result:`, await response.text()); return false; }
       logger.log(` Research result submitted successfully`);
@@ -282,12 +282,12 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     try {
       const res = await fetch(`${coordinatorUrl}/hyperparams/leaderboard`);
       if (!res.ok) return [];
-      const data = await res.json() as { entries?: Array<{ config?: { id?: string }; bestScore?: number }> };
-      return (data.entries ?? []).slice(0, 5).map(entry => ({
+      const data = await res.json() as { leaderboard?: Array<{ config?: { id?: string }; avgQualityScore?: number }> };
+      return (data.leaderboard ?? []).slice(0, 5).map(entry => ({
         id: entry.config?.id ?? '',
         model: '',
         hyperparams: (entry.config ?? {}) as Experiment['hyperparams'],
-        valLoss: entry.bestScore ?? 999,
+        valLoss: entry.avgQualityScore != null ? 1 / (entry.avgQualityScore + 0.001) : 999,
         status: 'completed' as const,
       }));
     } catch { return []; }
@@ -327,6 +327,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
         datasetId: payload.datasetId,
         valLossBefore,
         valLossAfter,
+        qualityScore: Math.max(0, Math.min(10, 10 * Math.exp(-valLossAfter))),
         durationMs,
         improved: valLossAfter < payload.currentBestLoss,
         timestamp: Date.now(),
@@ -346,7 +347,22 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       const formData = new FormData();
       formData.append('peerId', peerId);
       formData.append('gradients', new Blob([gradientBuffer], { type: 'application/octet-stream' }), 'gradients.pt');
-      const response = await fetch(`${coordinatorUrl}/diloco/${domain}/gradients`, { method: 'POST', body: formData });
+
+      const headers: Record<string, string> = {};
+      if (this._keypair && this._publicKey && this._peerId) {
+        const path = `/diloco/${domain}/gradients`;
+        const auth = await buildAuthHeaders({
+          method: 'POST',
+          path,
+          body: { peerId },
+          privateKey: this._keypair,
+          publicKey: this._publicKey,
+          peerId: this._peerId,
+        });
+        Object.assign(headers, auth);
+      }
+
+      const response = await fetch(`${coordinatorUrl}/diloco/${domain}/gradients`, { method: 'POST', headers, body: formData });
       if (!response.ok) { logger.warn(`[DiLoCo] Failed to upload gradients: ${await response.text()}`); return false; }
       return true;
     } catch (err) {

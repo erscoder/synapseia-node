@@ -170,7 +170,13 @@ export class WorkOrderLoopHelper {
       let success: boolean;
       let researchResult: ResearchResult | undefined;
 
-      if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
+      if (this.execution.isGpuInferenceWorkOrder(workOrder)) {
+        try {
+          const inferenceResult = await this.execution.executeGpuInferenceWorkOrder(workOrder, llmModel, llmConfig);
+          result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
+          success = true;
+        } catch (err) { result = `GPU inference failed: ${(err as Error).message}`; success = false; }
+      } else if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
         try {
           const inferenceResult = await this.execution.executeCpuInferenceWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl);
           result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
@@ -198,7 +204,7 @@ export class WorkOrderLoopHelper {
         if (success) {
           let paperId = workOrder.id.replace(/^wo_/, 'paper_');
           try {
-            const resp = await fetch(`${coordinatorUrl}/research-queue/papers`);
+            const resp = await fetch(`${coordinatorUrl}/papers`);
             if (resp.ok) {
               const data = await resp.json() as { papers?: Array<{ id: string; title: string }> };
               const match = data.papers?.find(p => p.title === workOrder.title || p.title.includes(workOrder.title.substring(0, 40)));
@@ -215,7 +221,7 @@ export class WorkOrderLoopHelper {
       }
 
       // Quality gates
-      if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder)) && !success) {
+      if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder)) && !success) {
         logger.warn(' Work order execution failed — skipping result submission');
         this.state.currentWorkOrder = undefined;
         continue;

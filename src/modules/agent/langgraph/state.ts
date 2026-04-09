@@ -99,6 +99,8 @@ export interface AgentState {
   researchPayload?: { title: string; abstract: string } | null;
   /** Work order IDs that were rejected by economic evaluation — skip on next fetch */
   rejectedWorkOrderIds?: string[];
+  /** Work order IDs already submitted this session — prevents double submission */
+  completedWorkOrderIds?: string[];
 }
 
 /**
@@ -141,5 +143,6 @@ export function createInitialAgentState(config: WorkOrderAgentConfig): AgentStat
     selfCritiquePassed: false,
     selfCritiqueFeedback: '',
     retryCount: 0,
+    completedWorkOrderIds: [],
   };
 }
