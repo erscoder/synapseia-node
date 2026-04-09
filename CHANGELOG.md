@@ -1,6 +1,6 @@
 # Changelog — @synapseia/node
 
-## [2026-04-09] Audit fixes + GPU inference + signed requests + capability reporting
+## [2026-04-09] Audit fixes + GPU inference + signed requests + capability reporting — `90ad3a26`
 
 ### Critical Fixes
 - **C-01** Fix paper lookup URL in work-order loop (`/research-queue/papers` → `/papers`)
