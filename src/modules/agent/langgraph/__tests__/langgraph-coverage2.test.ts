@@ -258,7 +258,7 @@ describe('ExecuteTrainingNode', () => {
     mockExecuteTrainingWorkOrder.mockResolvedValueOnce({ result: '{"valLoss":0.3}', success: true });
     const result = await node.execute(makeState({ selectedWorkOrder: wo }));
     expect(result.executionResult?.success).toBe(true);
-    expect(mockExecuteTrainingWorkOrder).toHaveBeenCalledWith(wo, TEST_CONFIG.coordinatorUrl, TEST_CONFIG.peerId, TEST_CONFIG.capabilities, 1);
+    expect(mockExecuteTrainingWorkOrder).toHaveBeenCalledWith(wo, TEST_CONFIG.coordinatorUrl, TEST_CONFIG.peerId, TEST_CONFIG.capabilities, 1, TEST_CONFIG.llmModel, TEST_CONFIG.llmConfig, []);
   });
 
   it('returns failure when throws', async () => {

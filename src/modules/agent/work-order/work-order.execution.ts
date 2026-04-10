@@ -9,7 +9,7 @@ import logger from '../../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../../llm/llm-provider';
 import { EmbeddingHelper } from '../../../shared/embedding';
 import { trainMicroModel } from '../../model/trainer';
-import { MutationEngineHelper } from '../../model/mutation-engine';
+import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
 import type { AgentBrain } from '../agent-brain';
@@ -218,14 +218,45 @@ Abstract: ${payload.abstract}`;
 
   // ── Training ──────────────────────────────────────────────────────────────
 
-  async executeTrainingWorkOrder(workOrder: WorkOrder, coordinatorUrl: string, peerId: string, capabilities: string[], iteration: number): Promise<{ result: string; success: boolean }> {
+  async executeTrainingWorkOrder(
+    workOrder: WorkOrder,
+    coordinatorUrl: string,
+    peerId: string,
+    capabilities: string[],
+    iteration: number,
+    llmModel?: LLMModel,
+    llmConfig?: LLMConfig,
+    fallbackModels: LLMModel[] = [],
+  ): Promise<{ result: string; success: boolean }> {
     logger.log(` Executing TRAINING: ${workOrder.title}`);
     let payload: TrainingWorkOrderPayload;
     try { payload = JSON.parse(workOrder.description) as TrainingWorkOrderPayload; } catch { return { result: 'Invalid training payload', success: false }; }
 
     const topExperiments = await this.coordinator.fetchTopExperiments(coordinatorUrl);
     const mutationEngine = new MutationEngineHelper();
-    let mutation = await mutationEngine.proposeMutation(topExperiments, payload.currentBestLoss, capabilities);
+    let mutation;
+    try {
+      mutation = await mutationEngine.proposeMutation(
+        topExperiments,
+        payload.currentBestLoss,
+        capabilities,
+        llmModel,
+        fallbackModels,
+        llmConfig,
+      );
+    } catch (err) {
+      // Never silently fall back to invented hyperparams — abort the WO so the
+      // coordinator can reassign it and we don't pollute the experiment log
+      // with fabricated "explorations".
+      if (err instanceof MutationEngineError) {
+        logger.error(` Mutation engine failed: ${err.message}`);
+        return {
+          result: `Training aborted: mutation engine could not produce a valid proposal (${err.attempts.length} attempts across ${err.attempts.map(a => a.model).join(', ')})`,
+          success: false,
+        };
+      }
+      throw err;
+    }
     if (payload.baseConfig) mutation = { ...mutation, hyperparams: { ...mutation.hyperparams, ...payload.baseConfig } };
 
     let datasetPath = payload.datasetId;

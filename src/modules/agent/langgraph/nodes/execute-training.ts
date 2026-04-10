@@ -21,6 +21,7 @@ export class ExecuteTrainingNode {
     try {
       const training = await this.execution.executeTrainingWorkOrder(
         selectedWorkOrder, coordinatorUrl, peerId, config.capabilities, iteration,
+        config.llmModel, config.llmConfig, [],
       );
       return { executionResult: { result: training.result, success: training.success } };
     } catch (error) {
