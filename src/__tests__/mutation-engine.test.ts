@@ -38,13 +38,13 @@ describe('MutationEngineHelper', () => {
       expect(proposal.baseExperimentId).toBeNull();
       expect(proposal.hyperparams).toBeDefined();
       expect(proposal.hyperparams.learningRate).toBe(0.001);
-      expect(proposal.hyperparams.maxTrainSeconds).toBe(120);
+      expect(proposal.hyperparams.maxTrainSeconds).toBe(60);
       expect(proposal.reasoning).toContain('Cold start');
     });
 
     it('should return 300s maxTrainSeconds for GPU hardware', async () => {
       const proposal = await helper.proposeMutation([], 0, ['cpu', 'gpu']);
-      expect(proposal.hyperparams.maxTrainSeconds).toBe(300);
+      expect(proposal.hyperparams.maxTrainSeconds).toBe(180);
     });
   });
 
