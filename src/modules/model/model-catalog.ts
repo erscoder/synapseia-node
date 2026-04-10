@@ -302,9 +302,17 @@ export class ModelCatalogHelper {
     }
   }
 
-  getLocalModels(): string[] {
+  /**
+   * List locally available Ollama models.
+   * @param ollamaUrl - Optional base URL (e.g. `http://ollama:11434`). Falls back to
+   *   `OLLAMA_URL` env var, then `http://localhost:11434`. Needed when Ollama runs on
+   *   a different host (e.g. Docker Compose, where `localhost` inside the node
+   *   container is not the ollama service).
+   */
+  getLocalModels(ollamaUrl?: string): string[] {
+    const baseUrl = ollamaUrl ?? process.env.OLLAMA_URL ?? 'http://localhost:11434';
     try {
-      const response = execSync('curl -s http://localhost:11434/api/tags', { encoding: 'utf-8' });
+      const response = execSync(`curl -s ${baseUrl}/api/tags`, { encoding: 'utf-8' });
       const data = JSON.parse(response) as OllamaTagsResponse;
       return data.models.map((m) => m.name);
     } catch {

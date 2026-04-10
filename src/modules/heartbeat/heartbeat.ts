@@ -209,6 +209,7 @@ export class HeartbeatHelper {
     lat?: number,
     lng?: number,
     walletAddress?: string | null,
+    ollamaUrl?: string,
   ): () => void {
     const intervalStartTime = Date.now();
     const modelDiscovery = new ModelDiscovery();
@@ -223,7 +224,7 @@ export class HeartbeatHelper {
         }
         // Sprint D: Discovery feedback — register available models with coordinator
         try {
-          await modelDiscovery.registerModels(coordinatorUrl, identity.peerId, hardware, identity);
+          await modelDiscovery.registerModels(coordinatorUrl, identity.peerId, hardware, identity, ollamaUrl);
         } catch (discErr) {
           logger.warn('Model discovery registration failed:', (discErr as Error).message);
         }
