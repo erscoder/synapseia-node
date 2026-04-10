@@ -28,14 +28,18 @@ Observations so far:
 ${obsText}
 
 Based on your plan and observations, decide your next action.
-If you need more context, use a tool.
-If you have enough information, generate the final analysis.
+If you need more context, use a tool. If you have enough information, generate the final analysis.
 
-Respond ONLY with valid JSON:
-{
-  "thought": "Your reasoning about what to do next",
-  "action": "use_tool" | "generate_answer",
-  "toolCall": { "toolName": "tool_name", "params": { ... } },  // only if action="use_tool"
-  "answer": "Final structured analysis"  // only if action="generate_answer"
-}`;
+Output ONLY a JSON object (no markdown, no extra text).
+
+To use a tool:
+{"thought":"why you need the tool","action":"use_tool","toolCall":{"toolName":"tool_name","params":{}}}
+
+To deliver the final answer, populate every field with REAL content derived from the abstract and observations:
+{"thought":"brief rationale","action":"generate_answer","answer":{"summary":"REAL multi-sentence synthesis here","keyInsights":["REAL finding 1","REAL finding 2","REAL finding 3","REAL finding 4","REAL finding 5"],"proposal":"REAL concrete next step here"}}
+
+Answer field requirements:
+- summary: 3-4 sentences — state the core problem, the method used, the main result, and why it matters. Must be at least 80 characters.
+- keyInsights: exactly 5 non-obvious findings extracted from the paper. Each at least 30 characters. No paraphrasing the abstract.
+- proposal: a concrete follow-up research or application proposal. At least 100 characters. Include mechanism, implementation approach, and success criteria.`;
 }
