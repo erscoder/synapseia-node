@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { Ollama } from 'ollama';
 
@@ -30,6 +30,8 @@ export class OllamaHelper {
   /**
    * Check Ollama availability and installed models
    */
+  private readonly logger = new Logger(OllamaHelper.name);
+
   async checkOllama(url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<OllamaStatus> {
     try {
       const response = await axios.get(`${url}/api/tags`, { timeout: 5000 });
@@ -67,7 +69,7 @@ export class OllamaHelper {
    */
   async pullModel(model: string, url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<void> {
     try {
-      console.log(`📥 Pulling model ${model} from Ollama...`);
+      this.logger.log(`📥 Pulling model ${model} from Ollama...`);
       const ollamaClient = new Ollama({ host: url });
       const stream = await ollamaClient.pull({ model, stream: true });
 
@@ -78,11 +80,11 @@ export class OllamaHelper {
             part.total !== undefined && part.completed !== undefined
               ? Math.round((part.completed / part.total) * 100)
               : 0;
-          console.log(`📦 ${model}: ${percent}% complete`);
+          this.logger.log(`📦 ${model}: ${percent}% complete`);
           lastDigest = part.digest;
         }
         if (part.status === 'success') {
-          console.log(`✅ Model ${model} downloaded successfully`);
+          this.logger.log(`✅ Model ${model} downloaded successfully`);
         }
       }
     } catch (error) {
@@ -108,7 +110,7 @@ export class OllamaHelper {
         targetModel = status.recommendedModel;
       }
 
-      console.log(`🧠 Generating with model: ${targetModel}`);
+      this.logger.log(`🧠 Generating with model: ${targetModel}`);
       const ollamaClient = new Ollama({ host: url });
 
       const response = await ollamaClient.chat({
@@ -142,10 +144,10 @@ export class OllamaHelper {
     const modelAvailable = status.models.some((m) => m.startsWith(model.split(':')[0]));
 
     if (!modelAvailable) {
-      console.log(`⚠️ Model ${model} not found. Pulling...`);
+      this.logger.log(`⚠️ Model ${model} not found. Pulling...`);
       await this.pullModel(model, url);
     } else {
-      console.log(`✅ Model ${model} is available`);
+      this.logger.log(`✅ Model ${model} is available`);
     }
   }
 }
