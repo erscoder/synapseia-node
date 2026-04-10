@@ -1,5 +1,10 @@
 # Changelog — @synapseia/node
 
+## [2026-04-10] Track real vs synthetic corpus in micro-training submissions
+
+### Fix
+- **`datasetId` always stored `'synthetic://text8-sample'`**: `submitTrainingResult()` was called with `payload.datasetId` which was the coordinator's hardcoded constant, regardless of whether `downloadDataset()` succeeded. The `micros` table recorded `'synthetic://text8-sample'` even when the node actually trained on the real domain corpus. Now the execution layer tracks `usedRealCorpus` (true if `downloadDataset()` succeeded) and passes `effectiveDatasetId` to the submission: `medical-corpus` / `trading-corpus` when real, `synthetic://built-in` when fallback.
+
 ## [2026-04-10] Micro-training reliability: script, unbuffered stdout, timeout fix
 
 ### Fixes

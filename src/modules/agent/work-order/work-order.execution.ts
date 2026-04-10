@@ -259,9 +259,15 @@ Abstract: ${payload.abstract}`;
     }
     if (payload.baseConfig) mutation = { ...mutation, hyperparams: { ...mutation.hyperparams, ...payload.baseConfig } };
 
-    let datasetPath = payload.datasetId;
-    try { datasetPath = await this.coordinator.downloadDataset(coordinatorUrl, payload.domain); logger.log(` Using domain dataset: ${datasetPath}`); }
-    catch (err) { logger.warn(` Dataset '${payload.domain}' not available (${(err as Error).message}). Using synthetic training data — this is normal on first runs.`); }
+    let datasetPath = '';
+    let usedRealCorpus = false;
+    try {
+      datasetPath = await this.coordinator.downloadDataset(coordinatorUrl, payload.domain);
+      usedRealCorpus = true;
+      logger.log(` Using domain corpus: ${datasetPath}`);
+    } catch (err) {
+      logger.warn(` Corpus for '${payload.domain}' not available (${(err as Error).message}). Falling back to built-in synthetic data.`);
+    }
 
     let trainingResult;
     try {
@@ -272,8 +278,9 @@ Abstract: ${payload.abstract}`;
     }
 
     const improved = trainingResult.valLoss < payload.currentBestLoss;
+    const effectiveDatasetId = usedRealCorpus ? `${payload.domain}-corpus` : 'synthetic://built-in';
     await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, trainingResult.valLoss, trainingResult.durationMs);
-    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, payload, trainingResult.valLoss, trainingResult.finalLoss, trainingResult.durationMs);
+    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, { ...payload, datasetId: effectiveDatasetId }, trainingResult.valLoss, trainingResult.finalLoss, trainingResult.durationMs);
 
     logger.log(` Training complete — valLoss=${trainingResult.valLoss.toFixed(4)}, improved=${improved}`);
     return { result: JSON.stringify({ valLoss: trainingResult.valLoss, finalLoss: trainingResult.finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: trainingResult.valLoss }), success: true };
