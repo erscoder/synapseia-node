@@ -1,5 +1,15 @@
 # Changelog — @synapseia/node
 
+## [2026-04-10] Fix research WO submission flow — nodes now participate in rounds — `03e7c63d`
+
+### Critical Fix
+- **isResearchWorkOrder** in `work-order.execution.ts` was only checking JSON-encoded descriptions. The coordinator sends plain-text descriptions with `metadata.paperTitle/paperAbstract`. Without type check fallback, research WOs were silently rejected.
+- **extractResearchPayload** in execution.ts only had a generic title+slice fallback. Aligned with evaluation.ts to use metadata first, then parse "Abstract:\n..." from plain text.
+- **Removed dead `/papers/results` call** — endpoint doesn't exist on coordinator, always returned 404. Research results already flow through `completeWorkOrder()` which registers a Submission in the active ResearchRound.
+- **submit-result.ts (LangGraph)** — removed duplicate `submitResearchResult()` call
+
+**Impact:** Rounds were showing 0 submissions and 0 participants despite 3 nodes running because all research WOs were being rejected at the type-detection stage. Now nodes actually complete research WOs and get counted.
+
 ## [2026-04-09] Audit fixes + GPU inference + signed requests + capability reporting — `90ad3a26`
 
 ### Critical Fixes
