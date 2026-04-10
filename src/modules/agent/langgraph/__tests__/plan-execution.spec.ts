@@ -19,12 +19,23 @@ jest.mock('../../../../utils/logger', () => ({
 describe('PlanExecutionNode', () => {
   let node: PlanExecutionNode;
   let mockLlmService: { generate: ReturnType<typeof jest.fn> };
+  let mockExecution: { extractResearchPayload: ReturnType<typeof jest.fn> };
 
   beforeEach(() => {
     mockLlmService = {
       generate: jest.fn(),
     };
-    node = new PlanExecutionNode(mockLlmService as any);
+    mockExecution = {
+      extractResearchPayload: jest.fn((wo: any) => {
+        // Mirror real behavior: try JSON first, then title fallback
+        try {
+          const parsed = JSON.parse(wo.description);
+          if (parsed.title && parsed.abstract) return { title: parsed.title, abstract: parsed.abstract };
+        } catch { /* ignore */ }
+        return wo.title ? { title: wo.title, abstract: wo.abstract || '' } : null;
+      }),
+    };
+    node = new PlanExecutionNode(mockLlmService as any, mockExecution as any);
   });
 
   function makeState(overrides: Partial<AgentState> = {}): AgentState {

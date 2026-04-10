@@ -100,7 +100,7 @@ function buildService(): AgentGraphService {
     new SubmitResultNode(coordinator),
     new UpdateMemoryNode(execution, agentBrain),
     new RetrieveMemoryNode(),
-    new PlanExecutionNode(mockLlmService as any),
+    new PlanExecutionNode(mockLlmService as any, execution),
     new SelfCritiqueNode(mockLlmService as any),
     new ResearcherNode(llmProvider, coordinator),
     new CriticNode(llmProvider, coordinator),

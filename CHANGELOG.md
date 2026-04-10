@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-04-10] Fix training JSON parse crash + research payload extraction in planner
+
+### Fixes
+- **`MutationEngineHelper.proposeMutation` crashed training WOs on malformed LLM JSON**: `parseMutationResponse` called `JSON.parse(jsonStr)` with no error handling. Small local models like `qwen2.5:0.5b` frequently produce truncated/malformed JSON (`SyntaxError: Expected ',' or '}' after property value in JSON at position 50`), and the error bubbled all the way up to `ExecuteTrainingNode` — aborting the whole training WO before `train_micro.py` ever ran. Fixed by wrapping both `llmProvider.generateLLM()` and `parseMutationResponse()` in a try/catch that falls back to the safe default hyperparams (identical to the `topExperiments.length === 0` path). Training now proceeds with sensible defaults when the mutation planner fails.
+- **`PlanExecutionNode` always logged `Failed to parse research payload, using defaults`**: the node did `JSON.parse(selectedWorkOrder.description)` directly, but coordinator sends research WOs as plain-text descriptions with `metadata.paperTitle`/`metadata.paperAbstract`. The planner was fed an empty abstract on every research WO, degrading plan quality. Now delegates to `WorkOrderExecutionHelper.extractResearchPayload()`, which already handles all 3 formats (legacy JSON, metadata fields, plain-text `Abstract:\n...`). `PlanExecutionNode` now constructor-injects `WorkOrderExecutionHelper`.
+
+### Tests
+- `mutation-engine.test.ts`: `"should throw on invalid JSON response"` replaced with `"should fall back to default config on invalid JSON response"` — asserts default hyperparams and `reasoning` contains `LLM mutation parse failed`.
+- `plan-execution.spec.ts` / `integration.spec.ts`: updated test instantiations to pass the new `WorkOrderExecutionHelper` constructor argument.
+- 57 suites / 868 tests green.
+
 ## [2026-04-10] Fix model discovery when Ollama is on a non-localhost host
 
 ### Critical Fix
