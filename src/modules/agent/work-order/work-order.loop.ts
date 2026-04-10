@@ -186,7 +186,7 @@ export class WorkOrderLoopHelper {
         const diloco = await this.execution.executeDiLoCoWorkOrder(workOrder, coordinatorUrl, peerId, capabilities);
         result = diloco.result; success = diloco.success;
       } else if (this.execution.isTrainingWorkOrder(workOrder)) {
-        const training = await this.execution.executeTrainingWorkOrder(workOrder, coordinatorUrl, peerId, capabilities, iteration);
+        const training = await this.execution.executeTrainingWorkOrder(workOrder, coordinatorUrl, peerId, capabilities, iteration, llmModel, llmConfig, []);
         result = training.result; success = training.success;
       } else if (this.execution.isResearchWorkOrder(workOrder)) {
         const research = await this.execution.executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);

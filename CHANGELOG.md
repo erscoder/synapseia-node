@@ -1,15 +1,25 @@
 # Changelog — @synapseia/node
 
-## [2026-04-10] Fix training JSON parse crash + research payload extraction in planner
+## [2026-04-10] Honest mutation-engine failure + research payload extraction in planner
 
 ### Fixes
-- **`MutationEngineHelper.proposeMutation` crashed training WOs on malformed LLM JSON**: `parseMutationResponse` called `JSON.parse(jsonStr)` with no error handling. Small local models like `qwen2.5:0.5b` frequently produce truncated/malformed JSON (`SyntaxError: Expected ',' or '}' after property value in JSON at position 50`), and the error bubbled all the way up to `ExecuteTrainingNode` — aborting the whole training WO before `train_micro.py` ever ran. Fixed by wrapping both `llmProvider.generateLLM()` and `parseMutationResponse()` in a try/catch that falls back to the safe default hyperparams (identical to the `topExperiments.length === 0` path). Training now proceeds with sensible defaults when the mutation planner fails.
+- **Training WOs crashed on malformed mutation-engine JSON, and silent defaults would have faked data**: `MutationEngineHelper.parseMutationResponse` called `JSON.parse` unguarded. `qwen2.5:0.5b` frequently emits truncated/malformed JSON (`SyntaxError: Expected ',' or '}' after property value in JSON at position 50`), crashing the WO inside `ExecuteTrainingNode`. A silent fallback to default hyperparams was rejected because it would report an un-mutated config as an "LLM-proposed experiment", polluting the experiment log. Instead, `proposeMutation` now:
+  1. Takes an explicit `primaryModel` + `fallbackModels` + `llmConfig` (threaded from the node's own `config.llmModel`/`config.llmConfig`).
+  2. Retries each candidate with a stricter "JSON-only, no prose" prompt after the first failure.
+  3. Walks fallback models if the primary exhausts its retries.
+  4. Throws `MutationEngineError` (new) when every candidate fails — no silent defaults, no fabricated experiments.
+  `executeTrainingWorkOrder` catches `MutationEngineError` and aborts the WO with a clear reason. The cold-start path (no prior experiments to mutate from) still uses a labeled neutral baseline — that's a legitimate starting point, not a failure fallback.
 - **`PlanExecutionNode` always logged `Failed to parse research payload, using defaults`**: the node did `JSON.parse(selectedWorkOrder.description)` directly, but coordinator sends research WOs as plain-text descriptions with `metadata.paperTitle`/`metadata.paperAbstract`. The planner was fed an empty abstract on every research WO, degrading plan quality. Now delegates to `WorkOrderExecutionHelper.extractResearchPayload()`, which already handles all 3 formats (legacy JSON, metadata fields, plain-text `Abstract:\n...`). `PlanExecutionNode` now constructor-injects `WorkOrderExecutionHelper`.
 
+### API
+- `MutationEngineHelper.proposeMutation(topExperiments, bestLoss, capabilities, primaryModel?, fallbackModels?, llmConfig?)` — new optional args.
+- `WorkOrderExecutionHelper.executeTrainingWorkOrder(..., llmModel?, llmConfig?, fallbackModels?)` — new optional args.
+- Exports `MutationEngineError` for callers to distinguish mutation failures from other training errors.
+
 ### Tests
-- `mutation-engine.test.ts`: `"should throw on invalid JSON response"` replaced with `"should fall back to default config on invalid JSON response"` — asserts default hyperparams and `reasoning` contains `LLM mutation parse failed`.
-- `plan-execution.spec.ts` / `integration.spec.ts`: updated test instantiations to pass the new `WorkOrderExecutionHelper` constructor argument.
-- 57 suites / 868 tests green.
+- `mutation-engine.test.ts`: replaced the old "should throw on invalid JSON" with three tests — throws `MutationEngineError` when both primary attempts fail, recovers on the stricter prompt retry, walks fallback models if the primary is exhausted.
+- `plan-execution.spec.ts` / `integration.spec.ts` / `langgraph-coverage2.test.ts`: updated to inject `WorkOrderExecutionHelper` into `PlanExecutionNode` and to pass the new training args.
+- 57 suites / 870 tests green.
 
 ## [2026-04-10] Fix model discovery when Ollama is on a non-localhost host
 

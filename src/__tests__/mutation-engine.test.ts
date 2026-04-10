@@ -39,7 +39,7 @@ describe('MutationEngineHelper', () => {
       expect(proposal.hyperparams).toBeDefined();
       expect(proposal.hyperparams.learningRate).toBe(0.001);
       expect(proposal.hyperparams.maxTrainSeconds).toBe(120);
-      expect(proposal.reasoning).toContain('Starting with default');
+      expect(proposal.reasoning).toContain('Cold start');
     });
 
     it('should return 300s maxTrainSeconds for GPU hardware', async () => {
@@ -134,19 +134,59 @@ describe('MutationEngineHelper', () => {
       expect(proposal.hyperparams.numLayers).toBe(8);
     });
 
-    it('should fall back to default config on invalid JSON response', async () => {
-      // Small local models (qwen2.5:0.5b) often emit malformed JSON. Instead of
-      // failing the training WO, proposeMutation should fall back to the default
-      // hyperparams and keep training moving.
+    it('should throw MutationEngineError when all candidates fail to emit valid JSON', async () => {
+      // We must NEVER fabricate hyperparams and report them as an LLM-proposed
+      // experiment. When every candidate model fails, the training WO must
+      // abort visibly with a clear error.
+      const { MutationEngineError } = require('../modules/model/mutation-engine');
       const exps = [mockExp('exp1')];
+      // Mock: 2 attempts on primary model, both return invalid JSON
       const mockGenerate = jest.fn<() => Promise<string>>().mockResolvedValue('not json at all');
       (helper as any).llmProvider = { generateLLM: mockGenerate };
 
+      await expect(helper.proposeMutation(exps, 3.5, ['cpu'])).rejects.toThrow(MutationEngineError);
+      // Primary gets 2 tries (base + strict prompt)
+      expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('should retry with stricter prompt before failing', async () => {
+      const exps = [mockExp('exp1')];
+      const validResponse = JSON.stringify({
+        type: 'explore', baseExperimentId: null,
+        hyperparams: { ...baseHyperparams },
+        reasoning: 'Stricter-prompt retry succeeded',
+      });
+      // First call: bad JSON. Second call (strict prompt): valid.
+      const mockGenerate = jest.fn<() => Promise<string>>()
+        .mockResolvedValueOnce('not json')
+        .mockResolvedValueOnce(validResponse);
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
       const proposal = await helper.proposeMutation(exps, 3.5, ['cpu']);
-      expect(proposal.type).toBe('explore');
-      expect(proposal.hyperparams.learningRate).toBe(0.001);
-      expect(proposal.hyperparams.batchSize).toBe(32);
-      expect(proposal.reasoning).toMatch(/LLM mutation parse failed/);
+      expect(proposal.reasoning).toBe('Stricter-prompt retry succeeded');
+      expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('should walk fallback models if primary fails all retries', async () => {
+      const exps = [mockExp('exp1')];
+      const fallbackResponse = JSON.stringify({
+        type: 'improve', baseExperimentId: 'exp1',
+        hyperparams: { ...baseHyperparams, hiddenDim: 256 },
+        reasoning: 'Fallback model recovered',
+      });
+      // Primary: 2 bad. Fallback: base prompt returns valid.
+      const mockGenerate = jest.fn<() => Promise<string>>()
+        .mockResolvedValueOnce('bad')
+        .mockResolvedValueOnce('bad')
+        .mockResolvedValueOnce(fallbackResponse);
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
+      const primary = { provider: 'ollama' as const, providerId: '' as const, modelId: 'qwen2.5:0.5b' };
+      const fallback = { provider: 'ollama' as const, providerId: '' as const, modelId: 'qwen2.5:1.5b' };
+      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu'], primary, [fallback]);
+      expect(proposal.reasoning).toBe('Fallback model recovered');
+      expect(proposal.model.modelId).toBe('qwen2.5:1.5b');
+      expect(mockGenerate).toHaveBeenCalledTimes(3);
     });
 
     it('should validate and fallback invalid activation', async () => {

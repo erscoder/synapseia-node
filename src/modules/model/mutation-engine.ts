@@ -3,7 +3,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { LlmProviderHelper, type LLMModel } from '../llm/llm-provider';
+import { LlmProviderHelper, type LLMModel, type LLMConfig } from '../llm/llm-provider';
+import logger from '../../utils/logger';
 import type { Experiment, Hyperparams } from '../../types';
 
 export interface MutationProposal {
@@ -15,45 +16,94 @@ export interface MutationProposal {
   estimatedCost?: number;
 }
 
+/**
+ * MutationEngineError is thrown when the mutation planner cannot obtain a
+ * well-formed proposal from any candidate LLM. Training WOs should fail
+ * visibly rather than fall back to invented hyperparams.
+ */
+export class MutationEngineError extends Error {
+  constructor(message: string, readonly attempts: { model: string; error: string }[]) {
+    super(message);
+    this.name = 'MutationEngineError';
+  }
+}
+
 @Injectable()
 export class MutationEngineHelper {
   private readonly llmProvider = new LlmProviderHelper();
 
+  /**
+   * Propose a mutation via LLM. On parse/generation failure, retries the SAME
+   * model with a stricter "JSON-only" prompt; then walks the fallback model
+   * list. If every candidate fails, throws MutationEngineError — the training
+   * WO should abort rather than run with fabricated hyperparams.
+   *
+   * @param fallbackModels - Extra models to try if the primary fails. Order matters.
+   * @param llmConfig - Base URL / API key shared across candidates.
+   */
   async proposeMutation(
     topExperiments: Experiment[],
     bestLoss: number,
     capabilities: string[],
+    primaryModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
+    fallbackModels: LLMModel[] = [],
+    llmConfig?: LLMConfig,
   ): Promise<MutationProposal> {
     if (topExperiments.length === 0) {
-      return this.defaultMutation(capabilities, 'Starting with default configuration for initial exploration');
+      // No experiments yet — nothing to mutate from. This is the legitimate
+      // cold-start path, not a failure fallback: the reasoning is honest.
+      return {
+        model: primaryModel,
+        type: 'explore',
+        baseExperimentId: null,
+        hyperparams: {
+          learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
+          numHeads: 4, activation: 'gelu', normalization: 'layernorm',
+          initScheme: 'xavier', warmupSteps: 100, weightDecay: 0.01,
+          maxTrainSeconds: capabilities.includes('gpu') ? 300 : 120,
+        },
+        reasoning: 'Cold start: no prior experiments to mutate from, using neutral baseline configuration',
+      };
     }
 
-    const prompt = this.buildPrompt(topExperiments, bestLoss, capabilities);
-    const model: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
-    try {
-      const response = await this.llmProvider.generateLLM(model, prompt);
-      return this.parseMutationResponse(response, topExperiments, bestLoss, capabilities);
-    } catch (err) {
-      // Small local models (qwen2.5:0.5b) frequently produce malformed JSON. Don't fail
-      // the whole training WO — fall back to a safe default config and move on.
-      const msg = err instanceof Error ? err.message : String(err);
-      return this.defaultMutation(capabilities, `LLM mutation parse failed (${msg.slice(0, 100)}), using default config`);
+    const candidates = [primaryModel, ...fallbackModels];
+    const basePrompt = this.buildPrompt(topExperiments, bestLoss, capabilities);
+    const strictPrompt = this.buildStrictPrompt(topExperiments, bestLoss, capabilities);
+    const attempts: { model: string; error: string }[] = [];
+
+    for (const model of candidates) {
+      for (const [attemptIdx, prompt] of [basePrompt, strictPrompt].entries()) {
+        try {
+          const response = await this.llmProvider.generateLLM(model, prompt, llmConfig);
+          return this.parseMutationResponse(response, topExperiments, bestLoss, capabilities, model);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.warn(`[MutationEngine] ${model.modelId} attempt ${attemptIdx + 1}/2 failed: ${msg.slice(0, 120)}`);
+          attempts.push({ model: model.modelId, error: msg.slice(0, 200) });
+        }
+      }
     }
+
+    throw new MutationEngineError(
+      `All mutation candidates failed (${candidates.map(m => m.modelId).join(', ')}). Training WO cannot proceed with a valid mutation proposal.`,
+      attempts,
+    );
   }
 
-  private defaultMutation(capabilities: string[], reasoning: string): MutationProposal {
-    return {
-      model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
-      type: 'explore',
-      baseExperimentId: null,
-      hyperparams: {
-        learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
-        numHeads: 4, activation: 'gelu', normalization: 'layernorm',
-        initScheme: 'xavier', warmupSteps: 100, weightDecay: 0.01,
-        maxTrainSeconds: capabilities.includes('gpu') ? 300 : 120,
-      },
-      reasoning,
-    };
+  private buildStrictPrompt(topExperiments: Experiment[], bestLoss: number, capabilities: string[]): string {
+    const hasGpu = capabilities.includes('gpu');
+    const topIds = topExperiments.slice(0, 3).map(e => e.id).join(', ');
+    return `Respond with ONE JSON object. NO prose, NO markdown, NO code fences. Start with { and end with }.
+
+Top experiment ids: ${topIds}
+Best loss: ${bestLoss.toFixed(4)}
+
+Required schema (replace the placeholder values):
+{"type":"explore","baseExperimentId":null,"hyperparams":{"learningRate":0.001,"batchSize":32,"hiddenDim":128,"numLayers":4,"numHeads":4,"activation":"gelu","normalization":"layernorm","initScheme":"xavier","warmupSteps":100,"weightDecay":0.01,"maxTrainSeconds":${hasGpu ? 300 : 120}},"reasoning":"short explanation"}
+
+Rules: learningRate 0.0001-0.01; batchSize one of 16,32,64,128; hiddenDim one of 64,128,192,256; numLayers 2-8; numHeads one of 2,4,8; activation one of gelu,silu,relu; normalization one of layernorm,rmsnorm; initScheme one of xavier,kaiming,normal.
+
+Output the JSON now:`;
   }
 
   private buildPrompt(topExperiments: Experiment[], bestLoss: number, capabilities: string[]): string {
@@ -97,6 +147,7 @@ Constraints:
 
   private parseMutationResponse(
     response: string, topExperiments: Experiment[], bestLoss: number, capabilities: string[],
+    sourceModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
   ): MutationProposal {
     const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Failed to parse JSON from LLM response');
@@ -104,24 +155,38 @@ Constraints:
     const jsonStr = jsonMatch[1] || jsonMatch[0];
     const parsed = JSON.parse(jsonStr) as any;
 
+    if (!parsed.hyperparams || typeof parsed.hyperparams !== 'object') {
+      throw new Error('LLM response missing hyperparams object');
+    }
+
+    // Coerce to number and replace non-finite values with the default. LLMs
+    // occasionally emit strings ("four"), nulls, or NaN — without this step
+    // those leak through clampValue as NaN and then JSON.stringify converts
+    // them to "null", crashing the Python trainer with "'NoneType'" errors.
+    const num = (v: unknown, fallback: number): number => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const hasGpu = capabilities.includes('gpu');
     const hyperparams: Hyperparams = {
-      learningRate: this.clampValue(parsed.hyperparams?.learningRate ?? 0.001, 0.0001, 0.01),
-      batchSize: this.clampToBatch(parsed.hyperparams?.batchSize ?? 32),
-      hiddenDim: this.clampToDimension(parsed.hyperparams?.hiddenDim ?? 128),
-      numLayers: this.clampValue(parsed.hyperparams?.numLayers ?? 4, 2, 8),
-      numHeads: this.clampToHeads(parsed.hyperparams?.numHeads ?? 4),
+      learningRate: this.clampValue(num(parsed.hyperparams?.learningRate, 0.001), 0.0001, 0.01),
+      batchSize: this.clampToBatch(num(parsed.hyperparams?.batchSize, 32)),
+      hiddenDim: this.clampToDimension(num(parsed.hyperparams?.hiddenDim, 128)),
+      numLayers: Math.round(this.clampValue(num(parsed.hyperparams?.numLayers, 4), 2, 8)),
+      numHeads: this.clampToHeads(num(parsed.hyperparams?.numHeads, 4)),
       activation: this.validateActivation(parsed.hyperparams?.activation),
       normalization: this.validateNormalization(parsed.hyperparams?.normalization),
       initScheme: this.validateInitScheme(parsed.hyperparams?.initScheme),
-      warmupSteps: this.clampValue(parsed.hyperparams?.warmupSteps ?? 100, 0, 1000),
-      weightDecay: this.clampValue(parsed.hyperparams?.weightDecay ?? 0.01, 0, 0.1),
-      maxTrainSeconds: capabilities.includes('gpu')
-        ? this.clampValue(parsed.hyperparams?.maxTrainSeconds ?? 300, 120, 600)
-        : this.clampValue(parsed.hyperparams?.maxTrainSeconds ?? 120, 60, 300),
+      warmupSteps: Math.round(this.clampValue(num(parsed.hyperparams?.warmupSteps, 100), 0, 1000)),
+      weightDecay: this.clampValue(num(parsed.hyperparams?.weightDecay, 0.01), 0, 0.1),
+      maxTrainSeconds: hasGpu
+        ? Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 300), 120, 600))
+        : Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 120), 60, 300)),
     };
 
     return {
-      model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
+      model: sourceModel,
       type: parsed.type === 'explore' || parsed.type === 'improve' ? parsed.type : 'explore',
       baseExperimentId: parsed.baseExperimentId || null,
       hyperparams,
