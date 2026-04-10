@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { stripReasoning } from '../../../../shared/sanitize-llm-output';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -41,22 +42,20 @@ Researcher's analysis:
 
 Critically evaluate this analysis. Identify weaknesses, overstatements, missing context, or gaps.
 
-Respond with JSON:
-\`\`\`json
-{
-  "assessment": "Your quality score (1-10) and brief rationale",
-  "concerns": ["concern 1", "concern 2"],
-  "suggestions": ["improvement 1", "improvement 2"]
-}
-\`\`\`
-Respond only with valid JSON.`;
+Output ONLY a JSON object with exactly these fields (no markdown, no extra text):
+{"assessment":"REAL score 1-10 and one-sentence rationale here","concerns":["REAL weakness or gap 1","REAL weakness or gap 2"],"suggestions":["REAL specific improvement 1","REAL specific improvement 2"]}
+
+Requirements:
+- assessment: a number from 1 to 10 followed by a one-sentence rationale. Be honest and specific.
+- concerns: at least 2 real weaknesses, overstatements, or missing context — not generic complaints.
+- suggestions: at least 2 concrete, actionable improvements the researcher could make.`;
 
     try {
       const output = await this.llmProvider.generateLLM(
         state.config?.llmModel ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
         prompt,
         state.config?.llmConfig,
-        undefined,
+        { forceJson: true },
       );
       logger.log(`[CriticNode] Generated critique (${output.length} chars)`);
       return { criticOutput: output };
@@ -67,22 +66,8 @@ Respond only with valid JSON.`;
   }
 
   private parseResearchResult(raw: string): { summary: string; keyInsights: string[]; proposal: string } {
-    let jsonStr = String(raw)
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .replace(/```json\s*|```\s*/g, '')
-      .trim();
-    // Strip leading literal \n
-    jsonStr = jsonStr.replace(/^\\n+/, '');
-    // eslint-disable-next-line no-control-regex
-    jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
-      if (ch === '\n') return '\\n';
-      if (ch === '\t') return '\\t';
-      return '';
-    });
-    const match = jsonStr.match(/\{[\s\S]*\}/);
-    if (match) jsonStr = match[0];
     try {
-      const p = JSON.parse(jsonStr);
+      const p = JSON.parse(stripReasoning(raw).trim());
       return {
         summary: String(p.summary ?? ''),
         keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],

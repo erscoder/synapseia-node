@@ -19,14 +19,10 @@ Work order: ${params.title}
 Abstract: ${params.abstract}
 Relevant memories: ${params.memories}
 
-Return ONLY valid JSON array of steps:
-[
-  {"id": "1", "action": "fetch_context", "description": "Search reference corpus for related work"},
-  {"id": "2", "action": "analyze_paper", "description": "Extract key findings and methodology"},
-  {"id": "3", "action": "generate_hypothesis", "description": "Formulate research hypothesis"}
-]
+Output ONLY a JSON array of 3-5 step objects (no markdown, no extra text):
+[{"id":"1","action":"<action>","description":"<what to do>"},...]
 
-Keep it to 3-5 steps. Actions must be one of: fetch_context, analyze_paper, cross_reference, generate_hypothesis, peer_review_prep.`;
+Valid actions: fetch_context, analyze_paper, cross_reference, generate_hypothesis, peer_review_prep.`;
 }
 
 /**

@@ -50,26 +50,20 @@ export class ResearcherNode {
 Paper: ${payload.title}
 Abstract: ${payload.abstract}
 
-${contextBlock ? contextBlock + '\n\n' : ''}Provide a structured analysis in JSON format:
-\`\`\`json
-{
-  "summary": "2-3 sentence summary of the paper's main contribution and significance",
-  "keyInsights": [
-    "Concrete finding or contribution 1",
-    "Concrete finding or contribution 2",
-    "Concrete finding or contribution 3"
-  ],
-  "proposal": "A specific, testable next step or experiment building on this research"
-}
-\`\`\`
-Respond only with valid JSON.`;
+${contextBlock ? contextBlock + '\n\n' : ''}Output ONLY a JSON object (no markdown, no extra text):
+{"summary":"REAL summary here","keyInsights":["REAL finding 1","REAL finding 2","REAL finding 3"],"proposal":"REAL next step here"}
+
+Requirements:
+- summary: 2-3 sentences covering the paper's main contribution and its significance. At least 80 characters. Do not paraphrase the abstract.
+- keyInsights: at least 3 concrete, non-obvious findings or contributions from the paper. Each at least 30 characters.
+- proposal: a specific, testable next step or experiment that builds on this research. At least 100 characters.`;
 
     try {
       const output = await this.llmProvider.generateLLM(
         state.config?.llmModel ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
         prompt,
         state.config?.llmConfig,
-        undefined,
+        { forceJson: true },
       );
       logger.log(`[ResearcherNode] Generated research output (${output.length} chars)`);
       return {

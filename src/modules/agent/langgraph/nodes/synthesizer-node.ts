@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { stripReasoning } from '../../../../shared/sanitize-llm-output';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -40,27 +41,21 @@ Researcher's analysis:
 Peer review critique:
 ${criticOutput}
 
-Produce the FINAL ResearchResult, incorporating the critique:
+Produce the FINAL refined result that directly addresses the critique's concerns and improves the original analysis.
+Output ONLY a JSON object with exactly these fields (no markdown, no extra text):
+{"summary":"REAL refined summary here","keyInsights":["REAL refined insight 1","REAL insight 2","REAL insight 3"],"proposal":"REAL concrete next step here"}
 
-\`\`\`json
-{
-  "summary": "Refined 2-3 sentence summary, addressing critique",
-  "keyInsights": [
-    "Refined insight 1 (addresses critique)",
-    "Refined insight 2",
-    "Refined insight 3"
-  ],
-  "proposal": "Next step refined in light of the critique"
-}
-\`\`\`
-Respond only with valid JSON.`;
+Requirements:
+- summary: 2-3 sentences that improve on the original, directly addressing the critique. At least 80 characters.
+- keyInsights: at least 3 refined findings. Each at least 30 characters.
+- proposal: a concrete, actionable next step. At least 100 characters. Must differ from the original proposal if the critique identified weaknesses.`;
 
     try {
       const output = await this.llmProvider.generateLLM(
         state.config?.llmModel ?? { provider: 'ollama', modelId: 'qwen2.5-3b' } as any,
         prompt,
         state.config?.llmConfig,
-        undefined,
+        { forceJson: true },
       );
 
       const final = this.parseResearchResult(output);
@@ -117,21 +112,8 @@ Respond only with valid JSON.`;
   }
 
   private parseResearchResult(raw: string): { summary: string; keyInsights: string[]; proposal: string } {
-    let jsonStr = String(raw)
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .replace(/```json\s*|```\s*/g, '')
-      .trim();
-    jsonStr = jsonStr.replace(/^\\n+/, '');
-    // eslint-disable-next-line no-control-regex
-    jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
-      if (ch === '\n') return '\\n';
-      if (ch === '\t') return '\\t';
-      return '';
-    });
-    const match = jsonStr.match(/\{[\s\S]*\}/);
-    if (match) jsonStr = match[0];
     try {
-      const p = JSON.parse(jsonStr);
+      const p = JSON.parse(stripReasoning(raw).trim());
       return {
         summary: String(p.summary ?? ''),
         keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
