@@ -134,12 +134,19 @@ describe('MutationEngineHelper', () => {
       expect(proposal.hyperparams.numLayers).toBe(8);
     });
 
-    it('should throw on invalid JSON response', async () => {
+    it('should fall back to default config on invalid JSON response', async () => {
+      // Small local models (qwen2.5:0.5b) often emit malformed JSON. Instead of
+      // failing the training WO, proposeMutation should fall back to the default
+      // hyperparams and keep training moving.
       const exps = [mockExp('exp1')];
       const mockGenerate = jest.fn<() => Promise<string>>().mockResolvedValue('not json at all');
       (helper as any).llmProvider = { generateLLM: mockGenerate };
 
-      await expect(helper.proposeMutation(exps, 3.5, ['cpu'])).rejects.toThrow();
+      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu']);
+      expect(proposal.type).toBe('explore');
+      expect(proposal.hyperparams.learningRate).toBe(0.001);
+      expect(proposal.hyperparams.batchSize).toBe(32);
+      expect(proposal.reasoning).toMatch(/LLM mutation parse failed/);
     });
 
     it('should validate and fallback invalid activation', async () => {

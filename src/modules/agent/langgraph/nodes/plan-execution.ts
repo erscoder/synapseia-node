@@ -8,11 +8,14 @@ import type { AgentState, ExecutionStep } from '../state';
 import { LangGraphLlmService } from '../llm.service';
 import { buildPlanningPrompt, DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 import logger from '../../../../utils/logger';
-import type { ResearchPayload } from '../../work-order/work-order.types';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 
 @Injectable()
 export class PlanExecutionNode {
-  constructor(private readonly llmService: LangGraphLlmService) {}
+  constructor(
+    private readonly llmService: LangGraphLlmService,
+    private readonly execution: WorkOrderExecutionHelper,
+  ) {}
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     const { selectedWorkOrder, relevantMemories, config } = state;
@@ -20,20 +23,20 @@ export class PlanExecutionNode {
     // Only plan for research work orders - fast path for others
     if (!selectedWorkOrder || selectedWorkOrder.type !== 'RESEARCH') {
       logger.log('[PlanExecutionNode] Skipping planning for non-research WO');
-      return { 
-        executionPlan: [], 
-        currentStepIndex: 0 
+      return {
+        executionPlan: [],
+        currentStepIndex: 0
       };
     }
 
     try {
-      // Extract research payload from description
-      let payload: ResearchPayload;
-      try {
-        payload = JSON.parse(selectedWorkOrder.description) as ResearchPayload;
-      } catch {
-        logger.warn('[PlanExecutionNode] Failed to parse research payload, using defaults');
-        payload = { title: selectedWorkOrder.title, abstract: '' };
+      // Extract research payload — coordinator sends plain-text descriptions with
+      // metadata.paperTitle/paperAbstract, not JSON. extractResearchPayload handles
+      // all 3 formats (legacy JSON, metadata fields, plain "Abstract:\n..." text).
+      const extracted = this.execution.extractResearchPayload(selectedWorkOrder);
+      const payload = extracted ?? { title: selectedWorkOrder.title, abstract: '' };
+      if (!extracted) {
+        logger.warn('[PlanExecutionNode] Could not extract research payload, using title only');
       }
 
       // Build the planning prompt

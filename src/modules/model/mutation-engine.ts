@@ -25,24 +25,35 @@ export class MutationEngineHelper {
     capabilities: string[],
   ): Promise<MutationProposal> {
     if (topExperiments.length === 0) {
-      return {
-        model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
-        type: 'explore',
-        baseExperimentId: null,
-        hyperparams: {
-          learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
-          numHeads: 4, activation: 'gelu', normalization: 'layernorm',
-          initScheme: 'xavier', warmupSteps: 100, weightDecay: 0.01,
-          maxTrainSeconds: capabilities.includes('gpu') ? 300 : 120,
-        },
-        reasoning: 'Starting with default configuration for initial exploration',
-      };
+      return this.defaultMutation(capabilities, 'Starting with default configuration for initial exploration');
     }
 
     const prompt = this.buildPrompt(topExperiments, bestLoss, capabilities);
     const model: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
-    const response = await this.llmProvider.generateLLM(model, prompt);
-    return this.parseMutationResponse(response, topExperiments, bestLoss, capabilities);
+    try {
+      const response = await this.llmProvider.generateLLM(model, prompt);
+      return this.parseMutationResponse(response, topExperiments, bestLoss, capabilities);
+    } catch (err) {
+      // Small local models (qwen2.5:0.5b) frequently produce malformed JSON. Don't fail
+      // the whole training WO — fall back to a safe default config and move on.
+      const msg = err instanceof Error ? err.message : String(err);
+      return this.defaultMutation(capabilities, `LLM mutation parse failed (${msg.slice(0, 100)}), using default config`);
+    }
+  }
+
+  private defaultMutation(capabilities: string[], reasoning: string): MutationProposal {
+    return {
+      model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
+      type: 'explore',
+      baseExperimentId: null,
+      hyperparams: {
+        learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
+        numHeads: 4, activation: 'gelu', normalization: 'layernorm',
+        initScheme: 'xavier', warmupSteps: 100, weightDecay: 0.01,
+        maxTrainSeconds: capabilities.includes('gpu') ? 300 : 120,
+      },
+      reasoning,
+    };
   }
 
   private buildPrompt(topExperiments: Experiment[], bestLoss: number, capabilities: string[]): string {
