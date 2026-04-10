@@ -38,10 +38,11 @@ export class ModelDiscovery {
     peerId: string,
     hardware: Hardware,
     identity?: Identity,
+    ollamaUrl?: string,
   ): Promise<void> {
     try {
       const catalogHelper = new ModelCatalogHelper();
-      const localModelNames = catalogHelper.getLocalModels();
+      const localModelNames = catalogHelper.getLocalModels(ollamaUrl);
       if (localModelNames.length === 0) {
         logger.log('[ModelDiscovery] No local models found, skipping registration');
         return;

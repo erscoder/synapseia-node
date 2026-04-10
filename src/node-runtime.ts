@@ -130,7 +130,7 @@ export async function startNode(
   try {
     const { ModelDiscovery } = await import('./modules/discovery/model-discovery');
     const modelDiscovery = new ModelDiscovery();
-    await modelDiscovery.registerModels(config.coordinatorUrl, config.identity.peerId, hardware, config.identity);
+    await modelDiscovery.registerModels(config.coordinatorUrl, config.identity.peerId, hardware, config.identity, config.llmConfig?.baseUrl);
     logger.log('   ✓ Models registered with coordinator');
   } catch (err) {
     logger.warn(`   ⚠️ Model registration failed (non-critical): ${(err as Error).message}`);
@@ -146,6 +146,7 @@ export async function startNode(
     config.lat,
     config.lng,
     config.walletAddress,
+    config.llmConfig?.baseUrl,
   );
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
