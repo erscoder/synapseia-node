@@ -57,10 +57,10 @@ export class MutationEngineHelper {
         type: 'explore',
         baseExperimentId: null,
         hyperparams: {
-          learningRate: 0.001, batchSize: 32, hiddenDim: 128, numLayers: 4,
-          numHeads: 4, activation: 'gelu', normalization: 'layernorm',
-          initScheme: 'xavier', warmupSteps: 100, weightDecay: 0.01,
-          maxTrainSeconds: capabilities.includes('gpu') ? 300 : 120,
+          learningRate: 0.001, batchSize: 32, hiddenDim: 64, numLayers: 2,
+          numHeads: 2, activation: 'gelu', normalization: 'layernorm',
+          initScheme: 'xavier', warmupSteps: 50, weightDecay: 0.01,
+          maxTrainSeconds: capabilities.includes('gpu') ? 180 : 60,
         },
         reasoning: 'Cold start: no prior experiments to mutate from, using neutral baseline configuration',
       };
@@ -99,7 +99,7 @@ Top experiment ids: ${topIds}
 Best loss: ${bestLoss.toFixed(4)}
 
 Required schema (replace the placeholder values):
-{"type":"explore","baseExperimentId":null,"hyperparams":{"learningRate":0.001,"batchSize":32,"hiddenDim":128,"numLayers":4,"numHeads":4,"activation":"gelu","normalization":"layernorm","initScheme":"xavier","warmupSteps":100,"weightDecay":0.01,"maxTrainSeconds":${hasGpu ? 300 : 120}},"reasoning":"short explanation"}
+{"type":"explore","baseExperimentId":null,"hyperparams":{"learningRate":0.001,"batchSize":32,"hiddenDim":128,"numLayers":4,"numHeads":4,"activation":"gelu","normalization":"layernorm","initScheme":"xavier","warmupSteps":100,"weightDecay":0.01,"maxTrainSeconds":${hasGpu ? 180 : 60}},"reasoning":"short explanation"}
 
 Rules: learningRate 0.0001-0.01; batchSize one of 16,32,64,128; hiddenDim one of 64,128,192,256; numLayers 2-8; numHeads one of 2,4,8; activation one of gelu,silu,relu; normalization one of layernorm,rmsnorm; initScheme one of xavier,kaiming,normal.
 
@@ -129,7 +129,7 @@ Output JSON with this structure:
     "learningRate": 0.001, "batchSize": 32, "hiddenDim": 128, "numLayers": 4,
     "numHeads": 4, "activation": "gelu", "normalization": "layernorm",
     "initScheme": "xavier", "warmupSteps": 100, "weightDecay": 0.01,
-    "maxTrainSeconds": ${hasGpu ? 300 : 120}
+    "maxTrainSeconds": ${hasGpu ? 180 : 60}
   },
   "reasoning": "Explanation of why this mutation should work"
 }
@@ -181,8 +181,8 @@ Constraints:
       warmupSteps: Math.round(this.clampValue(num(parsed.hyperparams?.warmupSteps, 100), 0, 1000)),
       weightDecay: this.clampValue(num(parsed.hyperparams?.weightDecay, 0.01), 0, 0.1),
       maxTrainSeconds: hasGpu
-        ? Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 300), 120, 600))
-        : Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 120), 60, 300)),
+        ? Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 180), 60, 300))
+        : Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 60), 30, 120)),
     };
 
     return {

@@ -78,8 +78,8 @@ export class TrainerHelper {
       return { valid: false, error: "normalization must be one of: layernorm, rmsnorm" };
     if (!['xavier', 'kaiming', 'normal'].includes(hyperparams.initScheme))
       return { valid: false, error: "initScheme must be one of: xavier, kaiming, normal" };
-    if (hyperparams.maxTrainSeconds < 10 || hyperparams.maxTrainSeconds > 600)
-      return { valid: false, error: 'maxTrainSeconds must be between 10 and 600' };
+    if (hyperparams.maxTrainSeconds < 10 || hyperparams.maxTrainSeconds > 300)
+      return { valid: false, error: 'maxTrainSeconds must be between 10 and 300' };
 
     return { valid: true };
   }
@@ -132,7 +132,9 @@ export class TrainerHelper {
       logger.log(`Training timeout: ${(TRAINING_TIMEOUT_MS / 1000).toFixed(0)}s (TRAINING_TIMEOUT_MS env var overrides)`);
       logger.log(`Script exists: ${existsSync(pythonScriptPath)}`);
 
-      const pythonProcess = spawn('python3', [pythonScriptPath], {
+      // -u forces unbuffered stdout/stderr so JSON progress lines arrive
+      // immediately instead of being held in Python's 4 KB block buffer.
+      const pythonProcess = spawn('python3', ['-u', pythonScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
@@ -206,6 +208,8 @@ export class TrainerHelper {
 
     const timeoutPromise = new Promise<never>((_res, reject) => {
       const timeoutHandle = setTimeout(() => {
+        // Mark settled BEFORE killing so the close-event handler is a no-op.
+        settledHolder.current = true;
         if (killProcess) { killProcess(); killProcess = null; }
         reject(new Error(`Training timed out after ${TRAINING_TIMEOUT_MS / 1000}s`));
       }, TRAINING_TIMEOUT_MS);
