@@ -201,20 +201,11 @@ export class WorkOrderLoopHelper {
           logger.log(' Research saved to agent brain');
         }
 
-        if (success) {
-          let paperId = workOrder.id.replace(/^wo_/, 'paper_');
-          try {
-            const resp = await fetch(`${coordinatorUrl}/papers`);
-            if (resp.ok) {
-              const data = await resp.json() as { papers?: Array<{ id: string; title: string }> };
-              const match = data.papers?.find(p => p.title === workOrder.title || p.title.includes(workOrder.title.substring(0, 40)));
-              if (match) paperId = match.id;
-            }
-          } catch (e) { logger.warn(' Failed to lookup paperId:', e); }
-
-          const submitted = await this.coordinator.submitResearchResult(coordinatorUrl, paperId, peerId, researchResult, researchHyperparams);
-          if (submitted) logger.log(' Research result submitted to research queue');
-        }
+        // NOTE: Research result is submitted via completeWorkOrder() below.
+        // The coordinator extracts summary/insights/proposal from the result JSON
+        // and registers a Submission in the active ResearchRound automatically.
+        // (Legacy /papers/results endpoint removed — it no longer exists on coordinator.)
+        void researchHyperparams; // silence unused warning — hyperparams tracked via reportHyperparamExperiment
       } else {
         const execution = await this.execution.executeWorkOrder(workOrder, llmModel, llmConfig);
         result = execution.result; success = execution.success;

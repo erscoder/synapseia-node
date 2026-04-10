@@ -27,10 +27,9 @@ export class SubmitResultNode {
 
     if (completed) {
       logger.log(` Result submitted! Potential reward: ${selectedWorkOrder.rewardAmount} SYN`);
-      if (researchResult && selectedWorkOrder.type === 'RESEARCH') {
-        await this.coordinator.submitResearchResult(coordinatorUrl, selectedWorkOrder.id, peerId, researchResult);
-        logger.log(' Research result submitted to research queue');
-      }
+      // Research results are registered in the ResearchRound via completeWorkOrder().
+      // The coordinator extracts summary/insights/proposal from the result JSON automatically.
+      void researchResult; // kept in state for brain/memory
     } else {
       logger.log(' Failed to report completion');
     }
