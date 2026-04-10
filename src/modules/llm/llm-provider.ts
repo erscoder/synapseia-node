@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { OllamaHelper, type GenerateOptions } from './ollama';
+import { stripReasoning } from '../../shared/sanitize-llm-output';
 
 export type LLMProvider = 'ollama' | 'cloud';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
@@ -112,9 +113,19 @@ export class LlmProviderHelper {
     config?: LLMConfig,
     hyperparams?: GenerateOptions,
   ): Promise<string> {
-    if (model.provider === 'ollama') return this.generateOllamaLLM(model, prompt, hyperparams);
-    if (model.provider === 'cloud') return this.generateCloudLLM(model, prompt, config, hyperparams);
-    throw new Error('Unknown provider');
+    let raw: string;
+    if (model.provider === 'ollama') {
+      raw = await this.generateOllamaLLM(model, prompt, hyperparams);
+    } else if (model.provider === 'cloud') {
+      raw = await this.generateCloudLLM(model, prompt, config, hyperparams);
+    } else {
+      throw new Error('Unknown provider');
+    }
+    // Centralized scrub of reasoning-model scratchpad (<think>, <thinking>,
+    // channel markers, truncated unclosed variants). Keeps contamination out
+    // of submissions, mutation proposals, insights, and corpus entries —
+    // callers don't need to strip locally.
+    return stripReasoning(raw);
   }
 
   checkOllama() {
@@ -351,6 +362,8 @@ export class LlmProviderHelper {
         model: model.modelId, messages: [{ role: 'user', content: prompt }],
         ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
         ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
+        // response_format enforces valid JSON on OpenAI-compat endpoints
+        ...(hyperparams?.forceJson && { response_format: { type: 'json_object' } }),
       }),
     });
     if (!response.ok) {

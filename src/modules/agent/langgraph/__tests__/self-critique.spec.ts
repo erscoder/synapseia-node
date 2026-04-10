@@ -17,11 +17,12 @@ jest.mock('../../../../utils/logger', () => ({
 
 describe('SelfCritiqueNode', () => {
   let node: SelfCritiqueNode;
-  let mockLlmService: { generate: ReturnType<typeof jest.fn> };
+  let mockLlmService: { generate: ReturnType<typeof jest.fn>; generateJSON: ReturnType<typeof jest.fn> };
 
   beforeEach(() => {
     mockLlmService = {
       generate: jest.fn(),
+      generateJSON: jest.fn(),
     };
     node = new SelfCritiqueNode(mockLlmService as any);
   });
@@ -64,7 +65,7 @@ describe('SelfCritiqueNode', () => {
 
   describe('for research work orders with passing scores', () => {
     it('should return passed=true when scores avg ≥ 7', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 8,
         completeness: 7,
         novelty: 8,
@@ -88,7 +89,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should handle scores exactly at threshold (7.0)', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 7,
         completeness: 7,
         novelty: 7,
@@ -111,7 +112,7 @@ describe('SelfCritiqueNode', () => {
 
   describe('for research work orders with failing scores', () => {
     it('should return passed=false when scores avg < 7', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 6,
         completeness: 6,
         novelty: 5,
@@ -134,7 +135,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should increment retryCount correctly on failure', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 5,
         completeness: 5,
         novelty: 5,
@@ -155,7 +156,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should not exceed max retry count of 2', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 5,
         completeness: 5,
         novelty: 5,
@@ -187,7 +188,7 @@ describe('SelfCritiqueNode', () => {
       expect(result.selfCritiqueScore).toBe(0);
       expect(result.selfCritiquePassed).toBe(true);
       expect(result.selfCritiqueFeedback).toBe('');
-      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      expect(mockLlmService.generateJSON).not.toHaveBeenCalled();
     });
 
     it('should skip critique for inference WOs', async () => {
@@ -198,7 +199,7 @@ describe('SelfCritiqueNode', () => {
       const result = await node.execute(state);
 
       expect(result.selfCritiquePassed).toBe(true);
-      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      expect(mockLlmService.generateJSON).not.toHaveBeenCalled();
     });
 
     it('should skip critique for diloco WOs', async () => {
@@ -209,7 +210,7 @@ describe('SelfCritiqueNode', () => {
       const result = await node.execute(state);
 
       expect(result.selfCritiquePassed).toBe(true);
-      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      expect(mockLlmService.generateJSON).not.toHaveBeenCalled();
     });
   });
 
@@ -226,13 +227,13 @@ describe('SelfCritiqueNode', () => {
       expect(result.selfCritiquePassed).toBe(false);
       expect(result.selfCritiqueFeedback).toBe('No research result available for critique');
       expect(result.retryCount).toBe(1);
-      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      expect(mockLlmService.generateJSON).not.toHaveBeenCalled();
     });
   });
 
   describe('error handling', () => {
     it('should handle invalid JSON from LLM gracefully', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce('invalid json');
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce('invalid json');
 
       const state = makeState({
         selectedWorkOrder: { id: 'wo-1', title: 'Test Research', type: 'RESEARCH', abstract: 'Test abstract', reward: 100 } as any,
@@ -248,7 +249,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should handle LLM error gracefully', async () => {
-      (mockLlmService.generate as any).mockRejectedValueOnce(new Error('LLM timeout'));
+      (mockLlmService.generateJSON as any).mockRejectedValueOnce(new Error('LLM timeout'));
 
       const state = makeState({
         selectedWorkOrder: { id: 'wo-1', title: 'Test Research', type: 'RESEARCH', abstract: 'Test abstract', reward: 100 } as any,
@@ -264,7 +265,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should handle partial LLM response (missing fields)', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 8,
         // missing completeness, novelty, actionability, feedback, passed
       }));
@@ -284,7 +285,7 @@ describe('SelfCritiqueNode', () => {
 
   describe('prompt building', () => {
     it('should include research details in the prompt', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 8, completeness: 8, novelty: 8, actionability: 8,
         feedback: 'Good', passed: true,
       }));
@@ -300,7 +301,7 @@ describe('SelfCritiqueNode', () => {
 
       await node.execute(state);
 
-      const prompt = (mockLlmService.generate as any).mock.calls[0][1];
+      const prompt = (mockLlmService.generateJSON as any).mock.calls[0][1];
       expect(prompt).toContain('My Research Paper');
       expect(prompt).toContain('Research summary here');
       expect(prompt).toContain('Insight 1, Insight 2');
@@ -308,7 +309,7 @@ describe('SelfCritiqueNode', () => {
     });
 
     it('should handle array keyInsights correctly', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 8, completeness: 8, novelty: 8, actionability: 8,
         feedback: 'Good', passed: true,
       }));
@@ -324,12 +325,12 @@ describe('SelfCritiqueNode', () => {
 
       await node.execute(state);
 
-      const prompt = (mockLlmService.generate as any).mock.calls[0][1];
+      const prompt = (mockLlmService.generateJSON as any).mock.calls[0][1];
       expect(prompt).toContain('insight1, insight2, insight3');
     });
 
     it('should handle non-array keyInsights', async () => {
-      (mockLlmService.generate as any).mockResolvedValueOnce(JSON.stringify({
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 8, completeness: 8, novelty: 8, actionability: 8,
         feedback: 'Good', passed: true,
       }));
@@ -345,7 +346,7 @@ describe('SelfCritiqueNode', () => {
 
       await node.execute(state);
 
-      const prompt = (mockLlmService.generate as any).mock.calls[0][1];
+      const prompt = (mockLlmService.generateJSON as any).mock.calls[0][1];
       expect(prompt).toContain('single insight');
     });
   });

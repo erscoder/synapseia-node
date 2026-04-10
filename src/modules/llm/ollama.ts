@@ -19,6 +19,8 @@ export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+  /** Force the model to emit valid JSON via constrained decoding (Ollama format:"json") */
+  forceJson?: boolean;
 }
 
 /**
@@ -117,6 +119,11 @@ export class OllamaHelper {
         model: targetModel,
         messages: [{ role: 'user', content: prompt }],
         stream: false,
+        // format: "json" enables grammar-based constrained decoding — the model
+        // is physically prevented from emitting non-JSON tokens, so JSON.parse
+        // never fails due to syntax errors (no fences, no trailing text, no
+        // unclosed strings). Still need to validate fields after parsing.
+        ...(options?.forceJson && { format: 'json' }),
         options: {
           ...(options?.temperature !== undefined && { temperature: options.temperature }),
           ...(options?.maxTokens !== undefined && { num_predict: options.maxTokens }),

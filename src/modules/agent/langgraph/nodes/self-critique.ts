@@ -55,8 +55,8 @@ export class SelfCritiqueNode {
         proposal: researchResult.proposal || '',
       });
 
-      // Call LLM for critique
-      const llmResponse = await this.llmService.generate(
+      // Use JSON mode so the model emits valid JSON directly — no parsing heuristics needed
+      const llmResponse = await this.llmService.generateJSON(
         config.llmModel,
         prompt,
         config.llmConfig

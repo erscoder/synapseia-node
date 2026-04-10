@@ -8,6 +8,7 @@ import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution'
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
+import { stripReasoning } from '../../../../shared/sanitize-llm-output';
 import type { AgentState, WorkOrder, ResearchResult } from '../state';
 import type { ReActThought } from '../tools/types';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -102,7 +103,7 @@ export class ExecuteResearchNode {
         observations,
       );
 
-      const raw = await this.llmService.generate(state.config.llmModel, prompt, state.config.llmConfig);
+      const raw = await this.llmService.generateJSON(state.config.llmModel, prompt, state.config.llmConfig);
       const thought = this.parseReActResponse(raw);
 
       if (thought.action === 'use_tool' && thought.toolCall && ctx.callCount < ctx.maxCalls) {
@@ -143,44 +144,26 @@ export class ExecuteResearchNode {
 
   private parseReActResponse(raw: string): ReActThought {
     try {
-      // Strip markdown code fences if present
-      let jsonStr = raw.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
-
-      // Strip <think>...</think> blocks (reasoning models)
-      jsonStr = jsonStr.replace(/[\s\S]*?<\/think>/gi, '');
-
-      // Strip leading literal \n sequences (LLM sometimes outputs \n before JSON)
-      jsonStr = jsonStr.replace(/^\\n+/, '');
-
-      // Sanitize control characters inside JSON string values (tabs, newlines, etc.)
-      // eslint-disable-next-line no-control-regex
-      jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
-        if (ch === '\n') return '\\n';
-        if (ch === '\r') return '\\r';
-        if (ch === '\t') return '\\t';
-        return '';
-      });
-
+      // generateJSON ensures the model emits valid JSON directly (Ollama
+      // format:"json" / OpenAI response_format:"json_object"). stripReasoning
+      // is kept as defense-in-depth for providers without JSON mode.
+      const jsonStr = stripReasoning(raw).trim();
       const parsed = JSON.parse(jsonStr) as ReActThought;
 
       // Validate required fields
       if (!parsed.thought || !parsed.action) {
         throw new Error('Missing required fields: thought, action');
       }
-
       if (parsed.action === 'use_tool' && !parsed.toolCall) {
         throw new Error('Missing toolCall for use_tool action');
       }
-
       if (parsed.action === 'generate_answer' && !parsed.answer) {
-        // If answer is missing but action is generate_answer, use the raw response
         parsed.answer = jsonStr;
       }
 
       return parsed;
     } catch (error) {
       logger.warn(` Failed to parse ReAct response: ${(error as Error).message}. Treating as direct answer.`);
-      // Fallback: treat entire response as the answer
       return {
         thought: 'Failed to parse structured response, treating as direct answer',
         action: 'generate_answer',
@@ -215,31 +198,12 @@ export class ExecuteResearchNode {
       }
       answer = String(answer);
     }
-    // Try to parse as JSON result
+    // Try to parse as JSON result — the answer came from generateJSON so it
+    // should be valid JSON. stripReasoning is kept as defense-in-depth.
     try {
-      // Strip markdown and thinking blocks
-      let jsonStr = answer
-        .replace(/```json\s*/g, '')
-        .replace(/```\s*$/g, '')
-        .replace(/[\s\S]*?<\/think>/gi, '')
-        .trim();
-
-      // Sanitize control characters
-      // eslint-disable-next-line no-control-regex
-      jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, (ch) => {
-        if (ch === '\n') return '\\n';
-        if (ch === '\r') return '\\r';
-        if (ch === '\t') return '\\t';
-        return '';
-      });
-
-      // Extract JSON object
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[0];
-      }
-
-      const parsed = JSON.parse(jsonStr);
+      const jsonStr = stripReasoning(answer).trim();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parsed: any = JSON.parse(jsonStr);
 
       // Validate and normalize result structure
       return {
