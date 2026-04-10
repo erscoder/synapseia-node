@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { buildAuthHeaders } from '../../../utils/node-auth';
 import logger from '../../../utils/logger';
-import type { WorkOrder, ResearchResult, TrainingWorkOrderPayload, ResearchPayload } from './work-order.types';
+import type { WorkOrder, TrainingWorkOrderPayload, ResearchPayload } from './work-order.types';
 import type { Experiment } from '../../../types';
 import { IdentityService } from '../../../modules/identity/services/identity.service';
 
@@ -164,35 +164,9 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     }
   }
 
-  // ── Research ──────────────────────────────────────────────────────────────
-
-  async submitResearchResult(
-    coordinatorUrl: string,
-    workOrderId: string,
-    peerId: string,
-    result: ResearchResult,
-    hyperparams?: Record<string, unknown>,
-  ): Promise<boolean> {
-    try {
-      const body = {
-        paperId: workOrderId,
-        peerId,
-        nodeId: peerId,
-        summary: result.summary,
-        keyInsights: result.keyInsights,
-        applicationProposal: result.proposal,
-        ...(hyperparams ? { hyperparams } : {}),
-      };
-      const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/papers/results`, 'POST', body);
-      const response = await fetch(fetchUrl, init);
-      if (!response.ok) { logger.warn(` Failed to submit research result:`, await response.text()); return false; }
-      logger.log(` Research result submitted successfully`);
-      return true;
-    } catch (error) {
-      logger.warn(' Failed to submit research result:', (error as Error).message);
-      return false;
-    }
-  }
+  // NOTE: submitResearchResult() removed — coordinator's /papers/results endpoint does not exist.
+  // Research results are submitted via completeWorkOrder() which registers a Submission
+  // in the active ResearchRound and extracts summary/insights/proposal from the result JSON.
 
   async uploadInsightToNetwork(
     coordinatorUrl: string,

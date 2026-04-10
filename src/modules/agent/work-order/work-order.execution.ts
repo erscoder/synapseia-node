@@ -41,7 +41,7 @@ export class WorkOrderExecutionHelper {
 
   isResearchWorkOrder(workOrder: WorkOrder): boolean {
     if (workOrder.type === 'RESEARCH') return true;
-    try { const p = JSON.parse(workOrder.description); return !!(p.title && p.abstract); } catch { return false; }
+    return this.extractResearchPayload(workOrder) !== null;
   }
 
   isTrainingWorkOrder(workOrder: WorkOrder): boolean {
@@ -70,18 +70,23 @@ export class WorkOrderExecutionHelper {
   }
 
   extractResearchPayload(workOrder: WorkOrder): ResearchPayload | null {
-    // Try JSON format first
+    // 1. Try JSON-encoded description (legacy format)
     try {
       const p = JSON.parse(workOrder.description);
       if (p.title && p.abstract) return { title: p.title, abstract: p.abstract };
-    } catch { /* not JSON */ }
+    } catch { /* not JSON — try other formats */ }
 
-    // Fallback: use WO title + description as plain text
+    // 2. Use metadata fields (paperTitle + paperAbstract) set by coordinator
+    const meta = workOrder.metadata;
+    if (meta?.['paperTitle'] && meta?.['paperAbstract']) {
+      return { title: String(meta['paperTitle']), abstract: String(meta['paperAbstract']) };
+    }
+
+    // 3. Parse plain-text description (coordinator builds "Abstract:\n..." format)
     if (workOrder.title && workOrder.description) {
-      return {
-        title: workOrder.title,
-        abstract: workOrder.description.slice(0, 2000),
-      };
+      const abstractMatch = workOrder.description.match(/Abstract:\n([\s\S]*?)(?:\n\n|$)/);
+      const abstract = abstractMatch?.[1]?.trim() || workOrder.description.slice(0, 2000);
+      return { title: workOrder.title, abstract };
     }
     return null;
   }
