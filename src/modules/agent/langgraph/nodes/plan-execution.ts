@@ -47,8 +47,7 @@ export class PlanExecutionNode {
         memories: memoriesText,
       });
 
-      // Call LLM for plan generation
-      const llmResponse = await this.llmService.generate(
+      const llmResponse = await this.llmService.generateJSON(
         config.llmModel,
         prompt,
         config.llmConfig

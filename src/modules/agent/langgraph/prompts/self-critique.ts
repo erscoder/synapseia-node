@@ -28,10 +28,8 @@ Score each dimension 0-10:
 - novelty: Are insights non-obvious (not just paraphrasing)?
 - actionability: Is the proposal concrete and specific?
 
-Threshold for passing: average ≥ 7.0
-
-Return ONLY valid JSON:
-{"accuracy": N, "completeness": N, "novelty": N, "actionability": N, "feedback": "one sentence on what to improve", "passed": true/false}`;
+Output ONLY a JSON object (no markdown, no extra text):
+{"accuracy":<0-10>,"completeness":<0-10>,"novelty":<0-10>,"actionability":<0-10>,"feedback":"<one sentence>","passed":<true|false>}`;
 }
 
 /**
@@ -47,44 +45,53 @@ export interface SelfCritiqueResponse {
 }
 
 /**
- * Parse and validate the self-critique response
+ * Parse and validate the self-critique response.
+ *
+ * generateJSON ensures the LLM emits syntactically valid JSON, so this
+ * function only needs to validate the schema and clamp numeric values.
+ *
+ * Outcomes:
+ *  1. Valid JSON + all 4 scores → use them (pass/fail by computed avg ≥ 7.0)
+ *  2. Valid JSON but missing fields → fail + retry (LLM didn't follow schema)
+ *  3. JSON.parse fails (provider without JSON mode) → fail + retry
  */
 export function parseSelfCritiqueResponse(jsonText: string): SelfCritiqueResponse {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
   try {
-    const parsed = JSON.parse(jsonText) as SelfCritiqueResponse;
-    
-    // Validate required fields
-    if (
-      typeof parsed.accuracy !== 'number' ||
-      typeof parsed.completeness !== 'number' ||
-      typeof parsed.novelty !== 'number' ||
-      typeof parsed.actionability !== 'number' ||
-      typeof parsed.feedback !== 'string' ||
-      typeof parsed.passed !== 'boolean'
-    ) {
-      throw new Error('Invalid response structure');
-    }
-
-    // Clamp scores to 0-10 range
-    return {
-      accuracy: Math.max(0, Math.min(10, parsed.accuracy)),
-      completeness: Math.max(0, Math.min(10, parsed.completeness)),
-      novelty: Math.max(0, Math.min(10, parsed.novelty)),
-      actionability: Math.max(0, Math.min(10, parsed.actionability)),
-      feedback: parsed.feedback,
-      passed: parsed.passed,
-    };
+    parsed = JSON.parse(jsonText.trim());
   } catch {
-    // Return a failing critique if parsing fails
     return {
-      accuracy: 5,
-      completeness: 5,
-      novelty: 5,
-      actionability: 5,
+      accuracy: 0, completeness: 0, novelty: 0, actionability: 0,
       feedback: 'Failed to parse critique response - needs improvement',
       passed: false,
     };
   }
+
+  if (
+    typeof parsed.accuracy !== 'number' ||
+    typeof parsed.completeness !== 'number' ||
+    typeof parsed.novelty !== 'number' ||
+    typeof parsed.actionability !== 'number'
+  ) {
+    return {
+      accuracy: 0, completeness: 0, novelty: 0, actionability: 0,
+      feedback: 'Incomplete critique response — missing required score fields',
+      passed: false,
+    };
+  }
+
+  const clamp = (n: number) => Math.max(0, Math.min(10, n));
+  const a = clamp(parsed.accuracy);
+  const c = clamp(parsed.completeness);
+  const n = clamp(parsed.novelty);
+  const ac = clamp(parsed.actionability);
+
+  return {
+    accuracy: a, completeness: c, novelty: n, actionability: ac,
+    feedback: typeof parsed.feedback === 'string' ? parsed.feedback : '',
+    passed: (a + c + n + ac) / 4 >= 7.0,
+  };
 }
 
 /**

@@ -42,6 +42,7 @@ jest.mock('../tools/tool-runner.service', () => ({
 jest.mock('../llm.service', () => ({
   LangGraphLlmService: jest.fn().mockImplementation(() => ({
     generate: jest.fn(),
+    generateJSON: jest.fn(),
   })),
 }));
 
@@ -147,6 +148,7 @@ describe('ExecuteResearchNode', () => {
 
     mockLlmService = {
       generate: jest.fn(),
+      generateJSON: jest.fn(),
     };
     mockExecution = new WorkOrderExecutionHelper();
     mockEvaluation = new WorkOrderEvaluationHelper();
@@ -171,7 +173,7 @@ describe('ExecuteResearchNode', () => {
       const state = createMockState({ selectedWorkOrder: workOrder });
 
       // First iteration: LLM wants to use a tool
-      mockLlmService.generate
+      mockLlmService.generateJSON
         .mockResolvedValueOnce(JSON.stringify({
           thought: 'I need more context about neural networks',
           action: 'use_tool',
@@ -212,7 +214,7 @@ describe('ExecuteResearchNode', () => {
       const workOrder = createMockWorkOrder();
       const state = createMockState({ selectedWorkOrder: workOrder });
 
-      mockLlmService.generate
+      mockLlmService.generateJSON
         .mockResolvedValueOnce(JSON.stringify({
           thought: 'Search for context',
           action: 'use_tool',
@@ -252,7 +254,7 @@ describe('ExecuteResearchNode', () => {
       const workOrder = createMockWorkOrder();
       const state = createMockState({ selectedWorkOrder: workOrder });
 
-      mockLlmService.generate
+      mockLlmService.generateJSON
         .mockResolvedValueOnce(JSON.stringify({
           thought: 'Search for context',
           action: 'use_tool',
@@ -294,7 +296,7 @@ describe('ExecuteResearchNode', () => {
         maxCalls: 2,
       });
 
-      mockLlmService.generate.mockImplementation(() => {
+      mockLlmService.generateJSON.mockImplementation(() => {
         callCount++;
         if (callCount <= 3) {
           return Promise.resolve(JSON.stringify({
@@ -335,7 +337,7 @@ describe('ExecuteResearchNode', () => {
       const workOrder = createMockWorkOrder();
       const state = createMockState({ selectedWorkOrder: workOrder });
 
-      mockLlmService.generate.mockResolvedValueOnce(JSON.stringify({
+      mockLlmService.generateJSON.mockResolvedValueOnce(JSON.stringify({
         thought: 'I have enough information from the abstract',
         action: 'generate_answer',
         answer: JSON.stringify({
@@ -358,7 +360,7 @@ describe('ExecuteResearchNode', () => {
       const workOrder = createMockWorkOrder();
       const state = createMockState({ selectedWorkOrder: workOrder });
 
-      mockLlmService.generate.mockRejectedValue(new Error('LLM service error'));
+      mockLlmService.generateJSON.mockRejectedValue(new Error('LLM service error'));
 
       mockExecuteResearchWorkOrder.mockResolvedValue({
         result: {
