@@ -193,14 +193,23 @@ export class TrainerHelper {
 
       pythonProcess.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
-      pythonProcess.on('close', (code) => {
+      pythonProcess.on('close', (code, signal) => {
         const durationMs = Date.now() - startTime;
         if (stderr.trim()) logger.warn(`[trainer] python3 stderr:\n${stderr.trim().slice(0, 2000)}`);
 
         if (code === null || code !== 0) {
-          const errorMsg = stderr.trim()
-            ? `Training failed (exit ${code}): ${stderr.trim().slice(0, 500)}`
-            : `Training process exited with code ${code ?? 'null'} — no output received`;
+          // code === null + SIGKILL almost always means the container's cgroup
+          // OOM killer took the process — Python didn't get a chance to flush
+          // any output. Call this out explicitly so operators know to bump
+          // mem_limit or lower hiddenDim/batchSize instead of chasing a bug
+          // in the trainer.
+          const killedByOom = code === null && signal === 'SIGKILL';
+          const base = stderr.trim()
+            ? `Training failed (exit ${code}, signal ${signal ?? 'none'}): ${stderr.trim().slice(0, 500)}`
+            : `Training process exited with code ${code ?? 'null'}, signal ${signal ?? 'none'} — no output received`;
+          const errorMsg = killedByOom
+            ? `${base} — likely OOM (SIGKILL by cgroup). Raise container mem_limit or lower hiddenDim/batchSize.`
+            : base;
           settle(new Error(errorMsg));
           return;
         }

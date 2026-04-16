@@ -28,6 +28,44 @@ export class MutationEngineError extends Error {
   }
 }
 
+/**
+ * Extract the first balanced `{...}` JSON object from a raw LLM response.
+ *
+ * Why not a regex? The greedy `/\{[\s\S]*\}/` matches from the first `{` to
+ * the LAST `}`, which for responses like `{"a":1}\n{"b":2}` produces the
+ * whole span (multi-object) — JSON.parse then fails at the boundary with
+ * "Unexpected non-whitespace character after JSON at position N". The
+ * non-greedy variant has the opposite problem (stops too early on nested
+ * objects).
+ *
+ * A brace counter that respects string literals + escapes always returns
+ * the first syntactically balanced object, with no sensitivity to trailing
+ * prose or a second object. Null if no balanced object is found.
+ */
+export function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 @Injectable()
 export class MutationEngineHelper {
   private readonly llmProvider = new LlmProviderHelper();
@@ -149,10 +187,11 @@ Constraints:
     response: string, topExperiments: Experiment[], bestLoss: number, capabilities: string[],
     sourceModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
   ): MutationProposal {
-    const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Failed to parse JSON from LLM response');
+    // First try a fenced ```json { ... } ``` block (common markdown wrap).
+    const fenced = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    const jsonStr = fenced ? fenced[1] : extractFirstJsonObject(response);
+    if (!jsonStr) throw new Error('Failed to parse JSON from LLM response');
 
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
     const parsed = JSON.parse(jsonStr) as any;
 
     if (!parsed.hyperparams || typeof parsed.hyperparams !== 'object') {

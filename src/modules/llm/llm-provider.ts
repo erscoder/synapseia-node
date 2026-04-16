@@ -69,7 +69,10 @@ export const MODEL_METADATA = {
  * Covers:
  * - Minimax error 2064: "server cluster under high load" — explicitly transient.
  * - HTTP 429 / 5xx / timeouts / generic "rate limit" / "overloaded".
- * - Ollama: "llama runner process no longer running", "EOF", connection refused.
+ * - Ollama: the llama runner (mmap'd model process) dies mid-generation
+ *   under memory pressure or during model eviction. Variants observed:
+ *   "runner process no longer running", "runner process has terminated",
+ *   and "%!w(<nil>)" (Go format-string leak when Ollama wraps a nil error).
  */
 export function isTransientLlmError(err: unknown): boolean {
   const msg = String((err as any)?.message ?? err ?? '').toLowerCase();
@@ -89,7 +92,8 @@ export function isTransientLlmError(err: unknown): boolean {
     msg.includes('etimedout') ||
     msg.includes('enotfound') ||
     msg.includes('socket hang up') ||
-    msg.includes('runner process no longer running') ||
+    msg.includes('runner process') ||
+    msg.includes('%!w') ||
     msg.includes('unexpected eof') ||
     msg.includes('try again')
   );
