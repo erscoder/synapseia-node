@@ -1,5 +1,42 @@
 # Changelog — @synapseia/node
 
+## [2026-04-16] Container log fixes — Ollama runner crashes, MiniMax parse errors, OOM diagnostic
+
+Four findings from a container-node log review at 22:15–22:24.
+
+### A. `Heartbeat sent via HTTP only` spam
+`heartbeat.ts`: downgraded from `info` → `debug`. Logged on every 30 s
+tick when P2P isn't running (normal in containers). No information loss
+— P2P status surfaces elsewhere.
+
+### B. `llama runner process has terminated: %!w(<nil>)` — not retried
+Ollama's mmap'd runner process dies mid-generation under memory pressure
+or during model eviction. The Go `%!w(<nil>)` format artifact comes from
+`fmt.Errorf("…%w", nil)` inside Ollama when the wrapped error is itself
+nil. `isTransientLlmError` only matched the phrase "runner process no
+longer running" — the newer "runner process has terminated" variant
+wasn't classified as transient, so the retry schedule (1 s / 3 s / 8 s
+backoff) never kicked in and the error bubbled straight to the mutation
+engine, which immediately walked to the cloud fallback. Extended the
+classifier to match `runner process` (generic) and the Go `%!w` artifact.
+
+### C. MiniMax `Unexpected non-whitespace character after JSON at position 4`
+`mutation-engine.parseMutationResponse` used `/\{[\s\S]*\}/` — greedy
+first-to-last brace. On responses like `{"a":1}\n{"b":2}` the regex
+captured the whole span and `JSON.parse` failed at the boundary. Replaced
+with a new `extractFirstJsonObject(text)` helper that does a proper
+brace count (respects string literals + backslash escapes) and returns
+the first balanced `{…}` block, ignoring trailing prose or secondary
+objects. Fenced ```json blocks still take priority.
+
+### D. `Training process exited with code null` without hint
+`trainer.ts` now captures the close signal as well as the exit code and
+explicitly calls out `code === null + signal === 'SIGKILL'` as a likely
+cgroup OOM kill, including a pointer to raise `mem_limit` or lower
+`hiddenDim`/`batchSize`. The trainer didn't change behavior — this is
+purely a diagnostic clarity fix so operators stop chasing a trainer bug
+when the kernel killed Python for eating RAM.
+
 ## [2026-04-15] Fix missing LLM config on peer-review loop (the real reason discoveries were empty)
 
 ### Problem

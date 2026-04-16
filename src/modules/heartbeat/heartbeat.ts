@@ -342,7 +342,7 @@ export class HeartbeatHelper {
           });
           logger.log('[P2P+HTTP] Heartbeat sent via both channels');
         } else {
-          logger.log('Heartbeat sent via HTTP only');
+          logger.debug('Heartbeat sent via HTTP only');
         }
       } catch (error) {
         logger.error('Heartbeat failed:', (error as Error).message);
