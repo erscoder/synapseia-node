@@ -31,3 +31,6 @@ PROGRESS.md
 
 # claude memory
 **/CLAUDE.md
+
+# Runtime data — generated at startup
+data/

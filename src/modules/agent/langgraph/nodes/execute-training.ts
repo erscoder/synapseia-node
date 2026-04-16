@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
-import { LlmProviderHelper } from '../../../llm/llm-provider';
+import { LlmProviderHelper, type LLMModel } from '../../../llm/llm-provider';
+import { resolveTrainingChain } from '../../../llm/training-llm';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
@@ -18,10 +19,26 @@ export class ExecuteTrainingNode {
     }
 
     logger.log(` Executing training: ${selectedWorkOrder.title}`);
+
+    // Resolve primary + full fallback chain. The CLI --model flag is typically
+    // an inference-sized model; we use the best training-capable LLM and keep
+    // every other available model as a fallback so a single model's JSON
+    // glitch (e.g. minimax appending stray tokens) doesn't kill the WO.
+    const chain = await resolveTrainingChain();
+    if (!chain) {
+      logger.warn(' No capable training LLM — aborting training WO');
+      return {
+        executionResult: {
+          result: 'No training LLM available (no Ollama models and no LLM_CLOUD_MODEL)',
+          success: false,
+        },
+      };
+    }
+
     try {
       const training = await this.execution.executeTrainingWorkOrder(
         selectedWorkOrder, coordinatorUrl, peerId, config.capabilities, iteration,
-        config.llmModel, config.llmConfig, [],
+        chain.primary, config.llmConfig, chain.fallbacks,
       );
       return { executionResult: { result: training.result, success: training.success } };
     } catch (error) {

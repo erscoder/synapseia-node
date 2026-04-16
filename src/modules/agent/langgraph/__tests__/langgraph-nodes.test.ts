@@ -16,6 +16,8 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
 jest.mock('../../work-order/work-order.execution', () => ({
   WorkOrderExecutionHelper: jest.fn().mockImplementation(() => ({
     isResearchWorkOrder: jest.fn((wo: any) => wo?.type === 'RESEARCH'),
+    isTrainingWorkOrder: jest.fn((wo: any) => wo?.type === 'TRAINING'),
+    isDiLoCoWorkOrder: jest.fn((wo: any) => wo?.type === 'DILOCO_TRAINING'),
   })),
 }));
 
@@ -158,6 +160,8 @@ describe('FetchWorkOrdersNode', () => {
     };
     const mockExecution = {
       isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+      isTrainingWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'TRAINING'),
+      isDiLoCoWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'DILOCO_TRAINING'),
     };
     (node as any).coordinator = mockCoordinator;
     (node as any).execution = mockExecution;
@@ -177,6 +181,8 @@ describe('FetchWorkOrdersNode', () => {
     };
     const mockExecution = {
       isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+      isTrainingWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'TRAINING'),
+      isDiLoCoWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'DILOCO_TRAINING'),
     };
     (node as any).coordinator = mockCoordinator;
     (node as any).execution = mockExecution;
@@ -191,6 +197,8 @@ describe('FetchWorkOrdersNode', () => {
     };
     const mockExecution = {
       isResearchWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'RESEARCH'),
+      isTrainingWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'TRAINING'),
+      isDiLoCoWorkOrder: jest.fn((wo: WorkOrder) => wo.type === 'DILOCO_TRAINING'),
     };
     (node as any).coordinator = mockCoordinator;
     (node as any).execution = mockExecution;

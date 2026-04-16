@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom, map } from 'rxjs';
+import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import logger from '../../utils/logger';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
 import { isPyTorchAvailable } from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
+import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
 import { buildAuthHeaders } from '../../utils/node-auth';
 
@@ -21,15 +26,34 @@ export interface HeartbeatPayload {
   lat?: number;
   lng?: number;
   publicIp?: string; // Self-reported public IP for geo-lookup
+  /** GB of GPU VRAM detected locally (0 means CPU-only). */
+  vram?: number;
+  /** Human-readable GPU model string (e.g. "Apple M1 Pro", "RTX 4090"). */
+  gpuModel?: string;
+  /** Binary attestation: sha256(chunk + nonce) response to the previous heartbeat's challenge. */
+  attestationResponse?: string;
+}
+
+export interface AttestationChallenge {
+  nonce: string;
+  offset: number;
+  length: number;
 }
 
 export interface HeartbeatResponse {
   registered: boolean;
   peerId: string;
+  /** Binary attestation challenge — respond in the NEXT heartbeat. */
+  attestationChallenge?: AttestationChallenge;
 }
 
 @Injectable()
 export class HeartbeatHelper {
+  /** Pending attestation challenge from the last heartbeat response. */
+  private pendingChallenge: AttestationChallenge | null = null;
+  /** Own bundle content — loaded lazily on first attestation challenge. */
+  private ownBundle: Buffer | null = null;
+
   constructor(
     private readonly ipifyService: IpifyService,
     private readonly httpService?: HttpService,
@@ -69,6 +93,24 @@ export class HeartbeatHelper {
     // Resolve public IP for geo-lookup (cached 30 min)
     const publicIp = await this.ipifyService.resolvePublicIp();
 
+    // Attestation: respond to the pending challenge from the PREVIOUS heartbeat.
+    let attestationResponse: string | undefined;
+    if (this.pendingChallenge) {
+      try {
+        const bundle = this.loadOwnBundle();
+        if (bundle) {
+          const { nonce, offset, length } = this.pendingChallenge;
+          const chunk = bundle.subarray(offset, offset + length);
+          attestationResponse = createHash('sha256')
+            .update(Buffer.concat([chunk, Buffer.from(nonce)]))
+            .digest('hex');
+        }
+      } catch (err) {
+        logger.debug(`[Heartbeat] Attestation response failed: ${(err as Error).message}`);
+      }
+      this.pendingChallenge = null;
+    }
+
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
       name: identity.name,
@@ -80,6 +122,11 @@ export class HeartbeatHelper {
       lat,
       lng,
       publicIp: publicIp ?? undefined,
+      // Hardware telemetry — lets the coordinator persist real GPU state in
+      // the `nodes` table (was always null because the payload lacked these).
+      vram: hardware.gpuVramGb || undefined,
+      gpuModel: hardware.gpuModel,
+      attestationResponse,
     };
 
     let lastError: Error | null = null;
@@ -120,6 +167,10 @@ export class HeartbeatHelper {
           const axiosRes = await client.post<HeartbeatResponse>('/peer/heartbeat', payload);
           response = axiosRes.data;
         }
+        // Store attestation challenge for the NEXT heartbeat
+        if (response.attestationChallenge) {
+          this.pendingChallenge = response.attestationChallenge;
+        }
         return response;
       } catch (error) {
         lastError = error as Error;
@@ -147,6 +198,31 @@ export class HeartbeatHelper {
    *  - llm           → alias for inference, kept for backwards compat.
    *  - embedding     → Ollama embedding models (requires Ollama + ≥8 GB RAM).
    */
+
+  /** Lazy-load own dist bundle for binary attestation. Cached after first read. */
+  private loadOwnBundle(): Buffer | null {
+    if (this.ownBundle) return this.ownBundle;
+    try {
+      // tsup bundles into dist/bootstrap.js → dist/index.js. We attest index.js.
+      const distDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+      const candidates = [
+        join(distDir, 'index.js'),
+        join(process.cwd(), 'dist', 'index.js'),
+      ];
+      for (const p of candidates) {
+        try {
+          this.ownBundle = readFileSync(p);
+          logger.debug(`[Attestation] Loaded own bundle from ${p} (${(this.ownBundle.length / 1024).toFixed(1)} KB)`);
+          return this.ownBundle;
+        } catch { /* try next */ }
+      }
+      logger.debug('[Attestation] Could not locate own dist/index.js — attestation responses will be skipped');
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   determineCapabilities(hardware: Hardware): string[] {
     const capabilities: string[] = [];
 
@@ -191,6 +267,29 @@ export class HeartbeatHelper {
       const idx = caps.indexOf('cpu_training');
       if (idx !== -1) caps.splice(idx, 1);
       logger.warn('[Heartbeat] PyTorch not found — removing cpu_training capability. Install with: pip3 install torch');
+    }
+    // Training WOs need an LLM for the mutation engine. The resolver prefers
+    // ≥1.5B local > cloud > sub-1.5B local, and returns null only when NO
+    // LLM is reachable. Drop cpu_training only in that terminal case — a
+    // small local model sometimes succeeds and the mutation engine aborts
+    // cleanly when it doesn't.
+    if (caps.includes('cpu_training')) {
+      try {
+        const trainingModel = await resolveTrainingLlmModel();
+        if (!trainingModel) {
+          const idx = caps.indexOf('cpu_training');
+          if (idx !== -1) caps.splice(idx, 1);
+          logger.warn(
+            '[Heartbeat] No training LLM reachable (Ollama offline and LLM_CLOUD_MODEL unset) — removing cpu_training capability.',
+          );
+        } else {
+          logger.log(
+            `[Heartbeat] Training LLM: ${trainingModel.provider}${trainingModel.providerId ? `:${trainingModel.providerId}` : ''}/${trainingModel.modelId}`,
+          );
+        }
+      } catch (err) {
+        logger.warn(`[Heartbeat] Training LLM detection failed: ${(err as Error).message}`);
+      }
     }
     return caps;
   }

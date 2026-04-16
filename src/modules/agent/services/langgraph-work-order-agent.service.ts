@@ -41,7 +41,19 @@ export class LangGraphWorkOrderAgentService {
     logger.log('🚀 Starting LangGraph work order agent');
     logger.log(`   Coordinator: ${config.coordinatorUrl}`);
     logger.log(`   Mode: langgraph`);
-    this.roundListenerHelper.startRoundListener(config.coordinatorUrl, config.peerId);
+    // Forward llmConfig so RoundListener can start the peer review loop on
+    // `round.evaluating`. Without this the listener printed a "No LLM config
+    // provided — skipping peer review loop" warning and no node ever picked
+    // up PENDING evaluation assignments, which in turn blocked the whole
+    // discovery + KG pipeline.
+    this.roundListenerHelper.startRoundListener(
+      config.coordinatorUrl,
+      config.peerId,
+      {
+        llmModel: config.llmModel,
+        llmConfig: config.llmConfig,
+      },
+    );
     return this.runLoop(config, intervalMs ?? 30_000, maxIterations);
   }
 

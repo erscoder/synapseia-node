@@ -168,6 +168,29 @@ describe('HeartbeatHelper', () => {
       );
     });
 
+    it('propagates GPU vram + gpuModel to the coordinator payload', async () => {
+      // Regression guard: previously the payload omitted these fields so the
+      // coordinator's `nodes.vram` column stayed null even on machines with
+      // a real GPU. The heartbeat now must echo hardware.gpuVramGb / gpuModel.
+      mockPost.mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
+
+      const gpuHardware = {
+        ...mockHardware,
+        gpuVramGb: 18,
+        gpuModel: 'Apple M1 Pro',
+      };
+
+      await helper.sendHeartbeat('http://localhost:3701', mockIdentity, gpuHardware);
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/peer/heartbeat',
+        expect.objectContaining({
+          vram: 18,
+          gpuModel: 'Apple M1 Pro',
+        }),
+      );
+    });
+
     it('retries on failure with exponential backoff', async () => {
       mockPost
         .mockRejectedValueOnce(new Error('Network error'))

@@ -278,25 +278,30 @@ describe('identity', () => {
     });
 
     it('should use default directory when not specified', () => {
-      
-      
-      
-      
+      // Isolate via SYNAPSEIA_HOME so the module-level `IDENTITY_DIR` default
+      // resolves to a tmp path instead of ~/.synapseia. Previously this test
+      // wrote to the real home dir and rotated the operator's kike-node peerId
+      // every time jest ran — silently orphaning node stats and rewards.
+      const previousHome = process.env.SYNAPSEIA_HOME;
+      const isolatedHome = path.join(os.tmpdir(), '.synapse-default-' + Date.now());
+      process.env.SYNAPSEIA_HOME = isolatedHome;
 
-      const defaultDir = path.join(os.homedir(), '.synapse');
+      // Use jest.isolateModules to re-evaluate IDENTITY_DIR (captured at
+      // module load) against the patched env.
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mod = require('../modules/identity/identity');
+        const identity = mod.generateIdentity();
+        expect(identity).toBeDefined();
+        mod.updateIdentity({ tier: 3 });
+        const loaded = mod.loadIdentity();
+        expect(loaded.tier).toBe(3);
+      });
 
-      // Clean up default dir if exists
-      try { fs.rmSync(defaultDir, { recursive: true, force: true }); } catch {}
-
-      // Generate to default dir, then update with default param
-      const identity = generateIdentity();
-      updateIdentity({ tier: 3 });
-
-      const loaded = loadIdentity();
-      expect(loaded.tier).toBe(3);
-
-      // Clean up
-      try { fs.rmSync(defaultDir, { recursive: true, force: true }); } catch {}
+      // Cleanup + restore env
+      try { fs.rmSync(isolatedHome, { recursive: true, force: true }); } catch {}
+      if (previousHome === undefined) delete process.env.SYNAPSEIA_HOME;
+      else process.env.SYNAPSEIA_HOME = previousHome;
     });
   });
 
@@ -427,6 +432,18 @@ describe('identity', () => {
       expect(identity).toBeDefined();
       expect(identity.peerId).toBeDefined();
       expect(identity.publicKey).toBeDefined();
+    });
+
+    it('throws instead of silently regenerating when identity.json is empty', () => {
+      // Regression guard: some external cleanup/truncation used to leave the
+      // file at 0 bytes, and the old behaviour was to regenerate — rotating
+      // the node's peerId and orphaning its stats in the coordinator.
+      const freshDir = path.join(os.tmpdir(), '.synapse-emptyid-' + Date.now());
+      fs.mkdirSync(freshDir, { recursive: true, mode: 0o700 });
+      const idPath = path.join(freshDir, 'identity.json');
+      fs.writeFileSync(idPath, '');
+      expect(() => getOrCreateIdentity(freshDir)).toThrow(/empty/);
+      fs.rmSync(freshDir, { recursive: true, force: true });
     });
 
     it('creates identity when none exists', () => {

@@ -36,7 +36,11 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
           this._keypair = Buffer.from(identity.privateKey, 'hex');
           this._publicKey = Buffer.from(identity.publicKey, 'hex');
           this._peerId = identity.peerId;
-          logger.info('[WorkOrderCoordinatorHelper] Ed25519 signing enabled for peerId:', this._peerId?.slice(0, 16) + '...');
+          // Debug-level: this line fires on every onModuleInit. Operationally
+          // uninteresting once the node is running — keep it accessible when
+          // LOG_LEVEL=debug but out of the normal boot stream (above the
+          // wallet password prompt).
+          logger.debug('[WorkOrderCoordinatorHelper] Ed25519 signing enabled for peerId:', this._peerId?.slice(0, 16) + '...');
         }
       } catch (err) {
         logger.warn('[WorkOrderCoordinatorHelper] Failed to load identity for signing:', (err as Error).message);

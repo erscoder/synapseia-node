@@ -13,7 +13,7 @@ import time
 import math
 import random
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -257,24 +257,26 @@ def train_step(model: nn.Module, batch: Tuple[torch.Tensor, torch.Tensor], optim
     return loss.item()
 
 
-def evaluate(model: nn.Module, dataloader: DataLoader, device: str) -> float:
-    """Evaluate model on validation set"""
+def evaluate(model: nn.Module, dataloader: DataLoader, device: str, deadline: Optional[float] = None) -> float:
+    """Evaluate model on validation set. Honours ``deadline`` (monotonic time)."""
     model.eval()
     total_loss = 0
     count = 0
-    
+
     with torch.no_grad():
         for batch in dataloader:
+            if deadline is not None and time.time() >= deadline:
+                break
             x, y = batch
             x, y = x.to(device), y.to(device)
-            
+
             logits = model(x)
             B, T, C = logits.shape
             loss = nn.functional.cross_entropy(logits.view(B * T, C), y.view(B * T))
-            
+
             total_loss += loss.item()
             count += 1
-    
+
     return total_loss / max(count, 1)
 
 
@@ -302,10 +304,30 @@ def main():
     max_train_seconds = config.get('maxTrainSeconds', 120)
     data_path = config.get('dataPath', './data/astro-sample.txt')
     hardware = config.get('hardware', 'cpu')
-    
+
     # Set device
     device = 'cuda' if hardware == 'gpu' and torch.cuda.is_available() else 'cpu'
-    
+
+    # CPU-constrained nodes (Docker) share cores with Ollama at 400%+. Cap torch
+    # threads so autograd workers don't thrash against inference. Single-thread
+    # prevents the scheduler stall that blocks stdout prints entirely.
+    if device == 'cpu':
+        try:
+            torch.set_num_threads(max(1, (torch.get_num_threads() or 1) // 2))
+        except Exception:
+            pass
+
+    # Emit a startup heartbeat BEFORE loading data/building the model so the
+    # Node parent can confirm the spawn reached Python code (diagnoses "no
+    # output for 10 minutes" timeouts caused by slow imports or data loading).
+    print(json.dumps({
+        "started": True,
+        "device": device,
+        "hardware": hardware,
+        "torchThreads": torch.get_num_threads(),
+        "maxTrainSeconds": max_train_seconds,
+    }), flush=True)
+
     # Load and prepare data
     text = load_data(data_path)
     train_text, val_text = split_data(text)
@@ -362,29 +384,30 @@ def main():
     
     # Training loop with time limit
     start_time = time.time()
+    deadline = start_time + max_train_seconds
     step = 0
     best_val_loss = float('inf')
-    
+
     try:
-        while time.time() - start_time < max_train_seconds:
+        while time.time() < deadline:
             for batch in train_loader:
-                # Check time limit
-                elapsed = time.time() - start_time
-                if elapsed >= max_train_seconds:
+                if time.time() >= deadline:
                     break
-                
+
                 # Learning rate warmup
                 if step < warmup_steps:
                     lr = learning_rate * (step + 1) / warmup_steps
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = lr
-                
+
                 # Training step
                 loss = train_step(model, batch, optimizer, device)
                 step += 1
-                
-                # Log progress every 10 steps
-                if step % 10 == 0:
+
+                # Log every step for the first 20 (proof-of-life on slow CPU
+                # nodes where step 10 might not be reached in 60s), then every
+                # 10 to keep stdout noise down.
+                if step <= 20 or step % 10 == 0:
                     current_lr = optimizer.param_groups[0]['lr']
                     progress = {
                         "step": step,
@@ -392,21 +415,23 @@ def main():
                         "lr": round(current_lr, 6),
                     }
                     print(json.dumps(progress), flush=True)
-            
-            # Validation at end of each epoch
-            val_loss = evaluate(model, val_loader, device)
+
+            # Validation at end of each epoch — honour the deadline so a slow
+            # val pass doesn't blow past max_train_seconds by minutes.
+            val_loss = evaluate(model, val_loader, device, deadline=deadline)
             best_val_loss = min(best_val_loss, val_loss)
-            
-            # Check early stopping condition
-            if time.time() - start_time >= max_train_seconds:
+
+            if time.time() >= deadline:
                 break
-                
+
     except KeyboardInterrupt:
         pass
-    
-    # Final evaluation
-    final_train_loss = evaluate(model, train_loader, device)
-    final_val_loss = evaluate(model, val_loader, device)
+
+    # Final evaluation — also time-capped. If the deadline has already passed
+    # we still want *some* metric, so enforce a small minimum budget.
+    final_deadline = max(time.time() + 10.0, deadline)
+    final_train_loss = evaluate(model, train_loader, device, deadline=final_deadline)
+    final_val_loss = evaluate(model, val_loader, device, deadline=final_deadline)
     duration_ms = int((time.time() - start_time) * 1000)
     
     # Output final result

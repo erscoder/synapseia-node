@@ -121,7 +121,7 @@ describe('MutationEngineHelper', () => {
       expect(proposal.hyperparams.batchSize).toBe(32);
     });
 
-    it('should clamp numLayers within range [2, 8]', async () => {
+    it('should clamp numLayers to GPU max (8) when GPU available', async () => {
       const exps = [mockExp('exp1')];
       const mockGenerate = jest.fn<() => Promise<string>>().mockResolvedValue(JSON.stringify({
         type: 'explore', baseExperimentId: null,
@@ -130,8 +130,22 @@ describe('MutationEngineHelper', () => {
       }));
       (helper as any).llmProvider = { generateLLM: mockGenerate };
 
-      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu']);
+      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu', 'gpu']);
       expect(proposal.hyperparams.numLayers).toBe(8);
+    });
+
+    it('should clamp numLayers to CPU max (4) when no GPU — keeps Docker nodes trainable', async () => {
+      const exps = [mockExp('exp1')];
+      const mockGenerate = jest.fn<() => Promise<string>>().mockResolvedValue(JSON.stringify({
+        type: 'explore', baseExperimentId: null,
+        hyperparams: { ...baseHyperparams, numLayers: 12, hiddenDim: 256 },
+        reasoning: 'Test',
+      }));
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
+      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu']);
+      expect(proposal.hyperparams.numLayers).toBe(4);
+      expect(proposal.hyperparams.hiddenDim).toBe(128);
     });
 
     it('should throw MutationEngineError when all candidates fail to emit valid JSON', async () => {
@@ -237,7 +251,9 @@ describe('MutationEngineHelper', () => {
 
       const proposal = await helper.proposeMutation(exps, 3.5, ['cpu']);
       expect(proposal.hyperparams.learningRate).toBe(0.001);
-      expect(proposal.hyperparams.batchSize).toBe(32);
+      // CPU default is 16 to keep Docker nodes (sharing cores with Ollama)
+      // trainable within the timeout. GPU nodes still default to 32.
+      expect(proposal.hyperparams.batchSize).toBe(16);
     });
   });
 });

@@ -47,7 +47,6 @@ export class ExecuteResearchNode {
             hypothesis: result.summary,
             metricType: 'coherence',
             metricValue: this.evaluation.scoreResearchResult(result),
-            proof: result.proposal,
           }),
           success: true,
         },
@@ -72,7 +71,6 @@ export class ExecuteResearchNode {
             hypothesis: research.result.summary,
             metricType: 'coherence',
             metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0,
-            proof: research.result.proposal,
           }),
           success: research.success,
         },
@@ -190,10 +188,18 @@ export class ExecuteResearchNode {
     if (typeof answer !== 'string') {
       // If it's already a structured object, try to use it directly
       if (answer && typeof answer === 'object') {
+        const obj = answer as Record<string, unknown>;
+        const summary = typeof obj.summary === 'string' ? obj.summary.trim() : '';
+        const proposal = typeof obj.proposal === 'string' ? obj.proposal.trim()
+          : typeof obj.hypothesis === 'string' ? (obj.hypothesis as string).trim()
+          : '';
+        if (!summary || !proposal) {
+          throw new Error(`buildResearchResult: structured LLM output missing summary/proposal for "${title}"`);
+        }
         return {
-          summary: String((answer as any).summary || `Analysis of ${title}`),
-          keyInsights: Array.isArray((answer as any).keyInsights) ? (answer as any).keyInsights : [],
-          proposal: String((answer as any).proposal || (answer as any).hypothesis || 'See summary'),
+          summary,
+          keyInsights: Array.isArray(obj.keyInsights) ? (obj.keyInsights as unknown[]).filter((s): s is string => typeof s === 'string') : [],
+          proposal,
         };
       }
       answer = String(answer);
@@ -205,20 +211,44 @@ export class ExecuteResearchNode {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parsed: any = JSON.parse(jsonStr);
 
-      // Validate and normalize result structure
+      const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
+      const proposal = typeof parsed.proposal === 'string' ? parsed.proposal.trim()
+        : typeof parsed.hypothesis === 'string' ? parsed.hypothesis.trim()
+        : '';
+
+      // Fail loudly instead of papering over with placeholder text. The
+      // coordinator's scoreSubmissionContent would reject placeholders
+      // anyway; surfacing the error here lets the retry / self-critique
+      // loop attempt another generation instead of shipping a broken
+      // submission.
+      if (!summary || !proposal) {
+        throw new Error(`buildResearchResult: parsed LLM JSON missing summary/proposal for "${title}"`);
+      }
+
       return {
-        summary: parsed.summary || `Analysis of ${title}`,
+        summary,
         keyInsights: Array.isArray(parsed.keyInsights) ? parsed.keyInsights : [],
-        proposal: parsed.proposal || parsed.hypothesis || 'No proposal generated',
+        proposal,
       };
-    } catch {
-      // Fallback: create structured result from raw answer
+    } catch (err) {
+      // Fallback: create structured result from raw answer ONLY when we have
+      // enough content to distinguish it from a failure. Require at least 7
+      // non-empty lines so the proposal (slice 6+) is non-empty.
       const answerStr = typeof answer === 'string' ? answer : JSON.stringify(answer);
       const lines = answerStr.split('\n').filter(l => l.trim());
+      if (lines.length < 7) {
+        throw err instanceof Error
+          ? err
+          : new Error(`buildResearchResult: LLM output too short (${lines.length} lines) for "${title}"`);
+      }
+      const proposalLines = lines.slice(6).join(' ').trim();
+      if (!proposalLines) {
+        throw new Error(`buildResearchResult: fallback proposal empty for "${title}"`);
+      }
       return {
-        summary: lines[0] || `Analysis of ${title}`,
+        summary: lines[0],
         keyInsights: lines.slice(1, 6),
-        proposal: lines.slice(6).join(' ') || 'See summary for details',
+        proposal: proposalLines,
       };
     }
   }

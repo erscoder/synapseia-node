@@ -61,6 +61,42 @@ export const MODEL_METADATA = {
   'custom': { latencyMs: 500, maxTokens: 4096 },
 };
 
+/**
+ * Decide whether an LLM error is worth retrying. We retry transient/server-side
+ * errors (rate limits, server overload, connection drops) but never retry hard
+ * errors (auth, malformed prompt, model not found) which would just burn quota.
+ *
+ * Covers:
+ * - Minimax error 2064: "server cluster under high load" — explicitly transient.
+ * - HTTP 429 / 5xx / timeouts / generic "rate limit" / "overloaded".
+ * - Ollama: "llama runner process no longer running", "EOF", connection refused.
+ */
+export function isTransientLlmError(err: unknown): boolean {
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase();
+  return (
+    msg.includes('2064') ||
+    msg.includes('high load') ||
+    msg.includes('overloaded') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate-limit') ||
+    msg.includes('too many requests') ||
+    msg.includes('429') ||
+    msg.includes('503') ||
+    msg.includes('502') ||
+    msg.includes('504') ||
+    msg.includes('timeout') ||
+    msg.includes('econn') ||
+    msg.includes('etimedout') ||
+    msg.includes('enotfound') ||
+    msg.includes('socket hang up') ||
+    msg.includes('runner process no longer running') ||
+    msg.includes('unexpected eof') ||
+    msg.includes('try again')
+  );
+}
+
+const RETRY_SCHEDULE_MS = [1_000, 3_000, 8_000]; // total ~12s of backoff across 3 retries
+
 @Injectable()
 export class LlmProviderHelper {
   private readonly ollamaHelper = new OllamaHelper();
@@ -113,14 +149,39 @@ export class LlmProviderHelper {
     config?: LLMConfig,
     hyperparams?: GenerateOptions,
   ): Promise<string> {
-    let raw: string;
-    if (model.provider === 'ollama') {
-      raw = await this.generateOllamaLLM(model, prompt, hyperparams);
-    } else if (model.provider === 'cloud') {
-      raw = await this.generateCloudLLM(model, prompt, config, hyperparams);
-    } else {
-      throw new Error('Unknown provider');
+    let raw: string | undefined;
+    let lastErr: unknown;
+
+    // Retry transient errors (Minimax 2064, HTTP 429/5xx, Ollama runner crashes).
+    // Non-transient errors (auth, bad prompt, model missing) bubble up immediately
+    // so we don't waste retries on errors that won't go away.
+    for (let attempt = 0; attempt <= RETRY_SCHEDULE_MS.length; attempt++) {
+      try {
+        if (model.provider === 'ollama') {
+          raw = await this.generateOllamaLLM(model, prompt, hyperparams);
+        } else if (model.provider === 'cloud') {
+          raw = await this.generateCloudLLM(model, prompt, config, hyperparams);
+        } else {
+          throw new Error('Unknown provider');
+        }
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (attempt >= RETRY_SCHEDULE_MS.length || !isTransientLlmError(err)) {
+          throw err;
+        }
+        const wait = RETRY_SCHEDULE_MS[attempt];
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[LLM] transient error on attempt ${attempt + 1}/${RETRY_SCHEDULE_MS.length + 1} ` +
+            `(${this.toErrorMessage(err)}) — retrying in ${wait}ms`,
+        );
+        await new Promise(resolve => setTimeout(resolve, wait));
+      }
     }
+
+    if (raw === undefined) throw lastErr ?? new Error('LLM generation failed');
+
     // Centralized scrub of reasoning-model scratchpad (<think>, <thinking>,
     // channel markers, truncated unclosed variants). Keeps contamination out
     // of submissions, mutation proposals, insights, and corpus entries —

@@ -14,12 +14,15 @@ import { DelegateToPeerTool } from './delegate-peer.tool';
 import { RequestPeerReviewTool } from './request-peer-review.tool';
 import { A2AClientModule } from '../../../a2a/client/client.module';
 import { IdentityModule } from '../../../identity/identity.module';
-import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderCoordinatorModule } from '../../work-order/work-order-coordinator.module';
 
 @Module({
-  imports: [A2AClientModule, IdentityModule],
+  // Pulling in the shared WorkOrderCoordinatorModule (instead of declaring
+  // WorkOrderCoordinatorHelper locally) makes NestJS reuse the single
+  // instance from the root DI container — fixes the duplicate onModuleInit
+  // log and prevents divergent internal state between modules.
+  imports: [A2AClientModule, IdentityModule, WorkOrderCoordinatorModule],
   providers: [
-    WorkOrderCoordinatorHelper,
     SearchCorpusTool,
     QueryKgTool,
     GenerateEmbeddingTool,

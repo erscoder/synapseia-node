@@ -1,12 +1,14 @@
 /**
  * RoundListener — subscribes to the coordinator WebSocket and listens for
- * 'round.closed', 'round.evaluating', and 'evaluation.assigned' events.
+ * round lifecycle events: close, evaluating, evaluation-assigned, and
+ * Commit-Reveal V2 phase transitions.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { io, Socket } from 'socket.io-client';
 import logger from '../../utils/logger';
 import { ReviewAgentHelper, type LLMReviewConfig } from './review-agent';
+import { CommitRevealV2Helper } from './commit-reveal-v2';
 
 interface RoundWinner {
   rank: number;
@@ -38,7 +40,10 @@ interface EvaluationAssignedEvent {
 export class RoundListenerHelper {
   private socket: Socket | null = null;
 
-  constructor(private readonly reviewAgentHelper: ReviewAgentHelper) {}
+  constructor(
+    private readonly reviewAgentHelper: ReviewAgentHelper,
+    @Optional() private readonly commitRevealV2?: CommitRevealV2Helper,
+  ) {}
 
   startRoundListener(coordinatorUrl: string, peerId: string, llmConfig?: LLMReviewConfig): void {
     if (this.socket) return;
@@ -107,6 +112,48 @@ export class RoundListenerHelper {
         this.reviewAgentHelper.startReviewLoop(coordinatorUrl, peerId, llmConfig);
       } else if (llmConfig) {
         logger.log('[RoundListener] Review loop already running — assignment will be picked up next cycle');
+      }
+    });
+
+    // ── Commit-Reveal V2 events ──────────────────────────────────────────
+
+    this.socket.on('round.v2.commit_open', (event: { roundId: string; deadline: number }) => {
+      if (!this.commitRevealV2) return;
+      logger.log(`[RoundListener] V2 commit window open for round ${event.roundId} (deadline: ${event.deadline})`);
+      // The helper needs the submission content to build the Merkle tree.
+      // Fetch this node's submission from the coordinator.
+      void (async () => {
+        try {
+          const res = await fetch(`${coordinatorUrl}/research-rounds/${event.roundId}/submissions`);
+          if (!res.ok) return;
+          const submissions = (await res.json()) as Array<{ nodeId: string; hypothesis: string; proposal?: string }>;
+          const mine = submissions.find(s => s.nodeId === peerId);
+          if (!mine) {
+            logger.debug(`[RoundListener] V2: no submission found for round ${event.roundId} — skipping commit`);
+            return;
+          }
+          const content = `${mine.hypothesis}\n\n${mine.proposal ?? ''}`.trim();
+          await this.commitRevealV2!.handleCommitPhase(coordinatorUrl, peerId, event.roundId, content);
+        } catch (err) {
+          logger.warn(`[RoundListener] V2 commit error: ${(err as Error).message}`);
+        }
+      })();
+    });
+
+    this.socket.on('round.v2.challenge_issued', (event: { roundId: string; indices: number[]; deadline: number }) => {
+      if (!this.commitRevealV2) return;
+      logger.log(`[RoundListener] V2 challenge for round ${event.roundId}: indices [${event.indices.join(', ')}]`);
+      void this.commitRevealV2.handleChallengeResponse(coordinatorUrl, peerId, event.roundId, event.indices)
+        .catch(err => logger.warn(`[RoundListener] V2 prove error: ${(err as Error).message}`));
+    });
+
+    this.socket.on('round.v2.verified', (event: { roundId: string; verifiedPeers: string[]; failedPeers: string[] }) => {
+      const isVerified = event.verifiedPeers.includes(peerId);
+      const isFailed = event.failedPeers.includes(peerId);
+      if (isVerified) {
+        logger.log(`[RoundListener] ✓ V2 verification PASSED for round ${event.roundId}`);
+      } else if (isFailed) {
+        logger.warn(`[RoundListener] ✗ V2 verification FAILED for round ${event.roundId}`);
       }
     });
 

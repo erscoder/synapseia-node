@@ -13,6 +13,8 @@ import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
 import { WorkOrderExecutionHelper } from './work-order.execution';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 import type { WorkOrderAgentConfig, WorkOrder, WorkOrderAgentState, ResearchResult } from './work-order.types';
+import { resolveTrainingChain } from '../../llm/training-llm';
+import type { LLMModel } from '../../llm/llm-provider';
 
 @Injectable()
 export class WorkOrderLoopHelper {
@@ -49,6 +51,7 @@ export class WorkOrderLoopHelper {
   shouldSleepBetweenIterations(isRunning: boolean): boolean {
     return this.state.shouldSleepBetweenIterations(isRunning);
   }
+
 
   async startWorkOrderAgent(config: WorkOrderAgentConfig): Promise<void> {
     if (this.state.isRunning) throw new Error('Work order agent is already running');
@@ -186,11 +189,35 @@ export class WorkOrderLoopHelper {
         const diloco = await this.execution.executeDiLoCoWorkOrder(workOrder, coordinatorUrl, peerId, capabilities);
         result = diloco.result; success = diloco.success;
       } else if (this.execution.isTrainingWorkOrder(workOrder)) {
-        const training = await this.execution.executeTrainingWorkOrder(workOrder, coordinatorUrl, peerId, capabilities, iteration, llmModel, llmConfig, []);
-        result = training.result; success = training.success;
+        // Resolve primary + full fallback chain (Ollama capable → cloud →
+        // Ollama small). Any model's JSON glitch is absorbed by the next
+        // candidate. See resolveTrainingChain() for the rationale.
+        const chain = await resolveTrainingChain();
+        if (!chain) {
+          logger.warn(' No training LLM available — skipping training WO');
+          result = 'No training LLM available';
+          success = false;
+        } else {
+          const training = await this.execution.executeTrainingWorkOrder(
+            workOrder, coordinatorUrl, peerId, capabilities, iteration,
+            chain.primary, llmConfig, chain.fallbacks,
+          );
+          result = training.result; success = training.success;
+        }
       } else if (this.execution.isResearchWorkOrder(workOrder)) {
         const research = await this.execution.executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
-        result = JSON.stringify({ summary: research.result.summary, keyInsights: research.result.keyInsights, proposal: research.result.proposal, hypothesis: research.result.summary, metricType: 'coherence', metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0, proof: research.result.proposal });
+        // Do NOT send `proof` — the coordinator computes a stable artefact
+        // reference (`submission:<id>`) when the node lacks a real hash.
+        // Sending the proposal text as `proof` was the bug that polluted the
+        // DB with placeholders like "See summary for details".
+        result = JSON.stringify({
+          summary: research.result.summary,
+          keyInsights: research.result.keyInsights,
+          proposal: research.result.proposal,
+          hypothesis: research.result.summary,
+          metricType: 'coherence',
+          metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0,
+        });
         success = research.success;
         researchResult = research.result;
         const researchHyperparams = research.hyperparams;

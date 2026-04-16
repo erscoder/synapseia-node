@@ -34,16 +34,27 @@ export class TrainerHelper {
   private static trainingInProgress = false;
 
   async isPyTorchAvailable(): Promise<boolean> {
-    if (TrainerHelper.pyTorchCache !== null) return TrainerHelper.pyTorchCache;
+    // Only cache positive detections. If torch import failed (transient timeout,
+    // python warming up, slow CPU under training load), we want to retry on the
+    // next heartbeat instead of permanently losing the cpu_training capability
+    // until the process restarts. A successful detection is stable — once torch
+    // is importable it stays importable for the process lifetime.
+    if (TrainerHelper.pyTorchCache === true) return true;
+
     const result = await new Promise<boolean>((res) => {
       const proc = spawn('python3', ['-c', 'import torch; print(torch.__version__)'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
-      proc.on('close', (code) => res(code === 0));
-      proc.on('error', () => res(false));
-      setTimeout(() => { proc.kill(); res(false); }, 15000);
+      let settled = false;
+      const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
+      proc.on('close', (code) => settle(code === 0));
+      proc.on('error', () => settle(false));
+      // 30s — `import torch` on a cold cache can take 5-10s on macOS, longer
+      // when the CPU is busy with another training run.
+      setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
     });
-    TrainerHelper.pyTorchCache = result;
+
+    if (result) TrainerHelper.pyTorchCache = true;
     return result;
   }
 

@@ -169,16 +169,33 @@ Constraints:
     };
 
     const hasGpu = capabilities.includes('gpu');
+    // CPU nodes (especially Docker containers sharing cores with Ollama at
+    // 400%+ usage) can't progress through the larger configs in a reasonable
+    // window — step 10 never prints, the parent times out at 10 min. Force
+    // smaller defaults AND tighter caps so the LLM can't propose a model
+    // that's structurally untrainable on this hardware.
+    const hiddenDimDefault = hasGpu ? 128 : 64;
+    const hiddenDimMax = hasGpu ? 256 : 128;
+    const numLayersDefault = hasGpu ? 4 : 2;
+    const numLayersMax = hasGpu ? 8 : 4;
+    const numHeadsDefault = hasGpu ? 4 : 2;
+    const warmupDefault = hasGpu ? 100 : 50;
+
+    const clampHidden = (v: number): number => {
+      const allowed = (hasGpu ? [64, 128, 192, 256] : [64, 128]).filter(d => d <= hiddenDimMax);
+      return allowed.reduce((prev, curr) => Math.abs(curr - v) < Math.abs(prev - v) ? curr : prev);
+    };
+
     const hyperparams: Hyperparams = {
       learningRate: this.clampValue(num(parsed.hyperparams?.learningRate, 0.001), 0.0001, 0.01),
-      batchSize: this.clampToBatch(num(parsed.hyperparams?.batchSize, 32)),
-      hiddenDim: this.clampToDimension(num(parsed.hyperparams?.hiddenDim, 128)),
-      numLayers: Math.round(this.clampValue(num(parsed.hyperparams?.numLayers, 4), 2, 8)),
-      numHeads: this.clampToHeads(num(parsed.hyperparams?.numHeads, 4)),
+      batchSize: this.clampToBatch(num(parsed.hyperparams?.batchSize, hasGpu ? 32 : 16)),
+      hiddenDim: clampHidden(num(parsed.hyperparams?.hiddenDim, hiddenDimDefault)),
+      numLayers: Math.round(this.clampValue(num(parsed.hyperparams?.numLayers, numLayersDefault), 2, numLayersMax)),
+      numHeads: this.clampToHeads(num(parsed.hyperparams?.numHeads, numHeadsDefault)),
       activation: this.validateActivation(parsed.hyperparams?.activation),
       normalization: this.validateNormalization(parsed.hyperparams?.normalization),
       initScheme: this.validateInitScheme(parsed.hyperparams?.initScheme),
-      warmupSteps: Math.round(this.clampValue(num(parsed.hyperparams?.warmupSteps, 100), 0, 1000)),
+      warmupSteps: Math.round(this.clampValue(num(parsed.hyperparams?.warmupSteps, warmupDefault), 0, 1000)),
       weightDecay: this.clampValue(num(parsed.hyperparams?.weightDecay, 0.01), 0, 0.1),
       maxTrainSeconds: hasGpu
         ? Math.round(this.clampValue(num(parsed.hyperparams?.maxTrainSeconds, 180), 60, 300))

@@ -97,7 +97,7 @@ function buildService(): AgentGraphService {
     new ExecuteInferenceNode(execution),
     new ExecuteDilocoNode(execution),
     new QualityGateNode(execution, evaluation),
-    new SubmitResultNode(coordinator),
+    new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any),
     new UpdateMemoryNode(execution, agentBrain),
     new RetrieveMemoryNode(),
     new PlanExecutionNode(mockLlmService as any, execution),

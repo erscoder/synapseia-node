@@ -3,7 +3,9 @@ import { copyFileSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 export default defineConfig({
-  entry: ['src/cli/index.ts'],
+  // `bootstrap.ts` is the `bin.syn` entry — it patches stderr before
+  // dynamic-importing `index.js`. Both need to be built side-by-side.
+  entry: ['src/cli/index.ts', 'src/cli/bootstrap.ts'],
   format: ['esm'],
   outExtension: () => ({ js: '.js' }),
   target: 'es2022', // ES2022 has native decorator support
