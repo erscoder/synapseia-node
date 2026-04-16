@@ -1,5 +1,74 @@
 # Changelog — @synapseia/node
 
+## [2026-04-15] Fix missing LLM config on peer-review loop (the real reason discoveries were empty)
+
+### Problem
+`evaluations` rows kept piling up with `status='pending'` and never advanced
+to `'completed'`. Without completed evaluations the discovery pipeline's
+median-score threshold could never be met, so `kg_nodes` / `kg_edges` /
+`reference_corpus` stayed empty downstream — even after all the fixes
+earlier today.
+
+### Root cause
+`LangGraphWorkOrderAgentService.start()` (the production entry for
+`syn start` via `node-runtime.ts`) called:
+```ts
+this.roundListenerHelper.startRoundListener(config.coordinatorUrl, config.peerId);
+```
+**without the 3rd `llmConfig` arg**. The sibling caller in
+`work-order.loop.ts` passed it correctly; this one never did.
+
+The `RoundListenerHelper.round.evaluating` handler is gated on `llmConfig`:
+```ts
+if (llmConfig) reviewAgentHelper.startReviewLoop(...)
+else logger.warn('[RoundListener] No LLM config provided — skipping peer review loop');
+```
+With `llmConfig === undefined` the review loop never started → the node
+never polled `/evaluations/assignments` → assignments stayed `pending`
+forever → median never computed → 0 discoveries.
+
+### Fix
+`src/modules/agent/services/langgraph-work-order-agent.service.ts` now
+forwards `llmModel` + `llmConfig` into `startRoundListener`, same shape
+as the other caller. On the next cycle the node logs
+`[ReviewAgent] Starting peer review loop (interval: 120s)` and starts
+polling assignments.
+
+## [2026-04-15] Quiet startup + fix duplicate `onModuleInit` for coordinator helper
+
+### Cleaner boot stream (no noise above the wallet password prompt)
+- `src/cli/index.ts`: dotenv now loaded with `{ quiet: true }` → removes the
+  `[dotenv@17.x] injecting env (19) from .env — tip: 🔐 encrypt with Dotenvx`
+  banner at startup.
+- `src/cli/index.ts`: early stderr filter swallows the single
+  `bigint: Failed to load bindings, pure JS will be used` line that
+  `bigint-buffer` writes on import. The pure-JS fallback is fine; we only
+  filter that exact string, everything else on stderr passes through.
+- `work-order.coordinator.ts`: the "Ed25519 signing enabled for peerId …"
+  log dropped from `info` to `debug`. Still accessible with `LOG_LEVEL=debug`
+  but out of the default boot stream.
+
+### Fix duplicate `WorkOrderCoordinatorHelper` instance
+- Root cause: both `WorkOrderModule` and `ToolsModule` declared
+  `WorkOrderCoordinatorHelper` as a provider. Because `WorkOrderModule`
+  imports `ToolsModule`, NestJS created TWO independent singletons of the
+  helper — each ran its own `onModuleInit` (hence the duplicate log) and
+  kept its own `_keypair` / `_peerId` state, which would silently diverge
+  after any `setIdentity()` call.
+- Extracted the helper to a new shared `WorkOrderCoordinatorModule`
+  (`src/modules/agent/work-order/work-order-coordinator.module.ts`) that
+  providers + exports it. Both consumers now import that module, so DI
+  injects the same instance everywhere. `WorkOrderModule` re-exports the
+  shared module so downstream callers (`a2a.module.ts`, …) keep working
+  without any change.
+- Side benefit: future work-order-coordinator lifecycle logic (reconnect,
+  token refresh, …) is guaranteed to run once.
+
+### Tests
+`tsc --noEmit` clean. Jest: 890 / 893 tests pass; the 3 failures are
+pre-existing timeouts in `generate-embedding.spec.ts` that hit a local
+Ollama — unrelated to this change.
+
 ## [2026-04-10] Track real vs synthetic corpus in micro-training submissions
 
 ### Fix

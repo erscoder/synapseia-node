@@ -16,6 +16,10 @@ import { setMaxListeners } from 'events';
 // abort signals internally and Node.js 22 emits warnings when >10 listeners accumulate.
 setMaxListeners(Infinity);
 
+// NOTE: the `bigint: Failed to load bindings` stderr filter lives in
+// `bootstrap.ts` (the real CLI entry). Putting it here would be too late —
+// ESM imports are hoisted and fire before this file's top-level runs.
+
 (function loadDotEnv() {
   const candidates = [
     dotenvJoin(process.cwd(), '.env'),
@@ -24,7 +28,9 @@ setMaxListeners(Infinity);
     dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '..', '.env'),
   ];
   for (const f of candidates) {
-    if (dotenvExists(f)) { dotenvConfig({ path: f, debug: false }); break; }
+    // `quiet: true` silences dotenv's startup banner ("[dotenv@17.x]
+    // injecting env … tip: encrypt with Dotenvx"). We don't need the tip.
+    if (dotenvExists(f)) { dotenvConfig({ path: f, debug: false, quiet: true }); break; }
   }
 })();
 import logger from '../utils/logger';
@@ -184,13 +190,17 @@ async function bootstrap() {
         lng?: string;
       }) => {
         const config = configService.load();
-        // Pass SYNAPSEIA_HOME so each node uses its own wallet dir
-        const nodeHome = process.env.SYNAPSEIA_HOME;
+        // Resolve nodeHome to a CONCRETE path up-front. Passing
+        // `process.env.SYNAPSEIA_HOME` raw (undefined when not set) and
+        // relying on the default-param in getOrCreateIdentity made every
+        // call-site recompute the default independently, splitting a subtle
+        // risk across files. Resolve once here, pass the resolved path
+        // everywhere downstream.
+        const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
 
         // Check if identity exists; if not, prompt for a name (or read from NODE_NAME env for non-interactive/docker)
         let nodeName: string | undefined;
-        const identityDir = nodeHome ?? path.join(os.homedir(), '.synapseia');
-        if (!existsSync(path.join(identityDir, 'identity.json'))) {
+        if (!existsSync(path.join(nodeHome, 'identity.json'))) {
           if (process.env.NODE_NAME) {
             nodeName = process.env.NODE_NAME.trim();
             logger.log(`Using node name from NODE_NAME env: ${nodeName}`);
@@ -744,6 +754,57 @@ async function bootstrap() {
       }
       logger.log();
       logger.log('═══════════════════════════════════════════════════');
+    });
+
+  // ── export-key ─────────────────────────────────────────────────────────────
+  program
+    .command('export-key')
+    .description('Display the wallet private key (requires password)')
+    .action(async () => {
+      const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+      const walletPath = path.join(nodeHome, 'wallet.json');
+
+      if (!existsSync(walletPath)) {
+        logger.error('No wallet found. Run `syn start` first to create one.');
+        process.exit(1);
+      }
+
+      logger.log('');
+      logger.log('⚠  WARNING: Your private key gives FULL control of your wallet.');
+      logger.log('   Never share it with anyone. Never paste it on a website.');
+      logger.log('');
+
+      const { password } = await import('@inquirer/prompts');
+      const pwd = await password({
+        message: 'Enter your wallet password to reveal the private key:',
+      });
+
+      try {
+        const wallet = await walletService.load(nodeHome, pwd);
+
+        // Convert secretKey array to base58 (standard Solana format)
+        const { default: bs58 } = await import('bs58');
+        const secretKeyBytes = Uint8Array.from(wallet.secretKey);
+        const base58Key = bs58.encode(secretKeyBytes);
+
+        logger.log('');
+        logger.log('═══════════════════════════════════════════════════');
+        logger.log(`  Wallet address:  ${wallet.publicKey}`);
+        logger.log(`  Private key (base58):`);
+        logger.log(`  ${base58Key}`);
+        logger.log('═══════════════════════════════════════════════════');
+        logger.log('');
+        logger.log('Copy the private key above. It will NOT be shown again.');
+        logger.log('');
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (msg.includes('decrypt') || msg.includes('password') || msg.includes('auth')) {
+          logger.error('Wrong password. Private key NOT revealed.');
+        } else {
+          logger.error(`Failed to load wallet: ${msg}`);
+        }
+        process.exit(1);
+      }
     });
 
   // ── stop ───────────────────────────────────────────────────────────────────

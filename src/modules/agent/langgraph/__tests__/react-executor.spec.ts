@@ -325,6 +325,14 @@ describe('ExecuteResearchNode', () => {
         latencyMs: 50,
       });
 
+      // Legacy-executor fallback returns a valid research shape — required
+      // because the ReAct loop may throw on max-calls-exceeded and fall into
+      // the catch block that calls executeResearchWorkOrder().
+      mockExecuteResearchWorkOrder.mockResolvedValue({
+        result: { summary: 'legacy summary', keyInsights: [], proposal: 'legacy proposal' },
+        success: true,
+      });
+
       await node.execute(state);
 
       // Should stop at maxCalls (2) even if LLM wants more

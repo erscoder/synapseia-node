@@ -41,6 +41,8 @@ export interface Hardware {
   cpuCores: number;
   ramGb: number;
   gpuVramGb: number;
+  /** Human-readable GPU/CPU model (e.g. "Apple M1 Pro", "NVIDIA RTX 4090"). */
+  gpuModel?: string;
   tier: number;
   hasOllama: boolean;
   /** True when the node has a cloud LLM URL configured (--llm-url) */
@@ -139,8 +141,18 @@ export class HardwareHelper {
         if (arch === 'arm64') {
           const model = execSync('sysctl -n machdep.cpu.brand_string').toString().trim();
           this.detectAppleSilicon(hardware, model);
-        } else if (arch === 'x86') {
+          hardware.gpuModel = model;
+        } else if (arch === 'x64' || arch === 'x86') {
+          // Node returns 'x64' on modern Intel/AMD; 'x86' kept for historic compat.
           this.detectNvidiaGPU(hardware);
+          // Best-effort GPU name for telemetry. Silent on failure (no NVIDIA).
+          try {
+            const name = execSync(
+              'nvidia-smi --query-gpu=name --format=csv,noheader',
+              { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] },
+            ).split('\n')[0]?.trim();
+            if (name) hardware.gpuModel = name;
+          } catch { /* no nvidia-smi */ }
         }
       } catch {
         // nvidia-smi not available or no GPU

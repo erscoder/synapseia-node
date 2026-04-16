@@ -5,17 +5,17 @@
   "description": "Synapseia Node CLI Software",
   "type": "module",
   "bin": {
-    "synapseia": "./dist/index.js",
-    "syn": "./dist/index.js"
+    "synapseia": "./dist/bootstrap.js",
+    "syn": "./dist/bootstrap.js"
   },
   "files": [
     "dist",
     "scripts"
   ],
   "scripts": {
-    "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js --help\"",
-    "build": "tsup src/cli/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsup index.ts --watch --onSuccess \"node dist/bootstrap.js --help\"",
+    "build": "tsup",
+    "start": "node dist/bootstrap.js",
     "test": "jest",
     "lint": "eslint src"
   },

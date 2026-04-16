@@ -20,6 +20,21 @@ jest.mock('../../../../modules/model/trainer.js', () => ({
   calculateImprovement: jest.fn(() => 0),
 }));
 
+// Training-LLM resolver — keep deterministic so tests don't depend on local
+// Ollama. Returns the same model the CLI config passes in, so the existing
+// `calls executeTrainingWorkOrder with correct args` assertion continues to
+// match `TEST_CONFIG.llmModel`.
+jest.mock('../../../../modules/llm/training-llm', () => ({
+  resolveTrainingLlmModel: jest.fn(async () => ({
+    provider: 'ollama', providerId: '', modelId: 'phi4-mini',
+  })),
+  resolveTrainingChain: jest.fn(async () => ({
+    primary: { provider: 'ollama', providerId: '', modelId: 'phi4-mini' },
+    fallbacks: [],
+  })),
+  isCapableTrainingModel: jest.fn(() => true),
+}));
+
 jest.mock('../../work-order/work-order.execution', () => ({
   WorkOrderExecutionHelper: jest.fn().mockImplementation(() => ({
     executeTrainingWorkOrder: mockExecuteTrainingWorkOrder,
@@ -27,6 +42,8 @@ jest.mock('../../work-order/work-order.execution', () => ({
     executeDiLoCoWorkOrder: mockExecuteDiLoCoWorkOrder,
     executeResearchWorkOrder: mockExecuteResearchWorkOrder,
     isResearchWorkOrder: mockIsResearchWorkOrder,
+    isTrainingWorkOrder: jest.fn().mockReturnValue(false),
+    isDiLoCoWorkOrder: jest.fn().mockReturnValue(false),
     isGpuInferenceWorkOrder: jest.fn().mockReturnValue(false),
   })),
 }));
@@ -253,12 +270,24 @@ describe('ExecuteTrainingNode', () => {
   let node: ExecuteTrainingNode;
   beforeEach(() => { jest.clearAllMocks(); node = new ExecuteTrainingNode(execution); });
 
-  it('calls executeTrainingWorkOrder with correct args', async () => {
+  it('calls executeTrainingWorkOrder with resolver-chosen model (not config.llmModel)', async () => {
     const wo = makeWO('TRAINING');
     mockExecuteTrainingWorkOrder.mockResolvedValueOnce({ result: '{"valLoss":0.3}', success: true });
     const result = await node.execute(makeState({ selectedWorkOrder: wo }));
     expect(result.executionResult?.success).toBe(true);
-    expect(mockExecuteTrainingWorkOrder).toHaveBeenCalledWith(wo, TEST_CONFIG.coordinatorUrl, TEST_CONFIG.peerId, TEST_CONFIG.capabilities, 1, TEST_CONFIG.llmModel, TEST_CONFIG.llmConfig, []);
+    // The training node now resolves a capable model via resolveTrainingLlmModel
+    // (mocked to phi4-mini here) instead of trusting config.llmModel which is
+    // typically the inference-sized CLI flag.
+    expect(mockExecuteTrainingWorkOrder).toHaveBeenCalledWith(
+      wo,
+      TEST_CONFIG.coordinatorUrl,
+      TEST_CONFIG.peerId,
+      TEST_CONFIG.capabilities,
+      1,
+      { provider: 'ollama', providerId: '', modelId: 'phi4-mini' },
+      TEST_CONFIG.llmConfig,
+      [],
+    );
   });
 
   it('returns failure when throws', async () => {

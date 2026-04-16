@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { Injectable } from '@nestjs/common';
+import logger from '../../utils/logger';
 // @noble/ed25519 is ESM-only and breaks Jest (CommonJS). Use Node crypto for Ed25519.
 // import { getPublicKey, sign as ed25519Sign, verify as ed25519Verify } from '@noble/ed25519';
 
@@ -35,6 +36,13 @@ export class IdentityHelper {
     if (!existsSync(identityDir)) {
       mkdirSync(identityDir, { recursive: true, mode: 0o700 });
     }
+
+    // Loud log so future regenerations are easy to correlate with external
+    // causes (cleanup scripts, truncated writes, manual rm). When peerId
+    // silently changes in the nodes table, this timestamp is the anchor.
+    logger.warn(
+      `[Identity] Generating NEW identity (this changes peerId) — writing to ${path.join(identityDir, 'identity.json')}`,
+    );
 
     // Generate Ed25519 keypair using Node crypto (no ESM dependency)
     const { privateKey: privKey, publicKey: pubKey } = crypto.generateKeyPairSync('ed25519');
@@ -166,18 +174,25 @@ export class IdentityHelper {
   getOrCreateIdentity(identityDir: string = IDENTITY_DIR, nodeName?: string): Identity {
     const idPath = path.join(identityDir, 'identity.json');
 
-    // If the file exists but fails to load, NEVER silently regenerate — that would
-    // create a new node identity on every restart. Surface the error instead.
+    // Fail-safe: if the file exists we load-or-throw — we never silently
+    // regenerate from an empty/truncated file. Silent regen on an empty file
+    // has bitten us before: some external actor (editor save, cleanup script,
+    // partial write) truncated the file to 0 bytes and the next node start
+    // produced a fresh peerId, resetting stats + rewards in the coordinator.
+    // If the operator truly wants a new identity, they must remove the file.
     if (existsSync(idPath)) {
       const raw = readFileSync(idPath, 'utf-8').trim();
-      if (raw) {
-        // File exists and has content — load it, throwing on any parse/validation error
-        // so the operator can fix the file rather than losing their node identity.
-        return this.loadIdentity(identityDir);
+      if (!raw) {
+        throw new Error(
+          `Identity file exists but is empty at ${idPath}. Refusing to regenerate — ` +
+          `that would change the node's peerId and orphan its stats/rewards. ` +
+          `Restore the file from backup OR delete it explicitly (rm "${idPath}") to create a fresh identity.`,
+        );
       }
+      return this.loadIdentity(identityDir);
     }
 
-    // File doesn't exist (or is empty) — first run, safe to generate.
+    // File doesn't exist — first run, safe to generate.
     return this.generateIdentity(identityDir, nodeName);
   }
 

@@ -218,7 +218,7 @@ describe('SubmitResultNode', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    node = new SubmitResultNode(coordinator);
+    node = new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any);
   });
 
   it('returns submitted=false when no work order', async () => {
@@ -254,7 +254,7 @@ describe('SubmitResultNode', () => {
       submitWorkOrderResult: (jest.fn() as any).mockRejectedValue(new Error('Coordinator error')),
       completeWorkOrder: (jest.fn() as any).mockResolvedValue(false),
     };
-    const failingNode = new SubmitResultNode(failingCoordinator as any);
+    const failingNode = new SubmitResultNode(failingCoordinator as any, { markCompleted: jest.fn() } as any);
     const result = await failingNode.execute(makeState({
       selectedWorkOrder: { ...makeResearchWO(), id: `wo_err_${Date.now()}` },
       executionResult: { result: 'result', success: true },

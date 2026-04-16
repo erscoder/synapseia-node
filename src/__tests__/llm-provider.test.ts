@@ -243,4 +243,60 @@ describe('LlmProviderHelper', () => {
       expect(result).toBe('MiniMax response');
     });
   });
+
+  describe('generateLLM - retry on transient errors', () => {
+    it('retries Minimax 2064 (server cluster under high load) then succeeds', async () => {
+      jest.useFakeTimers();
+      const fetchMock = global.fetch as any;
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: false, status: 500, statusText: 'Server Error',
+          json: async () => ({ error: { message: 'server cluster is under high load (2064)' } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { role: 'assistant', content: 'finally ok' }, finish_reason: 'stop' }],
+          }),
+        });
+
+      const promise = helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'k' });
+      await jest.advanceTimersByTimeAsync(1100);
+      const result = await promise;
+
+      expect(result).toBe('finally ok');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      jest.useRealTimers();
+    });
+
+    it('does NOT retry non-transient errors (auth)', async () => {
+      const fetchMock = global.fetch as any;
+      fetchMock.mockResolvedValueOnce({
+        ok: false, status: 401, statusText: 'Unauthorized',
+        json: async () => ({ error: { message: 'invalid api key' } }),
+      });
+
+      await expect(
+        helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'bad' }),
+      ).rejects.toThrow('invalid api key');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up after exhausting retries', async () => {
+      jest.useFakeTimers();
+      const fetchMock = global.fetch as any;
+      fetchMock.mockResolvedValue({
+        ok: false, status: 503, statusText: 'Unavailable',
+        json: async () => ({ error: { message: 'overloaded' } }),
+      });
+
+      const promise = helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'k' });
+      promise.catch(() => {}); // attach handler to prevent unhandled rejection
+      await jest.advanceTimersByTimeAsync(15_000);
+      await expect(promise).rejects.toThrow('overloaded');
+      // 1 initial + 3 retries = 4 attempts
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      jest.useRealTimers();
+    });
+  });
 });
