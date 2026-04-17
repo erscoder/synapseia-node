@@ -57,16 +57,18 @@ export class ModelDiscovery {
       const models = this.buildModelList(localModelNames, hardware);
       const hash = this.hashModels(models);
 
-      // Only re-register if the model list has changed
-      if (hash === this.lastRegisteredHash) {
-        return;
-      }
-
+      // Always POST — the coordinator keeps the registry in memory with a
+      // 60s TTL, and the hash check used to early-return which meant the
+      // very first register was the only one and the entry was purged
+      // shortly after, leaving the auction with zero providers even for
+      // healthy nodes. Re-posting each heartbeat (~15s) refreshes the
+      // coordinator's `updatedAt` and keeps us in `aliveProviders()`.
       const payload: ModelRegistrationPayload = {
         peerId,
         models,
         inferenceUrl: this.resolveInferenceUrl(),
       };
+      const modelsChanged = hash !== this.lastRegisteredHash;
 
       // Build auth headers if identity is available
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -91,8 +93,12 @@ export class ModelDiscovery {
         headers,
       });
 
-      this.lastRegisteredHash = hash;
-      logger.log(`[ModelDiscovery] Registered ${models.length} model(s) with coordinator`);
+      // Log only when the actual model list changed — a noisy heartbeat log
+      // every 15s is useless and drowns real signals.
+      if (modelsChanged) {
+        this.lastRegisteredHash = hash;
+        logger.log(`[ModelDiscovery] Registered ${models.length} model(s) with coordinator`);
+      }
     } catch (error) {
       logger.warn(`[ModelDiscovery] Failed to register models: ${(error as Error).message}`);
     }

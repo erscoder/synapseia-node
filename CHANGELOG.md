@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Chat Phase 1 — re-register every heartbeat (keep auction alive)
+
+`model-discovery.ts` used to early-return when the local model list
+hadn't changed since the last `POST /inference/register`. With the
+coordinator's 60 s TTL on the registry (introduced in Phase 1), that
+meant the very first register after boot was the only one a node
+ever made — 60 s later `aliveProviders()` purged the entry and the
+chat auction kept returning `NO_PROVIDERS` even when nodes were
+healthy. Now `registerModels()` always POSTs (overwrites idempotently,
+refreshes `updatedAt`); the hash check is kept only to silence the
+log when nothing actually changed. One tiny POST every ~15 s per node.
+
 ## [2026-04-18] Chat Phase 1 — node-side parity test
 
 Añadido `src/__tests__/QueryCostCalculator.spec.ts`. Contiene un
