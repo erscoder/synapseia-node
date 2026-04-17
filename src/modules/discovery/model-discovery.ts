@@ -23,6 +23,12 @@ export interface CoordinatorModelInfo {
 export interface ModelRegistrationPayload {
   peerId: string;
   models: CoordinatorModelInfo[];
+  /**
+   * HTTP URL of this node's inference-server. Coordinator needs it to POST
+   * `/inference/quote` (auction bid) and `/v1/chat/completions` (final
+   * generation) once the user has paid. Derived from env vars at call time.
+   */
+  inferenceUrl?: string;
 }
 
 @Injectable()
@@ -56,7 +62,11 @@ export class ModelDiscovery {
         return;
       }
 
-      const payload: ModelRegistrationPayload = { peerId, models };
+      const payload: ModelRegistrationPayload = {
+        peerId,
+        models,
+        inferenceUrl: this.resolveInferenceUrl(),
+      };
 
       // Build auth headers if identity is available
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -121,5 +131,23 @@ export class ModelDiscovery {
    */
   private hashModels(models: CoordinatorModelInfo[]): string {
     return models.map(m => `${m.name}:${m.quantization}`).sort().join(',');
+  }
+
+  /**
+   * The URL the coordinator should POST to for bids and generation. Priority:
+   *   1. INFERENCE_PUBLIC_URL — explicit override (e.g. for dockerised nodes
+   *      that need to announce their service name rather than localhost).
+   *   2. http://<NODE_NAME>:<INFERENCE_PORT> — convention for docker compose.
+   *   3. http://localhost:<INFERENCE_PORT> — dev fallback.
+   * Omitted from the payload if nothing can be resolved — coordinator then
+   * skips this node in auctions (won't crash it).
+   */
+  private resolveInferenceUrl(): string | undefined {
+    const explicit = process.env.INFERENCE_PUBLIC_URL;
+    if (explicit) return explicit.replace(/\/+$/, '');
+    const port = process.env.INFERENCE_PORT || '8080';
+    const nodeName = process.env.NODE_NAME;
+    if (nodeName) return `http://${nodeName}:${port}`;
+    return `http://localhost:${port}`;
   }
 }
