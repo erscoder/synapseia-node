@@ -1,5 +1,24 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Chat PR-1 — node declares inferencePort, not a URL
+
+Before: the node had to resolve its own `inferenceUrl` and send it to
+the coordinator in `POST /inference/register`. The resolver walked a
+three-step priority list (`INFERENCE_PUBLIC_URL` > `NODE_NAME:port` >
+`localhost:port`) — if the operator got it wrong (or just ran the node
+from a host where `localhost` doesn't resolve from the coord's network
+namespace) every auction silently failed with ECONNREFUSED and the
+user saw ALL_BIDS_FAILED.
+
+Now: the node only declares `inferencePort` (number, default 8080).
+The coordinator reads the HTTP request's remote address at register
+time and composes the URL itself — operators cannot misconfigure the
+endpoint. `INFERENCE_PUBLIC_URL` is still accepted as `inferencePublicUrl`
+in the payload for NAT / reverse-proxy edge cases (wins over the
+auto-derived URL).
+
+`resolveInferenceUrl()` deleted from `model-discovery.ts`.
+
 ## [2026-04-18] Chat Phase 1 — start inference-server on boot
 
 `inference-server.ts` was implemented in Phase 1 (handlers for
