@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-04-17] Synapseia-Agent — bid endpoint + inferenceUrl in register (Phase 1)
+
+Nuevo: el nodo ahora participa en la subasta Vickrey de chat queries:
+- `modules/inference/QueryCostCalculator.ts` — mirror exacto del del
+  coordinator. Precio determinista en `[QUERY_MIN_PRICE, QUERY_MAX_PRICE]`
+  (defaults 0.1 / 1.0 USD). Paridad verificada por input.
+- `modules/inference/inference-server.ts` — nuevo handler
+  `POST /inference/quote` que devuelve `{ priceUsd }` usando el
+  calculator. Timeout tolerante — ante error devuelve el precio mínimo.
+- `modules/discovery/model-discovery.ts` — ahora incluye `inferenceUrl`
+  en el payload de `POST /inference/register`. Resuelve desde
+  `INFERENCE_PUBLIC_URL` > `http://$NODE_NAME:$INFERENCE_PORT` >
+  `http://localhost:8080`. Sin eso el coordinator no podría contactar
+  al nodo para pedir bids o forward the chat completion.
+
 ## [2026-04-17] Cloud LLM — URL double-concat fix + non-JSON error handling
 
 OpenAI-compatible cloud endpoint (MiniMax) was failing with

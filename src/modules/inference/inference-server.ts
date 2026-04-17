@@ -9,6 +9,7 @@
 import { Injectable } from '@nestjs/common';
 import * as http from 'http';
 import * as crypto from 'crypto';
+import { priceUsdFromEnv } from './QueryCostCalculator';
 
 export interface InferenceServerConfig {
   port?: number;
@@ -237,6 +238,26 @@ export async function handleHealth(req: http.IncomingMessage, res: http.ServerRe
 /**
  * Handle 404
  */
+/**
+ * Vickrey auction bid endpoint. Coordinator fan-outs `POST /inference/quote`
+ * to every alive node; each returns its price for the given query. Uses the
+ * shared deterministic QueryCostCalculator so the coordinator can sanity-check
+ * quotes for drift. Returns min price (0.1 USD) on any parsing error — never
+ * rejects the bid, but always returns something the auction can rank.
+ */
+async function handleQuote(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  try {
+    const body = await parseBody(req);
+    const query = typeof body?.query === 'string' ? body.query : '';
+    const priceUsd = priceUsdFromEnv(query);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ priceUsd }));
+  } catch {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ priceUsd: priceUsdFromEnv('') }));
+  }
+}
+
 function handleNotFound(req: http.IncomingMessage, res: http.ServerResponse): void {
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
@@ -272,6 +293,8 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
     try {
       if (req.method === 'POST' && url === '/v1/chat/completions') {
         await handleChatCompletions(req, res, config.peerId, config.coordinatorUrl);
+      } else if (req.method === 'POST' && url === '/inference/quote') {
+        await handleQuote(req, res);
       } else if (req.method === 'GET' && url === '/api/v1/state') {
         await handleState(req, res, config);
       } else if (req.method === 'GET' && url === '/health') {
