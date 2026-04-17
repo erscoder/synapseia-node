@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Chat Phase 1 — node-side parity test
+
+Añadido `src/__tests__/QueryCostCalculator.spec.ts`. Contiene un
+"parity vector" con las mismas entradas y salidas numéricas exactas
+que el test gemelo en `packages/coordinator/src/application/inference/
+__tests__/QueryCostCalculator.spec.ts`. Si cualquiera de las dos copias
+del `QueryCostCalculator` deriva (regex de biomedical terms, divisor,
+rounding…), el test del bando que ha cambiado pasará pero el del otro
+bando fallará — y una subasta real no puede arrancar con ambos copies
+fuera de sync sin que CI lo detecte primero.
+
 ## [2026-04-17] Synapseia-Agent — bid endpoint + inferenceUrl in register (Phase 1)
 
 Nuevo: el nodo ahora participa en la subasta Vickrey de chat queries:
