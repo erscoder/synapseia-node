@@ -1,5 +1,25 @@
 # Changelog — @synapseia/node
 
+## [2026-04-17] Training LLM resolver — honour LLM_MODEL verbatim override
+
+On RAM-constrained hosts (Docker Desktop VM = 3.8 GiB) the auto-pick of
+qwen2.5:1.5b (the "capable" default) collides with torch's 0.8 GiB
+import peak and the kernel OOM-kills the python child. The resolver
+previously ignored the existing `LLM_MODEL` env var for training and
+went directly to ranking installed Ollama models, so operators had no
+way to pin a smaller model without either uninstalling the bigger one
+or editing the denylist globally.
+
+Resolver now consults `env.LLM_MODEL` first in both
+`resolveTrainingLlmModel` and `resolveTrainingChain`:
+- if set AND installed in Ollama → return verbatim (bypasses the
+  "capable" filter and the `qwen2.5:0.5b` denylist entry)
+- if set but not installed → silent fall-through to the ranking path
+- if unset → unchanged behaviour
+
+Reuses the env var that CLI + inference already consume, so `--model`
+/ `LLM_MODEL` / training resolver stay coherent. No new env var.
+
 ## [2026-04-17] Training OOM hardening — pre-import heartbeat + BLAS caps + ollama unload
 
 Fixes the recurring `SIGKILL` / "exited with code null" from the python

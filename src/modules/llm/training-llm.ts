@@ -148,6 +148,18 @@ export async function resolveTrainingLlmModel(
   } catch {
     // Non-fatal — Ollama may be unreachable; treat as empty list.
   }
+
+  // LLM_MODEL override: operator pinned a specific model (e.g. on a
+  // RAM-constrained host where the "capable" 1.5B default OOMs). Honour it
+  // verbatim if it's actually installed — bypasses the capable/denylist
+  // gates because the operator is declaring "this is what this node can
+  // run". Silent fall-through if not installed (misconfiguration
+  // shouldn't wedge the node).
+  const pinned = env.LLM_MODEL?.trim();
+  if (pinned && ollamaInstalled.includes(pinned)) {
+    return { provider: 'ollama', providerId: '', modelId: pinned };
+  }
+
   const capable = ollamaInstalled.filter(isCapableTrainingModel);
   capable.sort((a, b) => rankModel(b) - rankModel(a));
   if (capable.length > 0) {
@@ -210,11 +222,23 @@ export async function resolveTrainingChain(
     provider: 'ollama', providerId: '', modelId,
   });
 
-  const ranked: LLMModel[] = [
-    ...capable.map(asOllama),
-    ...(cloud ? [cloud] : []),
-    ...others.map(asOllama),
-  ];
+  // LLM_MODEL override: same semantics as resolveTrainingLlmModel — if the
+  // operator pinned a model and it's installed, it becomes the primary and
+  // everything else is demoted to fallback. Preserves the cascade (cloud,
+  // other Ollamas) in case the pinned model fails on a particular WO.
+  const pinned = env.LLM_MODEL?.trim();
+  const ranked: LLMModel[] = pinned && ollamaInstalled.includes(pinned)
+    ? [
+        asOllama(pinned),
+        ...capable.filter(m => m !== pinned).map(asOllama),
+        ...(cloud ? [cloud] : []),
+        ...others.filter(m => m !== pinned).map(asOllama),
+      ]
+    : [
+        ...capable.map(asOllama),
+        ...(cloud ? [cloud] : []),
+        ...others.map(asOllama),
+      ];
 
   if (ranked.length === 0) return null;
   return { primary: ranked[0], fallbacks: ranked.slice(1) };
