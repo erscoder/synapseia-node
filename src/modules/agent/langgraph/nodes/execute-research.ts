@@ -14,7 +14,7 @@ import type { ReActThought } from '../tools/types';
 import { ToolRegistry } from '../tools/tool-registry';
 import { ToolRunnerService } from '../tools/tool-runner.service';
 import { LangGraphLlmService } from '../llm.service';
-import { buildReActPrompt } from '../prompts/react';
+import { buildMedicalReActPrompt } from '../prompts/medical/medical-react';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -94,12 +94,19 @@ export class ExecuteResearchNode {
     while (iterationCount < MAX_ITERATIONS) {
       iterationCount++;
 
-      const prompt = buildReActPrompt(
-        { title: wo.title, abstract: this.extractAbstract(wo) },
+      const meta = (wo.metadata ?? {}) as Record<string, unknown>;
+      const paperDoi = typeof meta['paperDoi'] === 'string' ? meta['paperDoi'] : undefined;
+      const relatedDois = Array.isArray(meta['relatedDois'])
+        ? (meta['relatedDois'] as unknown[]).filter((d): d is string => typeof d === 'string')
+        : undefined;
+
+      const prompt = buildMedicalReActPrompt({
+        wo: { title: wo.title, abstract: this.extractAbstract(wo), doi: paperDoi },
         plan,
-        toolList,
+        availableTools: toolList,
         observations,
-      );
+        relatedDois,
+      });
 
       const raw = await this.llmService.generateJSON(state.config.llmModel, prompt, state.config.llmConfig);
       const thought = this.parseReActResponse(raw);

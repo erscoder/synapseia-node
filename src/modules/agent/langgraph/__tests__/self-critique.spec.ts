@@ -70,6 +70,7 @@ describe('SelfCritiqueNode', () => {
         completeness: 7,
         novelty: 8,
         actionability: 7,
+        ontologyGrounding: 8,
         feedback: 'Good analysis with solid methodology',
         passed: true,
       }));
@@ -82,7 +83,7 @@ describe('SelfCritiqueNode', () => {
 
       const result = await node.execute(state);
 
-      expect(result.selfCritiqueScore).toBe(7.5); // (8+7+8+7)/4
+      expect(result.selfCritiqueScore).toBeCloseTo(7.6, 1); // (8+7+8+7+8)/5
       expect(result.selfCritiquePassed).toBe(true);
       expect(result.selfCritiqueFeedback).toBe('Good analysis with solid methodology');
       expect(result.retryCount).toBe(0); // Should not increment on pass
@@ -94,6 +95,7 @@ describe('SelfCritiqueNode', () => {
         completeness: 7,
         novelty: 7,
         actionability: 7,
+        ontologyGrounding: 7,
         feedback: 'Acceptable but could be improved',
         passed: true,
       }));
@@ -117,6 +119,7 @@ describe('SelfCritiqueNode', () => {
         completeness: 6,
         novelty: 5,
         actionability: 6,
+        ontologyGrounding: 5,
         feedback: 'Analysis is too shallow, needs more depth',
         passed: false,
       }));
@@ -129,7 +132,7 @@ describe('SelfCritiqueNode', () => {
 
       const result = await node.execute(state);
 
-      expect(result.selfCritiqueScore).toBe(5.75); // (6+6+5+6)/4
+      expect(result.selfCritiqueScore).toBeCloseTo(5.6, 1); // (6+6+5+6+5)/5
       expect(result.selfCritiquePassed).toBe(false);
       expect(result.selfCritiqueFeedback).toBe('Analysis is too shallow, needs more depth');
     });
@@ -140,6 +143,7 @@ describe('SelfCritiqueNode', () => {
         completeness: 5,
         novelty: 5,
         actionability: 5,
+        ontologyGrounding: 5,
         feedback: 'Needs improvement',
         passed: false,
       }));
@@ -161,6 +165,7 @@ describe('SelfCritiqueNode', () => {
         completeness: 5,
         novelty: 5,
         actionability: 5,
+        ontologyGrounding: 5,
         feedback: 'Still needs work',
         passed: false,
       }));
@@ -244,7 +249,7 @@ describe('SelfCritiqueNode', () => {
       const result = await node.execute(state);
 
       expect(result.selfCritiquePassed).toBe(false);
-      expect(result.selfCritiqueFeedback).toContain('Failed to parse critique response');
+      expect(result.selfCritiqueFeedback).toContain('Failed to parse medical critique response');
       expect(result.retryCount).toBe(1);
     });
 

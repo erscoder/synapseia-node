@@ -8,6 +8,7 @@ import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { stripReasoning } from '../../../../shared/sanitize-llm-output';
+import { buildMedicalSynthesizerPrompt } from '../prompts/medical/medical-synthesizer';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -27,28 +28,11 @@ export class SynthesizerNode {
       return this.fallbackResult(state);
     }
 
-    const research = this.parseResearchResult(researchOutput);
-
-    const prompt = `You are a research synthesizer. Combine a researcher's analysis with peer review critique.
-
-Paper: ${payload.title}
-
-Researcher's analysis:
-- Summary: ${research.summary}
-- Key Insights: ${research.keyInsights.join('; ')}
-- Proposal: ${research.proposal}
-
-Peer review critique:
-${criticOutput}
-
-Produce the FINAL refined result that directly addresses the critique's concerns and improves the original analysis.
-Output ONLY a JSON object with exactly these fields (no markdown, no extra text):
-{"summary":"REAL refined summary here","keyInsights":["REAL refined insight 1","REAL insight 2","REAL insight 3"],"proposal":"REAL concrete next step here"}
-
-Requirements:
-- summary: 2-3 sentences that improve on the original, directly addressing the critique. At least 80 characters.
-- keyInsights: at least 3 refined findings. Each at least 30 characters.
-- proposal: a concrete, actionable next step. At least 100 characters. Must differ from the original proposal if the critique identified weaknesses.`;
+    const prompt = buildMedicalSynthesizerPrompt({
+      title: payload.title,
+      researcherJson: researchOutput,
+      criticFeedback: criticOutput,
+    });
 
     try {
       const output = await this.llmProvider.generateLLM(
@@ -96,13 +80,27 @@ Requirements:
     }
   }
 
+  /**
+   * Fallback when the synthesizer LLM call fails.
+   *
+   * The researcher emits `{summary, keyInsights, discoveryType, structuredData}`
+   * (no proposal — the proposal is built downstream). When the synthesizer
+   * fails we still want a submissible result, so we synthesize a proposal
+   * locally: plain-English prose + the JSON block from the researcher.
+   * The coordinator's extractStructuredPayload regex `/\{[\s\S]*\}/` grabs
+   * the JSON block, so the structured discovery is preserved.
+   */
   private fallbackResult(state: AgentState): Partial<AgentState> {
-    const output = state.researcherOutput;
-    const parsed = this.parseResearchResult(output || '');
+    const parsed = this.parseResearchResult(state.researcherOutput || '');
+    const summary = parsed.summary || 'No summary generated';
+    const proposalFromResearcher =
+      parsed.discoveryType && parsed.structuredData
+        ? `Proposed discovery: ${parsed.discoveryType}. ${summary} ${JSON.stringify({ discoveryType: parsed.discoveryType, structuredData: parsed.structuredData })}`
+        : parsed.proposal || 'No proposal generated';
     const researchResult = {
-      summary: parsed.summary || 'No summary generated',
+      summary,
       keyInsights: parsed.keyInsights,
-      proposal: parsed.proposal || 'No proposal generated',
+      proposal: proposalFromResearcher,
     };
     return {
       researchResult,
@@ -111,13 +109,24 @@ Requirements:
     };
   }
 
-  private parseResearchResult(raw: string): { summary: string; keyInsights: string[]; proposal: string } {
+  private parseResearchResult(raw: string): {
+    summary: string;
+    keyInsights: string[];
+    proposal: string;
+    discoveryType?: string;
+    structuredData?: Record<string, unknown>;
+  } {
     try {
       const p = JSON.parse(stripReasoning(raw).trim());
       return {
         summary: String(p.summary ?? ''),
         keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
         proposal: String(p.proposal ?? ''),
+        discoveryType: typeof p.discoveryType === 'string' ? p.discoveryType : undefined,
+        structuredData:
+          p.structuredData && typeof p.structuredData === 'object'
+            ? (p.structuredData as Record<string, unknown>)
+            : undefined,
       };
     } catch {
       return { summary: raw.slice(0, 200), keyInsights: [], proposal: '' };

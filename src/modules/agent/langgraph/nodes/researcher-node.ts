@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { buildMedicalResearcherPrompt } from '../prompts/medical/medical-researcher';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -40,23 +41,20 @@ export class ResearcherNode {
       } catch { /* ignore */ }
     }
 
-    const contextBlock = [
-      kgContext ? `Knowledge Graph context:\n${kgContext}` : null,
-      referenceContext ? `Reference context:\n${referenceContext}` : null,
-    ].filter(Boolean).join('\n\n');
+    const meta = (workOrder.metadata ?? {}) as Record<string, unknown>;
+    const paperDoi = typeof meta['paperDoi'] === 'string' ? meta['paperDoi'] : undefined;
+    const relatedDois = Array.isArray(meta['relatedDois'])
+      ? (meta['relatedDois'] as unknown[]).filter((d): d is string => typeof d === 'string')
+      : undefined;
 
-    const prompt = `You are a research analyst. Analyze the following paper thoroughly.
-
-Paper: ${payload.title}
-Abstract: ${payload.abstract}
-
-${contextBlock ? contextBlock + '\n\n' : ''}Output ONLY a JSON object (no markdown, no extra text):
-{"summary":"REAL summary here","keyInsights":["REAL finding 1","REAL finding 2","REAL finding 3"],"proposal":"REAL next step here"}
-
-Requirements:
-- summary: 2-3 sentences covering the paper's main contribution and its significance. At least 80 characters. Do not paraphrase the abstract.
-- keyInsights: at least 3 concrete, non-obvious findings or contributions from the paper. Each at least 30 characters.
-- proposal: a specific, testable next step or experiment that builds on this research. At least 100 characters.`;
+    const prompt = buildMedicalResearcherPrompt({
+      title: payload.title,
+      abstract: payload.abstract,
+      doi: paperDoi,
+      kgContext,
+      referenceContext,
+      relatedDois,
+    });
 
     try {
       const output = await this.llmProvider.generateLLM(
