@@ -6,11 +6,11 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LangGraphLlmService } from '../llm.service';
-import { 
-  buildSelfCritiquePrompt, 
-  parseSelfCritiqueResponse, 
-  calculateAverageScore 
-} from '../prompts/self-critique';
+import {
+  buildMedicalSelfCritiquePrompt,
+  parseMedicalSelfCritiqueResponse,
+  calculateMedicalAverageScore,
+} from '../prompts/medical/medical-self-critique';
 import logger from '../../../../utils/logger';
 
 const MAX_RETRIES = 2;
@@ -45,27 +45,42 @@ export class SelfCritiqueNode {
     }
 
     try {
-      // Build the critique prompt
-      const prompt = buildSelfCritiquePrompt({
+      // Build the medical critique prompt (5 dims: accuracy, completeness,
+      // novelty, actionability, ontologyGrounding). Pass the abstract +
+      // related DOIs as grounding sources so the critic can verify the
+      // supporting_dois weren't invented.
+      const meta = (selectedWorkOrder.metadata ?? {}) as Record<string, unknown>;
+      const abstract = typeof meta['paperAbstract'] === 'string' ? meta['paperAbstract'] : '';
+      const paperDoi = typeof meta['paperDoi'] === 'string' ? meta['paperDoi'] : '';
+      const relatedDois = Array.isArray(meta['relatedDois'])
+        ? (meta['relatedDois'] as unknown[]).filter((d): d is string => typeof d === 'string')
+        : [];
+      const groundingSources = [
+        abstract ? `Abstract:\n${abstract}` : '',
+        paperDoi ? `Paper DOI: ${paperDoi}` : '',
+        relatedDois.length ? `Related DOIs:\n${relatedDois.map((d) => `  - ${d}`).join('\n')}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      const prompt = buildMedicalSelfCritiquePrompt({
         title: selectedWorkOrder.title,
         summary: researchResult.summary || '',
-        keyInsights: Array.isArray(researchResult.keyInsights) 
-          ? researchResult.keyInsights.join(', ') 
+        keyInsights: Array.isArray(researchResult.keyInsights)
+          ? researchResult.keyInsights.join(', ')
           : String(researchResult.keyInsights || ''),
         proposal: researchResult.proposal || '',
+        groundingSources: groundingSources || undefined,
       });
 
-      // Use JSON mode so the model emits valid JSON directly — no parsing heuristics needed
       const llmResponse = await this.llmService.generateJSON(
         config.llmModel,
         prompt,
-        config.llmConfig
+        config.llmConfig,
       );
 
-      // Parse the critique response
-      const critique = parseSelfCritiqueResponse(llmResponse);
-      const averageScore = calculateAverageScore(critique);
-      const passed = averageScore >= PASSING_THRESHOLD;
+      const critique = parseMedicalSelfCritiqueResponse(llmResponse);
+      const averageScore = calculateMedicalAverageScore(critique);
+      // Pass requires 5-dim avg ≥ 7.0 AND ontologyGrounding ≥ 6 (enforced in the parser).
+      const passed = critique.passed && averageScore >= PASSING_THRESHOLD;
 
       // Increment retry count if failed
       const newRetryCount = passed 
