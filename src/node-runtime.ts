@@ -167,6 +167,36 @@ export async function startNode(
     logger.warn('⚠️ A2A_ENABLED=true but A2AServer service not provided — skipping');
   }
 
+  // ── 3.5 Inference server (OpenAI-compatible + Vickrey bid endpoint) ─────
+  // Exposes POST /v1/chat/completions (coordinator forwards chat here once
+  // the user paid) and POST /inference/quote (Vickrey bid). Port defaults
+  // to 8080, configurable via INFERENCE_PORT. Skipped if
+  // INFERENCE_SERVER_DISABLED=true (for tiny nodes that only train).
+  if (process.env.INFERENCE_SERVER_DISABLED !== 'true') {
+    try {
+      const { startInferenceServer } = await import('./modules/inference/inference-server');
+      const inferencePort = Number(process.env.INFERENCE_PORT) || 8080;
+      const localModels = config.llmConfig?.baseUrl
+        ? await (async () => {
+            try {
+              const { ModelCatalogHelper } = await import('./modules/model/model-catalog');
+              return new ModelCatalogHelper().getLocalModels(config.llmConfig!.baseUrl);
+            } catch { return [] as string[]; }
+          })()
+        : [];
+      startInferenceServer({
+        port: inferencePort,
+        peerId: config.identity.peerId,
+        tier: config.tier,
+        models: localModels,
+        coordinatorUrl: config.coordinatorUrl,
+      });
+      logger.log(`🧠 Inference server listening on port ${inferencePort}`);
+    } catch (err) {
+      logger.warn(`⚠️ Inference server failed to start: ${(err as Error).message}`);
+    }
+  }
+
   // ── 4. Work Order Agent ───────────────────────────────────────────────────
   logger.log('..............................');
   logger.log('🚀 Starting LangGraph work order agent...');
