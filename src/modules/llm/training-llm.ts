@@ -160,6 +160,18 @@ export async function resolveTrainingLlmModel(
     return { provider: 'ollama', providerId: '', modelId: pinned };
   }
 
+  // LLM_PROVIDER override: operator explicitly chose a provider. Cloud
+  // gets priority if it's declared AND fully configured, regardless of
+  // what Ollama has installed. This stops a co-tenant local Ollama with
+  // qwen 1.5b from winning on a box the operator wanted on cloud.
+  const provider = env.LLM_PROVIDER?.trim().toLowerCase();
+  if (provider === 'cloud') {
+    const cloud = buildCloudModel(env.LLM_CLOUD_MODEL, env.LLM_CLOUD_PROVIDER);
+    if (cloud) return cloud;
+    // Cloud requested but incomplete config → fall through to Ollama
+    // cascade rather than returning null (degraded > dead).
+  }
+
   const capable = ollamaInstalled.filter(isCapableTrainingModel);
   capable.sort((a, b) => rankModel(b) - rankModel(a));
   if (capable.length > 0) {
@@ -222,23 +234,33 @@ export async function resolveTrainingChain(
     provider: 'ollama', providerId: '', modelId,
   });
 
-  // LLM_MODEL override: same semantics as resolveTrainingLlmModel — if the
-  // operator pinned a model and it's installed, it becomes the primary and
-  // everything else is demoted to fallback. Preserves the cascade (cloud,
-  // other Ollamas) in case the pinned model fails on a particular WO.
+  // LLM_MODEL / LLM_PROVIDER overrides: same semantics as
+  // resolveTrainingLlmModel. LLM_MODEL wins first (verbatim model pin),
+  // then LLM_PROVIDER=cloud promotes the cloud model to primary. Both
+  // preserve the full cascade in case the chosen primary fails on a WO.
   const pinned = env.LLM_MODEL?.trim();
-  const ranked: LLMModel[] = pinned && ollamaInstalled.includes(pinned)
-    ? [
-        asOllama(pinned),
-        ...capable.filter(m => m !== pinned).map(asOllama),
-        ...(cloud ? [cloud] : []),
-        ...others.filter(m => m !== pinned).map(asOllama),
-      ]
-    : [
-        ...capable.map(asOllama),
-        ...(cloud ? [cloud] : []),
-        ...others.map(asOllama),
-      ];
+  const provider = env.LLM_PROVIDER?.trim().toLowerCase();
+  let ranked: LLMModel[];
+  if (pinned && ollamaInstalled.includes(pinned)) {
+    ranked = [
+      asOllama(pinned),
+      ...capable.filter(m => m !== pinned).map(asOllama),
+      ...(cloud ? [cloud] : []),
+      ...others.filter(m => m !== pinned).map(asOllama),
+    ];
+  } else if (provider === 'cloud' && cloud) {
+    ranked = [
+      cloud,
+      ...capable.map(asOllama),
+      ...others.map(asOllama),
+    ];
+  } else {
+    ranked = [
+      ...capable.map(asOllama),
+      ...(cloud ? [cloud] : []),
+      ...others.map(asOllama),
+    ];
+  }
 
   if (ranked.length === 0) return null;
   return { primary: ranked[0], fallbacks: ranked.slice(1) };
