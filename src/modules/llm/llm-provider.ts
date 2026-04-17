@@ -397,19 +397,44 @@ export class LlmProviderHelper {
 
   // ── Private: OpenAI-compatible ─────────────────────────────────────────────
 
+  /**
+   * Build the chat-completions URL for any OpenAI-compatible endpoint.
+   * Accepts `baseUrl` as either a root host (`https://api.minimax.io`) or
+   * an already-complete endpoint (`https://api.minimax.io/v1/chat/
+   * completions`). Previously the code blindly appended `/v1/chat/
+   * completions` which, with the latter form, produced a doubled path
+   * and a 404 that crashed JSON.parse with "position 4" on HTML error
+   * pages.
+   */
+  private buildOpenAICompatUrl(baseUrl: string | undefined): string {
+    const trimmed = (baseUrl ?? 'https://api.openai.com').replace(/\/+$/, '');
+    return trimmed.endsWith('/chat/completions')
+      ? trimmed
+      : `${trimmed}/v1/chat/completions`;
+  }
+
+  /** Safe error body reader: errors pages may be HTML, not JSON. */
+  private async extractHttpErrorMessage(response: Response): Promise<string> {
+    const body = await response.text().catch(() => '');
+    try {
+      const json = JSON.parse(body);
+      const msg = this.getOptionalString(json?.error, 'message') ?? this.getOptionalString(json, 'message');
+      if (msg) return msg;
+    } catch { /* body wasn't JSON */ }
+    const snippet = body.slice(0, 200).replace(/\s+/g, ' ').trim();
+    return `HTTP ${response.status} ${response.statusText}${snippet ? `: ${snippet}` : ''}`;
+  }
+
   private async checkOpenAICompat(model: LLMModel, apiKey: string, baseUrl?: string): Promise<LLMStatus> {
     try {
       const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
+      const url = this.buildOpenAICompatUrl(baseUrl);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({ model: model.modelId, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 }),
       });
-      if (!response.ok) {
-        const error = await response.json() as any;
-        throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-      }
+      if (!response.ok) throw new Error(await this.extractHttpErrorMessage(response));
       return { available: true, model, estimatedLatencyMs: meta?.latencyMs ?? 400, estimatedCostPerCall: meta?.costPerCall, maxTokens: meta?.maxTokens };
     } catch (error) {
       return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
@@ -419,7 +444,7 @@ export class LlmProviderHelper {
   private async generateOpenAICompat(
     model: LLMModel, prompt: string, apiKey: string, baseUrl?: string, hyperparams?: GenerateOptions,
   ): Promise<string> {
-    const url = baseUrl ? `${baseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
+    const url = this.buildOpenAICompatUrl(baseUrl);
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -431,10 +456,7 @@ export class LlmProviderHelper {
         ...(hyperparams?.forceJson && { response_format: { type: 'json_object' } }),
       }),
     });
-    if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-    }
+    if (!response.ok) throw new Error(await this.extractHttpErrorMessage(response));
     const data = await response.json() as any;
     return data.choices[0].message.content;
   }

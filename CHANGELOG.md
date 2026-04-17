@@ -1,5 +1,27 @@
 # Changelog — @synapseia/node
 
+## [2026-04-17] Cloud LLM — URL double-concat fix + non-JSON error handling
+
+OpenAI-compatible cloud endpoint (MiniMax) was failing with
+`Unexpected non-whitespace character after JSON at position 4`:
+
+- Cause 1: `generateOpenAICompat` unconditionally appended
+  `/v1/chat/completions` to `LLM_CLOUD_BASE_URL`. Operators naturally
+  set that env to the full endpoint
+  (`https://api.minimax.io/v1/chat/completions`), producing the double
+  path `…/chat/completions/v1/chat/completions` → 404 HTML response.
+- Cause 2: the error branch blindly called `response.json()` on that
+  HTML body → JSON.parse crashed at the first `<` (position 4 after
+  `<!DOC`).
+
+Fixes:
+- New `buildOpenAICompatUrl()` helper tolerates both conventions
+  (root host or full endpoint). Strips trailing slash, appends only if
+  `/chat/completions` isn't already present.
+- New `extractHttpErrorMessage()` reads the body as text, tries JSON
+  parse first, falls back to a truncated snippet. Used by both
+  `checkOpenAICompat` and `generateOpenAICompat`.
+
 ## [2026-04-17] Ollama thrash fix — LLM_PROVIDER=cloud + num_ctx 8192 + heartbeat 15s
 
 Three changes that together stop a RAM-starved node from cascading
