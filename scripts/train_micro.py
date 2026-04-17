@@ -8,12 +8,28 @@ Output: JSON lines to stdout (progress updates + final result)
 """
 
 import json
+import os
 import sys
 import time
 import math
 import random
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
+
+# Cap BLAS/MKL/OpenMP threadpools BEFORE importing torch. On arm64 under Docker
+# `import torch` peaks at 600-800 MB RSS because MKL/OpenMP pre-allocate one
+# thread per core; capping to 1 shaves ~100-300 MB and avoids cgroup OOM-kills
+# when the host is tight on RAM (node + ollama + pubmedbert + coordinator).
+# These env vars MUST be set before torch is imported — too late afterwards.
+for _var in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
+             'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
+    os.environ.setdefault(_var, '1')
+
+# Pre-import heartbeat: proves Python itself started. If the next run fails
+# WITHOUT this line appearing in stdout, Python never booted (bad interpreter,
+# missing script, cgroup killed the fork). If this appears but the post-import
+# heartbeat further down does NOT, the OOM happened during `import torch`.
+print(json.dumps({"stage": "pre-import", "pid": os.getpid()}), flush=True)
 
 import torch
 import torch.nn as nn

@@ -102,6 +102,43 @@ export class TrainerHelper {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
+  /**
+   * Ask Ollama to unload every currently-loaded model so its weights free RAM
+   * before we spawn Python + torch. Uses /api/ps to list residents, then posts
+   * {model, keep_alive: 0} to /api/generate for each (Ollama interprets
+   * keep_alive=0 as "unload now"). Fully best-effort: 2s total budget, every
+   * error swallowed — a stale Ollama must never block training.
+   */
+  private async unloadOllamaModels(): Promise<void> {
+    const baseUrl = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+    const deadline = Date.now() + 2000;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(500, deadline - Date.now()));
+      const listRes = await fetch(`${baseUrl}/api/ps`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!listRes.ok) return;
+      const listJson = (await listRes.json()) as { models?: Array<{ name?: string; model?: string }> };
+      const loaded = (listJson.models ?? [])
+        .map((m) => m.name ?? m.model)
+        .filter((n): n is string => typeof n === 'string' && n.length > 0);
+      if (loaded.length === 0) return;
+      logger.log(`[trainer] unloading ${loaded.length} ollama model(s) to free RAM: ${loaded.join(', ')}`);
+      await Promise.all(loaded.map(async (name) => {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), Math.max(300, deadline - Date.now()));
+        try {
+          await fetch(`${baseUrl}/api/generate`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: name, keep_alive: 0, prompt: '' }),
+            signal: ctl.signal,
+          });
+        } catch { /* ignore */ } finally { clearTimeout(t); }
+      }));
+    } catch { /* ignore */ }
+  }
+
   private resolveTrainScript(): string {
     try {
       // Works in both CJS (Jest) and ESM (tsup bundles __dirname shim)
@@ -132,6 +169,12 @@ export class TrainerHelper {
     // Training can be slow in container environments (CPU-constrained). Default: 20 min.
     const TRAINING_TIMEOUT_MS = parseInt(process.env.TRAINING_TIMEOUT_MS || '1200000', 10);
 
+    // Best-effort: unload any model currently resident in Ollama so that
+    // torch's ~600-800 MB import spike doesn't collide with qwen/llama weights
+    // still pinned by KEEP_ALIVE. Runs with a tight 2s budget — if Ollama is
+    // down or slow, we continue anyway; the spawn won't wait on this.
+    await this.unloadOllamaModels().catch(() => { /* fire-and-forget */ });
+
     let killProcess: (() => void) | null = null;
     const settledHolder = { current: false };
 
@@ -145,8 +188,19 @@ export class TrainerHelper {
 
       // -u forces unbuffered stdout/stderr so JSON progress lines arrive
       // immediately instead of being held in Python's 4 KB block buffer.
+      // Thread-cap env vars belt-and-suspenders: train_micro.py already sets
+      // these with setdefault before `import torch`, but passing them through
+      // the spawn guarantees they're present even if the script is edited.
       const pythonProcess = spawn('python3', ['-u', pythonScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          OMP_NUM_THREADS: '1',
+          MKL_NUM_THREADS: '1',
+          OPENBLAS_NUM_THREADS: '1',
+          NUMEXPR_NUM_THREADS: '1',
+          VECLIB_MAXIMUM_THREADS: '1',
+        },
       });
 
       killProcess = () => { if (!pythonProcess.killed) pythonProcess.kill('SIGTERM'); };
