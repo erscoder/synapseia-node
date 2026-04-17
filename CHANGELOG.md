@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Chat Phase 1 — start inference-server on boot
+
+`inference-server.ts` was implemented in Phase 1 (handlers for
+`POST /v1/chat/completions` and `POST /inference/quote`) but NOTHING
+called `startInferenceServer()` at node boot. The server class + module
+existed, tests passed, the node registered its models with
+`inferenceUrl=http://node-1:8080`, but the port was closed — so the
+coordinator's auction kept getting `fetch failed / ECONNREFUSED` on
+every bid request and the user saw `ALL_BIDS_FAILED` in `/chat`.
+
+Now `node-runtime.ts` starts the server between the heartbeat/model-
+registration pass and the LangGraph work-order loop. Listens on
+`INFERENCE_PORT` (default 8080). Opt out with
+`INFERENCE_SERVER_DISABLED=true` for small train-only nodes.
+
 ## [2026-04-18] Chat Phase 1 — re-register every heartbeat (keep auction alive)
 
 `model-discovery.ts` used to early-return when the local model list
