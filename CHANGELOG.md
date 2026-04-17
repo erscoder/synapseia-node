@@ -1,5 +1,50 @@
 # Changelog — @synapseia/node
 
+## [2026-04-17] Training OOM hardening — pre-import heartbeat + BLAS caps + ollama unload
+
+Fixes the recurring `SIGKILL` / "exited with code null" from the python
+training child. Root cause: the cgroup oom-killer was taking Python during
+`import torch` (peak ~600-800 MB RSS on arm64) when ollama weights, pubmedbert,
+and a second node container fought for the same Docker-host RAM.
+
+- `scripts/train_micro.py`: cap OMP/MKL/OPENBLAS/NUMEXPR/VECLIB threads to 1
+  via env vars set BEFORE `import torch`, and emit a `{"stage":"pre-import"}`
+  heartbeat before the import so future failures can be localised (pre-import
+  vs. during-import vs. post-import).
+- `src/modules/model/trainer.ts`: pass the same thread-cap env vars through
+  `spawn('python3', …)` as belt-and-suspenders. Added `unloadOllamaModels()`
+  helper that lists `/api/ps` and posts `{keep_alive:0}` per loaded model
+  before every training run — best-effort (2s budget, errors swallowed).
+- `docker-compose.yml`: add `mem_reservation: 2g` to `node-1` so the kernel
+  deprioritises killing it under pressure. Removed `node-2` service +
+  `node_2_data` volume — the host can't sustain two parallel torch imports.
+
+## [2026-04-16] Medical prompts — structured discovery emission
+
+New `prompts/medical/` module steers the multi-agent research pipeline
+(researcher → critic → synthesizer) and the legacy ReAct loop toward one
+of the 5 coordinator DiscoveryType schemas (drug_repurposing,
+combination_therapy, biomarker, mechanism_link, procedure_refinement).
+
+Key rules encoded in the prompt:
+- supporting_dois must contain ≥ 2 real DOIs from the abstract, the
+  source paper's DOI, or the related-paper DOIs the coordinator now
+  ships in `workOrder.metadata.relatedDois`. NEVER invent DOIs.
+- The synthesizer emits proposal = prose (≥ 100 chars, ≥ 12 words)
+  followed by a machine-readable `{discoveryType, structuredData}`
+  JSON block — the coordinator's DiscoveryService.extractStructuredPayload
+  regex grabs the first balanced `{…}`, so the plain-English prose
+  around the JSON keeps submission-quality scoring happy.
+- When nothing can be grounded, the prompts fall back to
+  `mechanism_link` (weakest claim) rather than inventing IDs.
+
+Also:
+- SynthesizerNode fallback now locally assembles a structured proposal
+  from the researcher's output when the synthesizer LLM call fails, so
+  the structured discovery survives LLM outages.
+- ResearcherNode + ExecuteResearchNode read `paperDoi` + `relatedDois`
+  from `workOrder.metadata` to build the prompt.
+
 ## [2026-04-16] Container log fixes — Ollama runner crashes, MiniMax parse errors, OOM diagnostic
 
 Four findings from a container-node log review at 22:15–22:24.
