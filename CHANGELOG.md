@@ -1,5 +1,26 @@
 # Changelog — @synapseia/node
 
+## [2026-04-17] Ollama thrash fix — LLM_PROVIDER=cloud + num_ctx 8192 + heartbeat 15s
+
+Three changes that together stop a RAM-starved node from cascading
+failures when a local-and-docker Ollama are contested by two nodes:
+
+- `training-llm.ts`: resolver now honours `LLM_PROVIDER=cloud`. If set
+  AND cloud creds are present, cloud wins the primary slot and Ollama
+  drops to fallback. Fixes the pattern where a host with cloud fully
+  configured still auto-picked a co-resident Ollama qwen2.5:1.5b and
+  OOMed. Applies to both `resolveTrainingLlmModel` and
+  `resolveTrainingChain`.
+- `ollama.ts`: raise `num_ctx` to 8192 on every Ollama `chat()` call.
+  Default was 2048 — research prompts carrying abstracts + related
+  DOIs + ontology context overran, which Ollama's llama.cpp runner
+  surfaced as "unexpected EOF" when the prompt end landed mid-token.
+  8192 fits qwen 0.5b on a 3.8 GiB VM without blowing out RAM.
+- `heartbeat.ts`: bump peer heartbeat axios timeout 5s → 15s. Under
+  heavy local inference the Node event loop was starved briefly and
+  the 5s window expired against a healthy coordinator, producing
+  spurious disconnect warnings.
+
 ## [2026-04-17] Training LLM resolver — honour LLM_MODEL verbatim override
 
 On RAM-constrained hosts (Docker Desktop VM = 3.8 GiB) the auto-pick of

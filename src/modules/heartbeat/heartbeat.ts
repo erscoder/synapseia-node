@@ -156,14 +156,18 @@ export class HeartbeatHelper {
           response = await lastValueFrom(
             this.httpService.post<HeartbeatResponse>('/peer/heartbeat', payload, {
               baseURL: coordinatorUrl,
-              timeout: 5000,
+              // 15s (was 5s). Under heavy local inference the Node event
+              // loop gets starved and the coordinator can block briefly on
+              // embedding/ontology work — 5s was too tight and produced
+              // spurious disconnect warnings on healthy nodes.
+              timeout: 15000,
               headers: { 'Content-Type': 'application/json', ...authHeaders },
             }).pipe(map(res => res.data)),
           );
         } else {
           // Fallback: use raw axios for standalone CLI usage
           const { default: axios } = await import('axios');
-          const client = axios.create({ baseURL: coordinatorUrl, timeout: 5000, headers: { 'Content-Type': 'application/json', ...authHeaders } });
+          const client = axios.create({ baseURL: coordinatorUrl, timeout: 15000, headers: { 'Content-Type': 'application/json', ...authHeaders } });
           const axiosRes = await client.post<HeartbeatResponse>('/peer/heartbeat', payload);
           response = axiosRes.data;
         }

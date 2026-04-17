@@ -125,6 +125,13 @@ export class OllamaHelper {
         // unclosed strings). Still need to validate fields after parsing.
         ...(options?.forceJson && { format: 'json' }),
         options: {
+          // Raise context window above the Ollama default (2048) so research
+          // prompts carrying paper abstracts + related DOIs + ontology
+          // context don't get truncated — truncation was surfacing as
+          // "unexpected EOF" when the prompt end landed mid-token on the
+          // llama runner. Qwen2.5 supports 32k; 8192 is a safe fit for 0.5b
+          // on a 3.8 GiB Docker VM.
+          num_ctx: 8192,
           ...(options?.temperature !== undefined && { temperature: options.temperature }),
           ...(options?.maxTokens !== undefined && { num_predict: options.maxTokens }),
           ...(options?.topP !== undefined && { top_p: options.topP }),
