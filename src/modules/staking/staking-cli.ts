@@ -3,7 +3,14 @@
  * Implements stake, unstake, claimRewards, deposit, and withdraw using raw Solana transactions
  */
 
-import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram, ComputeBudgetProgram } from '@solana/web3.js';
+
+// CU budget + priority fee for user-signed txs. 200k (default) is too low
+// for Anchor stake/unstake/claim ixs that do a CPI SPL transfer. Over-
+// requesting is free — only actually-consumed units are billed. Priority
+// fee gets the tx included faster + keeps wallet simulators happy.
+const DEFAULT_CU_LIMIT = 1_400_000;
+const DEFAULT_CU_PRICE_MICROLAMPORTS = 10_000;
 import logger from '../../utils/logger';
 import { getAssociatedTokenAddress, transfer, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction } from '@solana/spl-token';
 import * as fs from 'fs';
@@ -44,6 +51,83 @@ function getVaultAuthorityPDA(): [PublicKey, number] {
     [Buffer.from('stake_vault_authority')],
     STAKING_PROGRAM_ID
   );
+}
+
+// Derive staking pool PDA — REQUIRED by stake/unstake/claim_rewards in
+// the current syn_staking contract. Missing this account was the root
+// cause of 'account not found' errors from the node CLI.
+function getStakingPoolPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool')],
+    STAKING_PROGRAM_ID
+  );
+}
+
+/**
+ * Returns true when a Solana error indicates the tx already landed on-chain.
+ * Happens when the same signed tx is resubmitted within the ~60s blockhash
+ * validity window (retry, double-enter, cached blockhash). Treated as
+ * success by callers — chain state did accept the first submission.
+ */
+function isAlreadyProcessedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already been processed|already processed/i.test(msg);
+}
+
+/**
+ * Build + send + confirm a transaction with an explicitly-fetched fresh
+ * blockhash. Replaces the old pattern of `connection.sendTransaction(tx,
+ * signers)` without confirm, which:
+ *   - returned before the tx actually landed (races in scripted CLI)
+ *   - reused cached blockhashes on retries, producing byte-identical
+ *     signed txs and the "already been processed" error.
+ *
+ * If the first send comes back with "already processed", that means a
+ * previous attempt DID land on-chain — we return the stale signature
+ * so the CLI prints a useful diagnostic and the caller proceeds.
+ */
+async function sendAndConfirmFresh(
+  connection: Connection,
+  tx: Transaction,
+  signers: Keypair[],
+): Promise<string> {
+  const payer = signers[0];
+  if (!payer) throw new Error('sendAndConfirmFresh: at least one signer required');
+
+  // Prepend ComputeBudget limit + priority fee so wallet simulators and
+  // validators treat the tx as production-ready. Idempotent.
+  const hasCuIx = tx.instructions.some(
+    (ix) => ix.programId.equals(ComputeBudgetProgram.programId),
+  );
+  if (!hasCuIx) {
+    // Price first, then limit.
+    tx.instructions = [
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: DEFAULT_CU_PRICE_MICROLAMPORTS }),
+      ComputeBudgetProgram.setComputeUnitLimit({ units: DEFAULT_CU_LIMIT }),
+      ...tx.instructions,
+    ];
+  }
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = payer.publicKey;
+  tx.sign(...signers);
+  try {
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    return sig;
+  } catch (err) {
+    if (isAlreadyProcessedError(err)) {
+      logger.warn('[staking-cli] tx flagged "already been processed" — first submission already landed, returning existing signature');
+      // Recover the original signature from the signed tx (byte 1-65 of the signatures block).
+      const s = tx.signatures[0]?.signature;
+      return s ? s.toString('base64') : '';
+    }
+    throw err;
+  }
 }
 
 // Get stake vault ATA
@@ -203,23 +287,24 @@ export async function stakeTokens(amount: number): Promise<string> {
     });
 
     const initTx = new Transaction().add(initIx);
-    const initSig = await connection.sendTransaction(initTx, [wallet, stakeAccount], {
-      skipPreflight: false
-    });
-    await connection.confirmTransaction(initSig, 'confirmed');
-
+    const initSig = await sendAndConfirmFresh(connection, initTx, [wallet, stakeAccount]);
     logger.log(`   Stake account created: ${initSig}`);
   } else {
     stakeAccountPubkey = new PublicKey(stakeAccountAddress);
   }
-  
-  // Get token accounts
+
+  // Get token accounts + PDAs
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   const stakeVault = await getStakeVaultATA(connection);
   const [vaultAuthority] = getVaultAuthorityPDA();
-  
+  const [stakingPool] = getStakingPoolPDA();
+
   logger.log(`\n📤 Staking ${amount} SYN tokens...`);
-  
+
+  // StakeAction context needs: stake_account, owner, user_token_account,
+  // stake_vault, syn_mint, vault_authority, token_program, staking_pool.
+  // The staking_pool PDA is REQUIRED (contract reads daily_pool_lamports +
+  // total_staked to accrue rewards). Missing it was the CLI regression.
   const stakeIx = new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
     data: createStakeInstructionData(amount),
@@ -230,18 +315,17 @@ export async function stakeTokens(amount: number): Promise<string> {
       { pubkey: stakeVault, isSigner: false, isWritable: true },
       { pubkey: SYN_MINT, isSigner: false, isWritable: false },
       { pubkey: vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false }
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: stakingPool, isSigner: false, isWritable: true },
     ]
   });
-  
+
   const stakeTx = new Transaction().add(stakeIx);
-  const tx = await connection.sendTransaction(stakeTx, [wallet], {
-    skipPreflight: false
-  });
-  
+  const tx = await sendAndConfirmFresh(connection, stakeTx, [wallet]);
+
   logger.log(`✅ Stake successful!`);
   logger.log(`   Transaction: ${tx}`);
-  
+
   return tx;
 }
 
@@ -262,14 +346,14 @@ export async function unstakeTokens(amount: number): Promise<string> {
   }
   
   const stakeAccount = new PublicKey(stakeAccountAddress);
-  
-  // Get token accounts
+
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   const stakeVault = await getStakeVaultATA(connection);
   const [vaultAuthority] = getVaultAuthorityPDA();
-  
+  const [stakingPool] = getStakingPoolPDA();
+
   logger.log(`\n📥 Unstaking ${amount} SYN tokens...`);
-  
+
   const unstakeIx = new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
     data: createUnstakeInstructionData(amount),
@@ -280,18 +364,17 @@ export async function unstakeTokens(amount: number): Promise<string> {
       { pubkey: stakeVault, isSigner: false, isWritable: true },
       { pubkey: SYN_MINT, isSigner: false, isWritable: false },
       { pubkey: vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false }
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: stakingPool, isSigner: false, isWritable: true },
     ]
   });
-  
+
   const unstakeTx = new Transaction().add(unstakeIx);
-  const tx = await connection.sendTransaction(unstakeTx, [wallet], {
-    skipPreflight: false
-  });
-  
+  const tx = await sendAndConfirmFresh(connection, unstakeTx, [wallet]);
+
   logger.log(`✅ Unstake successful!`);
   logger.log(`   Transaction: ${tx}`);
-  
+
   return tx;
 }
 
@@ -327,11 +410,32 @@ export async function claimStakingRewards(): Promise<string> {
   }
   
   logger.log(`\n💰 Claiming ${rewards} SYN in rewards...`);
-  
+
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   const [treasuryAuthority] = getTreasuryAuthorityPDA();
   const treasuryTokenAccount = await getTreasuryTokenAccount(connection);
-  
+  const [stakingPool] = getStakingPoolPDA();
+
+  // Make sure the treasury ATA exists. If the wallet is the first to claim
+  // rewards in the lifetime of this deploy, the PDA-owned ATA may not be
+  // initialized yet. Prepend the createATA ix in that case.
+  const preIxs: TransactionInstruction[] = [];
+  const treasuryAtaInfo = await connection.getAccountInfo(treasuryTokenAccount);
+  if (!treasuryAtaInfo) {
+    const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+    preIxs.push(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey,
+        treasuryTokenAccount,
+        treasuryAuthority,
+        SYN_MINT,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    );
+    logger.log(`   Treasury ATA missing — will create it in the same tx`);
+  }
+
   const claimIx = new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
     data: createClaimRewardsInstructionData(),
@@ -342,18 +446,17 @@ export async function claimStakingRewards(): Promise<string> {
       { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
       { pubkey: treasuryAuthority, isSigner: false, isWritable: false },
       { pubkey: SYN_MINT, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false }
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: stakingPool, isSigner: false, isWritable: false },
     ]
   });
-  
-  const claimTx = new Transaction().add(claimIx);
-  const tx = await connection.sendTransaction(claimTx, [wallet], {
-    skipPreflight: false
-  });
-  
+
+  const claimTx = new Transaction().add(...preIxs, claimIx);
+  const tx = await sendAndConfirmFresh(connection, claimTx, [wallet]);
+
   logger.log(`✅ Rewards claimed!`);
   logger.log(`   Transaction: ${tx}`);
-  
+
   return tx;
 }
 
@@ -438,14 +541,12 @@ export async function withdrawSol(amount: number, destinationAddress: string): P
       lamports: amountLamports
     })
   );
-  
-  const signature = await connection.sendTransaction(tx, [wallet], {
-    skipPreflight: false
-  });
-  
+
+  const signature = await sendAndConfirmFresh(connection, tx, [wallet]);
+
   logger.log(`✅ Withdraw successful!`);
   logger.log(`   Transaction: ${signature}`);
-  
+
   return signature;
 }
 
@@ -490,14 +591,32 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
     amountLamports
   );
   
-  const tx = new Transaction().add(transferIx);
-  const signature = await connection.sendTransaction(tx, [wallet], {
-    skipPreflight: false
-  });
-  
+  // If the destination SYN ATA doesn't exist we prepend a createATA ix so
+  // the SPL transfer has a target. Without this the tx fails silently and
+  // the user retries → "already processed" confusion.
+  const preIxs: TransactionInstruction[] = [];
+  const destAtaInfo = await connection.getAccountInfo(destTokenAccount);
+  if (!destAtaInfo) {
+    const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+    preIxs.push(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey,
+        destTokenAccount,
+        destination,
+        SYN_MINT,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    );
+    logger.log(`   Destination ATA missing — will create it in the same tx`);
+  }
+
+  const tx = new Transaction().add(...preIxs, transferIx);
+  const signature = await sendAndConfirmFresh(connection, tx, [wallet]);
+
   logger.log(`✅ Withdraw successful!`);
   logger.log(`   Transaction: ${signature}`);
-  
+
   return signature;
 }
 
