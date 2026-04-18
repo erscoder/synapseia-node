@@ -88,36 +88,40 @@ export async function startNode(
   // ── 1. P2P ────────────────────────────────────────────────────────────────
   logger.log(' Starting P2P layer...');
   let p2pNode: P2PNode | null = null;
-  try {
-    const rawHost = config.coordinatorUrl
-      .replace(/^https?:\/\//, '')
-      .replace(/:\d+$/, '');
-    const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
+  let currentCoordPeerId: string | null = null;
+  const rawHost = config.coordinatorUrl
+    .replace(/^https?:\/\//, '')
+    .replace(/:\d+$/, '');
+  const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
+  const hostPrefix = isLocalhost ? '/ip4/127.0.0.1' : `/dns4/${rawHost}`;
 
-    // Fetch the coord's libp2p peerId from HTTP so we can build a FULL
-    // bootstrap multiaddr (`/dns4/host/tcp/9000/p2p/<peerId>`). Without
-    // the `/p2p/<peerId>` suffix, @libp2p/bootstrap can't complete the
-    // noise handshake — it doesn't know which peerId to expect on the
-    // other end — and the coord/node libp2p peers never connect. The
-    // chat auction then publishes into an empty gossip mesh and the
-    // coord returns ALL_BIDS_FAILED with zero bids.
-    let bootstrapAddrs: string[] = [];
+  // Fetch the coord's libp2p peerId from HTTP so we can build a FULL
+  // bootstrap multiaddr (`/dns4/host/tcp/9000/p2p/<peerId>`). Without
+  // the `/p2p/<peerId>` suffix, @libp2p/bootstrap can't complete the
+  // noise handshake — it doesn't know which peerId to expect on the
+  // other end — and the coord/node libp2p peers never connect. The
+  // chat auction then publishes into an empty gossip mesh and the
+  // coord returns ALL_BIDS_FAILED with zero bids.
+  const fetchCoordBootstrap = async (): Promise<string | null> => {
     try {
       const resp = await fetch(`${config.coordinatorUrl}/p2p/bootstrap`);
-      if (resp.ok) {
-        const info = (await resp.json()) as { peerId: string; multiaddrs: string[] };
-        if (info?.peerId) {
-          const hostPrefix = isLocalhost ? '/ip4/127.0.0.1' : `/dns4/${rawHost}`;
-          bootstrapAddrs = [`${hostPrefix}/tcp/9000/p2p/${info.peerId}`];
-          logger.log(`   Coord libp2p peerId=${info.peerId.slice(0, 12)}… bootstrap=${bootstrapAddrs[0]}`);
-        } else {
-          logger.warn(`   ⚠️ /p2p/bootstrap returned no peerId — coord libp2p may not be up yet`);
-        }
-      } else {
-        logger.warn(`   ⚠️ GET /p2p/bootstrap returned ${resp.status} — gossip will not connect until coord is reachable`);
-      }
-    } catch (err) {
-      logger.warn(`   ⚠️ /p2p/bootstrap fetch failed: ${(err as Error).message} — gossip will not connect`);
+      if (!resp.ok) return null;
+      const info = (await resp.json()) as { peerId: string; multiaddrs: string[] };
+      return info?.peerId || null;
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    let bootstrapAddrs: string[] = [];
+    const peerId = await fetchCoordBootstrap();
+    if (peerId) {
+      currentCoordPeerId = peerId;
+      bootstrapAddrs = [`${hostPrefix}/tcp/9000/p2p/${peerId}`];
+      logger.log(`   Coord libp2p peerId=${peerId.slice(0, 12)}… bootstrap=${bootstrapAddrs[0]}`);
+    } else {
+      logger.warn(`   ⚠️ Could not fetch /p2p/bootstrap — gossip will not connect until coord is reachable`);
     }
 
     p2pNode = await services.p2pService.createNode(config.identity, bootstrapAddrs);
@@ -128,6 +132,49 @@ export async function startNode(
     }
   } catch (err) {
     logger.warn(`⚠️P2P init failed — falling back to HTTP only: ${(err as Error).message}`);
+  }
+
+  // ── 1.5 Coord-reconnect watchdog ────────────────────────────────────────
+  // If the coord restarts without a persisted libp2p identity (or the
+  // `/app/data/libp2p-key` volume is wiped), its peerId changes. The old
+  // bootstrap multiaddr in @libp2p/bootstrap is now invalid, the node
+  // silently loses the mesh, heartbeat-over-HTTP keeps working (masking
+  // the break), and every chat auction returns ALL_BIDS_FAILED.
+  //
+  // This watchdog polls /p2p/bootstrap every 30s. If the reported peerId
+  // differs from the one we're actually connected to — or if we're not
+  // connected at all — it redials on the new multiaddr. Cheap HTTP probe,
+  // no-op on the happy path.
+  let coordWatchdogHandle: NodeJS.Timeout | null = null;
+  if (p2pNode) {
+    const WATCHDOG_INTERVAL_MS = 30_000;
+    const tick = async (): Promise<void> => {
+      if (!p2pNode) return;
+      try {
+        const reported = await fetchCoordBootstrap();
+        if (!reported) return; // coord down or unreachable — next tick will retry
+        const connected = p2pNode.getConnectedPeers();
+        const isConnected = connected.includes(reported);
+        const peerChanged = currentCoordPeerId && currentCoordPeerId !== reported;
+        if (!isConnected || peerChanged) {
+          const newAddr = `${hostPrefix}/tcp/9000/p2p/${reported}`;
+          logger.warn(
+            `[CoordWatchdog] reconnecting — was=${currentCoordPeerId?.slice(0, 12) ?? 'none'}… ` +
+              `now=${reported.slice(0, 12)}… connected=${isConnected} → dial ${newAddr}`,
+          );
+          try {
+            await p2pNode.dial(newAddr);
+            currentCoordPeerId = reported;
+          } catch (dialErr) {
+            logger.warn(`[CoordWatchdog] dial failed: ${(dialErr as Error).message} (will retry in ${WATCHDOG_INTERVAL_MS / 1000}s)`);
+          }
+        }
+      } catch (err) {
+        logger.warn(`[CoordWatchdog] tick error: ${(err as Error).message}`);
+      }
+    };
+    coordWatchdogHandle = setInterval(() => { void tick(); }, WATCHDOG_INTERVAL_MS);
+    logger.log(`[CoordWatchdog] polling /p2p/bootstrap every ${WATCHDOG_INTERVAL_MS / 1000}s`);
   }
 
   // ── 2. Heartbeat — send initial one before accepting work orders ─────────
@@ -279,6 +326,7 @@ export async function startNode(
     p2pNode,
     stop: async () => {
       logger.log('🛑 Shutting down node...');
+      if (coordWatchdogHandle) clearInterval(coordWatchdogHandle);
       heartbeatCleanup();
       services.workOrderAgentService.stop();
       if (a2aRunning && services.a2aServer) {
