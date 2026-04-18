@@ -72,15 +72,25 @@ export class BidResponder {
     const signature = await sign(canonical, this.config.identity.privateKey);
 
     try {
+      // libp2pPeerId is the base58 CID-style id every libp2p connection uses
+      // internally (e.g. `12D3Koo…`). The coord dials the winner on this
+      // string via `dialProtocol` — if we only sent `identity.peerId` (the
+      // Synapseia-style hex hash), `getConnections().find(c =>
+      // remotePeer.toString() === peerId)` never matches and /chat/send
+      // throws NODE_FAILED. Shipping both keeps the registry/payment flows
+      // unchanged (they keep using the Synapseia peerId) while fixing the
+      // libp2p dial.
+      const libp2pPeerId = this.p2p.getPeerId();
       await this.p2p.publish(TOPICS.CHAT_BID, {
         version: 1,
         quoteId,
         peerId: this.config.identity.peerId,
+        libp2pPeerId,
         priceUsd,
         publicKey: this.config.identity.publicKey,
         signature,
       });
-      logger.log(`[BidResponder] bid $${priceUsd} for quote ${quoteId.slice(0, 8)}…`);
+      logger.log(`[BidResponder] bid $${priceUsd} for quote ${quoteId.slice(0, 8)}… libp2p=${libp2pPeerId.slice(0, 12)}…`);
     } catch (err) {
       logger.warn(`[BidResponder] publish failed for quote ${quoteId.slice(0, 8)}…: ${(err as Error).message}`);
     }
