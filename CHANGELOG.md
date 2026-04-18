@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] stream-codec — rewrite for libp2p v3 API (mirror of coord)
+
+Mirror of `packages/coordinator/src/infrastructure/p2p/stream-codec.ts`.
+Swaps the `sink/source` pull-stream API (libp2p v1/v2) for the v3
+API (`send` + `drain` + `closeWrite` + `AsyncIterable`). Without
+this, the chat stream died immediately with
+`stream.sink is not a function` the moment the coord dialed in after
+a successful auction.
+
+Frame format unchanged — parity test still matches the coord's hex
+bytes exactly.
+
 ## [2026-04-18] CoordWatchdog — auto-reconnect to coord libp2p on peerId change
 
 Belt + tirantes for the coord-restart failure mode. If the coord
