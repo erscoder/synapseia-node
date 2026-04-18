@@ -9,6 +9,7 @@
 import { Injectable } from '@nestjs/common';
 import * as http from 'http';
 import * as crypto from 'crypto';
+import logger from '../../utils/logger';
 import { priceUsdFromEnv } from './QueryCostCalculator';
 
 export interface InferenceServerConfig {
@@ -303,7 +304,7 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
         handleNotFound(req, res);
       }
     } catch (error) {
-      console.error('Server error:', error);
+      logger.error(`[InferenceServer] request error: ${(error as Error).message}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         error: {
@@ -315,17 +316,17 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
   });
 
   server.listen(port, () => {
-    console.log(`🚀 Inference server listening on port ${port}`);
-    console.log(`   POST /v1/chat/completions - OpenAI-compatible chat`);
-    console.log(`   GET  /api/v1/state - Node state`);
-    console.log(`   GET  /health - Health check`);
+    // Single structured line — the rest (routes) is documented in the
+    // bootstrap banner elsewhere. Keeping the log terse makes it line up
+    // with the other `[...]` tagged lines from the logger utility.
+    logger.log(`[InferenceServer] listening on port ${port} (POST /v1/chat/completions, POST /inference/quote, GET /api/v1/state, GET /health)`);
   });
 
   return {
     server,
     close: () => {
       server.close();
-      console.log('✅ Inference server closed');
+      logger.log('[InferenceServer] closed');
     },
   };
 }

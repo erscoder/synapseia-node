@@ -1,5 +1,14 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] inference-server — replace console.* with logger
+
+`inference-server.ts` was the last file still printing through
+`console.log/error`, leaving untimestamped multi-line banners
+(`🚀 Inference server listening on port 8080\n  POST …\n  GET …`)
+interleaved with the proper `HH:MM:SS.mmm INFO [Tag] …` lines the
+rest of the process emits. Switched to the project logger utility
+and collapsed the startup banner into one structured line.
+
 ## [2026-04-18] Docker — bump node image from 20 to 24 (libp2p needs Promise.withResolvers)
 
 libp2p v3 (through one of its transitive deps) calls
