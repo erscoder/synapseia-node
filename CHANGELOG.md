@@ -1,5 +1,29 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] CoordWatchdog — auto-reconnect to coord libp2p on peerId change
+
+Belt + tirantes for the coord-restart failure mode. If the coord
+regenerates its libp2p identity (e.g. the persistent key volume was
+wiped, or a future deployment swaps the coord container without
+migrating `/app/data/libp2p-key`), the node's bootstrap multiaddr
+becomes stale — the new coord has a different peerId and the noise
+handshake fails. Without this watchdog, the node would sit in a
+never-connected state until manually restarted.
+
+The watchdog polls `${coordinatorUrl}/p2p/bootstrap` every 30s. On
+each tick:
+  - Fetch the coord's current libp2p peerId.
+  - Compare with the connected-peers list + the peerId we last
+    connected to.
+  - If the coord is disconnected OR its peerId changed, redial the
+    new multiaddr via `p2pNode.dial()`.
+
+Cheap HTTP probe, strict no-op on the happy path. Cleaned up in the
+node-runtime `stop()` alongside the other disposables. Added
+`@multiformats/multiaddr` as a direct dep so the new `P2PNode.dial()`
+method can construct multiaddrs under nodenext module resolution.
+934/934 node tests green.
+
 ## [2026-04-18] BidResponder — include libp2pPeerId in bid
 
 /chat/quote now works, but /chat/send was failing with

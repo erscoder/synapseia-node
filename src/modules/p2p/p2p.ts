@@ -174,6 +174,18 @@ export class P2PNode {
   getNode(): any {
     return this.node;
   }
+
+  /**
+   * Dial a full multiaddr (`/dns4/.../tcp/9000/p2p/<peerId>`). Used by the
+   * coord-reconnect watchdog in node-runtime when the coord's libp2p peerId
+   * has changed (coord restart without persisted identity, or the volume
+   * was wiped). Returns silently on failure so the watchdog can retry.
+   */
+  async dial(multiaddr: string): Promise<void> {
+    if (!this.node) throw new Error('P2P node not started');
+    const { multiaddr: ma } = await import('@multiformats/multiaddr');
+    await this.node.dial(ma(multiaddr));
+  }
 }
 
 @Injectable()
