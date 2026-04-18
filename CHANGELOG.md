@@ -1,5 +1,26 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] libp2p bootstrap — fetch coord peerId from /p2p/bootstrap
+
+The actual reason the gossip chat auction found zero bids: the node
+bootstrapped its libp2p layer with `/dns4/coordinator/tcp/9000` —
+**without** the coord's `/p2p/<peerId>` suffix. `@libp2p/bootstrap`
+can't complete a noise handshake without knowing the peerId it's
+expecting, so the dial silently failed, coord and node libp2p never
+meshed, and the coord's `publish(CHAT_AUCTION)` went into the void.
+
+Both sides had "libp2p node started" in their logs. Neither had a
+`Peer connected` line — and that was the signal we'd missed. Heartbeat
+kept working because it rides HTTP, not gossip.
+
+Fix: before creating the libp2p node, fetch `GET /p2p/bootstrap` from
+the coord (already exposed by `P2PController`) and build the full
+multiaddr `/dns4/<host>/tcp/9000/p2p/<coordPeerId>`. If the fetch fails
+we log a WARN and still boot — the node falls back to HTTP-only for
+chat, and retries next startup.
+
+934/934 node tests green.
+
 ## [2026-04-18] Dockerfile — multi-stage build (build INSIDE the image)
 
 The old Dockerfile copied a host-built `dist/` into the image
