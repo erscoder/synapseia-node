@@ -1,5 +1,18 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Docker — bump node image from 20 to 24 (libp2p needs Promise.withResolvers)
+
+libp2p v3 (through one of its transitive deps) calls
+`Promise.withResolvers()`, a method added in Node 22 / ES2024. The
+`node:20-slim` base image doesn't have it, so `createP2PNode()` threw
+`Promise.withResolvers is not a function`, P2P stayed off, and every
+chat auction fell back to ALL_BIDS_FAILED because the BidResponder
+subscribes over gossipsub. Local dev nodes were on Node 24 — no-op
+there — so the bug only surfaced in the container.
+
+`packages/node/Dockerfile` now bases on `node:24-slim`. No other
+changes; image size is comparable.
+
 ## [2026-04-18] Chat PR-2 — GossipSub bids + libp2p chat stream handler
 
 Node side of the PR-2 migration from HTTP fan-out to libp2p:
