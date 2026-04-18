@@ -1,5 +1,25 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] BidResponder — include libp2pPeerId in bid
+
+/chat/quote now works, but /chat/send was failing with
+`NODE_FAILED: no active libp2p connection to peer be06bff4…`. Root
+cause: the bid was published with only `peerId = identity.peerId`
+(Synapseia-style, hex hash of the publicKey — e.g. `be06bff4…`).
+The coord stored that as `winnerPeerId` in the Quote, then
+`ChatStreamClient.sendChat` passed it to `dialProtocol`, which calls
+`getConnections().find(c => c.remotePeer.toString() === peerId)`.
+But `remotePeer.toString()` returns the libp2p peerId (base58,
+`12D3Koo…`) — a completely different string derived from the same
+key. Match impossible → no active libp2p connection → NODE_FAILED.
+
+Fix: BidResponder now publishes both. `peerId` stays as the Synapseia
+peerId (registry, payments, heartbeats all keep using it). A new
+`libp2pPeerId = p2p.getPeerId()` is added to the payload for the
+coord to use when dialing the chat stream. Signature canonical
+unchanged — still `{peerId, priceUsd, quoteId}` — so the sig contract
+is preserved.
+
 ## [2026-04-18] libp2p bootstrap — fetch coord peerId from /p2p/bootstrap
 
 The actual reason the gossip chat auction found zero bids: the node
