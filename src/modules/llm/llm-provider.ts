@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { OllamaHelper, type GenerateOptions } from './ollama';
 import { stripReasoning } from '../../shared/sanitize-llm-output';
+import logger from '../../utils/logger';
 
 export type LLMProvider = 'ollama' | 'cloud';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
@@ -175,8 +176,7 @@ export class LlmProviderHelper {
           throw err;
         }
         const wait = RETRY_SCHEDULE_MS[attempt];
-        // eslint-disable-next-line no-console
-        console.warn(
+        logger.warn(
           `[LLM] transient error on attempt ${attempt + 1}/${RETRY_SCHEDULE_MS.length + 1} ` +
             `(${this.toErrorMessage(err)}) — retrying in ${wait}ms`,
         );

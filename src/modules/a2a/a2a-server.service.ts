@@ -17,6 +17,7 @@ import { AgentCardService } from './agent-card.service';
 import { A2AAuthService } from './auth/a2a-auth.service';
 import { TaskRouter } from './task-router';
 import type { Identity } from '../identity/identity';
+import logger from '../../utils/logger';
 
 @Injectable()
 export class A2AServer implements OnModuleDestroy {
@@ -45,7 +46,7 @@ export class A2AServer implements OnModuleDestroy {
       this.server!.listen(port, () => {
         this.running = true;
         const addr = this.server!.address() as AddressInfo;
-        console.log(`[A2A] Server listening on port ${addr.port}`);
+        logger.log(`[A2A] Server listening on port ${addr.port}`);
         resolve();
       });
     });
@@ -123,7 +124,7 @@ export class A2AServer implements OnModuleDestroy {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not Found', path: url }));
     } catch (err) {
-      console.error('[A2A] Request error:', err);
+      logger.error(`[A2A] Request error: ${(err as Error).message || String(err)}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal Server Error' }));
     }

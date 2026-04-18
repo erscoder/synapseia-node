@@ -7,6 +7,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import logger from '../../../utils/logger';
 
 @Injectable()
 export class DelegateResearchHandler {
@@ -34,10 +35,9 @@ export class DelegateResearchHandler {
       ? (workOrder as Record<string, unknown>)['id'] ?? 'unknown'
       : 'unknown';
 
-    console.log(`[A2A DelegateResearch] Received work order delegation`, {
-      workOrderId,
-      coordinatorUrl,
-    });
+    logger.log(
+      `[A2A DelegateResearch] received work order delegation workOrderId=${String(workOrderId)} coordinator=${coordinatorUrl ?? 'n/a'}`,
+    );
 
     return {
       summary: 'Research delegated successfully (stub)',

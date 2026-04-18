@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import logger from '../../utils/logger';
 
 export interface SolanaWallet {
   publicKey: string;     // Base58 encoded Solana address
@@ -159,13 +160,7 @@ export class WalletHelper {
 
     const { password } = await import('@inquirer/prompts');
 
-    console.log('');
-    console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║   Welcome to Synapseia Network!                          ║');
-    console.log('║                                                          ║');
-    console.log('║   ⚠️  Keep your password safe — it cannot be recovered.   ║');
-    console.log('╚══════════════════════════════════════════════════════════╝');
-    console.log('');
+    logger.log('[Wallet] welcome to Synapseia Network — keep your password safe, it cannot be recovered');
 
     // Retry loop until passwords match
     while (true) {
@@ -185,7 +180,7 @@ export class WalletHelper {
         return pass1;
       }
 
-      console.log('\n❌ Passwords do not match. Please try again.\n');
+      logger.warn('[Wallet] passwords do not match — try again');
     }
   }
 
@@ -325,12 +320,12 @@ export class WalletHelper {
         if (errorMessage.includes('Invalid password')) {
           attempts++;
           if (attempts < MAX_RETRIES) {
-            console.log('\n❌ Invalid password. Please try again.');
+            logger.warn('[Wallet] invalid password — try again');
             password = undefined; // Clear password to prompt again
             continue;
           }
           // Max retries reached
-          console.log('\n❌ Invalid password after 3 attempts.');
+          logger.error('[Wallet] invalid password after 3 attempts');
           throw new Error('Maximum password attempts exceeded. Please check your password and try again.');
         }
 
@@ -375,16 +370,9 @@ export class WalletHelper {
   displayWalletCreationWarning(wallet: SolanaWallet): void {
     if (!wallet.mnemonic) return;
 
-    console.log('\n' + '═'.repeat(70));
-    console.log('  IMPORTANT: SAVE YOUR RECOVERY PHRASE');
-    console.log('═'.repeat(70));
-    console.log('\nYour Solana wallet has been created. Write down these 12 words\nand store them in a secure, offline location:');
-    console.log('\n  ' + wallet.mnemonic);
-    console.log('\nAnyone with access to these words can control your funds.');
-    console.log('Never share your recovery phrase with anyone.');
-    console.log('\nA backup has also been saved to:');
-    console.log(`  ${BACKUP_FILE}`);
-    console.log('═'.repeat(70) + '\n');
+    logger.warn('[Wallet] IMPORTANT — save your recovery phrase offline. Anyone with these 12 words controls your funds:');
+    logger.log(`[Wallet] recovery phrase: ${wallet.mnemonic}`);
+    logger.log(`[Wallet] encrypted backup stored at ${BACKUP_FILE}`);
   }
 
   /**
@@ -409,7 +397,7 @@ export class WalletHelper {
       { mode: 0o600 }
     );
 
-    console.log('Password changed successfully');
+    logger.log('[Wallet] password changed successfully');
   }
 }
 
