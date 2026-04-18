@@ -1,36 +1,54 @@
-# node 24 — required for `Promise.withResolvers` used by libp2p v3 + deps.
-# Anything older fails at p2pService.createNode() with
-# "Promise.withResolvers is not a function", the P2P layer stays off, and
-# every chat auction resolves to ALL_BIDS_FAILED because the BidResponder
-# subscribes through gossipsub. Local dev nodes should also stay on Node 22+.
+# Synapseia Node — multi-stage image.
+#
+# Two stages so nobody can accidentally ship a stale host-built `dist/` again:
+#   1. builder: full deps + tsup build straight from `src/`
+#   2. runtime: slim image with prod deps + the freshly built dist
+#
+# Node 24 is required by libp2p v3 (uses `Promise.withResolvers`).
+# On Node 20 `p2pService.createNode()` throws and the entire gossip stack
+# (heartbeat, chat auction, chat stream) silently stays off.
+
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+FROM node:24-slim AS builder
+WORKDIR /app
+
+# Full deps (dev included — tsup lives there). Keep this layer cacheable by
+# copying only package.json first; src changes don't re-trigger npm install.
+COPY package.json ./
+RUN npm install
+
+# Source + build config → compile with tsup
+COPY src ./src
+COPY scripts ./scripts
+COPY tsconfig.json tsup.config.ts ./
+RUN npm run build
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM node:24-slim
 
-# Install Python3 + pip
+# Python + pip for the PyTorch training path + curl for healthchecks
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip curl\
+    python3 python3-pip curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files and install node deps
+# Prod deps only — keeps the runtime image small.
 COPY package.json ./
-RUN npm install
+RUN npm install --omit=dev
 
-# Copy pre-built dist from host (skips expensive tsup build inside Docker)
-COPY dist ./dist
-
-# Copy remaining source (needed at runtime for dynamic imports in some modules)
+# Freshly built dist from the builder stage + runtime-only source needed by
+# dynamic imports in some modules.
+COPY --from=builder /app/dist ./dist
 COPY src ./src
 COPY scripts ./scripts
 
-# Install PyTorch (matching pre-built version) + numpy (required dependency)
+# PyTorch + numpy for the training worker (must match the pre-built version)
 RUN pip3 install --no-cache-dir --break-system-packages torch numpy
 
-# Create data dir for datasets/brain
 RUN mkdir -p /root/.synapseia
 
 ENV NODE_ENV=production
 
-# Run the Synapseia node CLI
 ENTRYPOINT ["node", "dist/index.js"]
 CMD ["start"]
