@@ -93,9 +93,32 @@ export async function startNode(
       .replace(/^https?:\/\//, '')
       .replace(/:\d+$/, '');
     const isLocalhost = rawHost === 'localhost' || rawHost === '127.0.0.1';
-    const bootstrapAddrs = rawHost
-      ? [isLocalhost ? `/ip4/127.0.0.1/tcp/9000` : `/dns4/${rawHost}/tcp/9000`]
-      : [];
+
+    // Fetch the coord's libp2p peerId from HTTP so we can build a FULL
+    // bootstrap multiaddr (`/dns4/host/tcp/9000/p2p/<peerId>`). Without
+    // the `/p2p/<peerId>` suffix, @libp2p/bootstrap can't complete the
+    // noise handshake — it doesn't know which peerId to expect on the
+    // other end — and the coord/node libp2p peers never connect. The
+    // chat auction then publishes into an empty gossip mesh and the
+    // coord returns ALL_BIDS_FAILED with zero bids.
+    let bootstrapAddrs: string[] = [];
+    try {
+      const resp = await fetch(`${config.coordinatorUrl}/p2p/bootstrap`);
+      if (resp.ok) {
+        const info = (await resp.json()) as { peerId: string; multiaddrs: string[] };
+        if (info?.peerId) {
+          const hostPrefix = isLocalhost ? '/ip4/127.0.0.1' : `/dns4/${rawHost}`;
+          bootstrapAddrs = [`${hostPrefix}/tcp/9000/p2p/${info.peerId}`];
+          logger.log(`   Coord libp2p peerId=${info.peerId.slice(0, 12)}… bootstrap=${bootstrapAddrs[0]}`);
+        } else {
+          logger.warn(`   ⚠️ /p2p/bootstrap returned no peerId — coord libp2p may not be up yet`);
+        }
+      } else {
+        logger.warn(`   ⚠️ GET /p2p/bootstrap returned ${resp.status} — gossip will not connect until coord is reachable`);
+      }
+    } catch (err) {
+      logger.warn(`   ⚠️ /p2p/bootstrap fetch failed: ${(err as Error).message} — gossip will not connect`);
+    }
 
     p2pNode = await services.p2pService.createNode(config.identity, bootstrapAddrs);
     logger.log(`PeerID: ${p2pNode.getPeerId()}`);
