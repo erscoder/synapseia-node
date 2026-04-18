@@ -25,14 +25,19 @@ export class ChatStreamHandler {
   constructor(private readonly p2p: P2PNode) {}
 
   async start(): Promise<void> {
-    await this.p2p.handleProtocol(CHAT_PROTOCOL, (ctx) => {
+    // libp2p v3 calls (stream, connection). Using `(ctx) => ctx.stream`
+    // silently hands an undefined to readJsonFromStream and the peer
+    // times out — do not change this signature without updating the
+    // p2p.ts wrapper.
+    await this.p2p.handleProtocol(CHAT_PROTOCOL, (stream, _connection) => {
       // Run without blocking the libp2p event loop.
-      void this.onStream(ctx.stream);
+      void this.onStream(stream);
     });
     logger.log(`[ChatStreamHandler] listening on ${CHAT_PROTOCOL}`);
   }
 
   private async onStream(stream: any): Promise<void> {
+    logger.log(`[ChatStreamHandler] ⚡ inbound stream opened — reading request…`);
     try {
       const req = await readJsonFromStream<ChatStreamRequest>(stream);
       if (!req?.messages || !Array.isArray(req.messages)) {
@@ -44,11 +49,14 @@ export class ChatStreamHandler {
 
       logger.log(
         `[ChatStreamHandler] ▶ quote ${req.quoteId?.slice(0, 8)}… session ${req.sessionId?.slice(0, 8)}…` +
-          ` (${req.messages.length} messages)`,
+          ` (${req.messages.length} messages) — forwarding to Ollama`,
       );
 
+      const t0 = Date.now();
       const response = await this.forwardToOllama(req.messages);
+      logger.log(`[ChatStreamHandler] ✓ Ollama responded in ${Date.now() - t0}ms — writing response`);
       await sendJsonOverStream(stream, response);
+      logger.log(`[ChatStreamHandler] ✓ response sent for quote ${req.quoteId?.slice(0, 8)}…`);
     } catch (err) {
       logger.warn(`[ChatStreamHandler] stream error: ${(err as Error).message}`);
       try {

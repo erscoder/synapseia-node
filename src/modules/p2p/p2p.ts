@@ -157,14 +157,16 @@ export class P2PNode {
   }
 
   /**
-   * Register an inbound libp2p protocol handler. Used by the chat stream
-   * handler to accept prompts from the coordinator and stream the Ollama
-   * response back. libp2p routes incoming streams with the matching
-   * protocol name to this handler.
+   * Register an inbound libp2p protocol handler. libp2p v3 calls the
+   * handler with TWO POSITIONAL arguments — `(stream, connection)` — not
+   * an object. Passing a `(ctx) => ctx.stream` handler silently yields
+   * `undefined` on every inbound stream (ctx is actually the Stream
+   * itself; no `stream` property exists), so our codec call crashes on
+   * `for await (const chunk of undefined)` and the peer times out.
    */
   async handleProtocol(
     protocol: string,
-    handler: (ctx: { stream: any; connection: any }) => void | Promise<void>,
+    handler: (stream: any, connection: any) => void | Promise<void>,
   ): Promise<void> {
     if (!this.node) throw new Error('P2P node not started');
     await this.node.handle(protocol, handler);
