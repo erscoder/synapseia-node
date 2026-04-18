@@ -1,4 +1,9 @@
-FROM node:20-slim
+# node 24 — required for `Promise.withResolvers` used by libp2p v3 + deps.
+# Anything older fails at p2pService.createNode() with
+# "Promise.withResolvers is not a function", the P2P layer stays off, and
+# every chat auction resolves to ALL_BIDS_FAILED because the BidResponder
+# subscribes through gossipsub. Local dev nodes should also stay on Node 22+.
+FROM node:24-slim
 
 # Install Python3 + pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
