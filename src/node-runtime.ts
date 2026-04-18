@@ -172,6 +172,12 @@ export async function startNode(
   // the user paid) and POST /inference/quote (Vickrey bid). Port defaults
   // to 8080, configurable via INFERENCE_PORT. Skipped if
   // INFERENCE_SERVER_DISABLED=true (for tiny nodes that only train).
+  //
+  // Note: as of PR-2, auction + chat forwarding prefer libp2p (GossipSub
+  // bids + /synapseia/chat/1.0.0 stream). The HTTP server stays alive for
+  // rolling upgrades (coord falls back to HTTP if the libp2p stream dial
+  // fails). Once every node in the network serves the stream protocol the
+  // HTTP server can be retired.
   if (process.env.INFERENCE_SERVER_DISABLED !== 'true') {
     try {
       const { startInferenceServer } = await import('./modules/inference/inference-server');
@@ -195,6 +201,30 @@ export async function startNode(
     } catch (err) {
       logger.warn(`⚠️ Inference server failed to start: ${(err as Error).message}`);
     }
+  }
+
+  // ── 3.6 Chat: GossipSub bid responder + libp2p chat stream handler ──────
+  // Only wire if P2P is running. BidResponder self-filters on inference
+  // capability — train-only nodes just idle. ChatStreamHandler registers a
+  // libp2p protocol handler and scales with the gossip mesh.
+  if (p2pNode) {
+    try {
+      const { BidResponder } = await import('./modules/inference/bid-responder');
+      new BidResponder(p2pNode, {
+        capabilities: config.capabilities,
+        identity: config.identity,
+      }).start();
+    } catch (err) {
+      logger.warn(`⚠️ BidResponder failed to start: ${(err as Error).message}`);
+    }
+    try {
+      const { ChatStreamHandler } = await import('./modules/inference/chat-stream-handler');
+      await new ChatStreamHandler(p2pNode).start();
+    } catch (err) {
+      logger.warn(`⚠️ ChatStreamHandler failed to start: ${(err as Error).message}`);
+    }
+  } else {
+    logger.warn('⚠️ P2P not running — chat auction/stream over libp2p skipped (HTTP fallback only)');
   }
 
   // ── 4. Work Order Agent ───────────────────────────────────────────────────

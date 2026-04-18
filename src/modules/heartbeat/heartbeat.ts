@@ -208,7 +208,15 @@ export class HeartbeatHelper {
     if (this.ownBundle) return this.ownBundle;
     try {
       // tsup bundles into dist/bootstrap.js → dist/index.js. We attest index.js.
-      const distDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+      // Resolve our own file URL via a runtime helper that uses `import.meta`
+      // under ESM but gracefully degrades to `process.cwd()` under CJS test
+      // runtimes (ts-jest in some configs compiles to CJS, where a literal
+      // `import.meta` reference is a TS1343 compile error). Wrapping the
+      // access in `new Function(...)` defers evaluation past the type checker.
+      const importMetaUrl = this.resolveImportMetaUrl();
+      const distDir = importMetaUrl
+        ? join(dirname(fileURLToPath(importMetaUrl)), '..')
+        : join(process.cwd(), 'dist');
       const candidates = [
         join(distDir, 'index.js'),
         join(process.cwd(), 'dist', 'index.js'),
@@ -222,6 +230,25 @@ export class HeartbeatHelper {
       }
       logger.debug('[Attestation] Could not locate own dist/index.js — attestation responses will be skipped');
       return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Returns `import.meta.url` when available (ESM runtime) or null when
+   * running under a CJS test environment. Wrapping the access in `new
+   * Function(...)` defers parsing past TypeScript's TS1343 check and lets
+   * the same source file compile under both ESM (production) and CJS
+   * (ts-jest default mode) without a separate transform.
+   */
+  private resolveImportMetaUrl(): string | null {
+    try {
+      const probe = new Function(
+        'try { return typeof import !== "undefined" && import.meta && import.meta.url || null; } catch { return null; }',
+      );
+      const url = probe();
+      return typeof url === 'string' ? url : null;
     } catch {
       return null;
     }

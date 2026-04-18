@@ -1,9 +1,30 @@
 /**
  * Tests for GenerateEmbeddingTool
  * Sprint C - ReAct Tool Calling
+ *
+ * The tool talks to a local Ollama. In CI and most dev machines Ollama is
+ * either absent or misconfigured, so calling the real HTTP endpoint hangs
+ * on connect and pushes every test over its 15s timeout. The tool already
+ * has a graceful-degradation path that returns `[]` on error — we force
+ * that path by mocking `fetch` to reject synchronously, which keeps these
+ * tests under a few ms and environment-independent.
  */
 
 import { GenerateEmbeddingTool } from '../../tools/generate-embedding.tool';
+
+const originalFetch = globalThis.fetch;
+
+beforeAll(() => {
+  // Mock fetch so the tool's Ollama probe returns an error immediately — the
+  // tool catches and returns []. Works regardless of host Ollama state.
+  globalThis.fetch = jest.fn(async () => {
+    throw new Error('ECONNREFUSED (mocked for unit tests)');
+  }) as unknown as typeof fetch;
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe('GenerateEmbeddingTool', () => {
   let tool: GenerateEmbeddingTool;
