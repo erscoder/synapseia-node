@@ -1,5 +1,33 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] ChatStreamHandler — fix handler signature (libp2p v3 passes positional args)
+
+/chat/send kept timing out with `readResponse timed out after 60000ms`
+on the coord. The node received nothing in the handler (no
+`[ChatStreamHandler] ▶ quote ...` log appeared) even though the
+dial succeeded.
+
+Root cause: libp2p v3's `StreamHandler` signature is
+`(stream, connection) => void | Promise<void>` — two positional args,
+not an object. Our wrapper was registered as `(ctx) => ctx.stream`
+so `ctx` was actually the Stream itself; `ctx.stream` was `undefined`
+and `readJsonFromStream(undefined)` threw `TypeError: for await (const
+chunk of undefined)` inside the try/catch, then the fallback send
+call with the same undefined stream also threw and was swallowed —
+completely silent failure.
+
+Fixes:
+- `P2PNode.handleProtocol`: typed as `(stream, connection) => …`.
+- `ChatStreamHandler.start`: uses the two-arg form now.
+- Added an immediate `[ChatStreamHandler] ⚡ inbound stream opened —
+  reading request…` log on the very first line of `onStream` so the
+  next time something silently dies in this path we can tell.
+- Added Ollama timing + response-sent logs so we can see the actual
+  latency (the user flagged 60s as unacceptable for prod — this lets
+  us measure).
+
+934/934 node tests green.
+
 ## [2026-04-18] stream-codec — rewrite for libp2p v3 API (mirror of coord)
 
 Mirror of `packages/coordinator/src/infrastructure/p2p/stream-codec.ts`.
