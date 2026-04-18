@@ -1,5 +1,33 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Dockerfile — multi-stage build (build INSIDE the image)
+
+The old Dockerfile copied a host-built `dist/` into the image
+(`COPY dist ./dist`) with the comment *"skips expensive tsup build
+inside Docker"*. This was a footgun: if you forgot `npm run build`
+before `docker compose up -d --build`, the container shipped stale
+code and **nothing in the logs said so**. That's exactly what
+happened with PR-2 — the BidResponder wiring was in `src/` but not in
+the `dist/` the container was running, so `/chat/quote` returned
+`ALL_BIDS_FAILED` with zero `[BidResponder]` logs on the node.
+
+Now the Dockerfile is two-stage, matching the coordinator's pattern:
+
+1. **builder** (`node:24-slim`) — installs full deps and runs
+   `npm run build` (tsup) straight from `src/`. Fresh dist, every
+   time, no way to skip.
+2. **runtime** (`node:24-slim`) — installs only prod deps
+   (`npm install --omit=dev`), pulls the built `dist/` from the
+   builder stage, installs PyTorch + numpy, and runs.
+
+`.dockerignore` now **excludes** `dist/` so the host's `dist/` can
+never leak into the build context again.
+
+Cost: rebuilds with source changes take ~25s longer (tsup runs in the
+image instead of using a pre-built artifact). Benefit: impossible to
+ship stale code; one command — `docker compose up -d --build` — is
+always enough.
+
 ## [2026-04-18] wallet / model-catalog / llm-provider / a2a — finish console.* → logger purge
 
 Follow-up to the inference-server cleanup. Converted every remaining

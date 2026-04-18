@@ -5,8 +5,12 @@ node_modules
 npm-debug.log
 yarn-error.log
 
-# Build artifacts
-# dist  # MUST be included — we copy the pre-built dist from host
+# Build artifacts — dist is now built INSIDE the Docker image (multi-stage
+# builder runs `npm run build`), so the host's dist/ must NOT leak into the
+# build context. A stale host-built dist was the root cause of the silent
+# "BidResponder never loaded" bug that left /chat/quote returning
+# ALL_BIDS_FAILED with no log on the node.
+dist
 build
 *.tsbuildinfo
 
