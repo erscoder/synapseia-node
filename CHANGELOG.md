@@ -1,5 +1,36 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] wallet / model-catalog / llm-provider / a2a — finish console.* → logger purge
+
+Follow-up to the inference-server cleanup. Converted every remaining
+`console.log/warn/error` call under `packages/node/src/**` to the
+project `logger`, so the process now has a single, timestamped log
+stream end-to-end:
+
+- `modules/wallet/wallet.ts` — welcome banner collapsed to one
+  structured line; recovery-phrase display routed through
+  `logger.warn` + `logger.log` (still readable, still printed once at
+  wallet creation, but no longer a box-drawing multi-line console
+  block that breaks log tails); invalid-password retries and
+  `changeWalletPassword` success message now go through the logger.
+- `modules/model/model-catalog.ts` — `pullModel` progress line.
+- `modules/llm/llm-provider.ts` — transient-error retry warning.
+- `modules/a2a/a2a-server.service.ts` — startup line + request-error
+  handler.
+- `modules/a2a/handlers/delegate-research.handler.ts` — delegation
+  ingress line collapsed to a single formatted log.
+
+After this commit the only remaining `console.*` references in the
+node source tree are the logger implementation itself (`utils/logger.ts`)
+and a documentation comment in `cli/bootstrap.ts` (where a real
+module-level `console.warn` is still required before the logger
+module is evaluated — per the exception recorded in the feedback
+memory).
+
+Build: `npm run build` passes. Tests: 934 / 934 (62 suites) green,
+including the heartbeat `import.meta` fix and the embedding `await`
+fix landed earlier.
+
 ## [2026-04-18] inference-server — replace console.* with logger
 
 `inference-server.ts` was the last file still printing through

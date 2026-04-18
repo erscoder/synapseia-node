@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { execSync } from 'child_process';
+import logger from '../../utils/logger';
 
 /**
  * Model categories
@@ -294,7 +295,7 @@ export class ModelCatalogHelper {
       throw new Error('Ollama is not running. Start it with: ollama serve');
     }
     try {
-      console.log(`Pulling model ${name}...`);
+      logger.log(`[ModelCatalog] pulling model ${name}...`);
       execSync(`ollama pull ${name}`, { stdio: 'inherit' });
       return true;
     } catch (error) {
