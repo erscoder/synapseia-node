@@ -1,5 +1,32 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] ChatStreamHandler — route through LlmProviderHelper (cloud LLM support)
+
+The chat stream handler was hardcoded to Ollama at localhost:11434,
+ignoring the node's LLM_PROVIDER / LLM_CLOUD_PROVIDER config. On
+qwen2.5:0.5b CPU inference took ~48s per query — right at the 60s
+coord timeout. Nodes configured with cloud providers (MiniMax,
+Moonshot, Anthropic, OpenAI-compat) should get sub-5s answers.
+
+Now the handler uses the same `LlmProviderHelper.generateLLM()` the
+training + research agents use. If the node is cloud-configured the
+chat automatically rides that provider; if it's ollama, it keeps
+going to Ollama but through the helper's retry + sanitize pipeline
+(so transient "runner process no longer running" errors get retried
+instead of bubbling up as NODE_FAILED).
+
+Wiring in node-runtime now passes `config.llmModel` +
+`config.llmConfig` to the handler constructor. Messages are flattened
+into a single prompt with role prefixes (User/Assistant/System) since
+the helper's API is prompt-based; a chat-native path can be added later
+if tool-use is needed.
+
+Startup log now reports which LLM the chat uses, e.g.
+`[ChatStreamHandler] listening on /synapseia/chat/1.0.0
+(llm=minimax/MiniMax-M2.7)` — makes operator misconfig obvious.
+
+934/934 node tests green.
+
 ## [2026-04-18] ChatStreamHandler — fix handler signature (libp2p v3 passes positional args)
 
 /chat/send kept timing out with `readResponse timed out after 60000ms`

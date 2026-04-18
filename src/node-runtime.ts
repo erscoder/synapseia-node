@@ -289,7 +289,15 @@ export async function startNode(
     }
     try {
       const { ChatStreamHandler } = await import('./modules/inference/chat-stream-handler');
-      await new ChatStreamHandler(p2pNode).start();
+      // Pass the node's resolved LLM model + config so the handler reuses
+      // the SAME provider (ollama / minimax / moonshot / anthropic / …)
+      // the training + research agent already uses. Without this the
+      // chat was pinned to Ollama localhost:11434 and took ~48s on
+      // qwen2.5:0.5b — very close to the 60s coord timeout.
+      await new ChatStreamHandler(p2pNode, {
+        llmModel: config.llmModel,
+        llmConfig: config.llmConfig,
+      }).start();
     } catch (err) {
       logger.warn(`⚠️ ChatStreamHandler failed to start: ${(err as Error).message}`);
     }
