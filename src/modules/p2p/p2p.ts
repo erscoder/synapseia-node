@@ -19,7 +19,18 @@ export const TOPICS = {
   SUBMISSION: '/synapseia/submission/1.0.0',
   LEADERBOARD: '/synapseia/leaderboard/1.0.0',
   PULSE: '/synapseia/pulse/1.0.0',
+  /** Auction requests from the coordinator. Nodes with `inference` capability
+   *  listen, compute a local price via QueryCostCalculator, and publish to
+   *  CHAT_BID. */
+  CHAT_AUCTION: '/synapseia/chat-auction/1.0.0',
+  /** Signed bids published by nodes, consumed by the coordinator. */
+  CHAT_BID: '/synapseia/chat-bid/1.0.0',
 } as const;
+
+/** Libp2p protocol the winning node serves to accept the grounded prompt +
+ *  write back the OpenAI-shaped response. Runs over the same libp2p
+ *  connection used for gossip — no extra TCP/TLS. */
+export const CHAT_PROTOCOL = '/synapseia/chat/1.0.0';
 
 export type Topic = (typeof TOPICS)[keyof typeof TOPICS];
 type MsgCb = (data: Record<string, unknown>, from: string) => void;
@@ -143,6 +154,25 @@ export class P2PNode {
 
   async publishSubmission(data: Record<string, unknown>): Promise<void> {
     return this.publish(TOPICS.SUBMISSION, data);
+  }
+
+  /**
+   * Register an inbound libp2p protocol handler. Used by the chat stream
+   * handler to accept prompts from the coordinator and stream the Ollama
+   * response back. libp2p routes incoming streams with the matching
+   * protocol name to this handler.
+   */
+  async handleProtocol(
+    protocol: string,
+    handler: (ctx: { stream: any; connection: any }) => void | Promise<void>,
+  ): Promise<void> {
+    if (!this.node) throw new Error('P2P node not started');
+    await this.node.handle(protocol, handler);
+  }
+
+  /** Access the raw libp2p node — only for helpers that need fine-grained API. */
+  getNode(): any {
+    return this.node;
   }
 }
 

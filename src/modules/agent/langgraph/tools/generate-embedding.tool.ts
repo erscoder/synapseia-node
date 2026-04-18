@@ -21,13 +21,20 @@ export class GenerateEmbeddingTool {
   };
 
   async execute(params: { text: string }): Promise<number[]> {
-    // Use existing EmbeddingHelper or direct Ollama call
-    // If EmbeddingHelper doesn't exist, return stub empty array
+    // Use existing EmbeddingHelper or direct Ollama call. Graceful
+    // degradation: any failure (module missing, Ollama unreachable, model
+    // not pulled) returns an empty array so callers don't have to deal with
+    // exceptions — the ReAct agent interprets [] as "no embedding" and
+    // skips similarity-dependent branches.
+    //
+    // NOTE: the `await` on generateEmbedding() is load-bearing: without it
+    // the promise rejection escapes the try/catch and the "graceful" path
+    // never runs.
     try {
       const { generateEmbedding } = await import('../../../../shared/embedding');
-      return generateEmbedding(params.text);
+      return await generateEmbedding(params.text);
     } catch {
-      return []; // graceful degradation
+      return [];
     }
   }
 }

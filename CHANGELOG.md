@@ -1,5 +1,45 @@
 # Changelog — @synapseia/node
 
+## [2026-04-18] Chat PR-2 — GossipSub bids + libp2p chat stream handler
+
+Node side of the PR-2 migration from HTTP fan-out to libp2p:
+
+- **BidResponder** (`modules/inference/bid-responder.ts`): subscribes
+  to `/synapseia/chat-auction/1.0.0`, self-filters on the `inference`
+  capability, computes a local price via the shared
+  `QueryCostCalculator`, signs `canonical({quoteId, peerId, priceUsd,
+  publicKey})` with Ed25519 and publishes to
+  `/synapseia/chat-bid/1.0.0`.
+- **ChatStreamHandler** (`modules/inference/chat-stream-handler.ts`):
+  registers a libp2p protocol handler for `/synapseia/chat/1.0.0`.
+  Reads the prompt frame with the shared stream-codec, forwards to
+  local Ollama, writes the OpenAI-shaped response back, closes the
+  stream.
+- **P2PNode**: exposes `handleProtocol(protocol, handler)` and
+  `getNode()` for the new stream handler; adds CHAT_AUCTION / CHAT_BID
+  subscriptions.
+- **node-runtime**: wires BidResponder + ChatStreamHandler after the
+  heartbeat pass. Skipped if P2P is not running (HTTP fallback only).
+- **stream-codec.ts** — length-prefixed JSON helpers, byte-for-byte
+  mirror of the coordinator copy. Paired parity-vector test.
+
+Fixes for pre-existing broken tests (same suite, caught by the
+stricter "full suite must be green" rule):
+- `heartbeat.ts`: `import.meta.url` referenced directly blew up under
+  ts-jest's default CJS compile target (TS1343). Replaced with a
+  `new Function()` runtime probe that returns null under CJS and the
+  real URL under ESM — same runtime behaviour, compatible with both
+  transforms.
+- `generate-embedding.tool.ts`: `return generateEmbedding(text)` was
+  missing `await`, so the promise rejection escaped the surrounding
+  try/catch and the "graceful degradation → []" path never ran. Added
+  the missing `await`.
+- `generate-embedding.spec.ts`: mocks `globalThis.fetch` so the tool's
+  Ollama probe fails fast regardless of host state (tests no longer
+  hang or depend on local Ollama).
+
+Node test suite: 934/934 green.
+
 ## [2026-04-18] Chat PR-1 — node declares inferencePort, not a URL
 
 Before: the node had to resolve its own `inferenceUrl` and send it to
