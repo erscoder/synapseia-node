@@ -4,19 +4,33 @@ import { sendJsonOverStream, readJsonFromStream } from '../stream-codec';
  * Mirror of the coordinator's stream-codec.spec.ts. The parity vector at
  * the bottom must match byte-for-byte to guarantee the two copies speak the
  * same wire format.
+ *
+ * Mock simulates the libp2p v3 Stream API (send / closeWrite /
+ * AsyncIterable), not the old sink/source pull-stream shape.
  */
 
-class MockDuplexStream {
+class MockStream {
   public sunk: Uint8Array[] = [];
+  public writeClosed = false;
   constructor(private feed: Uint8Array[] = []) {}
-  async sink(it: AsyncIterable<Uint8Array>) {
-    for await (const chunk of it) this.sunk.push(chunk);
+  send(chunk: Uint8Array): boolean {
+    this.sunk.push(chunk);
+    return true;
   }
-  get source() {
+  async closeWrite(): Promise<void> {
+    this.writeClosed = true;
+  }
+  addEventListener(): void { /* unused */ }
+  removeEventListener(): void { /* unused */ }
+  [Symbol.asyncIterator](): AsyncIterator<Uint8Array> {
     const feed = this.feed;
-    return (async function* () {
-      for (const c of feed) yield c;
-    })();
+    let i = 0;
+    return {
+      next: async (): Promise<IteratorResult<Uint8Array>> => {
+        if (i >= feed.length) return { value: undefined as unknown as Uint8Array, done: true };
+        return { value: feed[i++], done: false };
+      },
+    };
   }
   sunkBytes(): Uint8Array {
     let total = 0;
@@ -42,9 +56,9 @@ function framed(obj: unknown): Uint8Array {
 describe('stream-codec (node)', () => {
   it('send + read round-trip', async () => {
     const obj = { hello: 'world', n: 42 };
-    const s1 = new MockDuplexStream();
+    const s1 = new MockStream();
     await sendJsonOverStream(s1, obj);
-    const s2 = new MockDuplexStream([s1.sunkBytes()]);
+    const s2 = new MockStream([s1.sunkBytes()]);
     expect(await readJsonFromStream(s2)).toEqual(obj);
   });
 
@@ -53,14 +67,14 @@ describe('stream-codec (node)', () => {
     const a = full.subarray(0, 2);
     const b = full.subarray(2, 5);
     const c = full.subarray(5);
-    const stream = new MockDuplexStream([a, b, c]);
+    const stream = new MockStream([a, b, c]);
     expect(await readJsonFromStream(stream)).toEqual({ split: 'three' });
   });
 
   it('read throws on oversized frame', async () => {
     const header = new Uint8Array(4);
     new DataView(header.buffer).setUint32(0, (1 << 20) + 1, true);
-    await expect(readJsonFromStream(new MockDuplexStream([header]))).rejects.toThrow(/frame length/);
+    await expect(readJsonFromStream(new MockStream([header]))).rejects.toThrow(/frame length/);
   });
 });
 
@@ -69,7 +83,7 @@ describe('stream-codec parity vector (coordinator ↔ node)', () => {
     Array.from(buf).map((b) => b.toString(16).padStart(2, '0')).join('');
 
   it('frames {"ping":1} as the canonical byte sequence', async () => {
-    const stream = new MockDuplexStream();
+    const stream = new MockStream();
     await sendJsonOverStream(stream, { ping: 1 });
     expect(hex(stream.sunkBytes())).toBe('0a0000007b2270696e67223a317d');
   });

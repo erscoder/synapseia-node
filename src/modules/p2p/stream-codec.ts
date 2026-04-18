@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Minimal length-prefixed JSON codec over libp2p streams. No deps.
+ * Minimal length-prefixed JSON codec over libp2p v3 streams. No deps.
  *
  * Mirror of `packages/coordinator/src/infrastructure/p2p/stream-codec.ts` —
  * a parity test in each package keeps the wire format byte-for-byte
@@ -8,6 +8,11 @@
  *
  * Frame format: `[uint32 LE length][JSON bytes]`. One JSON object per frame;
  * caller sends request frame, receives response frame, then closes.
+ *
+ * libp2p v3 Stream API — the old sink/source pull-stream pattern is gone.
+ * Use `stream.send(bytes)` / `for await (const chunk of stream)` /
+ * `stream.closeWrite()`. Trying `stream.sink(...)` throws
+ * `stream.sink is not a function` and the chat stream dies.
  */
 
 const MAX_FRAME_BYTES = 1 << 20; // 1 MB
@@ -20,32 +25,43 @@ export async function sendJsonOverStream(
   if (json.byteLength > MAX_FRAME_BYTES) {
     throw new Error(`stream-codec: payload ${json.byteLength} > ${MAX_FRAME_BYTES}`);
   }
-  const header = new Uint8Array(4);
-  const dv = new DataView(header.buffer);
-  dv.setUint32(0, json.byteLength, true);
   const full = new Uint8Array(4 + json.byteLength);
-  full.set(header, 0);
+  new DataView(full.buffer, full.byteOffset, 4).setUint32(0, json.byteLength, true);
   full.set(json, 4);
-  async function* once() {
-    yield full;
+
+  const ok = stream.send(full);
+  if (!ok) {
+    await new Promise<void>((resolve, reject) => {
+      const onDrain = (): void => { cleanup(); resolve(); };
+      const onClose = (): void => { cleanup(); reject(new Error('stream closed before drain')); };
+      const cleanup = (): void => {
+        stream.removeEventListener?.('drain', onDrain);
+        stream.removeEventListener?.('close', onClose);
+        stream.removeEventListener?.('remoteCloseRead', onClose);
+      };
+      stream.addEventListener?.('drain', onDrain, { once: true });
+      stream.addEventListener?.('close', onClose, { once: true });
+      stream.addEventListener?.('remoteCloseRead', onClose, { once: true });
+    });
   }
-  await stream.sink(once());
+
+  // Signal EOF on our writable half so the peer's read loop terminates.
+  try { await stream.closeWrite?.(); } catch { /* ignore */ }
 }
 
 export async function readJsonFromStream<T = unknown>(stream: any): Promise<T> {
-  const source = stream.source as AsyncIterable<Uint8Array | { subarray(): Uint8Array }>;
   const buffers: Uint8Array[] = [];
   let total = 0;
   let expected: number | null = null;
 
-  for await (const chunk of source) {
+  for await (const chunk of stream as AsyncIterable<Uint8Array | { subarray(start?: number, end?: number): Uint8Array }>) {
     const bytes = chunk instanceof Uint8Array ? chunk : (chunk as any).subarray();
     buffers.push(bytes);
     total += bytes.byteLength;
+
     if (expected === null && total >= 4) {
       const head = coalesceFirstN(buffers, 4);
-      const dv = new DataView(head.buffer, head.byteOffset, 4);
-      expected = dv.getUint32(0, true);
+      expected = new DataView(head.buffer, head.byteOffset, 4).getUint32(0, true);
       if (expected > MAX_FRAME_BYTES) {
         throw new Error(`stream-codec: frame length ${expected} > ${MAX_FRAME_BYTES}`);
       }
@@ -59,8 +75,7 @@ export async function readJsonFromStream<T = unknown>(stream: any): Promise<T> {
     throw new Error(`stream-codec: stream ended mid-frame (got ${all.byteLength - 4} of ${expected})`);
   }
   const payload = all.subarray(4, 4 + expected);
-  const text = new TextDecoder().decode(payload);
-  return JSON.parse(text) as T;
+  return JSON.parse(new TextDecoder().decode(payload)) as T;
 }
 
 function coalesce(chunks: Uint8Array[]): Uint8Array {
