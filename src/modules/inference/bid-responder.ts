@@ -17,10 +17,19 @@ import { P2PNode, TOPICS } from '../p2p/p2p';
 import { computeQueryPriceUsd } from './QueryCostCalculator';
 import type { Identity } from '../identity/identity';
 import { sign, canonicalPayload } from '../identity/identity';
+import type { SynapseiaServingClient } from '../llm/synapseia-serving-client';
 
 export interface BidResponderConfig {
   capabilities: string[];
   identity: Identity;
+  /**
+   * F3-C2 — optional Synapseia serving client. When present AND it
+   * reports an active model version, the bid advertises
+   * `modelVersion` so the coord's auction can apply the
+   * `MIN_REQUIRED_MODEL_VERSION` filter. Nodes without the client
+   * stay cloud-only and simply don't advertise a version.
+   */
+  synapseiaClient?: SynapseiaServingClient;
 }
 
 const DEFAULT_MIN = 0.1;
@@ -61,13 +70,19 @@ export class BidResponder {
     const maxPriceUsd = parseFloat(process.env.QUERY_MAX_PRICE ?? String(DEFAULT_MAX));
     const priceUsd = computeQueryPriceUsd(query, { minPriceUsd, maxPriceUsd });
 
-    // Sign the bid with Ed25519 (same pattern as heartbeat). The coord will
-    // eventually verify this against the peer's publicKey to prevent
-    // spoofing — TODO in the coordinator side, see AuctionService.ingestBid.
+    // F3-C2/C6 — advertise the Synapseia model version this node is
+    // currently serving. The value MUST be part of the signed canonical
+    // so a malicious node can't inflate its advertised version after
+    // signing a legitimate price.
+    const modelVersion = this.config.synapseiaClient?.getActiveVersion() ?? undefined;
+
+    // Sign the bid with Ed25519 (same pattern as heartbeat). The coord
+    // verifies this against the peer's publicKey to prevent spoofing.
     const canonical = canonicalPayload({
       quoteId,
       peerId: this.config.identity.peerId,
       priceUsd,
+      modelVersion: modelVersion ?? '',
     });
     const signature = await sign(canonical, this.config.identity.privateKey);
 
@@ -87,10 +102,14 @@ export class BidResponder {
         peerId: this.config.identity.peerId,
         libp2pPeerId,
         priceUsd,
+        modelVersion,
         publicKey: this.config.identity.publicKey,
         signature,
       });
-      logger.log(`[BidResponder] bid $${priceUsd} for quote ${quoteId.slice(0, 8)}… libp2p=${libp2pPeerId.slice(0, 12)}…`);
+      logger.log(
+        `[BidResponder] bid $${priceUsd} for quote ${quoteId.slice(0, 8)}… libp2p=${libp2pPeerId.slice(0, 12)}…` +
+          (modelVersion ? ` mv=${modelVersion}` : ''),
+      );
     } catch (err) {
       logger.warn(`[BidResponder] publish failed for quote ${quoteId.slice(0, 8)}…: ${(err as Error).message}`);
     }

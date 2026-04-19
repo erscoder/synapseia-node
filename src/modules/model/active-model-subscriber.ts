@@ -22,7 +22,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createHash } from 'crypto';
+import { createHash, createPublicKey, verify as cryptoVerify } from 'crypto';
 import logger from '../../utils/logger';
 import { SynapseiaServingClient } from '../llm/synapseia-serving-client';
 
@@ -33,6 +33,13 @@ interface ActiveModelResponse {
   sha256: string;
   bucketUrl: string;
   manifestSignature: string;
+}
+
+interface ManifestBody {
+  modelId?: string;
+  sha256?: string;
+  bucketUrl?: string;
+  [k: string]: unknown;
 }
 
 export type ModelSwapHook = (params: {
@@ -113,19 +120,44 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
       return 'verify-failed';
     }
 
-    if (this.swapHook) {
-      try {
-        await this.swapHook({
-          modelId: active.modelId,
-          adapterPath,
-          sha256: active.sha256,
-        });
-      } catch (err) {
-        logger.error(`[ModelSubscriber] swap hook failed: ${(err as Error).message}`);
-        return 'download-failed';
-      }
+    // F3-C10 — verify the manifest Ed25519 signature against the
+    // coordinator public key. Only runs when
+    // COORDINATOR_PUBLIC_KEY_BASE64 is configured; dev environments
+    // without it fall back to "sha-only" trust (logged loudly). A
+    // mismatch fails closed — we refuse to swap.
+    const manifestOk = await this.verifyManifest(active);
+    if (!manifestOk) {
+      logger.error(
+        `[ModelSubscriber] manifest signature verification FAILED for ${active.modelId} — refusing to swap`,
+      );
+      return 'verify-failed';
     }
 
+    // F3-C8 — do NOT advertise a new version until the swap hook has
+    // actually restarted / reloaded the local runtime. Otherwise the
+    // node tells auction winners it's serving X while still serving Y,
+    // and every bid is a lie.
+    if (!this.swapHook) {
+      logger.warn(
+        `[ModelSubscriber] new active ${active.modelId} downloaded but NO swap hook registered — ` +
+          `leaving local serving on ${this.currentModelId ?? 'cloud-only'}. ` +
+          `Register via subscriber.setSwapHook(...) to activate this version.`,
+      );
+      return 'download-failed';
+    }
+    try {
+      await this.swapHook({
+        modelId: active.modelId,
+        adapterPath,
+        sha256: active.sha256,
+      });
+    } catch (err) {
+      logger.error(`[ModelSubscriber] swap hook failed: ${(err as Error).message} — keeping previous version`);
+      return 'download-failed';
+    }
+
+    // Only after the runtime actually hot-swapped do we flip the
+    // advertised version so the next bid reflects reality.
     this.serving.setActiveVersion(active.modelId);
     this.currentModelId = active.modelId;
     logger.info(`[ModelSubscriber] now serving ${active.modelId}`);
@@ -158,6 +190,84 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
       const sha = createHash('sha256').update(bytes).digest('hex');
       return sha === expectedSha256;
     } catch {
+      return false;
+    }
+  }
+
+  /**
+   * F3-C10 — fetch `<bucketUrl dirname>/manifest.json`, verify the
+   * `manifestSignature` Ed25519 over the canonical bytes with the
+   * coordinator's public key, and sanity-check the inlined `modelId +
+   * sha256 + bucketUrl` match what `/models/active` reported. Returns
+   * false on ANY mismatch / network failure / parse error — fail
+   * closed.
+   *
+   * When `COORDINATOR_PUBLIC_KEY_BASE64` is not configured:
+   *   - `SYNAPSEIA_REQUIRE_SIGNED_MANIFEST=true` ⇒ verification fails
+   *     (operator explicitly asked for strict mode but forgot the key).
+   *   - unset / false ⇒ skip manifest verification with a loud warn.
+   *     Acceptable for devnet but anything facing real traffic should
+   *     set the env var.
+   */
+  private async verifyManifest(active: ActiveModelResponse): Promise<boolean> {
+    const pubKeyB64 = process.env.COORDINATOR_PUBLIC_KEY_BASE64;
+    const strict =
+      (process.env.SYNAPSEIA_REQUIRE_SIGNED_MANIFEST ?? '').toLowerCase() === 'true';
+
+    if (!pubKeyB64) {
+      if (strict) return false;
+      logger.warn(
+        `[ModelSubscriber] COORDINATOR_PUBLIC_KEY_BASE64 not set — manifest signature NOT verified (dev mode). ` +
+          `Set SYNAPSEIA_REQUIRE_SIGNED_MANIFEST=true in production to fail-closed.`,
+      );
+      return true;
+    }
+
+    if (!active.manifestSignature || active.manifestSignature === 'dev-unsigned') {
+      logger.error(
+        `[ModelSubscriber] manifest for ${active.modelId} is dev-unsigned but node is in signed mode — refusing`,
+      );
+      return false;
+    }
+
+    // Manifest URL is `<adapter dir>/manifest.json`.
+    const manifestUrl = active.bucketUrl.replace(/\/adapter\.[^/]+$/, '/manifest.json');
+    let body: Buffer;
+    let parsed: ManifestBody;
+    try {
+      const res = await fetch(manifestUrl, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) {
+        logger.error(`[ModelSubscriber] manifest fetch ${manifestUrl} HTTP ${res.status}`);
+        return false;
+      }
+      body = Buffer.from(await res.arrayBuffer());
+      parsed = JSON.parse(body.toString('utf8')) as ManifestBody;
+    } catch (err) {
+      logger.error(`[ModelSubscriber] manifest fetch failed: ${(err as Error).message}`);
+      return false;
+    }
+
+    if (parsed.modelId !== active.modelId) {
+      logger.error(
+        `[ModelSubscriber] manifest modelId=${parsed.modelId} does not match /models/active modelId=${active.modelId}`,
+      );
+      return false;
+    }
+    if (parsed.sha256 !== active.sha256) {
+      logger.error(
+        `[ModelSubscriber] manifest sha256 does not match /models/active sha256`,
+      );
+      return false;
+    }
+
+    try {
+      const pkcs1Der = Buffer.from(pubKeyB64, 'base64');
+      const pubKey = createPublicKey({ key: pkcs1Der, format: 'der', type: 'spki' });
+      const sig = Buffer.from(active.manifestSignature, 'base64');
+      const ok = cryptoVerify(null, body, pubKey, sig);
+      return ok;
+    } catch (err) {
+      logger.error(`[ModelSubscriber] manifest signature verify error: ${(err as Error).message}`);
       return false;
     }
   }

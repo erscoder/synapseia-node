@@ -3,9 +3,10 @@
  * Unifies Ollama and Cloud APIs under a common interface
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { OllamaHelper, type GenerateOptions } from './ollama';
 import { stripReasoning } from '../../shared/sanitize-llm-output';
+import { SynapseiaServingClient } from './synapseia-serving-client';
 import logger from '../../utils/logger';
 
 export type LLMProvider = 'ollama' | 'cloud' | 'synapseia';
@@ -113,6 +114,11 @@ const RETRY_SCHEDULE_MS = [1_000, 3_000, 8_000]; // total ~12s of backoff across
 export class LlmProviderHelper {
   private readonly ollamaHelper = new OllamaHelper();
 
+  // F3-C7 — optional Synapseia client. When Nest wires it, any model
+  // with `provider: 'synapseia'` is dispatched through it; otherwise we
+  // fall back to cloud/ollama so the node keeps serving even pre-F3.
+  constructor(@Optional() private readonly synapseia?: SynapseiaServingClient) {}
+
   // ── Public methods ────────────────────────────────────────────────────────
 
   toErrorMessage(error: unknown): string {
@@ -152,6 +158,7 @@ export class LlmProviderHelper {
   async checkLLM(model: LLMModel, config?: LLMConfig): Promise<LLMStatus> {
     if (model.provider === 'ollama') return this.checkOllamaLLM(model);
     if (model.provider === 'cloud') return this.checkCloudLLM(model, config);
+    if (model.provider === 'synapseia') return this.checkSynapseiaLLM(model);
     return { available: false, model, estimatedLatencyMs: 0, error: 'Unknown provider' };
   }
 
@@ -173,6 +180,8 @@ export class LlmProviderHelper {
           raw = await this.generateOllamaLLM(model, prompt, hyperparams);
         } else if (model.provider === 'cloud') {
           raw = await this.generateCloudLLM(model, prompt, config, hyperparams);
+        } else if (model.provider === 'synapseia') {
+          raw = await this.generateSynapseiaLLM(model, prompt, hyperparams);
         } else {
           throw new Error('Unknown provider');
         }
@@ -466,5 +475,43 @@ export class LlmProviderHelper {
     if (!response.ok) throw new Error(await this.extractHttpErrorMessage(response));
     const data = await response.json() as any;
     return data.choices[0].message.content;
+  }
+
+  // ── Private: Synapseia (F3-C7) ────────────────────────────────────────────
+
+  private async checkSynapseiaLLM(model: LLMModel): Promise<LLMStatus> {
+    if (!this.synapseia) {
+      return { available: false, model, estimatedLatencyMs: 0, error: 'Synapseia client not wired' };
+    }
+    const ok = await this.synapseia.isAvailable();
+    return {
+      available: ok,
+      model,
+      estimatedLatencyMs: 600,
+      error: ok ? undefined : 'local serving runtime not reachable',
+    };
+  }
+
+  private async generateSynapseiaLLM(
+    model: LLMModel,
+    prompt: string,
+    hyperparams?: GenerateOptions,
+  ): Promise<string> {
+    if (!this.synapseia) {
+      throw new Error('Synapseia client not wired — operator must launch llama.cpp + register swap hook');
+    }
+    const expected = model.synapseiaVersion;
+    const active = this.synapseia.getActiveVersion();
+    if (expected && active && expected !== active) {
+      throw new Error(
+        `Synapseia version mismatch: caller asked ${expected}, node is serving ${active}`,
+      );
+    }
+    const result = await this.synapseia.generate({
+      messages: [{ role: 'user', content: prompt }],
+      temperature: hyperparams?.temperature,
+      maxTokens: hyperparams?.maxTokens,
+    });
+    return result.content;
   }
 }
