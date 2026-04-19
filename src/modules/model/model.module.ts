@@ -3,22 +3,21 @@ import { ModelCatalogHelper } from './model-catalog';
 import { MutationEngineHelper } from './mutation-engine';
 import { TrainerHelper } from './trainer';
 import { ActiveModelSubscriber } from './active-model-subscriber';
-import { SynapseiaServingClient } from '../llm/synapseia-serving-client';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
+  imports: [LlmModule],
   providers: [
     ModelCatalogHelper,
     MutationEngineHelper,
     TrainerHelper,
     ActiveModelSubscriber,
-    SynapseiaServingClient,
   ],
   exports: [
     ModelCatalogHelper,
     MutationEngineHelper,
     TrainerHelper,
     ActiveModelSubscriber,
-    SynapseiaServingClient,
   ],
 })
 export class ModelModule implements OnModuleInit {
