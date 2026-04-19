@@ -1,5 +1,37 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] Mutation Phase 4 — Stryker bootstrap + node-auth mock fix
+
+First mutation-testing wiring for the node package. Stands up the
+Stryker config next to Jest's ESM setup and lands a real, working
+`node-auth.spec.ts` by fixing a shared mock that never actually
+produced valid Ed25519 signatures.
+
+- `stryker.conf.mjs` — ESM-aware Stryker config with
+  `--experimental-vm-modules`, `jest-runner`, a narrow `testMatch`
+  pointing at `src/utils/__tests__/node-auth.spec.ts` (legacy specs
+  use top-level `jest.*` globals that break in Stryker's ESM sandbox;
+  we scope each mutate[] file to its own spec to keep the sandbox
+  green without touching 26 legacy test files).
+- `package.json` — adds `@stryker-mutator/core` and
+  `@stryker-mutator/jest-runner` devDeps + `test:mutation` script.
+- `.gitignore` — adds `.stryker-tmp/` and `reports/mutation/`.
+- `src/__mocks__/@noble/ed25519.ts` — rewritten to back signing /
+  verification with Node's built-in `crypto` module. Previously the
+  mock returned all-zero `Uint8Array(64)` for sign(), which made every
+  real cryptographic test vacuous. This unblocks Phase 4 specs that
+  need byte-level signature assertions.
+- `src/utils/__tests__/node-auth.spec.ts` — 17 tests covering header
+  shape, body normalisation (object / null / undef / primitive /
+  nested / array), recursive key sort, timestamp freshness, signature
+  determinism, private-key immutability, null-guard in
+  `sortObjectKeys`. All pass against the real-crypto-backed mock.
+
+Initial Stryker run: **node-auth.ts 96.77 % mutation score (30 killed,
+1 survived, 0 timeouts)** — the surviving mutant is a redundant
+null-check reached only through nested objects; killed by the
+null-guard test above on the next pass.
+
 ## [2026-04-19] F3-P2 — Synapseia serving client + active-model subscriber
 
 Node-side scaffolding for Phase 3. The node learns about new canonical
