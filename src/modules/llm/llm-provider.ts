@@ -8,13 +8,20 @@ import { OllamaHelper, type GenerateOptions } from './ollama';
 import { stripReasoning } from '../../shared/sanitize-llm-output';
 import logger from '../../utils/logger';
 
-export type LLMProvider = 'ollama' | 'cloud';
+export type LLMProvider = 'ollama' | 'cloud' | 'synapseia';
 export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
 
 export interface LLMModel {
   provider: LLMProvider;
   providerId: CloudProviderId | '';
   modelId: string;
+  /**
+   * F3 — fully-qualified Synapseia model version served by this node.
+   * Populated only when `provider === 'synapseia'`. Format:
+   * `synapseia-agent:gen-<G>:v<N>`. The coord reads this off each
+   * auction bid to filter by `MIN_REQUIRED_MODEL_VERSION`.
+   */
+  synapseiaVersion?: string;
 }
 
 export interface LLMStatus {
