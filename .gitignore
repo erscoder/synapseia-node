@@ -8,6 +8,10 @@ dist/
 coverage/
 coverage-langgraph
 
+# stryker mutation artefacts
+.stryker-tmp/
+reports/mutation/
+
 # environment files — NEVER commit
 .env
 .env.*

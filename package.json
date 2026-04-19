@@ -17,6 +17,7 @@
     "build": "tsup",
     "start": "node dist/bootstrap.js",
     "test": "jest",
+    "test:mutation": "NODE_OPTIONS=--experimental-vm-modules stryker run",
     "lint": "eslint src"
   },
   "dependencies": {
@@ -52,6 +53,8 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/jest-runner": "^9.6.1",
     "@swc/core": "^1.15.18",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.19.37",
