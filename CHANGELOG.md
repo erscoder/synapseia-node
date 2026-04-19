@@ -1,5 +1,34 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] Mutation Phase 4 — +BidResponder spec, node overall 83.33%
+
+Extended node Stryker to cover the auction bid publisher. The
+node-auth null-guard test lands, pushing node-auth.ts from 96.77 % to
+**100 %** mutation score (0 survivors).
+
+- `src/modules/inference/__tests__/bid-responder.spec.ts` — 17 tests
+  covering the capability gate (inference / cpu_inference / gpu_inference),
+  handleAuction validation (missing quoteId / query / expired deadline /
+  zero-deadline pass-through), bid payload shape, env price bounds,
+  modelVersion advertisement, canonical signature with C6 spoof
+  guard (signs modelVersion so spoofed bids fail verification), and
+  publish failure resilience. Uses real Ed25519 via Node crypto (the
+  @noble mock was rewired for this in the previous commit).
+- `stryker.conf.mjs` — `mutate[]` and `testMatch` extended to both
+  node-auth.ts + bid-responder.ts. Each mutate target is paired with
+  its own spec file because the rest of the suite relies on top-level
+  `jest.*` globals that break in Stryker's ESM sandbox.
+
+**Mutation scores after this pass:**
+  - node-auth.ts     : 100 %  (31 killed / 0 survived / 0 timeouts)
+  - bid-responder.ts :  74.58 % (44 killed / 15 survived)
+  - **Overall node  :  83.33 %** across 90 mutants.
+
+Bid-responder survivors are almost entirely log-message StringLiterals
+and `quoteId.slice(0, 8)` truncations used only for logging — noise
+allowed per the plan. Behavioral regressions (guards, signature,
+payload assembly) are all killed.
+
 ## [2026-04-20] Mutation Phase 4 — Stryker bootstrap + node-auth mock fix
 
 First mutation-testing wiring for the node package. Stands up the
