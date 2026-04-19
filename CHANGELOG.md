@@ -1,5 +1,31 @@
 # Changelog — @synapseia/node
 
+## [2026-04-19] F3-P2 — Synapseia serving client + active-model subscriber
+
+Node-side scaffolding for Phase 3. The node learns about new canonical
+Synapseia model versions, downloads + SHA-verifies them, and serves
+chat through whatever local inference runtime (llama.cpp server /
+vLLM) the operator wired up.
+
+- `modules/llm/synapseia-serving-client.ts` — OpenAI-compatible HTTP
+  client for the local runtime. `isAvailable()` health-checks
+  `/v1/models`; `generate()` posts to `/v1/chat/completions`.
+  Tracks `activeVersion` so auction bids can advertise it.
+- `modules/model/active-model-subscriber.ts` — polls the coord's
+  `GET /models/active` every `MODEL_POLL_INTERVAL_MS` (default 60s).
+  When the active `modelId` changes, downloads the adapter to
+  `$HOME/.synapseia/adapters/`, verifies against `manifest.sha256`
+  and calls a caller-supplied `swapHook` to restart the local
+  runtime. Operators register the hook from their boot script.
+- `modules/llm/llm-provider.ts` — `LLMProvider` union adds
+  `'synapseia'`; `LLMModel.synapseiaVersion` is the
+  `synapseia-agent:gen-<G>:v<N>` tag advertised on auction bids.
+- `ModelModule` wires both services and starts the subscriber loop
+  at boot. Loop is a no-op until the coord publishes a canary.
+
+Tests: new `src/__tests__/synapseia-serving.test.ts`. 939 / 981 green
+(pre-existing skips unchanged).
+
 ## [2026-04-18] ChatStreamHandler — route through LlmProviderHelper (cloud LLM support)
 
 The chat stream handler was hardcoded to Ollama at localhost:11434,
