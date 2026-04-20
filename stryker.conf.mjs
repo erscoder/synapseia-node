@@ -28,12 +28,16 @@ const config = {
       testMatch: [
         '<rootDir>/src/utils/__tests__/node-auth.spec.ts',
         '<rootDir>/src/modules/inference/__tests__/bid-responder.spec.ts',
+        '<rootDir>/src/modules/inference/__tests__/inference-server.spec.ts',
+        '<rootDir>/src/modules/model/__tests__/active-model-subscriber.spec.ts',
       ],
     },
   },
   mutate: [
     'src/utils/node-auth.ts',
     'src/modules/inference/bid-responder.ts',
+    'src/modules/inference/inference-server.ts',
+    'src/modules/model/active-model-subscriber.ts',
   ],
   reporters: ['clear-text', 'html', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
