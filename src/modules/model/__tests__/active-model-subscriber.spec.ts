@@ -372,3 +372,132 @@ describe('ActiveModelSubscriber — start / destroy lifecycle', () => {
     jest.useRealTimers();
   });
 });
+
+// ── Hardening — kill remaining behavioural mutants ────────────────────────
+describe('ActiveModelSubscriber — hardening', () => {
+  it('start() falls back to DEFAULT_INTERVAL_MS when env var is NaN ("||" branch)', () => {
+    jest.useFakeTimers();
+    process.env.MODEL_POLL_INTERVAL_MS = 'not-a-number';
+    (global.fetch as any).mockResolvedValue(failResp(500));
+    const sub = new ActiveModelSubscriber(makeServing());
+    sub.start();
+    // Trigger the interval once to ensure the callback is live (not a no-op
+    // mutation of the setInterval body).
+    (global.fetch as any).mockClear();
+    jest.advanceTimersByTime(60_000);
+    expect((global.fetch as any).mock.calls.length).toBeGreaterThanOrEqual(1);
+    sub.onModuleDestroy();
+    jest.useRealTimers();
+  });
+
+  it('tick() callback inside setInterval actually runs (kills empty-body mutant)', () => {
+    jest.useFakeTimers();
+    process.env.MODEL_POLL_INTERVAL_MS = '100';
+    (global.fetch as any).mockResolvedValue(failResp(500));
+    const sub = new ActiveModelSubscriber(makeServing());
+    const tickSpy = jest.spyOn(sub, 'tick');
+    sub.start();
+    tickSpy.mockClear();
+    jest.advanceTimersByTime(300); // 3 interval ticks
+    expect(tickSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    sub.onModuleDestroy();
+    jest.useRealTimers();
+  });
+
+  it('onModuleDestroy() is safe when timer was never started', () => {
+    const sub = new ActiveModelSubscriber(makeServing());
+    expect((sub as any).timer).toBeNull();
+    // The `if (this.timer)` guard must protect against a stray
+    // clearInterval(null). Asserts the method doesn't throw.
+    expect(() => sub.onModuleDestroy()).not.toThrow();
+    expect((sub as any).timer).toBeNull();
+  });
+
+  it('tick() respects COORDINATOR_URL env override — fetch uses that host, not default', async () => {
+    process.env.COORDINATOR_URL = 'http://override.internal:4444';
+    (global.fetch as any).mockResolvedValueOnce(failResp(500));
+    await new ActiveModelSubscriber(makeServing()).tick();
+    const called = (global.fetch as any).mock.calls[0][0];
+    expect(String(called)).toBe('http://override.internal:4444/models/active');
+  });
+
+  it('tick() uses default host http://localhost:3701 when env is unset', async () => {
+    delete process.env.COORDINATOR_URL;
+    (global.fetch as any).mockResolvedValueOnce(failResp(500));
+    await new ActiveModelSubscriber(makeServing()).tick();
+    const called = (global.fetch as any).mock.calls[0][0];
+    expect(String(called)).toBe('http://localhost:3701/models/active');
+  });
+
+  it('tick() sends an AbortSignal to fetch (kills the "drop options" object mutant)', async () => {
+    (global.fetch as any).mockResolvedValueOnce(failResp(500));
+    await new ActiveModelSubscriber(makeServing()).tick();
+    const opts = (global.fetch as any).mock.calls[0][1];
+    expect(opts).toBeDefined();
+    expect(opts.signal).toBeDefined();
+    expect(typeof opts.signal.aborted).toBe('boolean');
+  });
+
+  it('tick() ignores a body with modelId when response.ok=false (guards against mutant dropping the ok check)', async () => {
+    // Mutant `if (res.ok)` → `if (true)` would still parse the error body.
+    // We return a failing response with a bogus active modelId — current
+    // code must NOT consume it and must NOT advance to the download step.
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false, status: 500,
+      json: async () => ({
+        modelId: 'ATTACKER-ID', version: 99, generation: 9,
+        sha256: 'deadbeef', bucketUrl: 'http://attacker/adapter.safetensors',
+        manifestSignature: 'evil',
+      }),
+    });
+    const serving = makeServing();
+    const sub = new ActiveModelSubscriber(serving);
+    const hook = jest.fn(async () => undefined);
+    sub.setSwapHook(hook as any);
+    const r = await sub.tick();
+    expect(r).toBe('no-active');
+    expect(hook).not.toHaveBeenCalled();
+    expect(serving.setActiveVersion).not.toHaveBeenCalled();
+  });
+
+  it('tick() returns "unchanged" for the exact current modelId (kills !== mutant)', async () => {
+    // Mutant: active.modelId !== this.currentModelId would trigger the
+    // download path even for unchanged ids. We assert the opposite: no
+    // second fetch happens when ids match.
+    const sub = new ActiveModelSubscriber(makeServing());
+    (sub as any).currentModelId = 'stable';
+    (global.fetch as any).mockResolvedValueOnce(okResp({
+      modelId: 'stable', version: 1, generation: 0,
+      sha256: 'x', bucketUrl: 'http://b', manifestSignature: 'sig',
+    }));
+    expect(await sub.tick()).toBe('unchanged');
+    // Only the /models/active fetch was made — no adapter download.
+    expect((global.fetch as any).mock.calls.length).toBe(1);
+  });
+
+  it('first downloadAdapter run writes to cache when file does not exist', async () => {
+    // Kills mutants around `fs.existsSync(target) && verifyAdapter(...)`.
+    const bytes = Buffer.from('fresh-bytes');
+    (global.fetch as any)
+      .mockResolvedValueOnce(okResp({
+        modelId: 'm-fresh', version: 1, generation: 0,
+        sha256: sha256(bytes), bucketUrl: 'http://h/adapter.safetensors',
+        manifestSignature: 'sig',
+      }))
+      .mockResolvedValueOnce(okResp(bytes, 'buffer'));
+    const sub = new ActiveModelSubscriber(makeServing());
+    sub.setSwapHook(async () => undefined);
+    // Dev mode: no pubkey, no strict flag → manifest verification skipped.
+    await sub.tick();
+    // Cache file should now exist on disk.
+    const files = fs.readdirSync(scratch);
+    expect(files.length).toBeGreaterThanOrEqual(1);
+    const cached = fs.readFileSync(path.join(scratch, files[0]!));
+    expect(cached.equals(bytes)).toBe(true);
+  });
+
+  it('verifyAdapter rejects when file does not exist (no throw)', () => {
+    const sub: any = new ActiveModelSubscriber(makeServing());
+    expect(sub.verifyAdapter('/nonexistent/path', 'abc')).toBe(false);
+  });
+});
