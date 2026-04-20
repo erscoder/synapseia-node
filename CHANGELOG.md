@@ -1,5 +1,38 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] Mutation Phase 4 — +LlmProviderHelper spec (71 tests, TIER-A complete)
+
+Fifth and final Phase 4 milestone — all 5 TIER-A files from the baseline
+plan now have dedicated specs + Stryker wiring.
+
+- `src/modules/llm/__tests__/llm-provider.spec.ts` — 71 tests.
+  * `isTransientLlmError` — 19-row table for every keyword branch
+    (2064 / high load / overloaded / 429 / 5xx / ECONNx / runner
+    process / %!w(<nil>) / EOF / try again) plus non-transient control
+    cases and null/undefined handling.
+  * `toErrorMessage` — message present / null / undefined / getter-throws.
+  * `getOptionalString` — null/undefined obj, non-string value, happy.
+  * `parseModel` — every SUPPORTED_MODELS key, each prefix fallback
+    (openai-compat/, minimax/, kimi/, moonshot/), empty-id-after-slash,
+    unknown prefix.
+  * `buildOpenAICompatUrl` — default, root host, already-complete,
+    trailing-slash normalisation.
+  * `extractHttpErrorMessage` — JSON.error.message, JSON.message
+    fallback, HTML body, empty body, long-body truncation.
+  * `checkLLM` — Ollama (down / model-missing / check-throw / happy),
+    Cloud (no-key / anthropic happy / unknown providerId), Synapseia
+    (not-wired / wired-available / wired-unreachable), unknown
+    top-level provider.
+  * `generateLLM` — happy path, non-transient immediate throw,
+    transient retry then succeed, max-4-attempts then rethrow, reasoning
+    scrub, cloud dispatch, cloud unknown providerId, Synapseia version
+    mismatch, Synapseia happy path passing temperature + maxTokens.
+  * Ollama passthrough (`checkOllama`, `generateOllama`).
+- `stryker.conf.mjs` — `mutate[]` and `testMatch` now include the
+  5th file. Next Stryker run will produce the full node baseline.
+
+71 new tests, 0 failures. Node test suite still green (997 tests).
+
 ## [2026-04-20] Mutation Phase 4 — +InferenceServer +ActiveModelSubscriber, overall 78.54 %
 
 Third Phase 4 milestone. Node Stryker now covers 4 of the 5 TIER-A
