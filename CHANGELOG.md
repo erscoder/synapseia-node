@@ -1,5 +1,42 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] Mutation Phase 4 — +InferenceServer +ActiveModelSubscriber, overall 78.54 %
+
+Third Phase 4 milestone. Node Stryker now covers 4 of the 5 TIER-A
+files from the baseline plan (missing only `llm-provider.ts`, 516 L,
+deferred as a follow-up).
+
+- `src/modules/inference/__tests__/inference-server.spec.ts` — 26
+  tests. parseBody happy/empty/malformed/stream-error, forwardToOllama
+  (temperature + num_predict matrix, error surfacing), transformToOpenAI
+  (shape, chatcmpl-<uuid> prefix, created=now), handleChatCompletions
+  validation (400s for missing model / non-array messages / empty
+  messages) and happy path + coord notify side-effect, handleState +
+  handleHealth shape, startInferenceServer routing with real sockets
+  (/health / /api/v1/state / /inference/quote / 404 / OPTIONS preflight).
+- `src/modules/model/__tests__/active-model-subscriber.spec.ts` — 21
+  tests. Every tick() return state (`no-active`, `unchanged`,
+  `swapped`, `download-failed`, `verify-failed`), manifest signature
+  verified against a real Ed25519 keypair (tampered body & tampered
+  sig both fail closed), strict / dev env toggle
+  (`SYNAPSEIA_REQUIRE_SIGNED_MANIFEST`), swap-hook missing / swap-hook
+  throws / swap-hook success paths, download cache skip when SHA
+  matches, start/stop lifecycle + `MODEL_SUBSCRIBER_DISABLED`.
+- `stryker.conf.mjs` — `mutate[]` now covers 4 files; paired
+  `testMatch` keeps the ESM sandbox narrow.
+
+**Mutation scores (466 mutants):**
+  - node-auth.ts                : 100.00 % (31 / 0 / 0)
+  - inference-server.ts         :  91.87 % (188 killed / 17 survived / 4 timeouts)
+  - bid-responder.ts            :  74.58 % (44 killed / 15 survived)
+  - active-model-subscriber.ts  :  59.28 % (99 killed / 68 survived)
+  - **Overall node              :  78.54 %**
+
+`active-model-subscriber.ts` at 59.28 % has the most room: survivors
+cluster around the `verifyManifest` branch strings and the tick-log
+format. A hardening pass (noise-allowed StringLiterals excluded) can
+push it ≥70 % in ~15 extra tests — tracked for Phase 5.
+
 ## [2026-04-20] Mutation Phase 4 — +BidResponder spec, node overall 83.33%
 
 Extended node Stryker to cover the auction bid publisher. The
