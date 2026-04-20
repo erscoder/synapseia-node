@@ -54,6 +54,14 @@ export class ReviewAgentHelper implements OnModuleInit {
 
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  /**
+   * Guard for overlapping poll cycles. The setInterval fires every 2 min but
+   * a cycle can take longer when the LLM is slow, so without this lock the
+   * initial `void` invocation in startReviewLoop + a late interval tick can
+   * both see the same PENDING assignment in the list, both POST it, and the
+   * second hits 400 "already completed" on the coordinator.
+   */
+  private cycleInFlight = false;
   private _keypair?: Uint8Array;
   private _publicKey?: Uint8Array;
   private _peerId?: string;
@@ -238,33 +246,53 @@ Respond ONLY with valid JSON (no markdown):
     peerId: string,
     llmConfig: LLMReviewConfig,
   ): Promise<number> {
-    logger.log('[ReviewAgent] Running review poll cycle...');
-    const assignments = await this.fetchEvaluationAssignments(coordinatorUrl, peerId);
-    const pending = assignments.filter(a => a.status === 'pending');
-
-    if (pending.length === 0) {
-      logger.log('[ReviewAgent] No pending assignments');
+    if (this.cycleInFlight) {
+      logger.log('[ReviewAgent] Skipping tick — previous cycle still in progress');
       return 0;
     }
+    this.cycleInFlight = true;
+    try {
+      logger.log('[ReviewAgent] Running review poll cycle...');
+      const assignments = await this.fetchEvaluationAssignments(coordinatorUrl, peerId);
+      const pending = assignments.filter(a => a.status === 'pending');
 
-    logger.log(`[ReviewAgent] Found ${pending.length} pending assignment(s)`);
-    let processed = 0;
-
-    for (const assignment of pending) {
-      const submissions = await this.fetchSubmissionsForRound(coordinatorUrl, assignment.roundId);
-      const submission = submissions.find(s => s.id === assignment.submissionId) ?? submissions[0];
-      if (!submission) {
-        logger.warn(`[ReviewAgent] Submission ${assignment.submissionId} not found in round ${assignment.roundId}`);
-        continue;
+      if (pending.length === 0) {
+        logger.log('[ReviewAgent] No pending assignments');
+        return 0;
       }
-      const scores = await this.scoreSubmission(submission, llmConfig);
-      if (!scores) continue;
-      const posted = await this.postEvaluation(coordinatorUrl, peerId, assignment, scores);
-      if (posted) processed++;
-    }
 
-    logger.log(`[ReviewAgent] Processed ${processed}/${pending.length} assignments`);
-    return processed;
+      // Dedupe by submissionId: defensive against stale PENDING twin rows
+      // that may still exist in the coord DB from before the idempotent-
+      // assignment fix. Multiple pending rows for the same submission mean
+      // only one real evaluation to run.
+      const seen = new Set<string>();
+      const uniquePending = pending.filter(a => {
+        if (seen.has(a.submissionId)) return false;
+        seen.add(a.submissionId);
+        return true;
+      });
+
+      logger.log(`[ReviewAgent] Found ${uniquePending.length} pending assignment(s)`);
+      let processed = 0;
+
+      for (const assignment of uniquePending) {
+        const submissions = await this.fetchSubmissionsForRound(coordinatorUrl, assignment.roundId);
+        const submission = submissions.find(s => s.id === assignment.submissionId) ?? submissions[0];
+        if (!submission) {
+          logger.warn(`[ReviewAgent] Submission ${assignment.submissionId} not found in round ${assignment.roundId}`);
+          continue;
+        }
+        const scores = await this.scoreSubmission(submission, llmConfig);
+        if (!scores) continue;
+        const posted = await this.postEvaluation(coordinatorUrl, peerId, assignment, scores);
+        if (posted) processed++;
+      }
+
+      logger.log(`[ReviewAgent] Processed ${processed}/${uniquePending.length} assignments`);
+      return processed;
+    } finally {
+      this.cycleInFlight = false;
+    }
   }
 
   startReviewLoop(coordinatorUrl: string, peerId: string, llmConfig: LLMReviewConfig): void {
