@@ -1,5 +1,23 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] ReviewAgent: in-flight cycle lock + submissionId dedupe
+
+Defense-in-depth for the duplicate-evaluation path fixed coord-side.
+The node's `runReviewPollCycle` had no re-entrancy guard, so the
+initial `void` invocation plus a late `setInterval` tick could run
+concurrently when the LLM was slow. Both cycles saw the same PENDING
+assignment and both POSTed — the coord's new idempotent path now
+handles the second gracefully, but this also closes the source.
+
+- `ReviewAgentHelper.cycleInFlight` — private flag, set on entry
+  and cleared in `finally`. Overlapping ticks log `Skipping tick —
+  previous cycle still in progress` and return 0.
+- `runReviewPollCycle` — dedupes `pending` by `submissionId` before
+  iterating, so stale twin PENDING rows (if any survived the coord
+  migration) don't cause two POSTs within a single cycle either.
+
+All 12 `review-agent.spec.ts` tests + full node suite (1101) pass.
+
 ## [2026-04-20] Phase 5 Stryker complete — node overall 62.74 %
 
 Full Stryker pass on node with all 5 TIER-A files in `mutate[]` and
