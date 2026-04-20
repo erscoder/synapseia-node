@@ -361,10 +361,20 @@ export class HeartbeatHelper {
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
           const capabilities = await this.determineCapabilitiesAsync(hardware);
+          // Do NOT include `publicKey` in the payload we pass in —
+          // `p2pNode.publishHeartbeat` canonicalises + signs the
+          // payload THEN tacks `publicKey` on post-signing. If we
+          // pre-included publicKey the node canonical would sign
+          // over it, but the coord's P2PHeartbeatBridge canonical
+          // strips BOTH `signature` and `publicKey` before verify
+          // → byte mismatch → every heartbeat logs
+          //   `[P2P] Invalid signature for heartbeat from <peerId>`
+          // even though the key pair is valid. Leaving publicKey out
+          // of the signed payload keeps the two canonicals aligned
+          // with the same rule already used for bid signatures.
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
             name: identity.name,
-            publicKey: identity.publicKey,
             walletAddress: walletAddress ?? null,
             tier: hardware.tier,
             capabilities,
