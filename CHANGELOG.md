@@ -1,5 +1,26 @@
 # Changelog — @synapseia/node
 
+## [2026-04-20] Phase 5 Stryker complete — node overall 62.74 %
+
+Full Stryker pass on node with all 5 TIER-A files in `mutate[]` and
+the Phase 5 active-model-subscriber hardening landed.
+
+**Per-file (1056 mutants, 1 h 28 m):**
+  - node-auth.ts                : **100.00 %**  (31 / 0 / 0)
+  - inference-server.ts         :  91.87 %  (188 / 17 / 4)
+  - bid-responder.ts            :  74.58 %  (44 / 15 / 0)
+  - active-model-subscriber.ts  :  **66.47 %**  (was 59.28 → +7.19 pp
+                                                from hardening commit 90babb32)
+  - llm-provider.ts             :  48.12 %  (280 / 304 / 2)
+
+**Overall node: 62.74 %** — down from the 4-file 78.54 % because
+llm-provider.ts (516 L, 3 cloud providers × 2 methods) pulls the
+weighted average. The 304 survivors cluster on provider-specific
+URL / header / JSON-shape StringLiterals; the 71-test Phase 4 spec
+exercises dispatch + retry but doesn't pin every outgoing fetch body.
+llm-provider hardening is next in queue — ~25-30 focused tests should
+push it to ~60-65 %.
+
 ## [2026-04-20] Mutation Phase 4 — +LlmProviderHelper spec (71 tests, TIER-A complete)
 
 Fifth and final Phase 4 milestone — all 5 TIER-A files from the baseline
