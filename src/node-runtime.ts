@@ -179,6 +179,9 @@ export async function startNode(
 
   // ── 2. Heartbeat — send initial one before accepting work orders ─────────
   const heartbeatHelper = new HeartbeatHelper(new IpifyService());
+  if (p2pNode) {
+    heartbeatHelper.setP2PNode(p2pNode);
+  }
   const hardware = { cpuCores: 0, ramGb: 0, gpuVramGb: 0, tier: config.tier, hasOllama: config.capabilities.includes('ollama'), hasCloudLlm: !!config.llmConfig?.baseUrl };
 
   logger.log('💓 Sending initial heartbeat (validating with coordinator)...');

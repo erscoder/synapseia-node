@@ -56,9 +56,11 @@ export class HeartbeatHelper {
   private pendingChallenge: AttestationChallenge | null = null;
   /** Own bundle content — loaded lazily on first attestation challenge. */
   private ownBundle: Buffer | null = null;
-  /** Latest p2pNode reference — set by startPeriodicHeartbeat so
+  /** Latest p2pNode reference — set before the initial heartbeat so
    *  _sendHeartbeat can call p2pNode.getPeerId() for the p2pPeerId field. */
-  private p2pNode: P2PNode | undefined;
+  setP2PNode(p2pNode: P2PNode): void {
+    this.p2pNode = p2pNode;
+  }
 
   constructor(
     private readonly ipifyService: IpifyService,
@@ -382,6 +384,7 @@ export class HeartbeatHelper {
           // with the same rule already used for bid signatures.
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
+            p2pPeerId: identity.peerId,  // Ed25519 peerId — stored as nodes.peerId
             name: identity.name,
             walletAddress: walletAddress ?? null,
             tier: hardware.tier,
