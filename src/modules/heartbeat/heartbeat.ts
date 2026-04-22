@@ -56,6 +56,9 @@ export class HeartbeatHelper {
   private pendingChallenge: AttestationChallenge | null = null;
   /** Own bundle content — loaded lazily on first attestation challenge. */
   private ownBundle: Buffer | null = null;
+  /** Latest p2pNode reference — set by startPeriodicHeartbeat so
+   *  _sendHeartbeat can call p2pNode.getPeerId() for the p2pPeerId field. */
+  private p2pNode: P2PNode | undefined;
 
   constructor(
     private readonly ipifyService: IpifyService,
@@ -116,7 +119,7 @@ export class HeartbeatHelper {
 
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
-      p2pPeerId: p2pNode?.getPeerId() ?? identity.peerId,
+      p2pPeerId: this.p2pNode?.getPeerId() ?? identity.peerId,
       name: identity.name,
       publicKey: identity.publicKey,  // Full Ed25519 public key for node signature verification
       walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts
@@ -345,6 +348,7 @@ export class HeartbeatHelper {
     walletAddress?: string | null,
     ollamaUrl?: string,
   ): () => void {
+    this.p2pNode = p2pNode;
     const intervalStartTime = Date.now();
     const modelDiscovery = new ModelDiscovery();
     const intervalId = setInterval(async () => {

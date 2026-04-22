@@ -120,8 +120,16 @@ export class P2PNode {
 
   private async loadOrCreateKey(keys: typeof import('@libp2p/crypto/keys')): Promise<any> {
     try {
-      const bytes = fs.readFileSync(LIBP2P_KEY_PATH);
-      const key = keys.privateKeyFromProtobuf(new Uint8Array(bytes));
+      const fileContent = fs.readFileSync(LIBP2P_KEY_PATH, 'utf8').trim();
+      // protobuf format: try hex first, then fall back to raw binary protobuf
+      let bytes: Buffer;
+      try {
+        bytes = Buffer.from(fileContent, 'hex');
+      } catch {
+        // legacy binary protobuf file — read as raw bytes
+        bytes = Buffer.from(fileContent, 'binary');
+      }
+      const key = keys.privateKeyFromProtobuf(bytes);
       logger.log(`[P2P] loaded persistent identity from ${LIBP2P_KEY_PATH}`);
       return key;
     } catch (err: any) {
@@ -131,7 +139,9 @@ export class P2PNode {
       const key = await keys.generateKeyPair('Ed25519');
       try {
         fs.mkdirSync(path.dirname(LIBP2P_KEY_PATH), { recursive: true, mode: 0o700 });
-        fs.writeFileSync(LIBP2P_KEY_PATH, keys.privateKeyToProtobuf(key), { mode: 0o600 });
+        // Store as hex of protobuf bytes — human-readable with `cat`
+        const protoBytes = keys.privateKeyToProtobuf(key);
+        fs.writeFileSync(LIBP2P_KEY_PATH, Buffer.from(protoBytes).toString('hex'), { mode: 0o600 });
         logger.log(`[P2P] generated + persisted new identity at ${LIBP2P_KEY_PATH} — restarts will keep the same peerId`);
       } catch (writeErr: any) {
         logger.warn(
