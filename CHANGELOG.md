@@ -1,5 +1,13 @@
 # Changelog — @synapseia/node
 
+## [2026-04-22] fix(p2p): store libp2p key as hex (cat-readable) + fix p2pPeerId reaching coordinator
+
+- p2p.ts: persist privateKeyToProtobuf as hex (136 chars, readable with `cat`).
+  Previous attempt used key.bytes which is not exposed by generateKeyPair.
+- heartbeat.ts: store p2pNode as instance field so _sendHeartbeat can
+  call p2pNode.getPeerId() — previously p2pPeerId fell through to
+  identity.peerId (Ed25519) instead of the libp2p CID.
+
 ## [2026-04-22] Persist libp2p keypair + send p2pPeerId in heartbeat
 
 - `p2p.ts` — loadOrCreateKey() persists Ed25519 keypair to
