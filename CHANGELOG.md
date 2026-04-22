@@ -1,8 +1,14 @@
 # Changelog — @synapseia/node
 
-## [2026-04-22] fix(p2p): store libp2p key as hex (cat-readable) + fix p2pPeerId reaching coordinator
+## [2026-04-22] feat(node): p2p gossip sends p2pPeerId + HTTP-only node registration
 
-- p2p.ts: persist privateKeyToProtobuf as hex (136 chars, readable with `cat`).
+- publishHeartbeat: include p2pPeerId=identity.peerId (Ed25519) so
+  the P2PHeartbeatBridge knows which peerId maps to Ed25519 identity
+- node-runtime: call setP2PNode before initial heartbeat so p2pPeerId
+  is sent from the first HTTP heartbeat
+- p2p.ts: persist libp2p key as hex protobuf (readable with `cat`)
+
+## [2026-04-22] fix(p2p): store libp2p key as hex (cat-readable) + fix p2pPeerId reaching coordinator
   Previous attempt used key.bytes which is not exposed by generateKeyPair.
 - heartbeat.ts: store p2pNode as instance field so _sendHeartbeat can
   call p2pNode.getPeerId() — previously p2pPeerId fell through to
