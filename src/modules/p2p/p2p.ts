@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createLibp2p } from 'libp2p';
 import { setMaxListeners } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import logger from '../../utils/logger';
 import { tcp } from '@libp2p/tcp';
 import { noise } from '@libp2p/noise';
@@ -13,6 +16,9 @@ import { ping } from '@libp2p/ping';
 import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity';
 import { sign, canonicalPayload } from '../identity/identity';
+
+const SYNAPSEIA_HOME = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+const LIBP2P_KEY_PATH = path.join(SYNAPSEIA_HOME, 'libp2p-key');
 
 export const TOPICS = {
   HEARTBEAT: '/synapseia/heartbeat/1.0.0',
@@ -42,6 +48,12 @@ export class P2PNode {
   constructor(private readonly identity: Identity) {}
 
   async start(bootstrapAddrs: string[] = []): Promise<void> {
+    // Load or generate the libp2p Ed25519 keypair. Persisting to disk means
+    // the peerId stays stable across node restarts — critical for the gossip
+    // mesh (coord + other nodes cache the multiaddr with the peerId embedded).
+    const keysModule = await import('@libp2p/crypto/keys');
+    const privateKey = await this.loadOrCreateKey(keysModule);
+
     const svcBase = {
       identify: identify(),
       ping: ping(),
@@ -54,6 +66,7 @@ export class P2PNode {
       : svcBase;
 
     this.node = await createLibp2p({
+      privateKey,
       transports: [tcp()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
@@ -103,6 +116,31 @@ export class P2PNode {
       const id = evt.detail?.toString() ?? 'unknown';
       logger.log('[P2P] ❌ Peer disconnected:', id);
     });
+  }
+
+  private async loadOrCreateKey(keys: typeof import('@libp2p/crypto/keys')): Promise<any> {
+    try {
+      const bytes = fs.readFileSync(LIBP2P_KEY_PATH);
+      const key = keys.privateKeyFromProtobuf(new Uint8Array(bytes));
+      logger.log(`[P2P] loaded persistent identity from ${LIBP2P_KEY_PATH}`);
+      return key;
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') {
+        logger.warn(`[P2P] could not read ${LIBP2P_KEY_PATH} (${err.message}) — generating fresh key`);
+      }
+      const key = await keys.generateKeyPair('Ed25519');
+      try {
+        fs.mkdirSync(path.dirname(LIBP2P_KEY_PATH), { recursive: true, mode: 0o700 });
+        fs.writeFileSync(LIBP2P_KEY_PATH, keys.privateKeyToProtobuf(key), { mode: 0o600 });
+        logger.log(`[P2P] generated + persisted new identity at ${LIBP2P_KEY_PATH} — restarts will keep the same peerId`);
+      } catch (writeErr: any) {
+        logger.warn(
+          `[P2P] generated key but FAILED to persist at ${LIBP2P_KEY_PATH} (${writeErr.message}) — ` +
+            `peerId will change on next restart. Check the volume mount.`,
+        );
+      }
+      return key;
+    }
   }
 
   async stop(): Promise<void> {

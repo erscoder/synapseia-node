@@ -17,6 +17,9 @@ import { buildAuthHeaders } from '../../utils/node-auth';
 
 export interface HeartbeatPayload {
   peerId: string;
+  /** libp2p peerId (base58 CID, 52 chars) — distinct from the Ed25519 peerId.
+   *  Persisted in nodes.p2pPeerId so the coordinator can dial over libp2p. */
+  p2pPeerId: string;
   publicKey: string;  // Full Ed25519 public key (64 hex chars = 32 bytes)
   walletAddress: string | null;
   tier: number;
@@ -113,6 +116,7 @@ export class HeartbeatHelper {
 
     const payload: HeartbeatPayload = {
       peerId: identity.peerId,
+      p2pPeerId: p2pNode?.getPeerId() ?? identity.peerId,
       name: identity.name,
       publicKey: identity.publicKey,  // Full Ed25519 public key for node signature verification
       walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts

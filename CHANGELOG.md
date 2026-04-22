@@ -1,5 +1,15 @@
 # Changelog — @synapseia/node
 
+## [2026-04-22] Persist libp2p keypair + send p2pPeerId in heartbeat
+
+- `p2p.ts` — loadOrCreateKey() persists Ed25519 keypair to
+  `$SYNAPSEIA_HOME/libp2p-key` so the libp2p peerId stays stable
+  across restarts (was random each boot).
+- `heartbeat.ts` — HeartbeatPayload now carries both `peerId`
+  (Ed25519 hex, stable) and `p2pPeerId` (libp2p base58 CID, for
+  coordinator to dial over libp2p). HTTP heartbeat sends Ed25519
+  peerId; P2P gossip sends the libp2p CID.
+
 ## [2026-04-20] ReviewAgent: in-flight cycle lock + submissionId dedupe
 
 Defense-in-depth for the duplicate-evaluation path fixed coord-side.
