@@ -5,6 +5,7 @@ import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
+import { isChatInferenceActive } from '../../../inference/chat-inference-state';
 
 const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10);
 // Training WOs (CPU/GPU/DiLoCo) are multi-submission: the coordinator ranks by
@@ -67,6 +68,13 @@ export class FetchWorkOrdersNode {
         return true;
       }
       if (this.execution.isTrainingWorkOrder(wo) || this.execution.isDiLoCoWorkOrder(wo)) {
+        // Mutex: if the node is currently servicing an inbound chat
+        // inference, refuse new TRAINING/DILOCO WOs. They share CPU with the
+        // LLM and push chat past the coordinator's stream timeout.
+        if (isChatInferenceActive()) {
+          logger.log(` Training WO "${wo.title}" deferred — chat inference in progress`);
+          return false;
+        }
         // Training WOs are retry-friendly: ranking uses best score per peer,
         // so a second attempt with a new mutation can promote the node. Apply
         // a cooldown instead of permanent exclusion.
