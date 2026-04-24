@@ -5,9 +5,18 @@
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { dirname, resolve } from 'path';
 import logger from '../../utils/logger';
 import type { MutationProposal } from './mutation-engine';
+
+/**
+ * Directory of THIS bundled module. esbuild (tsup) injects __dirname for ESM
+ * bundles via a fileURLToPath(import.meta.url) polyfill, so __dirname is
+ * available in both Jest (CJS) and production (ESM bundle).
+ */
+function moduleDir(): string {
+  return typeof __dirname !== 'undefined' ? __dirname : dirname(resolve('.'));
+}
 
 export interface TrainingResult {
   runNumber: number;
@@ -141,21 +150,24 @@ export class TrainerHelper {
 
   private resolveTrainScript(): string {
     try {
-      // Works in both CJS (Jest) and ESM (tsup bundles __dirname shim)
-      const moduleDir = resolve(process.cwd(), 'dist');
+      const here = moduleDir();
+      // tsup bundles this file into dist/chunk-*.js; the scripts directory
+      // ships as dist/scripts/. Walk up from `here` covering both dev
+      // (src/modules/model) and production (dist) layouts.
       const candidates = [
-        resolve(moduleDir, '../scripts/train_micro.py'),
-        resolve(moduleDir, '../../scripts/train_micro.py'),
-        resolve(moduleDir, '../../../scripts/train_micro.py'),
-        resolve(moduleDir, '../../../../scripts/train_micro.py'),
-        resolve(process.cwd(), 'scripts/train_micro.py'),
+        resolve(here, 'scripts/train_micro.py'),            // dist/scripts
+        resolve(here, '../scripts/train_micro.py'),         // dist/./scripts
+        resolve(here, '../../scripts/train_micro.py'),      // packages/node/scripts (dev)
+        resolve(here, '../../../scripts/train_micro.py'),
+        resolve(here, '../../../../scripts/train_micro.py'),
+        resolve(process.cwd(), 'scripts/train_micro.py'),   // cwd last resort
       ];
       for (const c of candidates) {
         if (existsSync(c)) return c;
       }
       return candidates[0];
     } catch {
-      return resolve(process.cwd(), 'scripts/train_micro.py');
+      return resolve(moduleDir(), 'scripts/train_micro.py');
     }
   }
 

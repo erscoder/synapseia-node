@@ -7,16 +7,15 @@ export default {
     '^@libp2p/(.*)$': '<rootDir>/src/__mocks__/@libp2p/$1.ts',
     '^@noble/ed25519$': '<rootDir>/src/__mocks__/@noble/ed25519.ts',
     '^@noble/hashes$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
+    '^@noble/hashes/sha2$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
   },
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',
       {
         useESM: true,
-        tsconfig: {
-          strict: false,
-          strictNullChecks: false,
-        },
+        tsconfig: './tsconfig.test.json',
+        diagnostics: false,
       },
     ],
   },

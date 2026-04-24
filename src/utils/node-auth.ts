@@ -8,12 +8,12 @@
  * - bodyHash: SHA-256 of JSON-stringified body, base64-encoded
  */
 import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256, sha512 } from '@noble/hashes/sha2';
 
-// @noble/ed25519 v2.x requires sha512Sync to be configured before use.
-// Without this, sign() throws "hashes.sha512Sync not set".
-ed.etc.sha512Sync = sha512 as unknown as (...msgs: Uint8Array[]) => Uint8Array;
+// @noble/ed25519 v3.x requires hashes.sha512 to be set before signing.
+// Without this, sign() throws "hashes.sha512 not set".
+// @noble/hashes v2 returns Uint8Array<ArrayBufferLike>; ed25519 v3 expects ArrayBuffer — cast is safe
+(ed.hashes as Record<string, unknown>).sha512 = sha512;
 
 const { sign } = ed;
 

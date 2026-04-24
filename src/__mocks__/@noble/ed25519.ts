@@ -70,3 +70,4 @@ export const Point = {};
 export const ExtendedPoint = {};
 export const ed25519_CURVE = {};
 export const etc: { sha512Sync?: (...msgs: Uint8Array[]) => Uint8Array } = {};
+export const hashes: { sha512?: unknown } = {};

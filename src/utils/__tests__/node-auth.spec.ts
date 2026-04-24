@@ -13,7 +13,7 @@
  */
 
 import * as crypto from 'crypto';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 import { buildAuthHeaders } from '../node-auth.js';
 
 // ── helpers ────────────────────────────────────────────────────────────────

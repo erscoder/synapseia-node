@@ -5,8 +5,28 @@
 
 import { Injectable } from '@nestjs/common';
 import { spawn, type ChildProcess } from 'child_process';
-import { resolve } from 'path';
-import { statSync } from 'fs';
+import { dirname, resolve } from 'path';
+import { existsSync, statSync } from 'fs';
+
+/** See trainer.ts — esbuild injects __dirname for ESM bundles. */
+function moduleDir(): string {
+  return typeof __dirname !== 'undefined' ? __dirname : dirname(resolve('.'));
+}
+
+function resolveDilocoScript(): string {
+  const here = moduleDir();
+  const candidates = [
+    resolve(here, 'scripts/diloco_train.py'),
+    resolve(here, '../scripts/diloco_train.py'),
+    resolve(here, '../../scripts/diloco_train.py'),
+    resolve(here, '../../../scripts/diloco_train.py'),
+    resolve(process.cwd(), 'scripts/diloco_train.py'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return candidates[0];
+}
 
 export type SpawnFn = (cmd: string, args: string[], options: Record<string, unknown>) => ChildProcess;
 export type StatFn = (path: string) => { size: number };
@@ -59,7 +79,7 @@ export class DiLoCoTrainerHelper {
     spawnFn: SpawnFn = spawn as unknown as SpawnFn,
     statFn: StatFn = (p) => statSync(p) as { size: number },
   ): Promise<DiLoCoResult> {
-    const scriptPath = config.pythonScriptPath ?? resolve(process.cwd(), 'scripts/diloco_train.py');
+    const scriptPath = config.pythonScriptPath ?? resolveDilocoScript();
     const startTime = Date.now();
     const DILOCO_TIMEOUT_MS = parseInt(process.env.DILOCO_TIMEOUT_MS || '900000', 10);
 

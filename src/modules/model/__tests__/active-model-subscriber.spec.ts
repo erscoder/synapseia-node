@@ -42,12 +42,14 @@ function makeServing() {
 
 // ── fetch helper ──────────────────────────────────────────────────────────
 function okResp(payload: any, type: 'json' | 'buffer' = 'json'): any {
-  return type === 'json'
-    ? { ok: true, status: 200, json: async () => payload, arrayBuffer: async () => Buffer.from(JSON.stringify(payload)) }
-    : { ok: true, status: 200, arrayBuffer: async () => payload };
+  if (type === 'json') {
+    const bodyStr = JSON.stringify(payload);
+    return { ok: true, status: 200, json: async () => payload, text: async () => bodyStr, arrayBuffer: async () => Buffer.from(bodyStr) };
+  }
+  return { ok: true, status: 200, text: async () => '', arrayBuffer: async () => payload };
 }
 function failResp(code: number): any {
-  return { ok: false, status: code, json: async () => ({}), arrayBuffer: async () => Buffer.from('') };
+  return { ok: false, status: code, json: async () => ({}), text: async () => '{}', arrayBuffer: async () => Buffer.from('') };
 }
 
 // ── env + fs scratch ──────────────────────────────────────────────────────

@@ -3,18 +3,14 @@
 
 import { createHash } from 'crypto';
 
-export const sha256 = {
-  digest: (data: Uint8Array | string): Uint8Array => {
-    const text = typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
-    return new Uint8Array(createHash('sha256').update(text).digest());
-  },
+export const sha256 = (data: Uint8Array | string): Uint8Array => {
+  const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data);
+  return new Uint8Array(createHash('sha256').update(buf).digest());
 };
 
-export const sha512 = {
-  digest: (data: Uint8Array | string): Uint8Array => {
-    const text = typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
-    return new Uint8Array(createHash('sha512').update(text).digest());
-  },
+export const sha512 = (data: Uint8Array | string): Uint8Array => {
+  const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data);
+  return new Uint8Array(createHash('sha512').update(buf).digest());
 };
 
 export const hmac = {
