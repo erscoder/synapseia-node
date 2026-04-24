@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] chore(node): Phase 3 vulnerability remediation — 66 CVEs eliminated
+
+- Upgraded axios, @langchain/*, libp2p stack, @noble/ed25519, @noble/hashes to latest
+- Fixed @noble/hashes v2 breaking change: sha256/sha512 now from `sha2` subpath
+- Fixed @noble/ed25519 v3 breaking change: `ed.hashes.sha512` replaces `ed.etc.sha512Sync`
+- Removed `import.meta.url` from trainer.ts and diloco-trainer.ts (esbuild injects __dirname)
+- Added `hashes` export to @noble/ed25519 mock; updated @noble/hashes mock to callable fns
+- Added @libp2p/crypto/keys mock for p2p tests
+- Added tsconfig.test.json + diagnostics:false to jest config for type relaxation in tests
+- Added `private p2pNode?: P2PNode` field declaration to HeartbeatHelper
+- All 68 test suites pass; build clean
+
 ## [2026-04-22] feat(node): p2p gossip sends p2pPeerId + HTTP-only node registration
 
 - publishHeartbeat: include p2pPeerId=identity.peerId (Ed25519) so

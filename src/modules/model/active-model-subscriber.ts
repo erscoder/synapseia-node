@@ -95,8 +95,15 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
         signal: AbortSignal.timeout(5000),
       });
       if (res.ok) {
-        const body = (await res.json()) as ActiveModelResponse | null;
-        active = body;
+        // NestJS serializes `null` as an empty body (Content-Length: 0) when
+        // there is no active model yet, so `res.json()` would throw
+        // "Unexpected end of JSON input" on a perfectly valid "no-active"
+        // response. Read as text and parse only when we actually have
+        // content.
+        const text = await res.text();
+        active = text.length > 0
+          ? (JSON.parse(text) as ActiveModelResponse)
+          : null;
       }
     } catch (err) {
       logger.warn(`[ModelSubscriber] poll failed: ${(err as Error).message}`);

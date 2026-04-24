@@ -56,6 +56,8 @@ export class HeartbeatHelper {
   private pendingChallenge: AttestationChallenge | null = null;
   /** Own bundle content — loaded lazily on first attestation challenge. */
   private ownBundle: Buffer | null = null;
+  private p2pNode?: P2PNode;
+
   /** Latest p2pNode reference — set before the initial heartbeat so
    *  _sendHeartbeat can call p2pNode.getPeerId() for the p2pPeerId field. */
   setP2PNode(p2pNode: P2PNode): void {
