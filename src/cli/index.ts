@@ -3,8 +3,7 @@
 // Search order: cwd, ~/.synapseia, package directory
 // Configure @noble/ed25519 sha512Sync BEFORE any other imports that use it
 import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
-ed.etc.sha512Sync = (...msgs: Parameters<typeof sha512>) => sha512(...msgs);
+import { sha512 } from '@noble/hashes/sha2';
 import { config as dotenvConfig } from 'dotenv';
 import { existsSync as dotenvExists } from 'fs';
 import { join as dotenvJoin, dirname as dotenvDirname } from 'path';
@@ -58,7 +57,8 @@ import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositS
 import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE } from '../modules/config/config';
-import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';  
+import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
+import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {
@@ -189,6 +189,21 @@ async function bootstrap() {
         lat?: string;
         lng?: string;
       }) => {
+        // Fail fast if another Synapseia node is already running somewhere
+        // on this machine (either from the CLI or from the desktop UI).
+        // Doing this BEFORE the password prompt / RPC work saves the user
+        // from typing a password only to be told they can't start.
+        const existingLock = getActiveLock();
+        if (existingLock) {
+          const who = existingLock.source === 'ui' ? 'from the desktop UI' : 'from the CLI';
+          logger.error(
+            `❌ Another Synapseia node is already running ${who} (PID ${existingLock.pid}).`
+          );
+          logger.error(`   Started at: ${existingLock.startedAt}`);
+          logger.error(`   Stop it before running 'synapseia start' again.`);
+          process.exit(6);
+        }
+
         const config = configService.load();
         // Resolve nodeHome to a CONCRETE path up-front. Passing
         // `process.env.SYNAPSEIA_HOME` raw (undefined when not set) and
@@ -467,6 +482,18 @@ async function bootstrap() {
           logger.log(`✅ SYN token account: ${activation.synTokenAccount}`);
         }
 
+        // Claim the lock immediately before starting the runtime so any
+        // concurrent `synapseia start` (or UI launch) that squeezed in
+        // after our early check still loses cleanly.
+        const launchSource: NodeLockSource =
+          process.env.SYNAPSEIA_LAUNCH_SOURCE === 'ui' ? 'ui' : 'cli';
+        try {
+          acquireLock(launchSource);
+        } catch (err) {
+          logger.error(`❌ ${(err as Error).message}`);
+          process.exit(6);
+        }
+
         // ── Hand off to the node runtime ──────────────────────────────────
         const runtime = await startNode(
           {
@@ -486,8 +513,18 @@ async function bootstrap() {
           { p2pService, workOrderAgentService },
         );
 
+        const cleanupLock = () => {
+          try { releaseLock(); } catch { /* best-effort */ }
+        };
+        process.on('exit', cleanupLock);
         process.on('SIGINT', async () => {
           await runtime.stop();
+          cleanupLock();
+          process.exit(0);
+        });
+        process.on('SIGTERM', async () => {
+          await runtime.stop();
+          cleanupLock();
           process.exit(0);
         });
 
@@ -585,6 +622,27 @@ async function bootstrap() {
         await claimStakingRewards();
       } catch (error) {
         logger.error('❌ Claim failed:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // ── claim work-order rewards (vault) ──────────────────────────────────────
+  // Claims accrued rewards from the `syn_rewards_vault` program's RewardAccount
+  // PDA. Separate pool from staking rewards — this is where training/research/
+  // DiLoCo/peer-review earnings go.
+  program
+    .command('claim-wo-rewards')
+    .description('Claim pending work-order rewards from the on-chain rewards vault')
+    .action(async () => {
+      try {
+        const { claimWorkOrderRewards } = await import('../modules/rewards/rewards-vault-cli');
+        const sig = await claimWorkOrderRewards();
+        logger.log(`__VAULT_CLAIM_OK__ ${sig}`);
+        logger.log(`✅ Rewards claimed. Tx: ${sig}`);
+        process.exit(0);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error(`❌ Vault claim failed: ${msg}`);
         process.exit(1);
       }
     });
@@ -774,19 +832,30 @@ async function bootstrap() {
       logger.log('   Never share it with anyone. Never paste it on a website.');
       logger.log('');
 
-      const { password } = await import('@inquirer/prompts');
-      const pwd = await password({
-        message: 'Enter your wallet password to reveal the private key:',
-      });
+      // Honour the env var so the desktop UI (no TTY) can invoke this
+      // command non-interactively. Interactive terminal users still get
+      // a prompt when no env var is set.
+      let pwd: string;
+      const envPwd = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
+      if (envPwd) {
+        pwd = envPwd;
+      } else {
+        const { password } = await import('@inquirer/prompts');
+        pwd = await password({
+          message: 'Enter your wallet password to reveal the private key:',
+        });
+      }
 
       try {
         const wallet = await walletService.load(nodeHome, pwd);
 
-        // Convert secretKey array to base58 (standard Solana format)
         const { default: bs58 } = await import('bs58');
         const secretKeyBytes = Uint8Array.from(wallet.secretKey);
         const base58Key = bs58.encode(secretKeyBytes);
 
+        // Sentinel so the UI can extract the key reliably without
+        // depending on surrounding log formatting.
+        logger.log(`__PRIVATE_KEY__ ${base58Key}`);
         logger.log('');
         logger.log('═══════════════════════════════════════════════════');
         logger.log(`  Wallet address:  ${wallet.publicKey}`);
@@ -796,6 +865,7 @@ async function bootstrap() {
         logger.log('');
         logger.log('Copy the private key above. It will NOT be shown again.');
         logger.log('');
+        process.exit(0);
       } catch (err) {
         const msg = (err as Error).message;
         if (msg.includes('decrypt') || msg.includes('password') || msg.includes('auth')) {
@@ -823,14 +893,25 @@ async function bootstrap() {
     .description('Interactive configuration wizard')
     .option('--show', 'Show current configuration')
     .option('--set-name <name>', 'Set node name')
-    .action(async (options: { show?: boolean; setName?: string }) => {
+    .option('--set-coordinator-url <url>', 'Set coordinator URL')
+    .option('--set-model <model>', 'Set default model (provider/model format)')
+    .option('--set-llm-url <url>', 'Set LLM API base URL')
+    .option('--set-llm-key <key>', 'Set LLM API key')
+    .action(async (options: {
+      show?: boolean;
+      setName?: string;
+      setCoordinatorUrl?: string;
+      setModel?: string;
+      setLlmUrl?: string;
+      setLlmKey?: string;
+    }) => {
       const configService = app.get(NodeConfigService);
-      
+
       const config = configService.load();
       if (options.show) {
         logger.log('Current configuration:');
         logger.log(JSON.stringify(config, null, 2));
-        return;
+        process.exit(0);
       }
 
       if (options.setName) {
@@ -841,7 +922,43 @@ async function bootstrap() {
         const identityDir = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
         identityService.update({ name: options.setName }, identityDir);
         logger.log(`✅ Node name set to: ${options.setName}`);
-        return;
+        process.exit(0);
+      }
+
+      if (options.setCoordinatorUrl) {
+        config.coordinatorUrl = options.setCoordinatorUrl;
+        configService.save(config);
+        logger.log(`✅ Coordinator URL set to: ${options.setCoordinatorUrl}`);
+        process.exit(0);
+      }
+
+      if (options.setModel) {
+        if (!/^[a-zA-Z0-9_-]+\/[\w.:\-]+$/.test(options.setModel)) {
+          logger.error(`❌ Invalid model format. Expected provider/model (e.g. openai/gpt-4o). Got: ${options.setModel}`);
+          process.exit(1);
+        }
+        config.defaultModel = options.setModel;
+        configService.save(config);
+        logger.log(`✅ Default model set to: ${options.setModel}`);
+        process.exit(0);
+      }
+
+      if (options.setLlmUrl) {
+        if (!/^https?:\/\//.test(options.setLlmUrl)) {
+          logger.error(`❌ Invalid LLM URL. Must start with http:// or https://`);
+          process.exit(1);
+        }
+        config.llmUrl = options.setLlmUrl;
+        configService.save(config);
+        logger.log(`✅ LLM API URL set`);
+        process.exit(0);
+      }
+
+      if (options.setLlmKey) {
+        config.llmKey = options.setLlmKey;
+        configService.save(config);
+        logger.log(`✅ LLM API key set`);
+        process.exit(0);
       }
 
       logger.log('\n🔧 Synapseia Configuration Wizard');
@@ -1078,12 +1195,124 @@ async function bootstrap() {
       logger.log('    synapseia status   # Check node status');
     });
 
+  // ── wallet-verify ──────────────────────────────────────────────────────────
+  // Non-interactive: takes password from SYNAPSEIA_WALLET_PASSWORD, tries to
+  // decrypt the encrypted wallet.json, and exits 0 on success or 1 on failure.
+  // Used by the desktop UI to validate the password the user typed.
+  program
+    .command('wallet-verify')
+    .description('Validate wallet password (reads SYNAPSEIA_WALLET_PASSWORD)')
+    .action(async () => {
+      const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
+      if (!envPassword) {
+        logger.error('SYNAPSEIA_WALLET_PASSWORD env var is required for wallet-verify');
+        process.exit(2);
+      }
+      const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+      const walletPath = path.join(nodeHome, 'wallet.json');
+      if (!existsSync(walletPath)) {
+        logger.error('WALLET_NOT_FOUND');
+        process.exit(3);
+      }
+      try {
+        const wallet = await walletService.load(nodeHome, envPassword);
+        logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
+        process.exit(0);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/invalid password|decryption failed|auth/i.test(msg)) {
+          logger.error('INVALID_PASSWORD');
+          process.exit(1);
+        }
+        logger.error(`WALLET_LOAD_ERROR: ${msg}`);
+        process.exit(4);
+      }
+    });
+
+  // ── wallet-create ──────────────────────────────────────────────────────────
+  // Non-interactive: creates a fresh wallet encrypted with
+  // SYNAPSEIA_WALLET_PASSWORD and writes node config in one atomic call.
+  // Used by the desktop UI during first-time setup. Refuses to overwrite an
+  // existing wallet — user must delete it explicitly to re-initialise.
+  program
+    .command('wallet-create')
+    .description('Create a new encrypted wallet + base config (non-interactive)')
+    .option('--name <name>', 'Node name')
+    .option('--coordinator-url <url>', 'Coordinator URL')
+    .option('--model <model>', 'Default model (provider/model)')
+    .option('--llm-url <url>', 'LLM API base URL')
+    .option('--llm-key <key>', 'LLM API key')
+    .action(async (options: {
+      name?: string;
+      coordinatorUrl?: string;
+      model?: string;
+      llmUrl?: string;
+      llmKey?: string;
+    }) => {
+      const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
+      if (!envPassword) {
+        logger.error('SYNAPSEIA_WALLET_PASSWORD env var is required for wallet-create');
+        process.exit(2);
+      }
+      if (envPassword.length < 8) {
+        logger.error('PASSWORD_TOO_SHORT: password must be at least 8 characters');
+        process.exit(2);
+      }
+      const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+      const walletPath = path.join(nodeHome, 'wallet.json');
+      if (existsSync(walletPath)) {
+        logger.error('WALLET_ALREADY_EXISTS');
+        process.exit(5);
+      }
+      try {
+        // Create the wallet directory + encrypted wallet.json in one call
+        const { wallet } = await walletService.generate(nodeHome, envPassword);
+
+        // Persist the base config atomically (no partial state)
+        const cfgService = app.get(NodeConfigService);
+        const cfg = cfgService.load();
+        if (options.name) cfg.name = options.name;
+        if (options.coordinatorUrl) cfg.coordinatorUrl = options.coordinatorUrl;
+        if (options.model) cfg.defaultModel = options.model;
+        if (options.llmUrl) cfg.llmUrl = options.llmUrl;
+        if (options.llmKey) cfg.llmKey = options.llmKey;
+        cfgService.save(cfg);
+
+        // Keep identity.json in sync with the chosen name so heartbeat broadcasts it
+        if (options.name) {
+          const identityService = app.get(IdentityService);
+          identityService.update({ name: options.name }, nodeHome);
+        }
+
+        logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
+        process.exit(0);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`WALLET_CREATE_ERROR: ${msg}`);
+        process.exit(4);
+      }
+    });
+
   program.parse();
 }
 
-bootstrap().catch((err) => {
-  const e = err as Error;
-  logger.error(`[FATAL] ${e?.name ?? 'Error'}: ${e?.message ?? JSON.stringify(err, Object.getOwnPropertyNames(err))}`);
-  if (e?.stack) logger.error(e.stack);
-  process.exit(1);
-});
+// ── Fast-path: `chain-info` never touches NestJS / P2P / heartbeat ─────────
+// The desktop UI polls this every 15s. Booting AppModule here would reconnect
+// libp2p and hammer the coordinator on each tick — exactly the noise we're
+// trying to eliminate. Short-circuit BEFORE bootstrap() so the helper runs
+// in a bare Node.js context with only the imports it needs.
+if (process.argv[2] === 'chain-info') {
+  import('./chain-info-lightweight').then(({ runChainInfoLightweight }) =>
+    runChainInfoLightweight().catch((err) => {
+      logger.error(`chain-info failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }),
+  );
+} else {
+  bootstrap().catch((err) => {
+    const e = err as Error;
+    logger.error(`[FATAL] ${e?.name ?? 'Error'}: ${e?.message ?? JSON.stringify(err, Object.getOwnPropertyNames(err))}`);
+    if (e?.stack) logger.error(e.stack);
+    process.exit(1);
+  });
+}

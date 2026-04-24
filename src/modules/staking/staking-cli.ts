@@ -86,7 +86,7 @@ function isAlreadyProcessedError(err: unknown): boolean {
  * previous attempt DID land on-chain — we return the stale signature
  * so the CLI prints a useful diagnostic and the caller proceeds.
  */
-async function sendAndConfirmFresh(
+export async function sendAndConfirmFresh(
   connection: Connection,
   tx: Transaction,
   signers: Keypair[],
@@ -185,7 +185,7 @@ function decryptWallet(encryptedData: string, password: string): Uint8Array {
 }
 
 // Load and decrypt wallet
-async function loadWalletWithPassword(): Promise<Keypair> {
+export async function loadWalletWithPassword(): Promise<Keypair> {
   const walletFile = WALLET_FILE();
   
   if (!fs.existsSync(walletFile)) {
@@ -201,12 +201,16 @@ async function loadWalletWithPassword(): Promise<Keypair> {
     return Keypair.fromSecretKey(secretKey);
   }
   
-  // Encrypted wallet - ask for password
-  const walletPassword = await password({
-    message: 'Enter wallet password:',
-    mask: '*'
-  });
-  
+  // Encrypted wallet — honour the env var first so the desktop UI (and any
+  // other non-interactive caller) can pass the password without a TTY. This
+  // was the root cause of `balance`/`stake`/`withdraw` hanging when Tauri
+  // spawned the CLI: stdin is piped to null, so the @inquirer prompt blocked
+  // forever.
+  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
+  const walletPassword = envPassword
+    ? envPassword
+    : await password({ message: 'Enter wallet password:', mask: '*' });
+
   try {
     const secretKey = decryptWallet(walletData.encryptedData, walletPassword);
     return Keypair.fromSecretKey(secretKey);
