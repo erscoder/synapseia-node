@@ -1,5 +1,18 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] chore(node): standalone pnpm.overrides (8290c304)
+
+Added pnpm.overrides to this package's own package.json so the
+standalone-install path (clone packages/node/ solo, `pnpm install`)
+picks up the CVE fixes the root workspace already had. Regenerated
+sub-repo lockfile via `pnpm install --ignore-workspace --lockfile-only`.
+
+osv-scanner (sub-repo, recursive): ~40 → 7 findings. Remaining 7 are
+all upstream-blocked (bigint-buffer via @solana/spl-token, lodash
+paths without published fix).
+
+Build + 68 test suites / 1101 tests green.
+
 ## [2026-04-24] feat(node): desktop UI integration (6bb810f1)
 
 Four coordinated additions for Tauri node-ui coexistence:
