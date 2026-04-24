@@ -35,7 +35,6 @@ overrides:
   socket.io-parser: '>=4.2.6'
   ajv: '>=8.18.0'
   '@nestjs/core': '>=11.1.18'
-  uuid: '>=14.0.0'
   lodash: '>=4.18.0'
   lodash-es: '>=4.18.0'
 
@@ -3296,8 +3295,20 @@ packages:
   utf8-codec@1.0.0:
     resolution: {integrity: sha512-S/QSLezp3qvG4ld5PUfXiH7mCFxLKjSVZRFkB3DOjgwHuJPFDkInAXc/anf7BAbHt/D38ozDzL+QMZ6/7gsI6w==}
 
-  uuid@14.0.0:
-    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
+  uuid@10.0.0:
+    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    hasBin: true
+
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
+
+  uuid@13.0.0:
+    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
+    hasBin: true
+
+  uuid@8.3.2:
+    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -4176,7 +4187,7 @@ snapshots:
       langsmith: 0.5.24(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       mustache: 4.2.0
       p-queue: 6.6.2
-      uuid: 14.0.0
+      uuid: 11.1.0
       zod: 4.3.6
     transitivePeerDependencies:
       - '@opentelemetry/api'
@@ -4188,14 +4199,14 @@ snapshots:
   '@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
     dependencies:
       '@langchain/core': 1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      uuid: 14.0.0
+      uuid: 10.0.0
 
   '@langchain/langgraph-sdk@1.8.9(@langchain/core@1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 9.1.2
       p-retry: 7.1.1
-      uuid: 14.0.0
+      uuid: 13.0.0
     optionalDependencies:
       '@langchain/core': 1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
 
@@ -4205,7 +4216,7 @@ snapshots:
       '@langchain/langgraph-checkpoint': 1.0.1(@langchain/core@1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
       '@langchain/langgraph-sdk': 1.8.9(@langchain/core@1.1.41(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
       '@standard-schema/spec': 1.1.0
-      uuid: 14.0.0
+      uuid: 10.0.0
       zod: 4.3.6
     transitivePeerDependencies:
       - react
@@ -5907,7 +5918,7 @@ snapshots:
       isomorphic-ws: 4.0.1(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       json-stringify-safe: 5.0.1
       stream-json: 1.9.1
-      uuid: 14.0.0
+      uuid: 8.3.2
       ws: 8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bufferutil
@@ -6672,7 +6683,7 @@ snapshots:
       '@types/ws': 8.18.1
       buffer: 6.0.3
       eventemitter3: 5.0.4
-      uuid: 14.0.0
+      uuid: 11.1.0
       ws: 8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       bufferutil: 4.1.0
@@ -6980,7 +6991,13 @@ snapshots:
 
   utf8-codec@1.0.0: {}
 
-  uuid@14.0.0: {}
+  uuid@10.0.0: {}
+
+  uuid@11.1.0: {}
+
+  uuid@13.0.0: {}
+
+  uuid@8.3.2: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
