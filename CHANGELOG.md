@@ -1,5 +1,30 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] fix(node): mutex TRAINING/DILOCO WOs while chat is active (a4db72ba)
+
+Partner commit to coordinator f5b5a73. Chat stream latency blew past
+the coord's 60s cap because this node was running TRAINING WOs every
+~4 min concurrently with inbound chat inference, and both workloads
+shared a single Ollama instance.
+
+Introduces `modules/inference/chat-inference-state.ts` — a
+module-level singleton with a ref-counted active flag. Exports
+`beginChatInference()`, `endChatInference()`, `isChatInferenceActive()`.
+
+Wiring:
+- `ChatStreamHandler.onStream` wraps `generateAnswer()` in begin/end
+  (try/finally) so the counter always releases.
+- `FetchWorkOrdersNode` refuses new TRAINING / DILOCO_TRAINING WOs
+  when `isChatInferenceActive()` — logs "deferred — chat inference
+  in progress". Research WOs are unaffected.
+
+Kept as a plain module (not Nest DI) because ChatStreamHandler is
+instantiated outside the DI container in node-runtime.ts.
+
+Tests: chat-inference-state.spec.ts (4 tests) + 2 new
+FetchWorkOrdersNode cases in langgraph-coverage2.test.ts covering
+deferral + release. 69 suites / 1107 tests green.
+
 ## [2026-04-24] chore(node): drop uuid override (08d40dc4)
 
 uuid 14.0.0 (only patched version) ships ESM-only and breaks jayson
