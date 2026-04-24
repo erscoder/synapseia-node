@@ -224,7 +224,7 @@ export async function startNode(
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
 
-  // ── 3. A2A Server (Sprint D) ──────────────────────────────────────────────
+  // ── 3. A2A Server ──────────────────────────────────────────────
   let a2aRunning = false;
   const a2aEnabled = config.a2aEnabled ?? (process.env.A2A_ENABLED === 'true');
   if (a2aEnabled && services.a2aServer) {
