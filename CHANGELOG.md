@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] feat(node): desktop UI integration (6bb810f1)
+
+Four coordinated additions for Tauri node-ui coexistence:
+- `node-lock.ts` — PID mutex at ~/.synapseia/node.lock (CLI vs UI)
+- `rewards-vault-cli.ts` — on-chain reward claim (raw web3.js, no Anchor)
+- `chain-info-lightweight.ts` — wallet readout w/o NestFactory spin-up
+- `staking-cli.ts` — SYNAPSEIA_WALLET_PASSWORD env var (fixes Tauri
+  stdin-piped-to-null hang), exports loadWalletWithPassword +
+  sendAndConfirmFresh
+- `cli/index.ts` — acquireLock/releaseLock wired into `start`
+- Build clean, 68 suites / 1101 tests green
+
 ## [2026-04-24] chore(node): @nestjs/{core,common} ^11.1.16 → ^11.1.19 (CVE fix)
 
 ## [2026-04-24] chore(node): Phase 3 vulnerability remediation — 66 CVEs eliminated
