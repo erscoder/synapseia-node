@@ -1,5 +1,14 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] chore(node): drop uuid override (08d40dc4)
+
+uuid 14.0.0 (only patched version) ships ESM-only and breaks jayson
+4.x's `require('uuid').v4` used transitively by @solana/web3.js and
+langchain. CVE documented in root osv-scanner.toml — unreachable
+under Node 22's native crypto.randomUUID.
+
+68 suites / 1101 tests green.
+
 ## [2026-04-24] chore(node): standalone pnpm.overrides (8290c304)
 
 Added pnpm.overrides to this package's own package.json so the
