@@ -262,6 +262,59 @@ describe('FetchWorkOrdersNode', () => {
     expect(result.availableWorkOrders).toHaveLength(1);
     expect(result.availableWorkOrders?.[0].id).toBe(woR.id);
   });
+
+  it('defers TRAINING / DILOCO WOs while chat inference is active, still serves RESEARCH', async () => {
+    const {
+      beginChatInference,
+      endChatInference,
+      _resetChatInferenceStateForTests,
+    } = require('../../../inference/chat-inference-state');
+    _resetChatInferenceStateForTests();
+    // The module-level `execution` instance already exposes the jest.mock'd
+    // methods; override them per-test instead of reaching into mock.results.
+    (execution as any).isTrainingWorkOrder = jest.fn((wo: any) => wo?.type === 'TRAINING');
+    (execution as any).isDiLoCoWorkOrder = jest.fn((wo: any) => wo?.type === 'DILOCO_TRAINING');
+
+    // Training/DILOCO WOs must pass the capability guard so the test actually
+    // exercises the chat mutex path (not the unrelated cap-filter path).
+    const woTrain = { ...makeWO('TRAINING'), requiredCapabilities: ['llm'] };
+    const woDiloco = { ...makeWO('DILOCO_TRAINING'), requiredCapabilities: ['llm'] };
+    const woResearch = makeResearchWO();
+    mockFetchAvailableWorkOrders.mockResolvedValueOnce([woTrain, woDiloco, woResearch]);
+
+    beginChatInference();
+    try {
+      const result = await node.execute(makeState());
+      expect(result.availableWorkOrders).toHaveLength(1);
+      expect(result.availableWorkOrders?.[0].id).toBe(woResearch.id);
+    } finally {
+      endChatInference();
+      (execution as any).isTrainingWorkOrder = jest.fn().mockReturnValue(false);
+      (execution as any).isDiLoCoWorkOrder = jest.fn().mockReturnValue(false);
+    }
+  });
+
+  it('serves TRAINING WOs again once chat inference ends', async () => {
+    const {
+      beginChatInference,
+      endChatInference,
+      _resetChatInferenceStateForTests,
+    } = require('../../../inference/chat-inference-state');
+    _resetChatInferenceStateForTests();
+    (execution as any).isTrainingWorkOrder = jest.fn((wo: any) => wo?.type === 'TRAINING');
+
+    const woTrain = { ...makeWO('TRAINING'), requiredCapabilities: ['llm'] };
+    beginChatInference();
+    endChatInference();
+    mockFetchAvailableWorkOrders.mockResolvedValueOnce([woTrain]);
+    try {
+      const result = await node.execute(makeState());
+      expect(result.availableWorkOrders).toHaveLength(1);
+      expect(result.availableWorkOrders?.[0].id).toBe(woTrain.id);
+    } finally {
+      (execution as any).isTrainingWorkOrder = jest.fn().mockReturnValue(false);
+    }
+  });
 });
 
 // ─── ExecuteTrainingNode ─────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import logger from '../../utils/logger';
 import { P2PNode, CHAT_PROTOCOL } from '../p2p/p2p';
 import { sendJsonOverStream, readJsonFromStream } from '../p2p/stream-codec';
 import { LlmProviderHelper, type LLMModel, type LLMConfig } from '../llm/llm-provider';
+import { beginChatInference, endChatInference } from './chat-inference-state';
 
 interface ChatStreamRequest {
   sessionId: string;
@@ -68,8 +69,16 @@ export class ChatStreamHandler {
           ` (${req.messages.length} messages) — generating via ${this.deps.llmModel.provider}`,
       );
 
+      // Block concurrent TRAINING WOs from starving the chat CPU budget.
+      // See chat-inference-state.ts + fetch-work-orders.ts for the mutex.
+      beginChatInference();
       const t0 = Date.now();
-      const response = await this.generateAnswer(req.messages);
+      let response;
+      try {
+        response = await this.generateAnswer(req.messages);
+      } finally {
+        endChatInference();
+      }
       logger.log(`[ChatStreamHandler] ✓ LLM responded in ${Date.now() - t0}ms — writing response`);
       await sendJsonOverStream(stream, response);
       logger.log(`[ChatStreamHandler] ✓ response sent for quote ${req.quoteId?.slice(0, 8)}…`);
