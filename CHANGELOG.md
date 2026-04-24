@@ -1,5 +1,7 @@
 # Changelog — @synapseia/node
 
+## [2026-04-24] chore(node): @nestjs/{core,common} ^11.1.16 → ^11.1.19 (CVE fix)
+
 ## [2026-04-24] chore(node): Phase 3 vulnerability remediation — 66 CVEs eliminated
 
 - Upgraded axios, @langchain/*, libp2p stack, @noble/ed25519, @noble/hashes to latest
