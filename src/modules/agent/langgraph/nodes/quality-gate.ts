@@ -7,7 +7,7 @@ import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
 const SUBMISSION_RATE_LIMIT_MS = parseInt(process.env.SUBMISSION_RATE_LIMIT_MS ?? String(10_000), 10);
-const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.15');
+const SUBMISSION_MIN_SCORE = parseFloat(process.env.SUBMISSION_MIN_SCORE ?? '0.30');
 
 @Injectable()
 export class QualityGateNode {

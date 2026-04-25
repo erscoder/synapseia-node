@@ -164,11 +164,27 @@ Title: ${title}
 Content: ${summary}
 Key insights: ${insightsText}
 
-Score each dimension 0-10 where 10 is perfect:
-- accuracy: factual correctness
-- novelty: new insights vs existing knowledge
-- methodology: rigor of analysis
-- conclusions: clarity and quality of findings
+Score each dimension 0-10:
+
+- accuracy (0-10): Are claims factually correct and supported by cited DOIs?
+  0-3: Major factual errors or fabricated claims
+  4-6: Mostly correct with minor evidence gaps
+  7-10: All claims grounded in cited evidence
+
+- novelty (0-10): Does this add insight beyond restating the source abstract?
+  0-3: Pure paraphrase of the abstract
+  4-6: Some synthesis but limited new insight
+  7-10: Genuine novel connection, hypothesis, or cross-paper synthesis
+
+- methodology (0-10): Is the analysis systematic and reproducible?
+  0-3: No clear analytical method
+  4-6: Reasonable approach with gaps
+  7-10: Systematic, well-structured, reproducible
+
+- conclusions (0-10): Are findings specific, actionable, and well-supported?
+  0-3: Vague or unsupported conclusions
+  4-6: Clear but limited actionability
+  7-10: Specific, testable, directly actionable for the stated research goal
 
 Respond ONLY with valid JSON (no markdown):
 {"accuracy": N, "novelty": N, "methodology": N, "conclusions": N, "commentary": "one sentence"}`;
