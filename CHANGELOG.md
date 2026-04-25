@@ -1,5 +1,26 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] feat(agent): mission-aware prompt grounding on round.opened (da3655f3)
+
+Bucket C1 (node half). Partner commit to coord `f6b4aa3`. Receives
+the active-mission brief on `round.opened` and injects it into the
+medical researcher prompt.
+
+- `modules/agent/mission-context-state.ts` (new): ref-safe singleton
+  with `setActiveMissions`, `getActiveMissions`,
+  `renderMissionBriefForPrompt`. `getActiveMissions` returns a fresh
+  slice so external mutation can't poison the cache.
+- `round-listener.ts` subscribes to `round.opened`, caches the
+  brief. Missing field degrades silently.
+- `medical-researcher.ts` accepts optional `missionContext`; when
+  present, prepends an "ACTIVE MISSIONS" block instructing the LLM
+  to foreground mission-aligned connections.
+- `researcher-node.ts` passes `renderMissionBriefForPrompt()` on
+  every research execution.
+
+Tests: `mission-context-state.spec.ts` (8) + 2 medical-prompts
+cases. 70 / 1116 green.
+
 ## [2026-04-24] fix(node): mutex TRAINING/DILOCO WOs while chat is active (a4db72ba)
 
 Partner commit to coordinator f5b5a73. Chat stream latency blew past
