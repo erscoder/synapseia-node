@@ -1,5 +1,24 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] fix(agent): perf-state round-2 review — recent-suffix + hysteresis + counter (a23154b3)
+
+Round-2 reviewer pass on the C3 deferred flag:
+
+- MEDIUM: stale-flag risk. placedRate was computed across the full
+  50-round window so a node that fixed itself kept flagging until
+  the bad rounds aged out. Now uses RECENT_SUFFIX (last 10 rounds)
+  for the flag check; the summary log keeps the full-window view.
+- MEDIUM: no debounce — flag fired on every 5-round multiple
+  while active. Added hysteresis: WARN emits once on activation,
+  stays silent until recent rate recovers above threshold, then
+  re-arms.
+- LOW: summary log spam after window saturation. `outcomes.length`
+  is pinned at 50 once full → `length % 5 === 0` matched every
+  record. Switched to a lifetime `recordCount` counter.
+
++4 tests: recent-suffix wins, hysteresis silence, re-fire after
+recovery, 12 summaries across 60 records. 71 / 1135 green.
+
 ## [2026-04-25] feat(agent): low-placed-rate flag for sustained underperformance (a3367c31)
 
 Closes the deferred subset of audit Bucket C3. performance-state
