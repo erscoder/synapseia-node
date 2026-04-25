@@ -1,5 +1,22 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] fix(audit-review): mutex covers HTTP fallback + perf window env-driven (8db9252f)
+
+Code-review followups on the audit landing:
+
+- HIGH — A1's TRAINING/chat mutex was wired only into the libp2p
+  ChatStreamHandler. Coordinator's HTTP fallback hits
+  `inference-server.handleChatCompletions`, which never incremented
+  the counter — so under fallback the mutex silently failed open.
+  Wrapped `forwardToOllama` in `try { begin… } finally { end… }`.
+- LOW — performance-state's window was hardcoded at 50. Now reads
+  `PERFORMANCE_WINDOW` env var on first import + on test reset,
+  with malformed values falling back to 50.
+
+Coverage: +2 inference-server cases (counter rise/fall on
+success/throw) + 3 performance-state cases (rollup log, env
+override, malformed env). 71 / 1126 green.
+
 ## [2026-04-25] feat(agent): persistent rolling per-round outcome window (9537dc1f)
 
 Bucket C3 (scoped subset). Lands the substrate for the future
