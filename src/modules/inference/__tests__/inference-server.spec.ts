@@ -284,6 +284,47 @@ describe('handleChatCompletions', () => {
     await p;
     expect(parseJson(res.body).error.message).toBe('custom-err');
   });
+
+  // Reviewer follow-up (HIGH bug): the libp2p ChatStreamHandler held the
+  // chat-inference mutex but the HTTP fallback path didn't, silently
+  // unblocking TRAINING WOs while a chat was in flight. Verify the
+  // counter rises during the call and falls back to zero, even on error.
+  describe('chat-inference mutex on HTTP fallback', () => {
+    it('increments and releases chat-inference around forwardToOllama', async () => {
+      const state = require('../chat-inference-state');
+      state._resetChatInferenceStateForTests();
+
+      let activeDuringCall = -1;
+      (global.fetch as any).mockImplementationOnce(async () => {
+        activeDuringCall = state.activeChatInferences();
+        return ok({ message: { role: 'assistant', content: 'ok' }, done: true, model: 'm', created_at: 'x' });
+      });
+
+      const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+      const res = new FakeRes();
+      const p = handleChatCompletions(req as any, res as any, 'peer');
+      req.feed(JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'q' }] }));
+      await p;
+
+      expect(activeDuringCall).toBe(1);
+      expect(state.activeChatInferences()).toBe(0);
+    });
+
+    it('releases the counter even when forwardToOllama throws', async () => {
+      const state = require('../chat-inference-state');
+      state._resetChatInferenceStateForTests();
+
+      (global.fetch as any).mockRejectedValueOnce(new Error('boom'));
+      const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+      const res = new FakeRes();
+      const p = handleChatCompletions(req as any, res as any, 'peer');
+      req.feed(JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'q' }] }));
+      await p;
+
+      expect(state.activeChatInferences()).toBe(0);
+      expect(res.statusCode).toBe(500);
+    });
+  });
 });
 
 // ── handleState ───────────────────────────────────────────────────────────
