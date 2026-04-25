@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { BackpressureService } from '../../work-order/backpressure.service';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import type { AgentState, WorkOrder } from '../state';
@@ -19,6 +20,7 @@ export class FetchWorkOrdersNode {
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly execution: WorkOrderExecutionHelper,
+    private readonly backpressure: BackpressureService,
   ) {}
 
 
@@ -27,6 +29,14 @@ export class FetchWorkOrdersNode {
   private readonly completedWorkOrderIds = new Set<string>();
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
+    // Backpressure: if at capacity, skip polling entirely
+    if (!this.backpressure.canAccept()) {
+      logger.warn(
+        `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping poll`,
+      );
+      return { availableWorkOrders: [] };
+    }
+
     const { coordinatorUrl, peerId, capabilities, rejectedWorkOrderIds = [] } = state;
     logger.log(' Polling for available work orders...');
 
