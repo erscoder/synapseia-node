@@ -1,5 +1,22 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] feat(agent): persistent rolling per-round outcome window (9537dc1f)
+
+Bucket C3 (scoped subset). Lands the substrate for the future
+feedback loop: a 50-round rolling window of `(roundId, myRank,
+myRewardSyn, totalWinners, recordedAtMs)` outcomes plus a one-line
+summary every five rounds.
+
+- `modules/agent/performance-state.ts` (new): singleton with
+  `recordRoundOutcome`, `computeRollingStats`, `getRecentOutcomes`,
+  `setRollingWindow`. Mutation-safe (returns slice copies).
+- `round-listener.ts` records the outcome from the existing
+  `round.closed` handler — no new IO.
+
+Auto model upgrades and capability gating intentionally deferred.
+
+Tests: 5 new cases. 71 / 1121 green.
+
 ## [2026-04-25] feat(agent): mission-aware prompt grounding on round.opened (da3655f3)
 
 Bucket C1 (node half). Partner commit to coord `f6b4aa3`. Receives
