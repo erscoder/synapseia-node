@@ -16,6 +16,8 @@ import { P2PNode } from './modules/p2p/p2p';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
 import { IpifyService } from './modules/shared/infrastructure/ipify.service';
 import type { A2AServer } from './modules/a2a/a2a-server.service';
+import { preflightVersionCheck, UpdateStatus } from './utils/update-checker';
+import { attemptSelfUpdate, restartProcess } from './utils/self-updater';
 
 export interface NodeRuntimeConfig {
   /** Resolved peer identity (peerId, publicKey, privateKey) */
@@ -85,6 +87,36 @@ export async function startNode(
     a2aServer?: A2AServer;
   },
 ): Promise<NodeRuntime> {
+  // ── 0. Pre-flight version check ──────────────────────────────────────────
+  const versionCheck = await preflightVersionCheck(config.coordinatorUrl);
+  if (versionCheck) {
+    if (versionCheck.status === UpdateStatus.UPDATE_REQUIRED) {
+      logger.log('[PreFlight] Attempting self-update...');
+      const result = attemptSelfUpdate();
+      if (result.success) {
+        logger.log(`[PreFlight] ${result.message}`);
+        restartProcess();
+      }
+      // Self-update failed — log and exit. The node cannot operate below minVersion.
+      logger.error(`[PreFlight] ${result.message}`);
+      logger.error(
+        `[PreFlight] Node v${versionCheck.currentVersion} is below minimum v${versionCheck.minVersion}. ` +
+          `Update manually and restart.`,
+      );
+      process.exit(10);
+    }
+    if (versionCheck.status === UpdateStatus.UPDATE_AVAILABLE) {
+      logger.log('[PreFlight] Attempting optional self-update...');
+      const result = attemptSelfUpdate();
+      if (result.success) {
+        logger.log(`[PreFlight] ${result.message}`);
+        restartProcess();
+      }
+      // Optional update failed — continue with current version
+      logger.warn(`[PreFlight] ${result.message} — continuing with v${versionCheck.currentVersion}`);
+    }
+  }
+
   // ── 1. P2P ────────────────────────────────────────────────────────────────
   logger.log(' Starting P2P layer...');
   let p2pNode: P2PNode | null = null;
