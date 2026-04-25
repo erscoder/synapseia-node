@@ -4,7 +4,15 @@
  */
 
 import { A2AAuthService } from '../auth/a2a-auth.service';
+import * as crypto from 'node:crypto';
 import type { A2ATask } from '../types';
+
+function generateTestKeypair(): { privateKeyHex: string; publicKeyHex: string } {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  const privHex = (privateKey.export({ type: 'pkcs8', format: 'der' }) as Buffer).slice(-32).toString('hex');
+  const pubHex = (publicKey.export({ type: 'spki', format: 'der' }) as Buffer).slice(-32).toString('hex');
+  return { privateKeyHex: privHex, publicKeyHex: pubHex };
+}
 
 describe('A2AAuthService', () => {
   let authService: A2AAuthService;
@@ -33,10 +41,10 @@ describe('A2AAuthService', () => {
 
     function signTask(task: Omit<A2ATask, 'signature'>, privateKeyHex: string): A2ATask {
       const message = `${task.id}:${task.type}:${task.senderPeerId}:${task.timestamp}:${task.nonce}`;
-      const crypto = require('node:crypto');
-      const sig = crypto.createHmac('sha256', Buffer.from(privateKeyHex, 'hex'))
-        .update(Buffer.from(message, 'utf-8'))
-        .digest('hex');
+      const PKCS8_HEADER = Buffer.from('302e020100300506032b657004220420', 'hex');
+      const derKey = Buffer.concat([PKCS8_HEADER, Buffer.from(privateKeyHex, 'hex')]);
+      const keyObject = crypto.createPrivateKey({ key: derKey, format: 'der', type: 'pkcs8' });
+      const sig = crypto.sign(null, Buffer.from(message, 'utf-8'), keyObject).toString('hex');
       return { ...task, signature: sig };
     }
 
@@ -53,42 +61,42 @@ describe('A2AAuthService', () => {
     });
 
     it('should reject replay of the same nonce', async () => {
-      const privateKeyHex = 'a'.repeat(64);
+      const { privateKeyHex, publicKeyHex } = generateTestKeypair();
       const nonce = Math.random().toString(36).slice(2);
       const baseTask = makeTask({ nonce });
       const task = signTask(baseTask, privateKeyHex);
 
       // First call should succeed (valid signature)
-      const first = await authService.verify(task, privateKeyHex);
+      const first = await authService.verify(task, publicKeyHex);
       expect(first).toBe(true);
 
       // Same nonce replayed should fail
-      const second = await authService.verify(task, privateKeyHex);
+      const second = await authService.verify(task, publicKeyHex);
       expect(second).toBe(false);
     });
 
     it('should reject invalid signatures', async () => {
-      const privateKeyHex = 'a'.repeat(64);
+      const { privateKeyHex, publicKeyHex } = generateTestKeypair();
       const task = signTask(makeTask(), privateKeyHex);
       // Tamper with signature
-      task.signature = 'b'.repeat(64);
+      task.signature = 'b'.repeat(128);
 
-      const valid = await authService.verify(task, privateKeyHex);
+      const valid = await authService.verify(task, publicKeyHex);
       expect(valid).toBe(false);
     });
 
-    it('should accept valid HMAC-SHA256 signatures', async () => {
-      const privateKeyHex = 'a'.repeat(64);
+    it('should accept valid Ed25519 signatures', async () => {
+      const { privateKeyHex, publicKeyHex } = generateTestKeypair();
       const task = signTask(makeTask(), privateKeyHex);
 
-      const valid = await authService.verify(task, privateKeyHex);
+      const valid = await authService.verify(task, publicKeyHex);
       expect(valid).toBe(true);
     });
   });
 
   describe('sign', () => {
-    it('should produce consistent HMAC-SHA256 signatures', () => {
-      const privateKeyHex = 'a'.repeat(64);
+    it('should produce consistent Ed25519 signatures', () => {
+      const { privateKeyHex } = generateTestKeypair();
       const task = {
         id: 'task-1',
         type: 'health_check' as const,
@@ -102,11 +110,11 @@ describe('A2AAuthService', () => {
       const sig2 = authService.sign(task, privateKeyHex);
 
       expect(sig1).toBe(sig2);
-      expect(sig1.length).toBe(64); // SHA256 = 32 bytes = 64 hex chars
+      expect(sig1.length).toBe(128); // Ed25519 = 64 bytes = 128 hex chars
     });
 
     it('should produce different signatures for different messages', () => {
-      const privateKeyHex = 'a'.repeat(64);
+      const { privateKeyHex } = generateTestKeypair();
       const task1 = {
         id: 'task-1', type: 'health_check' as const, payload: {},
         senderPeerId: 'sender', timestamp: 1000, nonce: 'n1',
@@ -127,7 +135,6 @@ describe('A2AAuthService', () => {
         { id: 't', type: 'health_check' as const, payload: {}, senderPeerId: 's', timestamp: 1, nonce: 'n' },
         'invalid-hex-xyz',
       );
-      // Should not throw, may return empty string
       expect(typeof sig).toBe('string');
     });
   });

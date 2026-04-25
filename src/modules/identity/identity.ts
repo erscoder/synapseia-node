@@ -143,14 +143,11 @@ export class IdentityHelper {
       const signatureBytes = Buffer.from(signatureHex, 'hex');
       const publicKeyBytes = Buffer.from(publicKeyHex, 'hex');
 
-      // Verify HMAC-SHA256 signature (for compatibility with sign())
-      // NOTE: Both sign() and verifySignature() must use the same algorithm.
-      // BUG-1: Coordinator P2PHeartbeatBridge uses Ed25519 (@noble/ed25519),
-      // which won't match HMAC-SHA256 signatures from this function.
-      const hmac = crypto.createHmac('sha256', publicKeyBytes);
-      hmac.update(messageBytes);
-      const expectedSignature = hmac.digest('hex');
-      return signatureBytes.toString('hex') === expectedSignature;
+      // Ed25519 SubjectPublicKeyInfo DER prefix (ASN.1) — wraps raw 32-byte key
+      const ED25519_DER_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+      const publicKeyDer = Buffer.concat([ED25519_DER_PREFIX, publicKeyBytes]);
+      const keyObject = crypto.createPublicKey({ key: publicKeyDer, format: 'der', type: 'spki' });
+      return crypto.verify(null, messageBytes, keyObject, signatureBytes);
     } catch {
       return false;
     }
