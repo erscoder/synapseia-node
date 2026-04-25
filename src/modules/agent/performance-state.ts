@@ -50,7 +50,34 @@ export function recordRoundOutcome(o: RoundOutcome): void {
         `avg rank ${stats.avgRank?.toFixed(2) ?? 'n/a'}, ` +
         `total reward ${stats.totalRewardSyn.toFixed(3)} SYN`,
     );
+
+    // C3 deferred subset: emit a structured WARN once we have enough
+    // signal AND the placedRate sits below the configured threshold for
+    // the entire rolling window. Operators / dashboards can tail this
+    // line to flag a node that needs a model upgrade or capability
+    // review. Default 30% over 10+ rounds; override via
+    // PERFORMANCE_LOW_PLACED_RATE.
+    const minRoundsForFlag = 10;
+    const lowRateThreshold = readLowPlacedRateThreshold();
+    if (
+      stats.totalRounds >= minRoundsForFlag &&
+      stats.placedRate < lowRateThreshold
+    ) {
+      logger.warn(
+        `[Performance] LOW PLACED RATE — last ${stats.totalRounds} rounds at ` +
+          `${stats.placedRate.toFixed(0)}% (< ${lowRateThreshold}%). ` +
+          `Consider upgrading the LLM or reviewing capabilities.`,
+      );
+    }
   }
+}
+
+function readLowPlacedRateThreshold(): number {
+  const raw = process.env.PERFORMANCE_LOW_PLACED_RATE;
+  const parsed = Number.parseFloat(raw ?? '');
+  if (!Number.isFinite(parsed)) return 30;
+  // Clamp to [0,100] so a typo can't disable / always-fire the flag.
+  return Math.max(0, Math.min(100, parsed));
 }
 
 export interface RollingStats {
