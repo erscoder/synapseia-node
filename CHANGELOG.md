@@ -1,5 +1,18 @@
 # Changelog — @synapseia/node
 
+## [0.3.0] 2026-04-25 — feat(version-gating): T6 pre-flight version check + self-update
+
+- New `utils/update-checker.ts`: fetches GET /version from coordinator,
+  compares semver, returns UP_TO_DATE / UPDATE_AVAILABLE / UPDATE_REQUIRED.
+- New `utils/self-updater.ts`: detects install type (npm global, git clone,
+  binary), runs `npm install -g @synapseia/node@latest` for npm installs,
+  returns manual instructions for others.
+- `node-runtime.ts`: pre-flight check before P2P boot. Required update =
+  attempt self-update then exit(10) if it fails. Optional update = attempt
+  and continue on failure.
+- Added `semver` as direct dependency.
+- +18 tests (update-checker + self-updater). 74 / 1197 green.
+
 ## [2026-04-25] feat(version-gating): T5 — report version in heartbeat + WS handshake (dd5ea70c)
 
 - New `utils/version.ts`: `getNodeVersion()` reads version from
