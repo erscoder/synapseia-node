@@ -81,6 +81,15 @@ const execution = new WorkOrderExecutionHelper(coordinator, evaluation);
 const brainHelper = new AgentBrainHelper();
 const initBrain = () => brainHelper.initBrain();
 
+/** Stub BackpressureService that always allows acquisition. */
+const mockBackpressure = {
+  canAccept: jest.fn<() => boolean>().mockReturnValue(true),
+  acquire: jest.fn<() => boolean>().mockReturnValue(true),
+  release: jest.fn(),
+  getInFlight: jest.fn<() => number>().mockReturnValue(0),
+  getMaxConcurrent: jest.fn<() => number>().mockReturnValue(2),
+};
+
 function makeState(overrides: Partial<AgentState> = {}): AgentState {
   return {
     availableWorkOrders: [],
@@ -140,7 +149,7 @@ describe('FetchWorkOrdersNode', () => {
   beforeEach(() => {
     // Don't use jest.resetAllMocks() here — we inject mock objects directly
     // and don't rely on module-level mocks
-    node = new FetchWorkOrdersNode(coordinator, execution);
+    node = new FetchWorkOrdersNode(coordinator, execution, mockBackpressure as any);
     node.reset();
   });
 
@@ -229,12 +238,13 @@ describe('AcceptWorkOrderNode', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    node = new AcceptWorkOrderNode(coordinator);
+    node = new AcceptWorkOrderNode(coordinator, mockBackpressure as any);
     // Inject mock coordinator to bypass fetch
     const mockCoordinator = {
       acceptWorkOrder: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
     };
     (node as any).coordinator = mockCoordinator;
+    mockBackpressure.acquire.mockReturnValue(true);
   });
 
   it('accepts work order successfully', async () => {

@@ -4,6 +4,7 @@ import { WorkOrderCoordinatorModule } from './work-order-coordinator.module';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 import { WorkOrderExecutionHelper } from './work-order.execution';
 import { WorkOrderLoopHelper } from './work-order.loop';
+import { BackpressureService } from './backpressure.service';
 import { LlmModule } from '../../llm/llm.module';
 import { RoundListenerHelper } from '../round-listener';
 import { ReviewAgentHelper } from '../review-agent';
@@ -23,6 +24,7 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
+    BackpressureService,
   ],
   // Re-export WorkOrderCoordinatorModule so downstream consumers that
   // already import WorkOrderModule keep getting the coordinator helper
@@ -33,6 +35,7 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
+    BackpressureService,
   ],
 })
 export class WorkOrderModule {}

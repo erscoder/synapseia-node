@@ -4,6 +4,7 @@ import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentB
 import type { WorkOrderAgentConfig } from '../work-order/work-order.types';
 import { AgentBrainHelper } from '../agent-brain';
 import { CheckpointService } from './checkpoint.service';
+import { BackpressureService } from '../work-order/backpressure.service';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';
 import { EvaluateEconomicsNode } from './nodes/evaluate-economics';
@@ -80,6 +81,7 @@ export class AgentGraphService {
     private readonly synthesizerNode: SynthesizerNode,
     private readonly agentBrainHelper: AgentBrainHelper,
     private readonly checkpointService: CheckpointService,
+    private readonly backpressure: BackpressureService,
   ) {}
 
   buildGraph(): any {
@@ -238,6 +240,12 @@ export class AgentGraphService {
 
       logger.log(`[AgentGraph] iteration=${iteration} thread=${threadId} submitted=${result.submitted}`);
       this.checkpointService.completeThread(threadId);
+
+      // Release backpressure slot if a WO was accepted during this iteration
+      if (result.selectedWorkOrder?.id) {
+        this.backpressure.release(result.selectedWorkOrder.id);
+      }
+
       return { completed: result.submitted ?? false, workOrder: result.selectedWorkOrder ?? null };
     } catch (error) {
       // Thread stays registered as incomplete on failure so

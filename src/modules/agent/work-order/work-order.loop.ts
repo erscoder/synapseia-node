@@ -12,6 +12,7 @@ import { WorkOrderStateHelper } from './work-order.state';
 import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
 import { WorkOrderExecutionHelper } from './work-order.execution';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
+import { BackpressureService } from './backpressure.service';
 import type { WorkOrderAgentConfig, WorkOrder, WorkOrderAgentState, ResearchResult } from './work-order.types';
 import { resolveTrainingChain } from '../../llm/training-llm';
 import type { LLMModel } from '../../llm/llm-provider';
@@ -25,6 +26,7 @@ export class WorkOrderLoopHelper {
     private readonly evaluation: WorkOrderEvaluationHelper,
     private readonly roundListener: RoundListenerHelper,
     private readonly agentBrain: AgentBrainHelper,
+    private readonly backpressure: BackpressureService,
   ) {}
 
   getWorkOrderAgentState(): WorkOrderAgentState {
@@ -134,6 +136,14 @@ export class WorkOrderLoopHelper {
     for (const workOrder of orderedByType) {
       logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
+      // Backpressure check: reject if at capacity
+      if (!this.backpressure.canAccept()) {
+        logger.warn(
+          `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping remaining WOs`,
+        );
+        break;
+      }
+
       // Economic evaluation
       const fullModelId = config.llmModel
         ? config.llmModel.provider === 'ollama'
@@ -154,132 +164,147 @@ export class WorkOrderLoopHelper {
       if (!ev.shouldAccept) { logger.log(' Skipping work order due to poor economics'); continue; }
 
       logger.log(' Accepting work order...');
-      const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
-      if (!accepted) { logger.log(' Failed to accept work order (likely race condition), trying next...'); continue; }
 
-      logger.log(' Work order accepted');
-      this.state.currentWorkOrder = workOrder;
-      // Track type for round-robin rotation
-      const woType = workOrder.type ?? 'COMPUTATION';
-      this.state.lastAcceptedType = woType;
-      this.state.typeExecutionCount.set(
-        woType,
-        (this.state.typeExecutionCount.get(woType) ?? 0) + 1,
-      );
-
-      // Execute
-      logger.log(' Executing work order...');
-      let result: string;
-      let success: boolean;
-      let researchResult: ResearchResult | undefined;
-
-      if (this.execution.isGpuInferenceWorkOrder(workOrder)) {
-        try {
-          const inferenceResult = await this.execution.executeGpuInferenceWorkOrder(workOrder, llmModel, llmConfig);
-          result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
-          success = true;
-        } catch (err) { result = `GPU inference failed: ${(err as Error).message}`; success = false; }
-      } else if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
-        try {
-          const inferenceResult = await this.execution.executeCpuInferenceWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl);
-          result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
-          success = true;
-        } catch (err) { result = `CPU inference failed: ${(err as Error).message}`; success = false; }
-      } else if (this.execution.isDiLoCoWorkOrder(workOrder)) {
-        const diloco = await this.execution.executeDiLoCoWorkOrder(workOrder, coordinatorUrl, peerId, capabilities);
-        result = diloco.result; success = diloco.success;
-      } else if (this.execution.isTrainingWorkOrder(workOrder)) {
-        // Resolve primary + full fallback chain (Ollama capable → cloud →
-        // Ollama small). Any model's JSON glitch is absorbed by the next
-        // candidate. See resolveTrainingChain() for the rationale.
-        const chain = await resolveTrainingChain();
-        if (!chain) {
-          logger.warn(' No training LLM available — skipping training WO');
-          result = 'No training LLM available';
-          success = false;
-        } else {
-          const training = await this.execution.executeTrainingWorkOrder(
-            workOrder, coordinatorUrl, peerId, capabilities, iteration,
-            chain.primary, llmConfig, chain.fallbacks,
-          );
-          result = training.result; success = training.success;
-        }
-      } else if (this.execution.isResearchWorkOrder(workOrder)) {
-        const research = await this.execution.executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
-        // Do NOT send `proof` — the coordinator computes a stable artefact
-        // reference (`submission:<id>`) when the node lacks a real hash.
-        // Sending the proposal text as `proof` was the bug that polluted the
-        // DB with placeholders like "See summary for details".
-        result = JSON.stringify({
-          summary: research.result.summary,
-          keyInsights: research.result.keyInsights,
-          proposal: research.result.proposal,
-          hypothesis: research.result.summary,
-          metricType: 'coherence',
-          metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0,
-        });
-        success = research.success;
-        researchResult = research.result;
-        const researchHyperparams = research.hyperparams;
-
-        if (brain && success) {
-          this.execution.saveResearchToBrain(brain, workOrder, researchResult);
-          this.agentBrain.saveBrainToDisk(brain);
-          logger.log(' Research saved to agent brain');
-        }
-
-        // NOTE: Research result is submitted via completeWorkOrder() below.
-        // The coordinator extracts summary/insights/proposal from the result JSON
-        // and registers a Submission in the active ResearchRound automatically.
-        // (Legacy /papers/results endpoint removed — it no longer exists on coordinator.)
-        void researchHyperparams; // silence unused warning — hyperparams tracked via reportHyperparamExperiment
-      } else {
-        const execution = await this.execution.executeWorkOrder(workOrder, llmModel, llmConfig);
-        result = execution.result; success = execution.success;
-      }
-
-      // Quality gates
-      if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder)) && !success) {
-        logger.warn(' Work order execution failed — skipping result submission');
-        this.state.currentWorkOrder = undefined;
+      // Acquire backpressure slot before accepting
+      if (!this.backpressure.acquire(workOrder.id)) {
+        logger.warn(`[Backpressure] Cannot acquire slot for WO ${workOrder.id} — skipping`);
         continue;
       }
 
-      if (this.execution.isResearchWorkOrder(workOrder) && researchResult) {
-        const submissionScore = this.evaluation.scoreResearchResult(researchResult);
-        if (submissionScore < this.state.submissionMinScoreThreshold) {
-          logger.warn(` Research score ${submissionScore.toFixed(4)} < threshold ${this.state.submissionMinScoreThreshold} — skipping submission`);
+      const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
+      if (!accepted) {
+        this.backpressure.release(workOrder.id);
+        logger.log(' Failed to accept work order (likely race condition), trying next...');
+        continue;
+      }
+
+      try {
+        logger.log(' Work order accepted');
+        this.state.currentWorkOrder = workOrder;
+        // Track type for round-robin rotation
+        const woType = workOrder.type ?? 'COMPUTATION';
+        this.state.lastAcceptedType = woType;
+        this.state.typeExecutionCount.set(
+          woType,
+          (this.state.typeExecutionCount.get(woType) ?? 0) + 1,
+        );
+
+        // Execute
+        logger.log(' Executing work order...');
+        let result: string;
+        let success: boolean;
+        let researchResult: ResearchResult | undefined;
+
+        if (this.execution.isGpuInferenceWorkOrder(workOrder)) {
+          try {
+            const inferenceResult = await this.execution.executeGpuInferenceWorkOrder(workOrder, llmModel, llmConfig);
+            result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
+            success = true;
+          } catch (err) { result = `GPU inference failed: ${(err as Error).message}`; success = false; }
+        } else if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
+          try {
+            const inferenceResult = await this.execution.executeCpuInferenceWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl);
+            result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
+            success = true;
+          } catch (err) { result = `CPU inference failed: ${(err as Error).message}`; success = false; }
+        } else if (this.execution.isDiLoCoWorkOrder(workOrder)) {
+          const diloco = await this.execution.executeDiLoCoWorkOrder(workOrder, coordinatorUrl, peerId, capabilities);
+          result = diloco.result; success = diloco.success;
+        } else if (this.execution.isTrainingWorkOrder(workOrder)) {
+          // Resolve primary + full fallback chain (Ollama capable → cloud →
+          // Ollama small). Any model's JSON glitch is absorbed by the next
+          // candidate. See resolveTrainingChain() for the rationale.
+          const chain = await resolveTrainingChain();
+          if (!chain) {
+            logger.warn(' No training LLM available — skipping training WO');
+            result = 'No training LLM available';
+            success = false;
+          } else {
+            const training = await this.execution.executeTrainingWorkOrder(
+              workOrder, coordinatorUrl, peerId, capabilities, iteration,
+              chain.primary, llmConfig, chain.fallbacks,
+            );
+            result = training.result; success = training.success;
+          }
+        } else if (this.execution.isResearchWorkOrder(workOrder)) {
+          const research = await this.execution.executeResearchWorkOrder(workOrder, llmModel, llmConfig, coordinatorUrl, peerId);
+          // Do NOT send `proof` — the coordinator computes a stable artefact
+          // reference (`submission:<id>`) when the node lacks a real hash.
+          // Sending the proposal text as `proof` was the bug that polluted the
+          // DB with placeholders like "See summary for details".
+          result = JSON.stringify({
+            summary: research.result.summary,
+            keyInsights: research.result.keyInsights,
+            proposal: research.result.proposal,
+            hypothesis: research.result.summary,
+            metricType: 'coherence',
+            metricValue: research.success ? this.evaluation.scoreResearchResult(research.result) : 0.0,
+          });
+          success = research.success;
+          researchResult = research.result;
+          const researchHyperparams = research.hyperparams;
+
+          if (brain && success) {
+            this.execution.saveResearchToBrain(brain, workOrder, researchResult);
+            this.agentBrain.saveBrainToDisk(brain);
+            logger.log(' Research saved to agent brain');
+          }
+
+          // NOTE: Research result is submitted via completeWorkOrder() below.
+          // The coordinator extracts summary/insights/proposal from the result JSON
+          // and registers a Submission in the active ResearchRound automatically.
+          // (Legacy /papers/results endpoint removed — it no longer exists on coordinator.)
+          void researchHyperparams; // silence unused warning — hyperparams tracked via reportHyperparamExperiment
+        } else {
+          const execution = await this.execution.executeWorkOrder(workOrder, llmModel, llmConfig);
+          result = execution.result; success = execution.success;
+        }
+
+        // Quality gates
+        if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder)) && !success) {
+          logger.warn(' Work order execution failed — skipping result submission');
           this.state.currentWorkOrder = undefined;
           continue;
         }
-      }
 
-      // Rate limit
-      await this.state.checkRateLimit();
-
-      logger.log(' Reporting result...');
-      const completed = await this.coordinator.completeWorkOrder(
-        coordinatorUrl, workOrder.id, peerId, result, success,
-        new Set(this.state.getState().completedWorkOrderIds),
-        (id) => this.state.markCompleted(id),
-        (lamports) => this.state.addRewards(lamports),
-        (s) => this.state.parseSynToLamports(s),
-      );
-
-      if (completed) {
-        logger.log(` Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
-        this.state.incrementCompleted();
-        if (this.execution.isResearchWorkOrder(workOrder)) {
-          this.state.setCooldown(workOrder.id);
-        } else if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
-          logger.log(` CPU inference result submitted — reward: ${workOrder.rewardAmount} SYN`);
+        if (this.execution.isResearchWorkOrder(workOrder) && researchResult) {
+          const submissionScore = this.evaluation.scoreResearchResult(researchResult);
+          if (submissionScore < this.state.submissionMinScoreThreshold) {
+            logger.warn(` Research score ${submissionScore.toFixed(4)} < threshold ${this.state.submissionMinScoreThreshold} — skipping submission`);
+            this.state.currentWorkOrder = undefined;
+            continue;
+          }
         }
-      } else {
-        logger.log(' Failed to report completion');
-      }
 
-      this.state.iteration = iteration;
-      return { workOrder, completed, researchResult };
+        // Rate limit
+        await this.state.checkRateLimit();
+
+        logger.log(' Reporting result...');
+        const completed = await this.coordinator.completeWorkOrder(
+          coordinatorUrl, workOrder.id, peerId, result, success,
+          new Set(this.state.getState().completedWorkOrderIds),
+          (id) => this.state.markCompleted(id),
+          (lamports) => this.state.addRewards(lamports),
+          (s) => this.state.parseSynToLamports(s),
+        );
+
+        if (completed) {
+          logger.log(` Result submitted for round evaluation! Potential reward: ${workOrder.rewardAmount} SYN (paid when round closes)`);
+          this.state.incrementCompleted();
+          if (this.execution.isResearchWorkOrder(workOrder)) {
+            this.state.setCooldown(workOrder.id);
+          } else if (this.execution.isCpuInferenceWorkOrder(workOrder)) {
+            logger.log(` CPU inference result submitted — reward: ${workOrder.rewardAmount} SYN`);
+          }
+        } else {
+          logger.log(' Failed to report completion');
+        }
+
+        this.state.iteration = iteration;
+        return { workOrder, completed, researchResult };
+      } finally {
+        this.backpressure.release(workOrder.id);
+      }
     }
 
     logger.log(' Could not accept any work order (all failed or skipped)');
