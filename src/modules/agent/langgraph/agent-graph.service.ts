@@ -3,6 +3,7 @@ import { StateGraph, Annotation } from '@langchain/langgraph';
 import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentBrain, MemoryEntry, ExecutionStep } from './state';
 import type { WorkOrderAgentConfig } from '../work-order/work-order.types';
 import { AgentBrainHelper } from '../agent-brain';
+import { CheckpointService } from './checkpoint.service';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';
 import { EvaluateEconomicsNode } from './nodes/evaluate-economics';
@@ -78,6 +79,7 @@ export class AgentGraphService {
     private readonly criticNode: CriticNode,
     private readonly synthesizerNode: SynthesizerNode,
     private readonly agentBrainHelper: AgentBrainHelper,
+    private readonly checkpointService: CheckpointService,
   ) {}
 
   buildGraph(): any {
@@ -181,15 +183,25 @@ export class AgentGraphService {
     w.addEdge('submitResult', 'updateMemory');
     w.addEdge('updateMemory', '__end__');
 
-    return workflow.compile();
+    return workflow.compile({
+      checkpointer: this.checkpointService.getCheckpointer(),
+    });
   }
 
   async runIteration(
     config: WorkOrderAgentConfig,
     iteration: number,
     brain?: AgentBrain,
+    workOrderId?: string,
   ): Promise<{ completed: boolean; workOrder?: WorkOrder | null }> {
     const graph = this.buildGraph();
+
+    // Derive a thread_id for checkpointing. When a specific work order ID is
+    // known upfront we use it; otherwise fall back to a per-iteration id so
+    // the checkpointer can still track partial progress within one invoke().
+    const effectiveWoId = workOrderId ?? `iter_${iteration}`;
+    const threadId = this.checkpointService.threadIdForWorkOrder(effectiveWoId);
+    this.checkpointService.registerThread(threadId, effectiveWoId);
 
     const initialState = {
       availableWorkOrders: [],
@@ -218,10 +230,20 @@ export class AgentGraphService {
       rejectedWorkOrderIds: [],
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (graph.invoke as any)(initialState);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (graph.invoke as any)(initialState, {
+        configurable: { thread_id: threadId },
+      });
 
-    logger.log(`[AgentGraph] iteration=${iteration} submitted=${result.submitted}`);
-    return { completed: result.submitted ?? false, workOrder: result.selectedWorkOrder ?? null };
+      logger.log(`[AgentGraph] iteration=${iteration} thread=${threadId} submitted=${result.submitted}`);
+      this.checkpointService.completeThread(threadId);
+      return { completed: result.submitted ?? false, workOrder: result.selectedWorkOrder ?? null };
+    } catch (error) {
+      // Thread stays registered as incomplete on failure so
+      // logIncompleteThreads() can report it on next startup.
+      logger.error(`[AgentGraph] iteration=${iteration} thread=${threadId} failed:`, (error as Error).message);
+      throw error;
+    }
   }
 }

@@ -4,6 +4,7 @@ import { ToolsModule } from './tools/tools.module';
 import { WorkOrderModule } from '../work-order/work-order.module';
 import { LangGraphLlmService } from './llm.service';
 import { AgentGraphService } from './agent-graph.service';
+import { CheckpointService } from './checkpoint.service';
 import { LlmProviderHelper } from '../../llm/llm-provider';
 import { AgentBrainHelper } from '../agent-brain';
 
@@ -13,8 +14,9 @@ import { AgentBrainHelper } from '../agent-brain';
     LangGraphLlmService,
     LlmProviderHelper,
     AgentBrainHelper,
+    CheckpointService,
     AgentGraphService,
   ],
-  exports: [AgentGraphService, LangGraphLlmService, AgentBrainHelper, NodesModule, WorkOrderModule],
+  exports: [AgentGraphService, LangGraphLlmService, AgentBrainHelper, CheckpointService, NodesModule, WorkOrderModule],
 })
 export class LanggraphModule {}
