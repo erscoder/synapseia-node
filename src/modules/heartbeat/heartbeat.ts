@@ -14,6 +14,7 @@ import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
 import { buildAuthHeaders } from '../../utils/node-auth';
+import { getNodeVersion } from '../../utils/version';
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -35,6 +36,8 @@ export interface HeartbeatPayload {
   gpuModel?: string;
   /** Binary attestation: sha256(chunk + nonce) response to the previous heartbeat's challenge. */
   attestationResponse?: string;
+  /** Node software version (semver). Used for version gating. */
+  version?: string;
 }
 
 export interface AttestationChallenge {
@@ -138,6 +141,7 @@ export class HeartbeatHelper {
       vram: hardware.gpuVramGb || undefined,
       gpuModel: hardware.gpuModel,
       attestationResponse,
+      version: getNodeVersion(),
     };
 
     let lastError: Error | null = null;
@@ -189,6 +193,19 @@ export class HeartbeatHelper {
         return response;
       } catch (error) {
         lastError = error as Error;
+
+        // 426 Upgrade Required: node version is too old. Don't retry.
+        const status = (error as any)?.response?.status ?? (error as any)?.status;
+        if (status === 426) {
+          const body = (error as any)?.response?.data;
+          const minVer = body?.minVersion ?? 'unknown';
+          logger.error(
+            `[Heartbeat] Coordinator rejected version ${getNodeVersion()} ` +
+              `(minimum: ${minVer}). Update your node: npm i -g @synapseia/node`,
+          );
+          throw error;
+        }
+
         logger.warn(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
 
         if (attempt < 2) {

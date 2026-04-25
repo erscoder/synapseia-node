@@ -11,6 +11,7 @@ import { ReviewAgentHelper, type LLMReviewConfig } from './review-agent';
 import { CommitRevealV2Helper } from './commit-reveal-v2';
 import { setActiveMissions, type MissionBrief } from './mission-context-state';
 import { recordRoundOutcome } from './performance-state';
+import { getNodeVersion } from '../../utils/version';
 
 interface RoundWinner {
   rank: number;
@@ -63,6 +64,7 @@ export class RoundListenerHelper {
       reconnection: true,
       reconnectionDelay: 5000,
       reconnectionAttempts: Infinity,
+      query: { version: getNodeVersion() },
     });
 
     this.socket.on('connect', () => {
@@ -71,6 +73,16 @@ export class RoundListenerHelper {
 
     this.socket.on('disconnect', (reason: string) => {
       logger.log(`[RoundListener] Disconnected from coordinator WS: ${reason}`);
+    });
+
+    this.socket.on('version_rejected', (data: { message: string; minVersion: string }) => {
+      logger.error(
+        `[RoundListener] Version rejected: ${data.message}. ` +
+          `Update your node: npm i -g @synapseia/node`,
+      );
+      // Stop reconnecting - version won't change without a restart
+      this.socket?.disconnect();
+      this.socket = null;
     });
 
     this.socket.on('round.opened', (event: RoundOpenedEvent) => {
