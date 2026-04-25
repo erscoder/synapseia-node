@@ -124,8 +124,7 @@ describe('performance-state', () => {
   });
 
   describe('low-placed-rate flag (C3 deferred)', () => {
-    it('emits a WARN when 10+ rounds at < 30% placed rate', () => {
-      // 10 rounds with placedRate = 0%
+    it('emits a WARN when 10+ recent rounds at < 30% placed rate', () => {
       for (let i = 0; i < 10; i += 1) {
         recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
       }
@@ -182,6 +181,78 @@ describe('performance-state', () => {
       }
       const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
       expect(flag).toBeUndefined();
+    });
+
+    // Reviewer Bug #4: stale-flag risk
+    it('uses recent suffix (last 10), not full window — old bad rounds do not flag forever', () => {
+      // 30 BAD rounds → expect flag to fire
+      for (let i = 0; i < 30; i += 1) {
+        recordRoundOutcome({ roundId: `b${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const before = mockWarn.mock.calls.filter((c) => String(c[0]).includes('LOW PLACED RATE')).length;
+      expect(before).toBeGreaterThan(0);
+      mockWarn.mockClear();
+
+      // 10 GOOD rounds wipe the recent suffix to 100%; flag should re-arm
+      // and a subsequent run of bad rounds should fire again.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `g${i}`, recordedAtMs: 100 + i, myRank: 1, myRewardSyn: 50, totalWinners: 3 });
+      }
+      const duringRecovery = mockWarn.mock.calls.filter((c) => String(c[0]).includes('LOW PLACED RATE')).length;
+      expect(duringRecovery).toBe(0);
+    });
+
+    // Reviewer Bug #4: hysteresis
+    it('emits the WARN once and then stays silent until recovery', () => {
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const firstBatch = mockWarn.mock.calls.filter((c) => String(c[0]).includes('LOW PLACED RATE')).length;
+      expect(firstBatch).toBe(1);
+
+      // 5 more bad rounds → another summary emission, but flag is
+      // already active → no new WARN.
+      for (let i = 0; i < 5; i += 1) {
+        recordRoundOutcome({ roundId: `r${10 + i}`, recordedAtMs: 10 + i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const secondBatch = mockWarn.mock.calls.filter((c) => String(c[0]).includes('LOW PLACED RATE')).length;
+      expect(secondBatch).toBe(1);
+    });
+
+    // Reviewer Bug #4 + #5: re-fire after recovery + counter not length
+    it('re-fires after recovery → bad streak again', () => {
+      // 10 bad → flag once.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      // 10 good → recovery clears flag.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `g${i}`, recordedAtMs: 10 + i, myRank: 1, myRewardSyn: 1, totalWinners: 3 });
+      }
+      mockWarn.mockClear();
+      // 10 bad again → flag re-fires.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `b${i}`, recordedAtMs: 20 + i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const refire = mockWarn.mock.calls.filter((c) => String(c[0]).includes('LOW PLACED RATE')).length;
+      expect(refire).toBe(1);
+    });
+  });
+
+  // Reviewer Bug #5: post-window saturation log spam
+  describe('summary log emission cadence (Bug #5)', () => {
+    it('emits the [Performance] summary every 5 records, even after window saturation', () => {
+      // Push 60 records (window default is 50). Without the counter
+      // fix, every record after #50 would also satisfy `length % 5
+      // === 0` and emit a summary. With the counter, summaries fire
+      // exactly at recordCount = 5, 10, 15, …, 60 — i.e. 12 total.
+      for (let i = 0; i < 60; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: 1, myRewardSyn: 1, totalWinners: 1 });
+      }
+      const summaries = mockLog.mock.calls.filter((c) =>
+        String(c[0]).includes('[Performance] last'),
+      );
+      expect(summaries).toHaveLength(12);
     });
   });
 });
