@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] feat(version-gating): T5 — report version in heartbeat + WS handshake (dd5ea70c)
+
+- New `utils/version.ts`: `getNodeVersion()` reads version from
+  package.json (cached after first call).
+- Heartbeat payload now includes `version` field on every tick.
+- 426 Upgrade Required response from coordinator stops retry loop
+  with a clear "update your node" error message.
+- RoundListener sends version in WS handshake query param.
+- Handles `version_rejected` WS event: disconnect + stop reconnecting.
+
++2 tests (version utility). 72 / 1137 green.
+
 ## [2026-04-25] fix(agent): perf-state round-2 review — recent-suffix + hysteresis + counter (a23154b3)
 
 Round-2 reviewer pass on the C3 deferred flag:
