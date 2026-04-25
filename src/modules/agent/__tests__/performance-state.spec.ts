@@ -7,15 +7,22 @@ import {
 } from '../performance-state';
 
 const mockLog = jest.fn();
+const mockWarn = jest.fn();
 jest.mock('../../../utils/logger', () => ({
   __esModule: true,
-  default: { log: (...a: unknown[]) => mockLog(...a), warn: jest.fn(), error: jest.fn() },
+  default: {
+    log: (...a: unknown[]) => mockLog(...a),
+    warn: (...a: unknown[]) => mockWarn(...a),
+    error: jest.fn(),
+  },
 }));
 
 describe('performance-state', () => {
   beforeEach(() => {
     mockLog.mockClear();
+    mockWarn.mockClear();
     delete process.env.PERFORMANCE_WINDOW;
+    delete process.env.PERFORMANCE_LOW_PLACED_RATE;
     _resetPerformanceStateForTests();
   });
 
@@ -114,5 +121,67 @@ describe('performance-state', () => {
       recordRoundOutcome({ roundId: `b${i}`, recordedAtMs: i, myRank: 1, myRewardSyn: 1, totalWinners: 1 });
     }
     expect(getRecentOutcomes()).toHaveLength(50);
+  });
+
+  describe('low-placed-rate flag (C3 deferred)', () => {
+    it('emits a WARN when 10+ rounds at < 30% placed rate', () => {
+      // 10 rounds with placedRate = 0%
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
+      expect(flag).toBeDefined();
+      expect(String(flag?.[0])).toContain('< 30%');
+    });
+
+    it('does NOT emit the WARN below the minimum-rounds threshold (5 rounds)', () => {
+      for (let i = 0; i < 5; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: null, myRewardSyn: null, totalWinners: 3 });
+      }
+      const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
+      expect(flag).toBeUndefined();
+    });
+
+    it('does NOT emit when placedRate sits above the threshold', () => {
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({
+          roundId: `r${i}`,
+          recordedAtMs: i,
+          myRank: 1,
+          myRewardSyn: 50,
+          totalWinners: 3,
+        });
+      }
+      const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
+      expect(flag).toBeUndefined();
+    });
+
+    it('honors PERFORMANCE_LOW_PLACED_RATE override', () => {
+      process.env.PERFORMANCE_LOW_PLACED_RATE = '80';
+      // 10 rounds with placedRate=50% — below 80%, should flag.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({
+          roundId: `r${i}`,
+          recordedAtMs: i,
+          myRank: i % 2 === 0 ? 1 : null,
+          myRewardSyn: i % 2 === 0 ? 1 : null,
+          totalWinners: 3,
+        });
+      }
+      const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
+      expect(flag).toBeDefined();
+      expect(String(flag?.[0])).toContain('< 80%');
+    });
+
+    it('clamps absurd PERFORMANCE_LOW_PLACED_RATE to [0,100]', () => {
+      process.env.PERFORMANCE_LOW_PLACED_RATE = '999';
+      // 100% placed → still should NOT fire because clamp puts threshold at 100,
+      // and 100 < 100 is false.
+      for (let i = 0; i < 10; i += 1) {
+        recordRoundOutcome({ roundId: `r${i}`, recordedAtMs: i, myRank: 1, myRewardSyn: 1, totalWinners: 3 });
+      }
+      const flag = mockWarn.mock.calls.find((c) => String(c[0]).includes('LOW PLACED RATE'));
+      expect(flag).toBeUndefined();
+    });
   });
 });
