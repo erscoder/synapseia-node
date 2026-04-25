@@ -1,5 +1,5 @@
-import { detectInstallType, InstallType, attemptSelfUpdate } from '../utils/self-updater';
-import { execSync } from 'child_process';
+import { detectInstallType, InstallType, attemptSelfUpdate, restartProcess } from '../utils/self-updater';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 
 jest.mock('child_process');
@@ -10,6 +10,7 @@ jest.mock('../utils/logger', () => ({
 }));
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockExecFileSync = execFileSync as jest.MockedFunction<typeof execFileSync>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 describe('detectInstallType', () => {
@@ -94,5 +95,37 @@ describe('attemptSelfUpdate', () => {
     const result = attemptSelfUpdate();
     expect(result.success).toBe(false);
     expect(result.message).toContain('EACCES');
+  });
+});
+
+describe('restartProcess', () => {
+  const originalArgv = process.argv;
+  const mockExit = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.argv = ['/usr/local/bin/node', '/usr/local/bin/syn', 'start'];
+  });
+
+  afterAll(() => {
+    process.argv = originalArgv;
+    mockExit.mockRestore();
+  });
+
+  it('calls execFileSync with process.argv[0] and remaining args', () => {
+    mockExecFileSync.mockReturnValue(Buffer.from(''));
+    restartProcess();
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      '/usr/local/bin/node',
+      ['/usr/local/bin/syn', 'start'],
+      expect.objectContaining({ stdio: 'inherit' }),
+    );
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('exits 0 even if the child process throws', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('child exited'); });
+    restartProcess();
+    expect(mockExit).toHaveBeenCalledWith(0);
   });
 });

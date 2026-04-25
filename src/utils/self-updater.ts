@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import logger from './logger';
@@ -104,12 +104,12 @@ export function restartProcess(): never {
   const args = process.argv.slice(1);
   logger.log('[SelfUpdate] Restarting process...');
   try {
-    execSync(`"${process.argv[0]}" ${args.map(a => `"${a}"`).join(' ')}`, {
+    execFileSync(process.argv[0], args, {
       stdio: 'inherit',
       env: process.env,
     });
   } catch {
-    // The new process exited — we should too
+    // The new process exited - we should too
   }
   process.exit(0);
 }
