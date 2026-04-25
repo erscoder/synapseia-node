@@ -1,5 +1,11 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] feat(quality-gate): T6 — explicit review rubric + raise quality gate to 0.30 (7131c5b8)
+
+- Rewrote `buildReviewPrompt()` in `review-agent.ts` with explicit 0-10 rubric per dimension (accuracy, novelty, methodology, conclusions) including score band descriptions.
+- Raised default `SUBMISSION_MIN_SCORE` from 0.15 to 0.30 in `quality-gate.ts`.
+- Reason: review prompt lacked rubric guidance, leading to inconsistent scoring; 0.15 gate was too permissive.
+
 ## [0.3.0] 2026-04-25 — feat(version-gating): T6 pre-flight version check + self-update
 
 - New `utils/update-checker.ts`: fetches GET /version from coordinator,
