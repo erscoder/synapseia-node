@@ -87,6 +87,24 @@ describe('buildMedicalResearcherPrompt', () => {
     expect(p).toContain('"discoveryType"');
     expect(p).toContain('"structuredData"');
   });
+
+  it('injects missionContext block when provided', () => {
+    const p = buildMedicalResearcherPrompt({
+      ...base,
+      missionContext:
+        'ACTIVE MISSIONS:\n  • ALS: cure\n    Find treatments for ALS\n    - [find_compound] Drug repurposing',
+    });
+    expect(p).toContain('ACTIVE MISSIONS');
+    expect(p).toContain('ALS: cure');
+    expect(p).toContain('foreground that connection in your summary');
+  });
+
+  it('omits missionContext block when empty / undefined', () => {
+    const p1 = buildMedicalResearcherPrompt({ ...base, missionContext: '' });
+    const p2 = buildMedicalResearcherPrompt(base);
+    expect(p1).not.toContain('ACTIVE MISSIONS');
+    expect(p2).not.toContain('ACTIVE MISSIONS');
+  });
 });
 
 describe('buildMedicalSynthesizerPrompt', () => {

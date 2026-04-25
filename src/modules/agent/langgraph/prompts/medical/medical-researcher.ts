@@ -22,6 +22,13 @@ export interface MedicalResearcherParams {
   referenceContext?: string;
   /** DOIs drawn from the coordinator corpus for the same topic; safe to cite as supporting_dois. */
   relatedDois?: string[];
+  /**
+   * Pre-rendered mission context block (from mission-context-state.
+   * renderMissionBriefForPrompt). Empty string disables the section.
+   * Audit 2026-04-25 (C1): grounding the LLM in the active goals stops
+   * the network from generating heart-transplant papers for ALS missions.
+   */
+  missionContext?: string;
 }
 
 export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string {
@@ -33,8 +40,11 @@ export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string
   const related = p.relatedDois?.length
     ? `\n\nRelated paper DOIs (draw supporting_dois from this list plus the source paper):\n${p.relatedDois.map((d) => `  - ${d}`).join('\n')}`
     : '';
+  const mission = p.missionContext && p.missionContext.length > 0
+    ? `\n\n${p.missionContext}\n\nIf the paper genuinely supports an active mission, foreground that connection in your summary and pick the discoveryType that best advances the mission. If none of the active missions apply, still emit a discovery — but note in the summary that the paper is off-mission.`
+    : '';
 
-  return `You are a biomedical research analyst. Read the paper and propose exactly ONE structured discovery.
+  return `You are a biomedical research analyst. Read the paper and propose exactly ONE structured discovery.${mission}
 
 Paper: ${p.title}
 Abstract: ${p.abstract}${doiLine}${kg}${ref}${related}
