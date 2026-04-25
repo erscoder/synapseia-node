@@ -8,6 +8,7 @@ import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { buildMedicalResearcherPrompt } from '../prompts/medical/medical-researcher';
+import { renderMissionBriefForPrompt } from '../../mission-context-state';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -54,6 +55,7 @@ export class ResearcherNode {
       kgContext,
       referenceContext,
       relatedDois,
+      missionContext: renderMissionBriefForPrompt(),
     });
 
     try {

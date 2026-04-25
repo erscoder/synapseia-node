@@ -9,6 +9,7 @@ import { io, Socket } from 'socket.io-client';
 import logger from '../../utils/logger';
 import { ReviewAgentHelper, type LLMReviewConfig } from './review-agent';
 import { CommitRevealV2Helper } from './commit-reveal-v2';
+import { setActiveMissions, type MissionBrief } from './mission-context-state';
 
 interface RoundWinner {
   rank: number;
@@ -28,6 +29,14 @@ interface RoundClosedEvent {
 interface RoundEvaluatingEvent {
   roundId: string;
   submissionCount: number;
+}
+
+interface RoundOpenedEvent {
+  roundId: string;
+  endsAt: string;
+  paperCount: number;
+  /** Optional. Older coordinators don't ship this field — degrade silently. */
+  missions?: MissionBrief[];
 }
 
 interface EvaluationAssignedEvent {
@@ -61,6 +70,15 @@ export class RoundListenerHelper {
 
     this.socket.on('disconnect', (reason: string) => {
       logger.log(`[RoundListener] Disconnected from coordinator WS: ${reason}`);
+    });
+
+    this.socket.on('round.opened', (event: RoundOpenedEvent) => {
+      const missionCount = event.missions?.length ?? 0;
+      logger.log(
+        `[RoundListener] Round opened: ${event.roundId} (${event.paperCount} papers, ` +
+          `${missionCount} active mission${missionCount === 1 ? '' : 's'}). Caching mission brief for prompt injection.`,
+      );
+      setActiveMissions(event.missions ?? []);
     });
 
     this.socket.on('round.closed', (event: RoundClosedEvent) => {
