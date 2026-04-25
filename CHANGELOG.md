@@ -1,5 +1,23 @@
 # Changelog — @synapseia/node
 
+## [2026-04-25] feat(agent): low-placed-rate flag for sustained underperformance (a3367c31)
+
+Closes the deferred subset of audit Bucket C3. performance-state
+already tracks the rolling outcome window; this commit adds the
+operator-visible signal:
+
+- Every 5 recorded outcomes, after the existing summary log, also
+  emit a structured `[Performance] LOW PLACED RATE` WARN if the
+  rolling placed-rate sits below `PERFORMANCE_LOW_PLACED_RATE`
+  (default 30%) AND the window has ≥ 10 rounds of signal.
+- Threshold clamped to [0, 100] so a typo can't disable or
+  always-fire the flag.
+- Auto model upgrades / capability gating remain intentionally
+  deferred — this is the substrate; the reaction policy lives
+  somewhere a human or dashboard reads.
+
++5 tests. 71 / 1131 green.
+
 ## [2026-04-25] fix(audit-review): mutex covers HTTP fallback + perf window env-driven (8db9252f)
 
 Code-review followups on the audit landing:
