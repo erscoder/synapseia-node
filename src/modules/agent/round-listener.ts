@@ -10,6 +10,7 @@ import logger from '../../utils/logger';
 import { ReviewAgentHelper, type LLMReviewConfig } from './review-agent';
 import { CommitRevealV2Helper } from './commit-reveal-v2';
 import { setActiveMissions, type MissionBrief } from './mission-context-state';
+import { recordRoundOutcome } from './performance-state';
 
 interface RoundWinner {
   rank: number;
@@ -85,6 +86,16 @@ export class RoundListenerHelper {
       logger.log(`[RoundListener] Round closed: ${event.roundId} (workOrder: ${event.workOrderId})`);
       const myResult = event.winners.find(w => w.nodeId === peerId);
       const lamportsToSyn = (lamports: string) => (Number(lamports) / 1e9).toFixed(9);
+
+      // Bucket C3: persist per-round outcome for the rolling performance
+      // window. recordRoundOutcome rolls up a summary every 5 rounds.
+      recordRoundOutcome({
+        roundId: event.roundId,
+        recordedAtMs: Date.now(),
+        myRank: myResult?.rank ?? null,
+        myRewardSyn: myResult ? Number(myResult.rewardAmount) / 1e9 : null,
+        totalWinners: event.winners.length,
+      });
 
       if (myResult) {
         const rankEmoji = myResult.rank === 1 ? '🥇' : myResult.rank === 2 ? '🥈' : '🥉';
