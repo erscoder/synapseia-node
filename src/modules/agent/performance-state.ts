@@ -29,7 +29,12 @@ export interface RoundOutcome {
 }
 
 const DEFAULT_WINDOW = 50;
-let window = DEFAULT_WINDOW;
+function readEnvWindow(): number {
+  const raw = process.env.PERFORMANCE_WINDOW;
+  const parsed = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WINDOW;
+}
+let window = readEnvWindow();
 let outcomes: RoundOutcome[] = [];
 
 export function recordRoundOutcome(o: RoundOutcome): void {
@@ -85,5 +90,5 @@ export function setRollingWindow(size: number): void {
 /** Test-only reset helper. */
 export function _resetPerformanceStateForTests(): void {
   outcomes = [];
-  window = DEFAULT_WINDOW;
+  window = readEnvWindow();
 }

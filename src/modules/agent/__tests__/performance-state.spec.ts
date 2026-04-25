@@ -6,13 +6,18 @@ import {
   _resetPerformanceStateForTests,
 } from '../performance-state';
 
+const mockLog = jest.fn();
 jest.mock('../../../utils/logger', () => ({
   __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  default: { log: (...a: unknown[]) => mockLog(...a), warn: jest.fn(), error: jest.fn() },
 }));
 
 describe('performance-state', () => {
-  beforeEach(() => _resetPerformanceStateForTests());
+  beforeEach(() => {
+    mockLog.mockClear();
+    delete process.env.PERFORMANCE_WINDOW;
+    _resetPerformanceStateForTests();
+  });
 
   it('starts empty', () => {
     expect(getRecentOutcomes()).toEqual([]);
@@ -72,5 +77,42 @@ describe('performance-state', () => {
     // No throw, no change in default behavior — push 1 row to confirm.
     recordRoundOutcome({ roundId: 'r1', recordedAtMs: 0, myRank: 1, myRewardSyn: 1, totalWinners: 1 });
     expect(getRecentOutcomes()).toHaveLength(1);
+  });
+
+  it('emits a [Performance] summary log every five recorded rounds', () => {
+    for (let i = 0; i < 5; i += 1) {
+      recordRoundOutcome({
+        roundId: `r${i}`,
+        recordedAtMs: i,
+        myRank: i % 3 === 0 ? 1 : null,
+        myRewardSyn: i % 3 === 0 ? 50 : null,
+        totalWinners: 3,
+      });
+    }
+    const summary = mockLog.mock.calls.find((c) =>
+      String(c[0]).includes('[Performance]'),
+    );
+    expect(summary).toBeDefined();
+    expect(String(summary?.[0])).toContain('last 5 rounds');
+    expect(String(summary?.[0])).toContain('placed');
+  });
+
+  it('reads PERFORMANCE_WINDOW env var on reset', () => {
+    process.env.PERFORMANCE_WINDOW = '2';
+    _resetPerformanceStateForTests();
+    for (let i = 0; i < 4; i += 1) {
+      recordRoundOutcome({ roundId: `e${i}`, recordedAtMs: i, myRank: 1, myRewardSyn: 1, totalWinners: 1 });
+    }
+    expect(getRecentOutcomes()).toHaveLength(2);
+  });
+
+  it('ignores malformed PERFORMANCE_WINDOW and keeps the default window', () => {
+    process.env.PERFORMANCE_WINDOW = 'not-a-number';
+    _resetPerformanceStateForTests();
+    // Push >50 to overflow the default — only 50 should remain.
+    for (let i = 0; i < 60; i += 1) {
+      recordRoundOutcome({ roundId: `b${i}`, recordedAtMs: i, myRank: 1, myRewardSyn: 1, totalWinners: 1 });
+    }
+    expect(getRecentOutcomes()).toHaveLength(50);
   });
 });

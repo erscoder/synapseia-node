@@ -11,6 +11,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import logger from '../../utils/logger';
 import { priceUsdFromEnv } from './QueryCostCalculator';
+import { beginChatInference, endChatInference } from './chat-inference-state';
 
 export interface InferenceServerConfig {
   port?: number;
@@ -183,7 +184,17 @@ export async function handleChatCompletions(
       return;
     }
 
-    const ollamaResponse = await forwardToOllama(body);
+    // HTTP fallback path matters when libp2p is degraded — coordinator's
+    // ChatStreamClient drops to /v1/chat/completions. Without this hook the
+    // TRAINING mutex (audit 2026-04-24, A1) silently fails open and the
+    // coordinator times out again.
+    beginChatInference();
+    let ollamaResponse;
+    try {
+      ollamaResponse = await forwardToOllama(body);
+    } finally {
+      endChatInference();
+    }
     const openaiResponse = transformToOpenAI(ollamaResponse, body.model);
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
