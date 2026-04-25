@@ -39,6 +39,7 @@ jest.mock('../../../../utils/logger', () => ({
 global.fetch = jest.fn() as unknown as typeof fetch;
 
 import { AgentGraphService } from '../agent-graph.service';
+import { CheckpointService } from '../checkpoint.service';
 import { FetchWorkOrdersNode } from '../nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from '../nodes/select-wo';
 import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
@@ -106,6 +107,7 @@ function buildService(): AgentGraphService {
     new CriticNode(llmProvider, coordinator),
     new SynthesizerNode(llmProvider, coordinator),
     agentBrain,
+    new CheckpointService(),
   );
 }
 
