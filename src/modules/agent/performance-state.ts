@@ -29,6 +29,7 @@ export interface RoundOutcome {
 }
 
 const DEFAULT_WINDOW = 50;
+const RECENT_SUFFIX = 10;
 function readEnvWindow(): number {
   const raw = process.env.PERFORMANCE_WINDOW;
   const parsed = Number.parseInt(raw ?? '', 10);
@@ -36,13 +37,27 @@ function readEnvWindow(): number {
 }
 let window = readEnvWindow();
 let outcomes: RoundOutcome[] = [];
+// Counter independent of `outcomes.length` — once the rolling window is
+// saturated `outcomes.length` stays pinned at `window` and `% 5 === 0`
+// evaluates true on every record (log spam). Track the lifetime count
+// and gate summary emissions against that instead.
+let recordCount = 0;
+// Hysteresis: once the LOW PLACED RATE flag fires, suppress repeats
+// until the rate recovers above the threshold. Otherwise a node with
+// 30 bad rounds buried in the window flags every 5 rounds even after
+// it has fixed itself.
+let lowRateFlagActive = false;
 
 export function recordRoundOutcome(o: RoundOutcome): void {
   outcomes.push(o);
   while (outcomes.length > window) outcomes.shift();
+  recordCount += 1;
   // Roll up a one-line summary every 5 rounds so the operator sees the
-  // trend without having to scrape per-round logs.
-  if (outcomes.length > 0 && outcomes.length % 5 === 0) {
+  // trend without having to scrape per-round logs. Gated on
+  // `recordCount` (lifetime counter) instead of `outcomes.length`
+  // because once the window saturates `outcomes.length` stays at its
+  // cap and `length % 5 === 0` would fire every single record.
+  if (recordCount % 5 === 0) {
     const stats = computeRollingStats();
     logger.log(
       `[Performance] last ${outcomes.length} rounds: ` +
@@ -52,22 +67,34 @@ export function recordRoundOutcome(o: RoundOutcome): void {
     );
 
     // C3 deferred subset: emit a structured WARN once we have enough
-    // signal AND the placedRate sits below the configured threshold for
-    // the entire rolling window. Operators / dashboards can tail this
-    // line to flag a node that needs a model upgrade or capability
-    // review. Default 30% over 10+ rounds; override via
-    // PERFORMANCE_LOW_PLACED_RATE.
-    const minRoundsForFlag = 10;
-    const lowRateThreshold = readLowPlacedRateThreshold();
-    if (
-      stats.totalRounds >= minRoundsForFlag &&
-      stats.placedRate < lowRateThreshold
-    ) {
-      logger.warn(
-        `[Performance] LOW PLACED RATE — last ${stats.totalRounds} rounds at ` +
-          `${stats.placedRate.toFixed(0)}% (< ${lowRateThreshold}%). ` +
-          `Consider upgrading the LLM or reviewing capabilities.`,
-      );
+    // signal AND the recent placedRate sits below the configured
+    // threshold. Operators / dashboards can tail this line to flag a
+    // node that needs a model upgrade or capability review.
+    //
+    // Use the RECENT SUFFIX (last RECENT_SUFFIX rounds) instead of the
+    // full window — a node that fixed itself shouldn't keep flagging
+    // because old bad rounds are still buried in the rolling window.
+    // Hysteresis: once active the flag stays silent until placedRate
+    // recovers above the threshold, then can re-arm.
+    const recent = outcomes.slice(-RECENT_SUFFIX);
+    if (recent.length >= RECENT_SUFFIX) {
+      const placedRecent = recent.filter((r) => r.myRank !== null).length;
+      const recentRate = (placedRecent / recent.length) * 100;
+      const lowRateThreshold = readLowPlacedRateThreshold();
+      if (recentRate < lowRateThreshold) {
+        if (!lowRateFlagActive) {
+          logger.warn(
+            `[Performance] LOW PLACED RATE — last ${recent.length} rounds at ` +
+              `${recentRate.toFixed(0)}% (< ${lowRateThreshold}%). ` +
+              `Consider upgrading the LLM or reviewing capabilities.`,
+          );
+          lowRateFlagActive = true;
+        }
+      } else {
+        // Recovered above the threshold — re-arm the flag so the next
+        // dip emits a fresh WARN.
+        lowRateFlagActive = false;
+      }
     }
   }
 }
@@ -118,4 +145,6 @@ export function setRollingWindow(size: number): void {
 export function _resetPerformanceStateForTests(): void {
   outcomes = [];
   window = readEnvWindow();
+  recordCount = 0;
+  lowRateFlagActive = false;
 }
