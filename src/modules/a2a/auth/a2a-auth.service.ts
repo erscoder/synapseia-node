@@ -3,15 +3,7 @@
  * Sprint D — A2A Server for Synapseia Node
  *
  * Verifies Ed25519 signatures on incoming A2A tasks and signs outgoing tasks.
- *
- * NOTE: The existing IdentityHelper (modules/identity) stores Ed25519 private keys
- * as the last 32 bytes of the PKCS8 DER export. This is NOT the correct format
- * for Ed25519 private key import. For proper Ed25519, keys should be stored as
- * full PKCS8 DER (48 bytes) or raw 32-byte scalar.
- *
- * This service uses HMAC-SHA256 to match the existing IdentityHelper signature
- * scheme (see identity.ts BUG-1). For true Ed25519 inter-node verification,
- * the identity module should be updated to store full PKCS8 DER keys.
+ * Uses Ed25519 via Node.js native crypto (matching IdentityHelper.sign()).
  */
 
 import { Injectable } from '@nestjs/common';
@@ -27,8 +19,7 @@ export class A2AAuthService {
   private readonly usedNonces = new Map<string, number>();
 
   /**
-   * Verify incoming A2A task signature.
-   * Uses HMAC-SHA256 to match IdentityHelper.verifySignature().
+   * Verify incoming A2A task signature using Ed25519.
    * Returns true if valid, false if invalid/expired/replay.
    */
   async verify(task: A2ATask, senderPublicKeyHex: string): Promise<boolean> {
@@ -45,8 +36,7 @@ export class A2AAuthService {
     this.usedNonces.set(task.nonce, Date.now());
     this.cleanExpiredNonces();
 
-    // 3. Verify HMAC-SHA256 signature (matches IdentityHelper scheme)
-    // Signature covers: task.id + task.type + task.senderPeerId + task.timestamp + task.nonce
+    // 3. Verify Ed25519 signature
     const message = `${task.id}:${task.type}:${task.senderPeerId}:${task.timestamp}:${task.nonce}`;
 
     try {
@@ -54,20 +44,17 @@ export class A2AAuthService {
       const signatureBytes = Buffer.from(task.signature, 'hex');
       const messageBytes = Buffer.from(message, 'utf-8');
 
-      // HMAC-SHA256 verification (same as IdentityHelper.verifySignature)
-      const hmac = crypto.createHmac('sha256', publicKeyBytes);
-      hmac.update(messageBytes);
-      const expectedSignature = hmac.digest('hex');
-
-      return signatureBytes.toString('hex') === expectedSignature;
+      const ED25519_DER_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+      const publicKeyDer = Buffer.concat([ED25519_DER_PREFIX, publicKeyBytes]);
+      const keyObject = crypto.createPublicKey({ key: publicKeyDer, format: 'der', type: 'spki' });
+      return crypto.verify(null, messageBytes, keyObject, signatureBytes);
     } catch {
       return false;
     }
   }
 
   /**
-   * Sign an outgoing A2A task with the node's private key.
-   * Uses HMAC-SHA256 to match IdentityHelper.sign() (see BUG-1).
+   * Sign an outgoing A2A task with the node's Ed25519 private key.
    */
   sign(task: Omit<A2ATask, 'signature'>, privateKeyHex: string): string {
     const message = `${task.id}:${task.type}:${task.senderPeerId}:${task.timestamp}:${task.nonce}`;
@@ -75,9 +62,10 @@ export class A2AAuthService {
     try {
       const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
       const messageBytes = Buffer.from(message, 'utf-8');
-      const hmac = crypto.createHmac('sha256', privateKeyBytes);
-      hmac.update(messageBytes);
-      return hmac.digest('hex');
+      const PKCS8_HEADER = Buffer.from('302e020100300506032b657004220420', 'hex');
+      const derKey = Buffer.concat([PKCS8_HEADER, privateKeyBytes]);
+      const keyObject = crypto.createPrivateKey({ key: derKey, format: 'der', type: 'pkcs8' });
+      return crypto.sign(null, messageBytes, keyObject).toString('hex');
     } catch {
       return '';
     }
