@@ -1,5 +1,9 @@
 # Changelog — @synapseia/node
 
+## [0.4.0] 2026-04-26 — version sync release
+
+- Bumped version to 0.4.0 (synced with coordinator and node-ui).
+
 ## [2026-04-26] feat(coordinator-client): parse structured error responses (6560b149)
 
 - `WorkOrderCoordinatorHelper` now parses structured `{ error, message, details }` JSON from coordinator error responses.
