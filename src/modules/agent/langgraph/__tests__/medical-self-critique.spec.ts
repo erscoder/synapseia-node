@@ -3,7 +3,7 @@
  *
  * Prompt-text assertions cover the ontologyGrounding dimension + harsh
  * grading rules. Parser tests cover the stricter pass rule (avg ≥ 7.0
- * AND grounding ≥ 6).
+ * AND grounding ≥ 8 — raised 2026-04-26 from ≥6 after audit).
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -56,15 +56,31 @@ describe('buildMedicalSelfCritiquePrompt', () => {
     expect(p).toContain('10.1056/NEJMoa2204705');
   });
 
-  it('documents the pass rule (avg ≥ 7.0 AND grounding ≥ 6)', () => {
+  it('documents the pass rule (avg ≥ 7.0 AND grounding ≥ 8)', () => {
     const p = buildMedicalSelfCritiquePrompt(base);
     expect(p).toMatch(/average.*≥\s*7\.0/i);
-    expect(p).toMatch(/ontologyGrounding\s*is\s*≥\s*6/i);
+    expect(p).toMatch(/ontologyGrounding\s*is\s*≥\s*8/i);
+  });
+
+  it('forbids wrong schema keys (RxNorm, MeSH, UMLS CUI) explicitly', () => {
+    const p = buildMedicalSelfCritiquePrompt(base);
+    // Anti-pattern enumeration must list the capitalized variants the
+    // audit caught in production.
+    expect(p).toContain('"RxNorm"');
+    expect(p).toContain('"MeSH"');
+    expect(p).toContain('"UMLS CUI"');
+    expect(p.toLowerCase()).toContain('schema field names');
+  });
+
+  it('flags multi-object paste as automatic fail', () => {
+    const p = buildMedicalSelfCritiquePrompt(base);
+    expect(p).toContain('Multiple JSON objects');
+    expect(p).toContain('}}, {');
   });
 });
 
 describe('parseMedicalSelfCritiqueResponse', () => {
-  it('returns clamped scores + passed=true when all dimensions ≥ 7 and grounding ≥ 6', () => {
+  it('returns clamped scores + passed=true when all dimensions ≥ 7 and grounding ≥ 8', () => {
     const raw = JSON.stringify({
       accuracy: 8, completeness: 9, novelty: 7, actionability: 8, ontologyGrounding: 9,
       feedback: 'solid', passed: true,
@@ -84,10 +100,21 @@ describe('parseMedicalSelfCritiqueResponse', () => {
     expect(r.passed).toBe(false);
   });
 
-  it('fails when grounding < 6 even if the rest is perfect', () => {
+  it('fails when grounding < 8 even if the rest is perfect', () => {
     const raw = JSON.stringify({
       accuracy: 10, completeness: 10, novelty: 10, actionability: 10, ontologyGrounding: 3,
       feedback: 'invented DOIs', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw);
+    expect(r.passed).toBe(false);
+  });
+
+  it('fails when grounding=7 (the previous threshold that audit found too lax)', () => {
+    // 2026-04-26 regression guard: avg here is 7.6 but grounding=7, which used
+    // to pass. After the audit raise to ≥8, this MUST fail.
+    const raw = JSON.stringify({
+      accuracy: 8, completeness: 8, novelty: 7, actionability: 8, ontologyGrounding: 7,
+      feedback: 'borderline grounding', passed: true,
     });
     const r = parseMedicalSelfCritiqueResponse(raw);
     expect(r.passed).toBe(false);

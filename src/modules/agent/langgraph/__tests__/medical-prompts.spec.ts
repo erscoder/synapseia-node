@@ -105,6 +105,29 @@ describe('buildMedicalResearcherPrompt', () => {
     expect(p1).not.toContain('ACTIVE MISSIONS');
     expect(p2).not.toContain('ACTIVE MISSIONS');
   });
+
+  // 2026-04-26 audit additions: explicit anti-pattern guards.
+  it('lists wrong schema keys (RxNorm, MeSH, UMLS CUI) as anti-patterns', () => {
+    const p = buildMedicalResearcherPrompt(base);
+    expect(p).toContain('"RxNorm"');
+    expect(p).toContain('"MeSH"');
+    expect(p).toContain('"UMLS CUI"');
+    expect(p).toContain('drug_rxnorm_id');
+  });
+
+  it('forbids multi-object output explicitly', () => {
+    const p = buildMedicalResearcherPrompt(base);
+    expect(p).toContain('ONE single JSON object');
+    expect(p).toContain('}}, {');
+  });
+
+  it('includes a worked example with real RxNorm + MeSH IDs', () => {
+    const p = buildMedicalResearcherPrompt(base);
+    expect(p).toContain('WORKED EXAMPLE');
+    expect(p).toContain('"9325"'); // riluzole RXCUI
+    expect(p).toContain('"D000690"'); // ALS MeSH
+    expect(p).toContain('drug_repurposing');
+  });
 });
 
 describe('buildMedicalSynthesizerPrompt', () => {
@@ -142,6 +165,28 @@ describe('buildMedicalSynthesizerPrompt', () => {
     expect(p).toMatch(/≥\s*100 chars/);
     expect(p).toMatch(/≥\s*12 words/);
   });
+
+  // 2026-04-26 audit additions: anti-pattern hardening against the failure
+  // modes observed in production (multi-object paste was the worst).
+  it('forbids multi-object output explicitly', () => {
+    const p = buildMedicalSynthesizerPrompt({ title: 'x', researcherJson: '{}', criticFeedback: 'x' });
+    expect(p).toContain('exactly ONE');
+    expect(p).toMatch(/multiple\s+objects/i);
+  });
+
+  it('lists wrong schema keys (RxNorm, MeSH, UMLS CUI) as anti-patterns', () => {
+    const p = buildMedicalSynthesizerPrompt({ title: 'x', researcherJson: '{}', criticFeedback: 'x' });
+    expect(p).toContain('"RxNorm"');
+    expect(p).toContain('"MeSH"');
+    expect(p).toContain('"UMLS CUI"');
+  });
+
+  it('includes a worked example showing prose + embedded JSON in one proposal', () => {
+    const p = buildMedicalSynthesizerPrompt({ title: 'x', researcherJson: '{}', criticFeedback: 'x' });
+    expect(p).toContain('WORKED EXAMPLE');
+    expect(p).toContain('drug_rxnorm_id');
+    expect(p).toContain('9325');
+  });
 });
 
 describe('buildMedicalReActPrompt', () => {
@@ -169,5 +214,13 @@ describe('buildMedicalReActPrompt', () => {
   it('emits the same 5-schema block as the other prompts', () => {
     const p = buildMedicalReActPrompt(base);
     for (const t of DISCOVERY_TYPES) expect(p).toContain(`"${t}"`);
+  });
+
+  it('lists schema-key + multi-object anti-patterns aligned with researcher/synthesizer', () => {
+    const p = buildMedicalReActPrompt(base);
+    expect(p).toContain('"RxNorm"');
+    expect(p).toContain('"MeSH"');
+    expect(p).toContain('}}, {');
+    expect(p).toContain('drug_rxnorm_id');
   });
 });

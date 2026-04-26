@@ -7,9 +7,12 @@
  * DiscoveryService.extractStructuredPayload parses it out with a regex
  * looking for the first balanced {…} block.
  *
- * When the abstract doesn't cleanly match any of the 5 types, the LLM is
- * told to pick the closest and keep supporting_dois grounded in the
- * abstract / context DOIs — never invent DOIs.
+ * 2026-04-26 audit revealed three failure modes in production: the LLM
+ * was emitting wrong field names (`"RxNorm"` instead of `drug_rxnorm_id`),
+ * inventing IDs with implausible prefixes (`"R03945"` instead of `7933`),
+ * and pasting multiple JSON objects together (`}}, {`). Schema-only
+ * descriptions weren't enough — small models (Llama-class via Ollama)
+ * need explicit anti-patterns and at least one worked example to mirror.
  */
 
 import { renderDiscoverySchemasForPrompt } from './schemas';
@@ -60,9 +63,46 @@ Output ONLY a JSON object with exactly this shape (no markdown, no prose, no \`\
   "structuredData": { <the required fields for the chosen discoveryType, copied from the schema above> }
 }
 
-Strict rules:
+═══ WORKED EXAMPLE — copy this shape exactly ═══
+
+For a paper titled "Riluzole prolongs survival in patients with amyotrophic lateral sclerosis"
+(DOI 10.1056/NEJM199403033300901), a correct output is:
+
+{
+  "summary": "Riluzole, a benzothiazole sodium-channel blocker, extends median survival by ~3 months in ALS patients in a placebo-controlled trial of 155 participants. The mechanism is presumed glutamate antagonism reducing motor-neuron excitotoxicity. The effect is modest but reproducible across follow-up cohorts.",
+  "keyInsights": [
+    "Sodium-channel blockade reduces glutamate-driven motor-neuron death in ALS",
+    "Median survival gain ~3 months vs placebo at 18-month follow-up",
+    "Effect size is similar in bulbar and limb-onset subgroups"
+  ],
+  "discoveryType": "drug_repurposing",
+  "structuredData": {
+    "drug_rxnorm_id": "9325",
+    "disease_mesh_id": "D000690",
+    "mechanism_summary": "Riluzole inhibits voltage-gated sodium channels and presynaptic glutamate release, reducing excitotoxic injury in spinal and bulbar motor neurons.",
+    "supporting_dois": ["10.1056/NEJM199403033300901", "10.1016/S0140-6736(96)91680-3"]
+  }
+}
+
+Note: \`drug_rxnorm_id\`, \`disease_mesh_id\`, \`mechanism_summary\`, \`supporting_dois\` — those exact field names. RxNorm RXCUI \`9325\` and MeSH \`D000690\` are real, grounded identifiers.
+
+═══ ANTI-PATTERNS — these outputs are INVALID and will be rejected ═══
+
+❌ WRONG keys: \`"RxNorm": [...]\`, \`"MeSH": [...]\`, \`"UMLS CUI": [...]\` — these are NOT in the schema. Use \`drug_rxnorm_id\` (singular), \`disease_mesh_id\`, \`umls_cui\` exactly as the schema spells them.
+
+❌ WRONG IDs: RxNorm RXCUIs are NUMERIC strings (e.g. \`"7933"\`, \`"9325"\`). Never invent prefixes like \`"R03945"\` or \`"RX-12345"\`. MeSH descriptor IDs start with the letter D followed by 6 digits (\`"D000690"\`); they are NOT free-text disease names like \`"Heart failure"\`. UMLS CUIs are uppercase C followed by 7 digits (\`"C0002736"\`).
+
+❌ MULTIPLE OBJECTS: Output ONE single JSON object. Never paste two objects together as \`{...}}, {...}\` — that is invalid output and the parser will reject the whole submission.
+
+❌ PROSE OUTSIDE JSON: No markdown, no \`\`\`json fences, no explanation before or after. Just the JSON.
+
+❌ INVENTED DOIs: Every DOI in \`supporting_dois\` must literally appear in the abstract, the source paper's DOI, or the related-paper DOIs above. If you cannot find ≥2 grounded DOIs, switch to \`mechanism_link\` (the schema variant with the laxest evidence requirement) — never invent.
+
+═══ STRICT RULES ═══
+
 - supporting_dois must contain ≥ 2 real DOIs drawn from the abstract, the source paper's DOI, or the related-paper DOIs listed above. NEVER invent a DOI.
 - All ID fields (RxNorm, MeSH, UMLS CUI) must be real identifiers you can cite from the abstract or context. If you cannot ground an ID, pick a different discoveryType that does not require it.
 - summary and keyInsights must be plain English, not JSON.
-- Do NOT include a "proposal" field — the proposal is built downstream from structuredData.`;
+- Do NOT include a "proposal" field — the proposal is built downstream from structuredData.
+- Use the EXACT field names from the schema block above. \`drug_rxnorm_id\` not \`"RxNorm"\`. \`disease_mesh_id\` not \`"MeSH"\`. \`umls_cui\` not \`"UMLS CUI"\`.`;
 }
