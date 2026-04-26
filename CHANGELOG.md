@@ -1,5 +1,21 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] fix(tauri): trainer cwd resolution using deferred import.meta parse (4d6b042b)
+
+Re-applies the intent of the earlier reverted trainer/diloco-trainer fix
+(Tauri spawns the node binary with `cwd='/'`, so `dirname(resolve('.'))`
+resolves to `/` and Python tries to open `/scripts/train.py`). The fix
+mirrors the `self-updater.ts` / `version.ts` pattern: the literal
+`import.meta.url` lives only inside a `new Function(...)` body so
+ts-jest's CJS transpilation can't choke on it. Three runtimes covered:
+
+1. Jest (CJS) → CJS global `__dirname` is defined.
+2. Production ESM bundle → resolve from `import.meta.url` at runtime.
+3. Tauri spawn (`cwd='/'`) → no longer falls back to `resolve('.')`;
+   throws explicitly if both paths fail.
+
+Tests stay 76/76 green (1195/1195 tests).
+
 ## [2026-04-26] fix(tests): jest ESM/CJS interop + @noble/hashes v2 subpath mocks (3f76760f)
 
 13 of 76 test suites were failing in baseline runs. Two unrelated causes:
