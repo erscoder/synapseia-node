@@ -8,7 +8,7 @@
  * - bodyHash: SHA-256 of JSON-stringified body, base64-encoded
  */
 import * as ed from '@noble/ed25519';
-import { sha256, sha512 } from '@noble/hashes/sha2';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 
 // @noble/ed25519 v3.x requires hashes.sha512 to be set before signing.
 // Without this, sign() throws "hashes.sha512 not set".
