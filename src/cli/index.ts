@@ -3,7 +3,7 @@
 // Search order: cwd, ~/.synapseia, package directory
 // Configure @noble/ed25519 sha512Sync BEFORE any other imports that use it
 import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha2';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { config as dotenvConfig } from 'dotenv';
 import { existsSync as dotenvExists } from 'fs';
 import { join as dotenvJoin, dirname as dotenvDirname } from 'path';
