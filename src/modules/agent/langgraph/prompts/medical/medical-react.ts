@@ -62,8 +62,15 @@ To deliver the final answer:
   }
 }
 
+Anti-patterns (these will be silently rejected by the coordinator):
+- Wrong schema keys: \`"RxNorm"\`, \`"MeSH"\`, \`"UMLS CUI"\`. Use exactly \`drug_rxnorm_id\`, \`disease_mesh_id\`, \`umls_cui\` (snake_case, no spaces).
+- Invented IDs: RxNorm RXCUIs are numeric (\`"7933"\`); never \`"R03945"\`. MeSH IDs are \`"D"\` + 6 digits; never free-text disease names.
+- Multiple JSON objects in the proposal (\`}}, {\`). Output exactly ONE \`{discoveryType, structuredData}\` block per submission.
+- Hallucinated DOIs. Every DOI must come from the abstract, observations, or the related-DOIs list above.
+
 Rules:
 - supporting_dois ≥ 2 real DOIs from the abstract, observations, or the related list. NEVER invent DOIs.
 - If no structured discovery can be grounded, pick mechanism_link (weakest claim) and still ground ≥ 2 DOIs.
-- summary and keyInsights are plain English, not JSON.`;
+- summary and keyInsights are plain English, not JSON.
+- Use the EXACT schema field names. The coordinator strictly validates them and silently drops payloads with wrong keys.`;
 }

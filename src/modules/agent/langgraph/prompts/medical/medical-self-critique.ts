@@ -6,9 +6,11 @@
  * (RxNorm, MeSH, UMLS CUI) and supporting DOIs are real and come from
  * the abstract/context, or whether the LLM invented them.
  *
- * Same schema otherwise: scores 0-10, overall pass at avg ≥ 7.0. The
- * prompt tells the model to grade grounding harshly — a single made-up
- * DOI should drop the dimension below 5.
+ * 2026-04-26 audit: the previous threshold (avg ≥ 7.0 AND grounding ≥ 6)
+ * was passing payloads that had wrong schema keys (`"RxNorm"` instead of
+ * `drug_rxnorm_id`) and invented IDs (`"R03945"`). Tightened: grounding
+ * floor raised to 8 and an explicit rule says "wrong schema keys → set
+ * ontologyGrounding=0 and passed=false unconditionally."
  */
 
 import type { SelfCritiquePromptParams, SelfCritiqueResponse } from '../self-critique';
@@ -45,17 +47,31 @@ Score each dimension 0-10:
 - novelty: Are insights non-obvious (not just paraphrasing)?
 - actionability: Is the proposal concrete and specific?
 - ontologyGrounding: Are the structured IDs real and grounded? Grade harshly.
-  • drug_rxnorm_id / drugs_rxnorm_ids must be real RxNorm RXCUIs (6-7 digits).
-  • disease_mesh_id / disease_mesh_ids must be real MeSH descriptor IDs (e.g. "D000690").
-  • umls_cui must be a real UMLS CUI (e.g. "C0002736"), not a guess.
+  • The proposal's JSON block MUST use the exact schema field names:
+    \`drug_rxnorm_id\`, \`drugs_rxnorm_ids\`, \`disease_mesh_id\`, \`disease_mesh_ids\`,
+    \`umls_cui\`, \`pathway_name\`, \`mechanism_summary\`, \`supporting_dois\`,
+    \`biomarker_name\`, \`base_procedure_umls\`, \`modification\`, \`synergy_evidence\`.
+    If you see ANY of \`"RxNorm"\`, \`"MeSH"\`, \`"UMLS CUI"\`, \`"DOI"\` (capitalized,
+    non-snake-case, or otherwise not in the list above) → set ontologyGrounding=0
+    and passed=false. No exceptions.
+  • drug_rxnorm_id / drugs_rxnorm_ids must be NUMERIC RxNorm RXCUIs (e.g. "7933").
+    Identifiers with letter prefixes like "R03945" or "RX-…" are invented → set
+    ontologyGrounding=0.
+  • disease_mesh_id / disease_mesh_ids must be MeSH descriptor IDs of the form
+    "D" + 6 digits (e.g. "D000690"). Free-text disease names like "Heart failure"
+    are NOT IDs → set ontologyGrounding=0.
+  • umls_cui must be of the form "C" + 7 digits (e.g. "C0002736"). Anything else
+    → set ontologyGrounding ≤ 2.
   • supporting_dois MUST all appear in the abstract or grounding sources above.
     Any DOI not present there → this dimension ≤ 3. Zero DOIs that check out → score 0.
+  • Multiple JSON objects pasted together inside the proposal (\`}}, {\`) → set
+    ontologyGrounding=0 and passed=false.
 
 Output ONLY a JSON object (no markdown, no extra text):
 {"accuracy":<0-10>,"completeness":<0-10>,"novelty":<0-10>,"actionability":<0-10>,"ontologyGrounding":<0-10>,"feedback":"<one sentence, cite the weakest dimension>","passed":<true|false>}
 
-\`passed\` should be true only when the five-dimension average is ≥ 7.0 AND ontologyGrounding is ≥ 6.
-A single invented DOI or fabricated ID should fail the whole critique.`;
+\`passed\` should be true only when the five-dimension average is ≥ 7.0 AND ontologyGrounding is ≥ 8.
+A single invented DOI, fabricated ID, wrong schema key, or multi-object paste fails the whole critique.`;
 }
 
 /**
@@ -98,9 +114,10 @@ export function parseMedicalSelfCritiqueResponse(raw: string): MedicalSelfCritiq
   const ac = clamp(parsed.actionability as number);
   const og = clamp(parsed.ontologyGrounding as number);
 
-  // Pass if 5-dim avg ≥ 7.0 AND grounding ≥ 6.
+  // Pass if 5-dim avg ≥ 7.0 AND grounding ≥ 8. Tightened 2026-04-26 after
+  // audit found wrong-schema-key payloads passing with grounding=7.
   const avg = (a + c + n + ac + og) / 5;
-  const passed = avg >= 7.0 && og >= 6;
+  const passed = avg >= 7.0 && og >= 8;
 
   return {
     accuracy: a,
