@@ -8,6 +8,12 @@ export default {
     '^@noble/ed25519$': '<rootDir>/src/__mocks__/@noble/ed25519.ts',
     '^@noble/hashes$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
     '^@noble/hashes/sha2$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
+    // Subpath imports added in @noble/hashes v2 (sha2.js, etc.) — same mock
+    '^@noble/hashes/sha2\\.js$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
+    '^@noble/hashes/(.+)\\.js$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
+    // @solana/web3.js imports `@noble/hashes/utils` (no .js suffix) and the
+    // mock must intercept that too — otherwise utils_ts_1.utf8ToBytes is undefined.
+    '^@noble/hashes/(.+)$': '<rootDir>/src/__mocks__/@noble/hashes.ts',
   },
   transform: {
     '^.+\\.tsx?$': [
