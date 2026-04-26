@@ -1,5 +1,25 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] fix(tests): jest ESM/CJS interop + @noble/hashes v2 subpath mocks (3f76760f)
+
+13 of 76 test suites were failing in baseline runs. Two unrelated causes:
+
+1. **ESM `import.meta.url` inside CJS-transpiled output.** Affected
+   `self-updater.ts` and `version.ts`. ts-jest emits CJS for some test
+   paths, so the literal `import.meta.url` becomes a SyntaxError. Fixed
+   by deferring the parse via `new Function('return import.meta.url')()`
+   — the literal only lives inside a function-constructor string, so
+   ts-jest never sees it as syntax. Falls back to the CJS global on
+   SyntaxError. Production ESM bundle unchanged.
+2. **@noble/hashes v2 subpath imports.** Affected staking/rewards specs
+   and anything pulling `@solana/web3.js`. v2 splits utils into
+   subpaths (`@noble/hashes/utils`, `@noble/hashes/sha2.js`); the mock
+   only intercepted the top-level. Added two regex patterns to
+   `moduleNameMapper` and expanded the mock to cover the full v2 utils
+   surface (utf8ToBytes, anumber, abytes, ahash, u32, createView, …).
+
+Result: **76/76 suites, 1195/1195 tests pass** (was 63/76 + 13 failing).
+
 ## [2026-04-26] feat(prompts): few-shot examples + anti-patterns + grounding floor 8 (580ee23f)
 
 Audit on 2026-04-26 found weekend submissions emitting wrong schema keys
