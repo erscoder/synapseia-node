@@ -1,5 +1,10 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] feat(coordinator-client): parse structured error responses (6560b149)
+
+- `WorkOrderCoordinatorHelper` now parses structured `{ error, message, details }` JSON from coordinator error responses.
+- Logs domain error codes (e.g. `WORK_ORDER_NOT_FOUND`, `NODE_FORBIDDEN`) for better diagnostics.
+
 ## [2026-04-26] fix(tests): update test mocks for Ed25519 crypto + backpressure service (6417acf6)
 
 - Updated `a2a-client.spec.ts` to expect 128-char Ed25519 hex signature (was 64-char HMAC).
