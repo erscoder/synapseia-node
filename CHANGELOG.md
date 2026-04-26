@@ -1,5 +1,34 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] feat(audit-tier-3.2): node-side schema validator + synthesizer retry loop (0190611a)
+
+Closes the last audit gap — schema-broken payloads no longer travel
+from node to coordinator only to be silently dropped. The node now
+validates locally and either fixes via retry or skips the POST.
+
+- `validators/discovery-schema-validator.ts`: pure-function vendor copy
+  of the coordinator's `DiscoveryValidator` (same field rules, DOI
+  normalize, evidence-type priors). Plus
+  `extractStructuredPayloadFromProposal` — parse-first + brace-counter
+  mirror of the coordinator's extractor.
+- `SynthesizerNode` runs the validator after each LLM call (attempts
+  1–3). On failure the critic feedback is augmented with a
+  `[SCHEMA-RETRY] Previous attempt failed validation: <errors>` block
+  and the LLM is re-invoked. After `SCHEMA_VALIDATION_MAX_ATTEMPTS`,
+  `executionResult.success=false` with `schema_invalid_after_retries`
+  reason; the pre-existing `SubmitResultNode` hard-guard then skips
+  the POST.
+- LLM-call exceptions still drop straight to `fallbackResult` (no retry
+  burns on transient ollama outages).
+- Contract spec (23 cases) keeps the node validator in sync with the
+  coordinator's enforced rules — wrong-key payloads, multi-object paste,
+  DOI normalization, `meta_analysis` ≥ 3 DOIs, `contradiction_detected`
+  stems, etc.
+- Retry spec (4 cases): first-attempt pass, three-attempt fail →
+  `success=false`, second-attempt success, LLM-throw fallback.
+
+78/78 suites, 1222/1222 tests pass.
+
 ## [2026-04-26] fix(tauri): trainer cwd resolution using deferred import.meta parse (4d6b042b)
 
 Re-applies the intent of the earlier reverted trainer/diloco-trainer fix
