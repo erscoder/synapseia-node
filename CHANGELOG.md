@@ -1,5 +1,31 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] feat(prompts): few-shot examples + anti-patterns + grounding floor 8 (580ee23f)
+
+Audit on 2026-04-26 found weekend submissions emitting wrong schema keys
+(`"RxNorm"` instead of `drug_rxnorm_id`), invented identifiers (`"R03945"` —
+not a real RXCUI), and multiple JSON objects pasted together (`}}, {`).
+Schema-only descriptions weren't enough for the Llama-class model running
+in production.
+
+- `medical-researcher.ts`: added a worked example for `drug_repurposing`
+  (riluzole/ALS with real RXCUI `9325` + MeSH `D000690`) and an explicit
+  anti-pattern list for wrong-key variants (`"RxNorm"`, `"MeSH"`,
+  `"UMLS CUI"`), invented IDs (R-prefix RxNorm, free-text disease names),
+  and multi-object output.
+- `medical-synthesizer.ts`: parallel worked example showing prose + ONE
+  embedded JSON block; explicit "exactly ONE" rule against the
+  multi-object-paste failure mode that swamped the audit data.
+- `medical-self-critique.ts`: `ontologyGrounding` floor raised from 6 to 8;
+  new rule sets `ontologyGrounding=0` unconditionally on wrong schema keys
+  or multi-object paste; ID format rules call out exact shapes (RXCUI
+  numeric only, MeSH `D` + 6 digits, UMLS `C` + 7 digits).
+- `medical-react.ts`: anti-pattern list aligned with researcher /
+  synthesizer for consistency across all three medical prompts.
+- Tests: +7 prompt assertions covering the new anti-patterns and worked
+  examples; regression guard for `ontologyGrounding=7` (the previous
+  threshold) — must now fail per the new rule.
+
 ## [0.4.0] 2026-04-26 — version sync release
 
 - Bumped version to 0.4.0 (synced with coordinator and node-ui).
