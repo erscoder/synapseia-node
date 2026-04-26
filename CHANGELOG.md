@@ -1,5 +1,29 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] fix(esm): tsup banner injects per-chunk __filename/__dirname; walk-up package.json lookup (6cdea161)
+
+The earlier "fix" using `new Function('return import.meta.url')()` was
+silently broken in production. The Function constructor body evaluates
+in non-module scope, so `import.meta` always threw and the catch
+returned an empty path. `node dist/index.js --version` returned the
+fallback `0.2.0` instead of the real package version.
+
+- `tsup.config.ts`: banner injects a per-chunk shim
+  (`const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);`).
+  Each bundled chunk gets its own `__filename` pointing at the chunk file.
+  `shims: true` was wrong — it bundles a single shim file whose
+  `import.meta.url` points back at the shim itself.
+- `self-updater.ts`, `version.ts`, `trainer.ts`, `diloco-trainer.ts`,
+  `cli/index.ts`: drop the `new Function` dance; use plain `__dirname`.
+  CJS jest provides it natively, ESM bundle gets it from the banner.
+- `detectInstallType` walks up looking for a `.git/` folder; `getNodeVersion`
+  / `getPackageVersion` walk up looking for a `package.json` whose name
+  contains "synapseia". Robust whether the file ships from `src/` or `dist/`.
+
+Verification: `node dist/index.js --version` returns `0.4.0`. 78/78 suites,
+1222/1222 tests pass. Tauri `cwd='/'` is also fixed because `__dirname`
+always points at the bundle install location, never at `process.cwd()`.
+
 ## [2026-04-26] feat(audit-tier-3.2): node-side schema validator + synthesizer retry loop (0190611a)
 
 Closes the last audit gap — schema-broken payloads no longer travel
