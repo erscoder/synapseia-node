@@ -96,6 +96,23 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       },
     };
   }
+  /**
+   * Parse structured error response from coordinator.
+   * Coordinator returns: { error: 'CODE', message: '...', details: {...} }
+   */
+  private async parseErrorResponse(response: Response): Promise<{ code: string; message: string; details?: Record<string, unknown> }> {
+    try {
+      const body = await response.json() as { error?: string; message?: string; details?: Record<string, unknown> };
+      return {
+        code: body.error ?? `HTTP_${response.status}`,
+        message: body.message ?? response.statusText,
+        details: body.details,
+      };
+    } catch {
+      return { code: `HTTP_${response.status}`, message: response.statusText };
+    }
+  }
+
   // ── Work order lifecycle ──────────────────────────────────────────────────
 
   async fetchAvailableWorkOrders(coordinatorUrl: string, peerId: string, capabilities: string[]): Promise<WorkOrder[]> {
@@ -105,11 +122,13 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       const response = await fetch(url);
       if (!response.ok) {
         if (response.status === 404) return [];
-        throw new Error(`Failed to fetch work orders: ${response.statusText}`);
+        const err = await this.parseErrorResponse(response);
+        logger.warn(`[FetchWO] ${err.code}: ${err.message}`);
+        return [];
       }
       return (await response.json() as WorkOrder[]) || [];
     } catch (error) {
-      logger.warn(' Failed to fetch work orders:', (error as Error).message);
+      logger.warn('[FetchWO] Network error:', (error as Error).message);
       return [];
     }
   }
@@ -122,15 +141,15 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       const { url: fetchUrl, init } = await this.signedFetch(url, 'POST', body);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {
-        const error = await response.text();
-        logger.warn(` [Accept] HTTP ${response.status} for ${workOrderId}: ${error}`);
+        const err = await this.parseErrorResponse(response);
+        logger.warn(`[Accept] ${err.code} (${response.status}) for ${workOrderId}: ${err.message}`);
         return false;
       }
       logger.log(` [Accept] OK ${response.status} for ${workOrderId}`);
       return true;
     } catch (error) {
       const e = error as Error;
-      logger.error(` [Accept] EXCEPTION for ${workOrderId}: name=${e.name} msg=${e.message}`);
+      logger.error(`[Accept] EXCEPTION for ${workOrderId}: name=${e.name} msg=${e.message}`);
       return false;
     }
   }
@@ -155,7 +174,8 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, 'POST', body);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {
-        logger.warn(` Failed to complete work order ${workOrderId}:`, await response.text());
+        const err = await this.parseErrorResponse(response);
+        logger.warn(`[Complete] ${err.code} (${response.status}) for ${workOrderId}: ${err.message}`);
         return false;
       }
       const data = await response.json() as WorkOrder;
@@ -163,7 +183,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       if (success && data.rewardAmount) addRewards(parseSynToLamports(data.rewardAmount));
       return true;
     } catch (error) {
-      logger.warn(' Failed to complete work order:', (error as Error).message);
+      logger.warn('[Complete] Network error:', (error as Error).message);
       return false;
     }
   }
