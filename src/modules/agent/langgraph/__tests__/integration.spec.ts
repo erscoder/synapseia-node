@@ -89,7 +89,7 @@ function buildService(): AgentGraphService {
   const llmService = new LangGraphLlmService(null);
   const agentBrain = new AgentBrainHelper();
   return new AgentGraphService(
-    new FetchWorkOrdersNode(coordinator, execution),
+    new FetchWorkOrdersNode(coordinator, execution, { canAccept: () => true, getInFlight: () => 0, getMaxConcurrent: () => 2, acquire: () => true, release: () => {} } as any),
     new SelectWorkOrderNode(),
     new EvaluateEconomicsNode(evaluation),
     new AcceptWorkOrderNode(coordinator),
