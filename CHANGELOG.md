@@ -1,5 +1,30 @@
 # Changelog — @synapseia/node
 
+## [2026-04-26] fix(tests): update test mocks for Ed25519 crypto + backpressure service (6417acf6)
+
+- Updated `a2a-client.spec.ts` to expect 128-char Ed25519 hex signature (was 64-char HMAC).
+- Provided mock `BackpressureService` in `langgraph-coverage2.test.ts` and `integration.spec.ts` for `FetchWorkOrderNode` and `AgentGraphService`.
+
+## [2026-04-26] feat(node): work order backpressure limiting — P2-T4 (1d272113)
+
+- New `BackpressureService` enforces `MAX_CONCURRENT_WORK_ORDERS` (default: 2).
+- Integrated into work-order loop and LangGraph accept/fetch nodes.
+- Prevents resource starvation when many work orders arrive simultaneously.
+
+## [2026-04-26] feat(node): agent graph checkpointing with MemorySaver — P1-T4 (0e256958)
+
+- New `CheckpointService` for LangGraph state persistence using `MemorySaver` (in-process).
+- Thread IDs derived from work order IDs (`wo_<id>`).
+- Incomplete threads logged on restart; no auto-resume (coordinator reassigns stale WOs).
+- SQLite persistence deferred due to native dep + ESM constraints.
+
+## [2026-04-26] fix(node): replace HMAC-SHA256 with Ed25519 in verifySignature — BUG-1 (2921975f)
+
+- `identity.ts:verifySignature()` was using HMAC-SHA256 while `sign()` used Ed25519, causing signature verification mismatches with the coordinator.
+- Fixed `verifySignature()` to use `crypto.verify()` with SPKI DER-wrapped pubkey.
+- Fixed `A2AAuthService.verify()` and `sign()` to use Ed25519.
+- Updated auth tests to use real Ed25519 keypairs.
+
 ## [2026-04-25] feat(quality-gate): T6 — explicit review rubric + raise quality gate to 0.30 (7131c5b8)
 
 - Rewrote `buildReviewPrompt()` in `review-agent.ts` with explicit 0-10 rubric per dimension (accuracy, novelty, methodology, conclusions) including score band descriptions.
