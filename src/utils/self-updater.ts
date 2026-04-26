@@ -1,7 +1,11 @@
 import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import logger from './logger';
+
+// ESM bundle: __filename is not defined. Resolve it from import.meta.url.
+const __filename = fileURLToPath(import.meta.url);
 
 export enum InstallType {
   NPM_GLOBAL = 'npm_global',

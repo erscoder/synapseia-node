@@ -1,5 +1,9 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM bundle: __dirname is not defined. Resolve it from import.meta.url.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let cached: string | null = null;
 
