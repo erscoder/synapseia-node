@@ -4,8 +4,24 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import logger from './logger';
 
-// ESM bundle: __filename is not defined. Resolve it from import.meta.url.
-const __filename = fileURLToPath(import.meta.url);
+// Module path resolution that survives both runtimes:
+//   • Production ESM bundle: `import.meta.url` is defined; resolve via fileURLToPath.
+//   • Jest CJS test runtime: `import.meta` is a syntax error in CJS-transpiled
+//     output, so we deliberately keep the literal `import.meta.url` only inside
+//     a runtime-evaluated `new Function(...)` body. The function call is wrapped
+//     in try/catch so the CJS SyntaxError surfaces only at call time and we
+//     fall back to the CJS global `__filename`.
+let resolvedFilename: string;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const importMetaUrl = new Function('return import.meta.url')() as string;
+  resolvedFilename = fileURLToPath(importMetaUrl);
+} catch {
+  // CJS path (jest): __filename is a runtime global injected by Node.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resolvedFilename = (globalThis as any).__filename ?? '';
+}
+const moduleFilename: string = resolvedFilename;
 
 export enum InstallType {
   NPM_GLOBAL = 'npm_global',
@@ -27,7 +43,7 @@ export function detectInstallType(): InstallType {
   } catch { /* not npm global */ }
 
   // git clone: .git dir exists in the package root
-  const pkgRoot = join(dirname(__filename), '..', '..');
+  const pkgRoot = join(dirname(moduleFilename), '..', '..');
   if (existsSync(join(pkgRoot, '.git'))) {
     return InstallType.GIT_CLONE;
   }
