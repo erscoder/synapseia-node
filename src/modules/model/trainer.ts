@@ -5,36 +5,21 @@
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import logger from '../../utils/logger';
 import type { MutationProposal } from './mutation-engine';
 
 /**
- * Directory of THIS bundled module — must work in three runtimes:
- *   1. Jest (CJS)            → CJS global `__dirname` is defined.
- *   2. Production ESM bundle → resolve from `import.meta.url`.
- *   3. Tauri spawn (cwd='/') → must NEVER fall back to `resolve('.')`,
- *      which returns '/' under Tauri and makes Python try to open
- *      '/scripts/train.py'.
- *
- * The `import.meta.url` literal lives only inside a `new Function(...)` body
- * so the CJS-transpiled output ts-jest produces never sees it as syntax —
- * the SyntaxError surfaces only at call time and falls back to __dirname.
+ * Directory of THIS bundled module. Works across all three runtimes
+ * because `__dirname` is provided in each:
+ *   1. Jest (CJS)            → CJS global injected by Node.
+ *   2. Production ESM bundle → tsup `shims: true` injects __dirname /
+ *                              __filename at the top of the bundle.
+ *   3. Tauri spawn (cwd='/') → uses the bundle's __dirname (the install
+ *                              location), never falls back to cwd.
  */
 function moduleDir(): string {
-  if (typeof __dirname !== 'undefined') return __dirname;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const importMetaUrl = new Function('return import.meta.url')() as string;
-    return dirname(fileURLToPath(importMetaUrl));
-  } catch {
-    // Last resort — should never hit this in any of the three runtimes,
-    // but a relative-cwd fallback would be wrong under Tauri so we throw.
-    throw new Error(
-      '[trainer] Cannot resolve module directory: __dirname is undefined and import.meta.url is unavailable',
-    );
-  }
+  return __dirname;
 }
 
 export interface TrainingResult {
