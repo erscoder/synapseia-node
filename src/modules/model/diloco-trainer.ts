@@ -5,27 +5,17 @@
 
 import { Injectable } from '@nestjs/common';
 import { spawn, type ChildProcess } from 'child_process';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 
 /**
- * Directory of THIS bundled module. See trainer.ts for the rationale —
- * Tauri spawns the node binary with cwd='/', so a `resolve('.')` fallback
- * is wrong in production. The `import.meta.url` literal lives only inside
- * a `new Function(...)` body so ts-jest CJS transpilation can't choke on it.
+ * Directory of THIS bundled module. `__dirname` is provided in all three
+ * runtimes: CJS jest global, tsup `shims: true` ESM injection in the
+ * production bundle, and the install-location bundle path under Tauri.
+ * See trainer.ts for the full rationale.
  */
 function moduleDir(): string {
-  if (typeof __dirname !== 'undefined') return __dirname;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const importMetaUrl = new Function('return import.meta.url')() as string;
-    return dirname(fileURLToPath(importMetaUrl));
-  } catch {
-    throw new Error(
-      '[diloco-trainer] Cannot resolve module directory: __dirname is undefined and import.meta.url is unavailable',
-    );
-  }
+  return __dirname;
 }
 
 function resolveDilocoScript(): string {

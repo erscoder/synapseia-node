@@ -1,27 +1,11 @@
 import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import logger from './logger';
 
-// Module path resolution that survives both runtimes:
-//   • Production ESM bundle: `import.meta.url` is defined; resolve via fileURLToPath.
-//   • Jest CJS test runtime: `import.meta` is a syntax error in CJS-transpiled
-//     output, so we deliberately keep the literal `import.meta.url` only inside
-//     a runtime-evaluated `new Function(...)` body. The function call is wrapped
-//     in try/catch so the CJS SyntaxError surfaces only at call time and we
-//     fall back to the CJS global `__filename`.
-let resolvedFilename: string;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  const importMetaUrl = new Function('return import.meta.url')() as string;
-  resolvedFilename = fileURLToPath(importMetaUrl);
-} catch {
-  // CJS path (jest): __filename is a runtime global injected by Node.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  resolvedFilename = (globalThis as any).__filename ?? '';
-}
-const moduleFilename: string = resolvedFilename;
+// `__filename` is a CJS global in jest and a tsup-injected shim in the
+// production ESM bundle (`shims: true` in tsup.config.ts). Both paths
+// resolve before any code in this file runs, so we can use it directly.
 
 export enum InstallType {
   NPM_GLOBAL = 'npm_global',
@@ -42,9 +26,10 @@ export function detectInstallType(): InstallType {
     }
   } catch { /* not npm global */ }
 
-  // git clone: .git dir exists in the package root
-  const pkgRoot = join(dirname(moduleFilename), '..', '..');
-  if (existsSync(join(pkgRoot, '.git'))) {
+  // git clone: .git dir exists somewhere up the tree. Walk up from this
+  // module's location looking for the first .git/ — robust to dev vs
+  // bundled layouts.
+  if (findGitRoot(dirname(__filename))) {
     return InstallType.GIT_CLONE;
   }
 
@@ -114,6 +99,23 @@ export function attemptSelfUpdate(): SelfUpdateResult {
         message: 'Unknown install type. Update manually: npm i -g @synapseia/node',
       };
   }
+}
+
+/**
+ * Walk up from `start` looking for a directory containing a `.git/`
+ * folder. Returns the path to the directory or null. Used by
+ * detectInstallType so it works whether this module ships from
+ * src/utils/ (dev) or dist/ (production bundle).
+ */
+function findGitRoot(start: string): string | null {
+  let dir = start;
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(join(dir, '.git'))) return dir;
+    const parent = join(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 
 /**

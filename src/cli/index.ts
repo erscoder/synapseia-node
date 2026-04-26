@@ -6,10 +6,13 @@ import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
 import { config as dotenvConfig } from 'dotenv';
 import { existsSync as dotenvExists } from 'fs';
-import { join as dotenvJoin, dirname as dotenvDirname } from 'path';
-import { fileURLToPath as dotenvFileUrlToPath } from 'url';
+import { join as dotenvJoin } from 'path';
 import { homedir as dotenvHomedir } from 'os';
 import { setMaxListeners } from 'events';
+
+// `__dirname` is provided in both runtimes: tsup `shims: true` injects
+// it into the production ESM bundle, and Node injects it natively in
+// CJS. See `tsup.config.ts` and `self-updater.ts` for the rationale.
 
 // Suppress AbortSignal/EventTarget MaxListeners warning — LangGraph + libp2p create many
 // abort signals internally and Node.js 22 emits warnings when >10 listeners accumulate.
@@ -23,8 +26,8 @@ setMaxListeners(Infinity);
   const candidates = [
     dotenvJoin(process.cwd(), '.env'),
     dotenvJoin(dotenvHomedir(), '.synapseia', '.env'),
-    dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '.env'),
-    dotenvJoin(dotenvDirname(dotenvFileUrlToPath(import.meta.url)), '..', '..', '.env'),
+    dotenvJoin(__dirname, '..', '.env'),
+    dotenvJoin(__dirname, '..', '..', '.env'),
   ];
   for (const f of candidates) {
     // `quiet: true` silences dotenv's startup banner ("[dotenv@17.x]
@@ -37,10 +40,9 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import * as path from 'path';
 import * as os from 'os';
-import { fileURLToPath } from 'url';
 import { AppModule } from '../app.module';
 import { IdentityService } from '../modules/identity/services/identity.service';
 import { HardwareService } from '../modules/hardware/services/hardware.service';
@@ -111,12 +113,24 @@ const SYPNASEIA_HEADER = `
 `;
 
 function getPackageVersion(): string {
+  // Walk up from this file's directory looking for the FIRST package.json
+  // whose `name` looks like the synapseia node package. Robust across
+  // dev (src/cli/), production bundle (dist/), and any future relocation.
   try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const pkgPath = join(__dirname, '../../package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version;
+    let dir = __dirname;
+    for (let i = 0; i < 6; i++) {
+      const candidate = join(dir, 'package.json');
+      if (existsSync(candidate)) {
+        const pkg = JSON.parse(readFileSync(candidate, 'utf-8')) as { name?: string; version?: string };
+        if (pkg.name && pkg.name.includes('synapseia') && pkg.version) {
+          return pkg.version;
+        }
+      }
+      const parent = join(dir, '..');
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return '0.2.0';
   } catch {
     return '0.2.0';
   }

@@ -13,6 +13,20 @@ export default defineConfig({
   // Minification can break design:paramtypes — keep off
   minify: false,
   swcMinify: false,
+  // Inject __filename / __dirname per-chunk so they resolve to the chunk's
+  // own location at runtime. tsup's `shims: true` doesn't work for our
+  // case — it bundles a single shim file whose `import.meta.url` points
+  // back at the shim itself, so consumers reading `__dirname` get the
+  // shim's directory instead of the chunk that imported it. The banner
+  // approach inlines the resolution into every chunk's top, so each
+  // chunk's `__dirname` is genuinely "where this code lives".
+  banner: {
+    js:
+      'import { fileURLToPath as __synFup } from "url";' +
+      'import { dirname as __synDn } from "path";' +
+      'const __filename = __synFup(import.meta.url);' +
+      'const __dirname = __synDn(__filename);',
+  },
   // Copy Python scripts next to dist output so train_micro.py is always findable
   async onSuccess() {
     try {
