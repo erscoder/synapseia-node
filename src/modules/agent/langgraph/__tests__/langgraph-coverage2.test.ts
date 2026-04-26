@@ -227,7 +227,8 @@ describe('FetchWorkOrdersNode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsResearchWorkOrder.mockImplementation((wo: any) => wo?.type === 'RESEARCH');
-    node = new FetchWorkOrdersNode(coordinator, execution);
+    const mockBackpressure = { canAccept: jest.fn().mockReturnValue(true), getInFlight: jest.fn().mockReturnValue(0), getMaxConcurrent: jest.fn().mockReturnValue(2), acquire: jest.fn().mockReturnValue(true), release: jest.fn() } as any;
+    node = new FetchWorkOrdersNode(coordinator, execution, mockBackpressure);
     node.reset();
   });
 

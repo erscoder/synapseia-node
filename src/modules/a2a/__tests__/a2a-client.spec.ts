@@ -143,7 +143,7 @@ describe('A2AClientService', () => {
       const fetchCall = mockFetch.mock.calls[0];
       const body = JSON.parse(fetchCall[1].body);
       expect(body.task.signature).toBeDefined();
-      expect(body.task.signature.length).toBe(64); // hex encoded
+      expect(body.task.signature.length).toBe(128); // Ed25519 hex encoded
     });
 
     it('should set correct Content-Type header', async () => {
