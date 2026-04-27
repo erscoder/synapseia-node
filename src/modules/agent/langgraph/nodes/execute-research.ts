@@ -148,14 +148,44 @@ export class ExecuteResearchNode {
   }
 
   private parseReActResponse(raw: string): ReActThought {
-    try {
-      // generateJSON ensures the model emits valid JSON directly (Ollama
-      // format:"json" / OpenAI response_format:"json_object"). stripReasoning
-      // is kept as defense-in-depth for providers without JSON mode.
-      const jsonStr = stripReasoning(raw).trim();
-      const parsed = JSON.parse(jsonStr) as ReActThought;
+    // generateJSON ensures the model emits valid JSON directly (Ollama
+    // format:"json" / OpenAI response_format:"json_object"). stripReasoning
+    // is kept as defense-in-depth for providers without JSON mode.
+    const jsonStr = stripReasoning(raw).trim();
 
-      // Validate required fields
+    let parsed: ReActThought | null = null;
+    let firstError: Error | null = null;
+    try {
+      parsed = JSON.parse(jsonStr) as ReActThought;
+    } catch (err) {
+      firstError = err as Error;
+      // Some providers (notably MiniMax cloud) ignore response_format and
+      // emit `{...valid JSON...} extra trailing prose` or two stacked
+      // objects. Recover by extracting the first balanced {...} block.
+      const balanced = extractFirstJsonObject(jsonStr);
+      if (balanced) {
+        try {
+          parsed = JSON.parse(balanced) as ReActThought;
+        } catch { /* keep firstError */ }
+      }
+    }
+
+    if (!parsed) {
+      // Surface a snippet of the trailing garbage so the operator can see
+      // what the LLM is appending after the JSON envelope.
+      const posMatch = firstError?.message.match(/position\s+(\d+)/);
+      const pos = posMatch ? parseInt(posMatch[1], 10) : -1;
+      const tail = pos >= 0 ? jsonStr.slice(pos, pos + 80).replace(/\s+/g, ' ') : '';
+      const tailHint = tail ? ` (trailing: "${tail}")` : '';
+      logger.warn(` Failed to parse ReAct response: ${firstError?.message ?? 'unknown'}${tailHint}. Treating as direct answer.`);
+      return {
+        thought: 'Failed to parse structured response, treating as direct answer',
+        action: 'generate_answer',
+        answer: raw,
+      };
+    }
+
+    try {
       if (!parsed.thought || !parsed.action) {
         throw new Error('Missing required fields: thought, action');
       }
@@ -165,7 +195,6 @@ export class ExecuteResearchNode {
       if (parsed.action === 'generate_answer' && !parsed.answer) {
         parsed.answer = jsonStr;
       }
-
       return parsed;
     } catch (error) {
       logger.warn(` Failed to parse ReAct response: ${(error as Error).message}. Treating as direct answer.`);
@@ -259,4 +288,30 @@ export class ExecuteResearchNode {
       };
     }
   }
+}
+
+/**
+ * Walk `s` and return the first balanced `{...}` substring. Honors string
+ * literals (so braces inside `"..."` don't shift depth). Returns null when
+ * no balanced object is found. Exported for tests.
+ */
+export function extractFirstJsonObject(s: string): string | null {
+  const start = s.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
 }
