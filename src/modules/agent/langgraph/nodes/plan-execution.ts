@@ -9,6 +9,7 @@ import { LangGraphLlmService } from '../llm.service';
 import { buildPlanningPrompt, DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 import logger from '../../../../utils/logger';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
+import { parseLlmJson } from '../../../../shared/parse-llm-json';
 
 @Injectable()
 export class PlanExecutionNode {
@@ -91,8 +92,16 @@ export class PlanExecutionNode {
    */
   private parseExecutionPlan(jsonText: string): ExecutionStep[] {
     try {
-      const parsed = JSON.parse(jsonText) as ExecutionStep[];
-      
+      // parseLlmJson handles trailing prose / stacked structures emitted
+      // by providers that ignore response_format (MiniMax cloud, raw
+      // local Llama, etc.). Plans are arrays, so the helper's structure
+      // extractor recovers `[...]` as well as `{...}`.
+      const result = parseLlmJson<ExecutionStep[]>(jsonText);
+      if (!result.ok || !result.value) {
+        throw new Error(result.error ?? 'JSON parse failed');
+      }
+      const parsed = result.value;
+
       // Validate it's an array
       if (!Array.isArray(parsed)) {
         throw new Error('Response is not an array');

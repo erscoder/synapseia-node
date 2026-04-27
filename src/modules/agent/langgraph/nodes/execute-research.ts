@@ -8,7 +8,7 @@ import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution'
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
-import { stripReasoning } from '../../../../shared/sanitize-llm-output';
+import { parseLlmJson, jsonParseTailSnippet } from '../../../../shared/parse-llm-json';
 import type { AgentState, WorkOrder, ResearchResult } from '../state';
 import type { ReActThought } from '../tools/types';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -149,35 +149,15 @@ export class ExecuteResearchNode {
 
   private parseReActResponse(raw: string): ReActThought {
     // generateJSON ensures the model emits valid JSON directly (Ollama
-    // format:"json" / OpenAI response_format:"json_object"). stripReasoning
-    // is kept as defense-in-depth for providers without JSON mode.
-    const jsonStr = stripReasoning(raw).trim();
+    // format:"json" / OpenAI response_format:"json_object"). The shared
+    // parseLlmJson handles trailing-prose recovery for providers (e.g.
+    // MiniMax cloud) that ignore response_format.
+    const result = parseLlmJson<ReActThought>(raw);
 
-    let parsed: ReActThought | null = null;
-    let firstError: Error | null = null;
-    try {
-      parsed = JSON.parse(jsonStr) as ReActThought;
-    } catch (err) {
-      firstError = err as Error;
-      // Some providers (notably MiniMax cloud) ignore response_format and
-      // emit `{...valid JSON...} extra trailing prose` or two stacked
-      // objects. Recover by extracting the first balanced {...} block.
-      const balanced = extractFirstJsonObject(jsonStr);
-      if (balanced) {
-        try {
-          parsed = JSON.parse(balanced) as ReActThought;
-        } catch { /* keep firstError */ }
-      }
-    }
-
-    if (!parsed) {
-      // Surface a snippet of the trailing garbage so the operator can see
-      // what the LLM is appending after the JSON envelope.
-      const posMatch = firstError?.message.match(/position\s+(\d+)/);
-      const pos = posMatch ? parseInt(posMatch[1], 10) : -1;
-      const tail = pos >= 0 ? jsonStr.slice(pos, pos + 80).replace(/\s+/g, ' ') : '';
+    if (!result.ok || !result.value) {
+      const tail = jsonParseTailSnippet(result.cleaned, result.error);
       const tailHint = tail ? ` (trailing: "${tail}")` : '';
-      logger.warn(` Failed to parse ReAct response: ${firstError?.message ?? 'unknown'}${tailHint}. Treating as direct answer.`);
+      logger.warn(` Failed to parse ReAct response: ${result.error ?? 'unknown'}${tailHint}. Treating as direct answer.`);
       return {
         thought: 'Failed to parse structured response, treating as direct answer',
         action: 'generate_answer',
@@ -185,6 +165,7 @@ export class ExecuteResearchNode {
       };
     }
 
+    const parsed = result.value;
     try {
       if (!parsed.thought || !parsed.action) {
         throw new Error('Missing required fields: thought, action');
@@ -193,7 +174,7 @@ export class ExecuteResearchNode {
         throw new Error('Missing toolCall for use_tool action');
       }
       if (parsed.action === 'generate_answer' && !parsed.answer) {
-        parsed.answer = jsonStr;
+        parsed.answer = result.cleaned;
       }
       return parsed;
     } catch (error) {
@@ -240,16 +221,24 @@ export class ExecuteResearchNode {
       }
       answer = String(answer);
     }
-    // Try to parse as JSON result — the answer came from generateJSON so it
-    // should be valid JSON. stripReasoning is kept as defense-in-depth.
+    // Try to parse as JSON result — the answer came from generateJSON so
+    // it should be valid JSON. parseLlmJson handles trailing-prose and
+    // markdown-fence recovery for providers that ignore response_format.
     try {
-      const jsonStr = stripReasoning(answer).trim();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parsed: any = JSON.parse(jsonStr);
+      const result = parseLlmJson<{
+        summary?: unknown;
+        proposal?: unknown;
+        hypothesis?: unknown;
+        keyInsights?: unknown;
+      }>(answer);
+      if (!result.ok || !result.value) {
+        throw new Error(result.error ?? 'JSON parse failed');
+      }
+      const parsed = result.value;
 
       const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
       const proposal = typeof parsed.proposal === 'string' ? parsed.proposal.trim()
-        : typeof parsed.hypothesis === 'string' ? parsed.hypothesis.trim()
+        : typeof parsed.hypothesis === 'string' ? (parsed.hypothesis as string).trim()
         : '';
 
       // Fail loudly instead of papering over with placeholder text. The
@@ -263,7 +252,7 @@ export class ExecuteResearchNode {
 
       return {
         summary,
-        keyInsights: Array.isArray(parsed.keyInsights) ? parsed.keyInsights : [],
+        keyInsights: Array.isArray(parsed.keyInsights) ? (parsed.keyInsights as unknown[]).filter((s): s is string => typeof s === 'string') : [],
         proposal,
       };
     } catch (err) {
@@ -290,28 +279,8 @@ export class ExecuteResearchNode {
   }
 }
 
-/**
- * Walk `s` and return the first balanced `{...}` substring. Honors string
- * literals (so braces inside `"..."` don't shift depth). Returns null when
- * no balanced object is found. Exported for tests.
- */
-export function extractFirstJsonObject(s: string): string | null {
-  const start = s.indexOf('{');
-  if (start < 0) return null;
-  let depth = 0;
-  let inStr = false;
-  let escape = false;
-  for (let i = start; i < s.length; i++) {
-    const ch = s[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\') { escape = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) return s.slice(start, i + 1);
-    }
-  }
-  return null;
-}
+// extractFirstJsonObject lived here in the first iteration of the
+// trailing-prose fix; it's now part of the shared parser module so every
+// LLM-output consumer benefits, not just ReAct. Re-exported as an alias
+// so existing imports keep working.
+export { extractFirstJsonStructure as extractFirstJsonObject } from '../../../../shared/parse-llm-json';

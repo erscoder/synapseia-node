@@ -10,6 +10,7 @@ import logger from '../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../llm/llm-provider';
 import { IdentityService } from '../identity/services/identity.service';
 import { buildAuthHeaders } from '../../utils/node-auth';
+import { parseLlmJson } from '../../shared/parse-llm-json';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -197,14 +198,15 @@ Respond ONLY with valid JSON (no markdown):
     const prompt = this.buildReviewPrompt(submission);
     try {
       const raw = await this.llmProvider.generateLLM(llmConfig.llmModel, prompt, llmConfig.llmConfig);
-      let jsonStr = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-                         jsonStr.match(/```(?:json)?\s*([\s\S]*)/);
-      if (fenceMatch) jsonStr = fenceMatch[1].trim();
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      jsonStr = jsonMatch ? jsonMatch[0] : jsonStr;
-
-      const scores = JSON.parse(jsonStr) as ReviewScores;
+      // parseLlmJson stripReasoning + JSON.parse + balanced-structure
+      // recovery covers <think>, markdown fences (the first `{` skips
+      // the fence), and trailing prose for providers that ignore
+      // response_format.
+      const result = parseLlmJson<ReviewScores>(raw);
+      if (!result.ok || !result.value) {
+        throw new Error(result.error ?? 'review JSON parse failed');
+      }
+      const scores = result.value;
       const clamp = (n: unknown) => Math.max(0, Math.min(10, Number(n) || 0));
       return {
         accuracy: clamp(scores.accuracy),

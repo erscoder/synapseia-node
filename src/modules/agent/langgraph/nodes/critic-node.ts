@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
-import { stripReasoning } from '../../../../shared/sanitize-llm-output';
+import { parseLlmJson } from '../../../../shared/parse-llm-json';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -66,15 +66,15 @@ Requirements:
   }
 
   private parseResearchResult(raw: string): { summary: string; keyInsights: string[]; proposal: string } {
-    try {
-      const p = JSON.parse(stripReasoning(raw).trim());
-      return {
-        summary: String(p.summary ?? ''),
-        keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
-        proposal: String(p.proposal ?? ''),
-      };
-    } catch {
+    const result = parseLlmJson<{ summary?: unknown; keyInsights?: unknown; proposal?: unknown }>(raw);
+    if (!result.ok || !result.value) {
       return { summary: raw.slice(0, 200), keyInsights: [], proposal: '' };
     }
+    const p = result.value;
+    return {
+      summary: String(p.summary ?? ''),
+      keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
+      proposal: String(p.proposal ?? ''),
+    };
   }
 }
