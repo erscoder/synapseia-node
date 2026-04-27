@@ -1,5 +1,24 @@
 # Changelog — @synapseia/node
 
+## [2026-04-27] fix(react-parser): recover when LLM appends prose after JSON envelope (0090355)
+
+MiniMax-M2.7 (cloud) ignores `response_format:json_object` and emits
+`{...valid JSON...} trailing prose` or two stacked objects. JSON.parse
+crashed with "Unexpected non-whitespace character after JSON at
+position N" and ReAct execution failed every step → fallback to the
+legacy executor on every iteration.
+
+- New `extractFirstJsonObject(s)` (exported): scans for the first
+  balanced `{...}` substring honoring string literals and escaped
+  quotes. Returns `null` when no balanced object is found.
+- `parseReActResponse` uses it as a recovery path when `JSON.parse`
+  fails on the raw envelope.
+- Warn logs now include an 80-char snippet of the trailing garbage so
+  the operator can see what the provider is appending (was just
+  "position 357" with no context).
+
+8 unit tests for the extractor; 79 suites / 1232 tests green.
+
 ## [2026-04-27] fix(agent-brain): resolve default path via __dirname, not process.cwd() (4f27eaff)
 
 Tauri spawns the node child with `cwd='/'` so the legacy
