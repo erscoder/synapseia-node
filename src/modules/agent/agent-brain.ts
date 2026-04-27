@@ -43,11 +43,42 @@ export interface AgentBrain {
   bestResult: number | null;
 }
 
+/**
+ * Resolve the bundle's own directory. tsup's per-chunk banner injects
+ * `__dirname` into every emitted chunk so this works under both the dev
+ * tree (src/ via ts-jest) and the production ESM bundle. Critical for
+ * Tauri spawns where `process.cwd()` is `/` and any cwd-relative resolution
+ * lands at the filesystem root.
+ */
+function moduleDir(): string {
+  return __dirname;
+}
+
 @Injectable()
 export class AgentBrainHelper {
   private readonly defaultGoals = ['minimize loss', 'discover novel architectures'];
+  /**
+   * Resolution order:
+   *   1. `AGENT_BRAIN_PATH` env (Tauri sets this to <appDataDir>/agent-brain.json).
+   *   2. `<moduleDir>/../data/agent-brain.json`  -- pkg-root/data in dev (src bundled
+   *      to dist) and in production (npm install lays the same shape).
+   *   3. `<moduleDir>/../../data/agent-brain.json` -- one level deeper for nested layouts.
+   *   4. `<process.cwd()>/data/agent-brain.json`   -- last resort (works in plain node CLI).
+   * The first candidate whose parent dir already exists wins; otherwise
+   * `saveBrainToDisk` will mkdir the first one.
+   */
   private get defaultBrainPath(): string {
-    return process.env.AGENT_BRAIN_PATH || path.join(process.cwd(), 'data', 'agent-brain.json');
+    if (process.env.AGENT_BRAIN_PATH) return process.env.AGENT_BRAIN_PATH;
+    const here = moduleDir();
+    const candidates = [
+      path.join(here, '..', 'data', 'agent-brain.json'),
+      path.join(here, '..', '..', 'data', 'agent-brain.json'),
+      path.join(process.cwd(), 'data', 'agent-brain.json'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(path.dirname(c))) return c;
+    }
+    return candidates[0];
   }
 
   loadBrainFromDisk(filePath?: string): AgentBrain | null {
