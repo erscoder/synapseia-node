@@ -1,5 +1,26 @@
 # Changelog — @synapseia/node
 
+## [2026-04-27] fix(agent-brain): resolve default path via __dirname, not process.cwd() (4f27eaff)
+
+Tauri spawns the node child with `cwd='/'` so the legacy
+`path.join(process.cwd(), 'data', 'agent-brain.json')` resolved to
+`/data/agent-brain.json`, and `mkdirSync('/data')` crashed with ENOENT
+(`Failed to save brain to /data/agent-brain.json: ENOENT…`).
+
+Resolution order is now:
+  1. `AGENT_BRAIN_PATH` env (Tauri sets `<appDataDir>/agent-brain.json`).
+  2. `<moduleDir>/../data/agent-brain.json`.
+  3. `<moduleDir>/../../data/agent-brain.json`.
+  4. `<process.cwd()>/data/agent-brain.json` — last resort.
+
+`moduleDir()` returns `__dirname` (injected per-chunk by tsup's banner)
+so the same source compiles for both the production ESM bundle and
+ts-jest CJS. First candidate whose parent dir exists wins; otherwise
+`saveBrainToDisk` mkdir's the first.
+
++ regression test: with `cwd='/'` and no env override, the resolved
+  path must not collapse under `/data/`.
+
 ## [2026-04-26] fix(esm): tsup banner injects per-chunk __filename/__dirname; walk-up package.json lookup (6cdea161)
 
 The earlier "fix" using `new Function('return import.meta.url')()` was
