@@ -1,5 +1,37 @@
 # Changelog — @synapseia/node
 
+## [2026-04-27] refactor(llm-parser): centralize JSON parsing for cross-provider robustness (52c6de9)
+
+The trailing-prose recovery shipped earlier today (0090355) only covered
+ReAct. Other LLM consumers (critic, synthesizer, plan-execution,
+review-agent, buildResearchResult) still used bare
+`JSON.parse(stripReasoning(raw))` and would crash whenever a non-strict
+provider (Claude, MiniMax cloud, raw local Llama, older Gemini) emitted
+prose-after-JSON, markdown fences, or stacked objects.
+
+New single chokepoint: `src/shared/parse-llm-json.ts`
+
+- `extractFirstJsonStructure(s)`: linear scan returning the first
+  balanced `{...}` OR `[...]` substring (whichever opens first),
+  honouring string literals and escaped quotes. Plan arrays recover too.
+- `parseLlmJson<T>(raw)`: stripReasoning → `JSON.parse(envelope)` →
+  fallback to extractFirstJsonStructure → typed result with
+  `recoveredFrom: 'envelope' | 'extraction'`.
+- `jsonParseTailSnippet()`: 80-char preview of trailing garbage starting
+  at the error's reported position — so warn logs surface what the
+  provider actually appended.
+
+Migrated callsites:
+- `execute-research`: `parseReActResponse`, `buildResearchResult`
+- `critic-node`: `parseResearchResult`
+- `synthesizer-node`: `parseResearchResult`
+- `plan-execution`: `parseExecutionPlan` (handles arrays)
+- `review-agent`: drops the ad-hoc fence + regex parser
+
+`extractFirstJsonObject` re-exported from execute-research as an alias
+for backwards compat. 28 unit tests for the helper; 80 suites / 1260
+tests green.
+
 ## [2026-04-27] fix(react-parser): recover when LLM appends prose after JSON envelope (0090355)
 
 MiniMax-M2.7 (cloud) ignores `response_format:json_object` and emits
