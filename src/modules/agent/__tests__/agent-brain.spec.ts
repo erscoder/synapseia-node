@@ -68,6 +68,37 @@ describe('AgentBrainHelper', () => {
     });
   });
 
+  // ── defaultBrainPath resolution ──────────────────────────────────────────
+
+  describe('defaultBrainPath fallback', () => {
+    it('honors AGENT_BRAIN_PATH env override', () => {
+      process.env.AGENT_BRAIN_PATH = tmpFile;
+      const brain = makeBrain({ totalExperiments: 9 });
+      helper.saveBrainToDisk(brain);
+      expect(fs.existsSync(tmpFile)).toBe(true);
+      const loaded = helper.loadBrainFromDisk();
+      expect(loaded?.totalExperiments).toBe(9);
+    });
+
+    it('does not resolve to the filesystem root when cwd is "/"', () => {
+      // Simulate Tauri's cwd=/ scenario. Pre-fix: defaultBrainPath
+      // collapsed to "/data/agent-brain.json" and saveBrainToDisk crashed
+      // with ENOENT on mkdir /data. Post-fix: resolves via __dirname-based
+      // candidates, never under /data/ at the FS root.
+      delete process.env.AGENT_BRAIN_PATH;
+      const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/');
+      try {
+        const resolved = (helper as unknown as { defaultBrainPath: string })
+          .defaultBrainPath;
+        expect(resolved).not.toBe('/data/agent-brain.json');
+        expect(resolved.startsWith('/data/')).toBe(false);
+        expect(resolved.endsWith('agent-brain.json')).toBe(true);
+      } finally {
+        cwdSpy.mockRestore();
+      }
+    });
+  });
+
   // ── saveBrainToDisk / loadBrainFromDisk ───────────────────────────────────
 
   describe('saveBrainToDisk() + loadBrainFromDisk()', () => {
