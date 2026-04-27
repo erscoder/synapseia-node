@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentState } from '../state';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
-import { stripReasoning } from '../../../../shared/sanitize-llm-output';
+import { parseLlmJson } from '../../../../shared/parse-llm-json';
 import { buildMedicalSynthesizerPrompt } from '../prompts/medical/medical-synthesizer';
 import {
   extractStructuredPayloadFromProposal,
@@ -209,20 +209,26 @@ export class SynthesizerNode {
     discoveryType?: string;
     structuredData?: Record<string, unknown>;
   } {
-    try {
-      const p = JSON.parse(stripReasoning(raw).trim());
-      return {
-        summary: String(p.summary ?? ''),
-        keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
-        proposal: String(p.proposal ?? ''),
-        discoveryType: typeof p.discoveryType === 'string' ? p.discoveryType : undefined,
-        structuredData:
-          p.structuredData && typeof p.structuredData === 'object'
-            ? (p.structuredData as Record<string, unknown>)
-            : undefined,
-      };
-    } catch {
+    const result = parseLlmJson<{
+      summary?: unknown;
+      keyInsights?: unknown;
+      proposal?: unknown;
+      discoveryType?: unknown;
+      structuredData?: unknown;
+    }>(raw);
+    if (!result.ok || !result.value) {
       return { summary: raw.slice(0, 200), keyInsights: [], proposal: '' };
     }
+    const p = result.value;
+    return {
+      summary: String(p.summary ?? ''),
+      keyInsights: Array.isArray(p.keyInsights) ? p.keyInsights.map(String) : [],
+      proposal: String(p.proposal ?? ''),
+      discoveryType: typeof p.discoveryType === 'string' ? p.discoveryType : undefined,
+      structuredData:
+        p.structuredData && typeof p.structuredData === 'object'
+          ? (p.structuredData as Record<string, unknown>)
+          : undefined,
+    };
   }
 }
