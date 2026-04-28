@@ -1,4 +1,9 @@
-export { TelemetryClient } from './telemetry';
+export {
+  TelemetryClient,
+  TELEMETRY_LIMITS,
+  setGlobalTelemetryClient,
+  getGlobalTelemetryClient,
+} from './telemetry';
 export type { TelemetryClientOptions, Scheduler } from './telemetry';
 export { TelemetryModule } from './telemetry.module';
 export { DiskSpool } from './disk-spool';

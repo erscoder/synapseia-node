@@ -61,6 +61,15 @@ import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE } from '../modules/config/config';
 import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
 import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
+import {
+  getGlobalTelemetryClient,
+  TelemetryClient,
+} from '../modules/telemetry/telemetry';
+import {
+  makeUncaughtExceptionEvent,
+  makeUnhandledRejectionEvent,
+  type HwFingerprint,
+} from '../modules/telemetry/event-builder';
 
 // ── Global SIGINT handler ────────────────────────────────────────────────────
 function isExitError(e: unknown): boolean {
@@ -73,9 +82,15 @@ process.on('uncaughtException', (err: unknown) => {
     process.exit(0);
   }
   const e = err as Error;
+  // Best-effort telemetry — emit BEFORE logger.error so the
+  // exception.uncaught event captures the raw error, not the
+  // already-tapped subsystem.error from logger.error itself.
+  // drainAll() is awaited via .then() so we still exit on schedule
+  // even if the network is down (drainAll has its own deadline).
+  emitTelemetryException('uncaught', err);
   logger.error(`[uncaughtException] ${e?.name ?? 'Unknown'}: ${e?.message ?? JSON.stringify(err)}`);
   if (e?.stack) logger.error(e.stack);
-  process.exit(1);
+  void drainTelemetryThenExit(1);
 });
 process.on('unhandledRejection', (reason: unknown) => {
   if (isExitError(reason)) {
@@ -83,10 +98,53 @@ process.on('unhandledRejection', (reason: unknown) => {
     process.exit(0);
   }
   const e = reason as Error;
+  emitTelemetryException('rejection', reason);
   logger.error(`[unhandledRejection] ${e?.name ?? 'Unknown'}: ${e?.message ?? JSON.stringify(reason)}`);
   if (e?.stack) logger.error(e.stack);
   // Don't exit on unhandled rejections — just log them (node continues running)
 });
+
+/**
+ * Best-effort telemetry emission from process-level handlers.
+ * The TelemetryClient may not be configured yet (early-boot crashes)
+ * — silently no-op in that case.
+ */
+function emitTelemetryException(
+  kind: 'uncaught' | 'rejection',
+  reason: unknown,
+): void {
+  try {
+    const client = getGlobalTelemetryClient();
+    if (!client) return;
+    const fallbackHw: HwFingerprint = {
+      os: process.platform,
+      arch: process.arch,
+    };
+    const ev =
+      kind === 'uncaught'
+        ? makeUncaughtExceptionEvent(fallbackHw, reason)
+        : makeUnhandledRejectionEvent(fallbackHw, reason);
+    client.emit(ev);
+  } catch {
+    // Telemetry must NEVER block the crash path.
+  }
+}
+
+function drainTelemetryThenExit(code: number): Promise<void> {
+  return Promise.resolve()
+    .then(async () => {
+      try {
+        const client = getGlobalTelemetryClient();
+        if (client) await client.drainAll(2_000);
+      } catch {
+        // ignore
+      }
+    })
+    .then(() => {
+      process.exit(code);
+    })
+    .catch(() => process.exit(code));
+}
 
 async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
   try {
@@ -508,6 +566,9 @@ async function bootstrap() {
           process.exit(6);
         }
 
+        // Telemetry client (DI'd, configured + started inside startNode).
+        const telemetryClient = app.get(TelemetryClient);
+
         // ── Hand off to the node runtime ──────────────────────────────────
         const runtime = await startNode(
           {
@@ -524,7 +585,8 @@ async function bootstrap() {
             lat: config.lat,
             lng: config.lng,
           },
-          { p2pService, workOrderAgentService },
+          { p2pService, workOrderAgentService, telemetryClient },
+          hardware,
         );
 
         const cleanupLock = () => {
