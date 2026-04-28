@@ -399,7 +399,7 @@ export async function startNode(
         },
       };
       const ollamaUrl =
-        config.llmConfig.url ?? process.env.OLLAMA_URL ?? 'http://localhost:11434';
+        config.llmConfig.baseUrl ?? process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
       services.telemetryClient.configure({
         peerId: config.identity.peerId,
