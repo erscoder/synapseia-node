@@ -9,6 +9,8 @@ import logger from '../../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../../llm/llm-provider';
 import { EmbeddingHelper } from '../../../shared/embedding';
 import { trainMicroModel } from '../../model/trainer';
+import { runDocking, DockingError } from '../../docking';
+import type { DockingWorkOrderPayload } from '../../docking/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
@@ -66,6 +68,14 @@ export class WorkOrderExecutionHelper {
     try {
       const p = JSON.parse(workOrder.description) as Partial<CpuInferenceWorkOrderPayload>;
       return typeof p.task === 'string' && ['embedding', 'tokenize', 'classify'].includes(p.task) && typeof p.input === 'string';
+    } catch { return false; }
+  }
+
+  isDockingWorkOrder(workOrder: WorkOrder): boolean {
+    if ((workOrder.type as string) === 'MOLECULAR_DOCKING') return true;
+    try {
+      const p = JSON.parse(workOrder.description) as Partial<DockingWorkOrderPayload>;
+      return !!(p.pairId && p.receptorPdbId && p.ligandSmiles && p.bindingSite && p.vinaSeed && p.vinaVersion);
     } catch { return false; }
   }
 
@@ -424,6 +434,49 @@ Abstract: ${payload.abstract}`;
     const latencyMs = Date.now() - startMs;
     logger.log(`[GpuInference] task=${payload.task} done in ${latencyMs}ms, tokens=${tokensProcessed}`);
     return { output, tokensProcessed, latencyMs, modelUsed };
+  }
+
+  // ── Molecular Docking (AutoDock Vina v1.2.5) ──────────────────────────────
+
+  /**
+   * Execute a MOLECULAR_DOCKING work order. Spawns Vina + Open Babel,
+   * parses the PDBQT output, and returns a JSON-serialised
+   * DockingSubmissionPayload as the WO result. The coordinator's
+   * complete-WO path detects the type and routes the result to
+   * DockingSubmissionService.ingest. NO local sandboxing — same trust
+   * model as training (we run our own binaries against payloads we
+   * issued).
+   */
+  async executeDockingWorkOrder(
+    workOrder: WorkOrder,
+    peerId: string,
+  ): Promise<{ result: string; success: boolean }> {
+    logger.log(` Executing MOLECULAR_DOCKING: ${workOrder.title}`);
+    let payload: DockingWorkOrderPayload;
+    try {
+      payload = JSON.parse(workOrder.description) as DockingWorkOrderPayload;
+    } catch {
+      return { result: 'Invalid docking payload', success: false };
+    }
+    if (payload.vinaVersion !== '1.2.5') {
+      return {
+        result: `Unsupported Vina version: ${payload.vinaVersion} (only 1.2.5 is allowed in V1)`,
+        success: false,
+      };
+    }
+
+    try {
+      const submission = await runDocking({ workOrderId: workOrder.id, peerId, payload });
+      logger.log(
+        ` Docking complete — bestAffinity=${submission.bestAffinity.toFixed(3)} kcal/mol, poses=${submission.poses.length}, ${submission.durationMs}ms`,
+      );
+      return { result: JSON.stringify(submission), success: true };
+    } catch (err) {
+      const stage = err instanceof DockingError ? `[${err.stage}] ` : '';
+      const msg = (err as Error).message;
+      logger.error(` Docking failed ${stage}${msg}`);
+      return { result: `Docking failed ${stage}${msg}`, success: false };
+    }
   }
 
   // ── Generic ───────────────────────────────────────────────────────────────

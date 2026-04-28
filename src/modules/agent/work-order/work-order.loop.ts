@@ -195,7 +195,10 @@ export class WorkOrderLoopHelper {
         let success: boolean;
         let researchResult: ResearchResult | undefined;
 
-        if (this.execution.isGpuInferenceWorkOrder(workOrder)) {
+        if (this.execution.isDockingWorkOrder(workOrder)) {
+          const docking = await this.execution.executeDockingWorkOrder(workOrder, peerId);
+          result = docking.result; success = docking.success;
+        } else if (this.execution.isGpuInferenceWorkOrder(workOrder)) {
           try {
             const inferenceResult = await this.execution.executeGpuInferenceWorkOrder(workOrder, llmModel, llmConfig);
             result = JSON.stringify({ ...inferenceResult, metricType: 'latency', metricValue: inferenceResult.latencyMs });
@@ -261,7 +264,7 @@ export class WorkOrderLoopHelper {
         }
 
         // Quality gates
-        if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder)) && !success) {
+        if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder) || this.execution.isDockingWorkOrder(workOrder)) && !success) {
           logger.warn(' Work order execution failed — skipping result submission');
           this.state.currentWorkOrder = undefined;
           continue;
