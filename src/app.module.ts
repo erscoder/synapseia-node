@@ -11,6 +11,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { InferenceModule } from './modules/inference/inference.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { A2AModule } from './modules/a2a/a2a.module';
+import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { A2AModule } from './modules/a2a/a2a.module';
     InferenceModule,
     AgentModule,
     A2AModule,  // restored (ReviewAgentHelper dep removed from PeerReviewHandler)
+    TelemetryModule,
   ],
 })
 export class AppModule {}
