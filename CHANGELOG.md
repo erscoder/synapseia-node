@@ -1,5 +1,35 @@
 # Changelog — @synapseia/node
 
+## [2026-04-28] feat(telemetry): GPU smoke test + node-runtime wiring + crash handlers (11468c1)
+
+Wires the TelemetryClient (847d502) end-to-end. The node now emits:
+
+- `node.boot` — one per process start, with full hw fingerprint
+  (CPU, RAM, GPU model, VRAM, tier, hasOllama, hasCloudLlm).
+- `gpu.smoke.{passed,failed,skipped}` — fires once after Ollama
+  warm-up. Skipped if no GPU or Ollama unreachable. Otherwise POST
+  `/api/generate` with `num_gpu=99` to force GPU offload + 30 s
+  timeout, model `qwen2.5:0.5b`. Probe inferred from the GPU model
+  string (NVIDIA → cuda, Apple → metal, AMD → rocm).
+- `exception.uncaught` / `.unhandled-rejection` — from
+  `cli/index.ts` process handlers, BEFORE the existing
+  `logger.error → exit`. Drain has its own 2 s deadline.
+- `node.shutdown` — emitted on graceful stop with a 2 s drain.
+
+`modules/telemetry/telemetry.ts` adds
+`setGlobalTelemetryClient` / `getGlobalTelemetryClient` — the
+singleton handle that lets process-level handlers reach the
+DI'd client.
+
+`node-runtime.ts` configures the client (peerId, app version,
+hwFingerprint, signed buildAuthHeaders), starts it, registers the
+global singleton, and fires the GPU smoke test in the background.
+Telemetry is fully best-effort — any failure in this section
+degrades to a single warn and the node continues.
+
+Tests: 8 new specs on `gpu-smoke-test`. Full node suite at 1320
+tests green.
+
 ## [2026-04-28] feat(telemetry): node TelemetryClient + ring + spool + sanitizer + logger tap (847d502)
 
 Node side of the testnet feedback pipeline. Companion to the
