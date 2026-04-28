@@ -287,3 +287,21 @@ export const TELEMETRY_LIMITS = {
   FLUSH_BATCH_MAX,
   MAX_FAILURES_BEFORE_SPOOL,
 };
+
+/* ───────────────── Global singleton handle ─────────────────
+ * The cli/index.ts process-level error handlers fire BEFORE Nest's DI
+ * graph is available (and from contexts where DI cannot reach). They
+ * still need a way to push exception telemetry. node-runtime.ts calls
+ * `setGlobalTelemetryClient(client)` after configuring the Nest-owned
+ * client; the handlers reach for it through `getGlobalTelemetryClient()`
+ * — best effort, no-throw if not yet set.
+ */
+let globalClient: TelemetryClient | null = null;
+
+export function setGlobalTelemetryClient(client: TelemetryClient | null): void {
+  globalClient = client;
+}
+
+export function getGlobalTelemetryClient(): TelemetryClient | null {
+  return globalClient;
+}

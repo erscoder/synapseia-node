@@ -18,6 +18,17 @@ import { IpifyService } from './modules/shared/infrastructure/ipify.service';
 import type { A2AServer } from './modules/a2a/a2a-server.service';
 import { preflightVersionCheck, UpdateStatus } from './utils/update-checker';
 import { attemptSelfUpdate, restartProcess } from './utils/self-updater';
+import type { Hardware } from './modules/hardware/hardware';
+import { runGpuSmokeTest } from './modules/hardware/gpu-smoke-test';
+import { TelemetryClient, setGlobalTelemetryClient } from './modules/telemetry/telemetry';
+import {
+  makeBootEvent,
+  makeGpuSmokeEvent,
+  makeShutdownEvent,
+  type HwFingerprint,
+} from './modules/telemetry/event-builder';
+import { buildAuthHeaders } from './utils/node-auth';
+import { getNodeVersion } from './utils/version';
 
 export interface NodeRuntimeConfig {
   /** Resolved peer identity (peerId, publicKey, privateKey) */
@@ -85,7 +96,9 @@ export async function startNode(
       stop: () => void;
     };
     a2aServer?: A2AServer;
+    telemetryClient?: TelemetryClient;
   },
+  realHardware?: Hardware,
 ): Promise<NodeRuntime> {
   // ── 0. Pre-flight version check ──────────────────────────────────────────
   const versionCheck = await preflightVersionCheck(config.coordinatorUrl);
@@ -365,10 +378,102 @@ export async function startNode(
     });
 
 
+  // ── Telemetry: configure → start → emit node.boot → GPU smoke ───────────
+  // Best-effort. Telemetry must NEVER block boot. If anything fails,
+  // we log a single warn and continue — the node still runs.
+  let telemetryStopFn: (() => void) | null = null;
+  if (services.telemetryClient && realHardware) {
+    try {
+      const hwFingerprint: HwFingerprint = {
+        os: process.platform,
+        arch: process.arch,
+        appVersion: getNodeVersion(),
+        gpuModel: realHardware.gpuModel,
+        extra: {
+          cpuCores: realHardware.cpuCores,
+          ramGb: realHardware.ramGb,
+          gpuVramGb: realHardware.gpuVramGb,
+          tier: realHardware.tier,
+          hasOllama: realHardware.hasOllama,
+          hasCloudLlm: realHardware.hasCloudLlm,
+        },
+      };
+      const ollamaUrl =
+        config.llmConfig.url ?? process.env.OLLAMA_URL ?? 'http://localhost:11434';
+
+      services.telemetryClient.configure({
+        peerId: config.identity.peerId,
+        appVersion: getNodeVersion(),
+        coordinatorUrl: config.coordinatorUrl,
+        hwFingerprint,
+        buildAuthHeaders: async ({ method, path, body }) => {
+          if (!config.identity.privateKey || !config.identity.publicKey) {
+            return {};
+          }
+          return buildAuthHeaders({
+            method,
+            path,
+            body,
+            privateKey: Buffer.from(config.identity.privateKey, 'hex'),
+            publicKey: Buffer.from(config.identity.publicKey, 'hex'),
+            peerId: config.identity.peerId,
+          });
+        },
+      });
+      services.telemetryClient.start();
+      setGlobalTelemetryClient(services.telemetryClient);
+      telemetryStopFn = () => {
+        services.telemetryClient!.stop();
+        setGlobalTelemetryClient(null);
+      };
+
+      // node.boot
+      services.telemetryClient.emit(
+        makeBootEvent(hwFingerprint, {
+          pid: process.pid,
+          uptime: process.uptime(),
+          capabilities: config.capabilities,
+        }),
+      );
+
+      // gpu.smoke.* — fire-and-forget, doesn't block boot.
+      void runGpuSmokeTest({ hardware: realHardware, ollamaUrl })
+        .then(result => {
+          services.telemetryClient!.emit(
+            makeGpuSmokeEvent(hwFingerprint, result),
+          );
+        })
+        .catch(err => {
+          logger.warn(
+            `[Telemetry] GPU smoke test runner threw: ${(err as Error).message}`,
+          );
+        });
+    } catch (err) {
+      logger.warn(
+        `[Telemetry] Failed to start client: ${(err as Error).message}`,
+      );
+    }
+  }
+
   return {
     p2pNode,
     stop: async () => {
       logger.log('🛑 Shutting down node...');
+      if (services.telemetryClient && realHardware) {
+        try {
+          const hwFp: HwFingerprint = {
+            os: process.platform,
+            arch: process.arch,
+            appVersion: getNodeVersion(),
+            gpuModel: hardware.gpuModel,
+          };
+          services.telemetryClient.emit(makeShutdownEvent(hwFp, 'requested'));
+          await services.telemetryClient.drainAll(2_000);
+        } catch {
+          // best effort
+        }
+      }
+      if (telemetryStopFn) telemetryStopFn();
       if (coordWatchdogHandle) clearInterval(coordWatchdogHandle);
       heartbeatCleanup();
       services.workOrderAgentService.stop();
