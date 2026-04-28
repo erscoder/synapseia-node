@@ -1,5 +1,47 @@
 # Changelog — @synapseia/node
 
+## [2026-04-28] feat(telemetry): node TelemetryClient + ring + spool + sanitizer + logger tap (847d502)
+
+Node side of the testnet feedback pipeline. Companion to the
+coordinator's `POST /telemetry/events` shipped in `coordinator/942bdf7`.
+
+- `utils/logger.ts` gains a `setLoggerTap(fn)` mechanism. Every
+  `logger.error|warn|info|debug` invocation now also calls the
+  registered tap (last-writer-wins, fail-soft, default no-op). The
+  logger-tap is the primary feed of `subsystem.error|warning`
+  telemetry events — no caller-site changes required.
+- `modules/telemetry/sanitizer.ts` strips PII / secrets / oversize
+  before events leave the node — abs paths normalized, sensitive
+  identifiers (`WALLET_PRIVATE_KEY=...`, `apiKey=...`, `mnemonic=...`)
+  redacted even inside underscore-joined names, caps on message
+  / stack / total event size with a regression suite.
+- `modules/telemetry/disk-spool.ts` — append-only NDJSON at
+  `~/.synapseia/telemetry-spool.ndjson`. 50 MB cap, iterative
+  oldest-first truncation. Survives node restarts and long
+  coordinator outages.
+- `modules/telemetry/event-builder.ts` — typed factories for the 10
+  closed event shapes. Subsystem inferred from the `[Subsystem]`
+  log prefix.
+- `modules/telemetry/telemetry.ts` — `TelemetryClient`:
+  - RAM ring (cap 1000, overflow spills oldest 100 to disk)
+  - Auto-flush every 30 s or when the ring crosses 50 events
+  - Single attempt per flush — outer interval is the retry cadence;
+    on 3 consecutive failures the batch goes to the disk spool
+  - `start()` attaches the logger tap; `stop()` / `drainAll()` for
+    clean shutdown
+  - HttpService when injected (Nest), fallback raw fetch for CLI
+  - `configure()` allows late binding of peerId + hardware once the
+    boot sequence resolves them
+- `TelemetryModule` wired into the node `AppModule`.
+
+Late binding via `client.configure(...)` + `start()` and the
+`exception.uncaught|unhandled-rejection` hooks in `cli/index.ts`
+ship in the next commit (boot + GPU smoke + cli handlers).
+
+Tests: 52 specs across sanitizer (24), disk-spool (6), event-builder
+(15), and telemetry client (7). Full node suite (1312 tests) still
+green.
+
 ## [2026-04-27] refactor(llm-parser): centralize JSON parsing for cross-provider robustness (52c6de9)
 
 The trailing-prose recovery shipped earlier today (0090355) only covered
