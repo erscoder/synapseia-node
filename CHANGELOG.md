@@ -1,5 +1,69 @@
 # Changelog — @synapseia/node
 
+## [2026-04-29] fix(node-runtime): use llmConfig.baseUrl instead of stale .url field (b8fd1c95)
+
+Single-line fix: `node-runtime.ts:399` was the only place reading
+`config.llmConfig.url`; every other LLM-config consumer reads
+`baseUrl`. The stray `.url` resolved to `undefined`, masking any
+custom base URL by silently falling through to OLLAMA_URL /
+`http://localhost:11434`.
+
+## [2026-04-29] feat(docking): node-side Vina runner + work-order dispatch hook (2a618d54)
+
+Layer 1 of the 4-layer pharma plan
+(`~/.claude/plans/lucky-mixing-dongarra.md`) — node-side execution
+of MOLECULAR_DOCKING work orders end-to-end via AutoDock Vina v1.2.5
++ Open Babel.
+
+New module `src/modules/docking/`:
+- `types.ts` — local mirror of the coordinator's docking domain
+  shapes (`DockingPose`, `AtomCoord`, `DockingWorkOrderPayload`,
+  `DockingSubmissionPayload`). Wire-validated on the coordinator
+  side; the two copies must stay in sync.
+- `vina-parser.ts::parseVinaPdbqt(text)` — pure parser for Vina's
+  PDBQT output. Splits MODEL/ENDMDL blocks, extracts the
+  `REMARK VINA RESULT:` line for affinity + RMSD bounds, parses
+  ATOM/HETATM fixed-width columns. Maps PDBQT atom-type extensions
+  back to standard element symbols (A→C aromatic, OA→O, NA→N,
+  HD→H, SA→S, …). Skips malformed records and MODELs missing the
+  VINA RESULT remark rather than crashing — the coordinator's
+  cross-node verification gate catches the rest.
+- `docker.ts::runDocking(input, opts)` — full pipeline: receptor
+  cache (RCSB download to `~/.synapseia/docking/receptors`),
+  receptor `obabel -xr -p 7.4` PDB→PDBQT, ligand `obabel --gen3d -h`
+  SMILES→PDBQT, Vina invocation with the WO's binding-site box +
+  seed (truncated to int32 from the WO's hex seed) + locked params
+  (exhaustiveness=8, num_modes=9, energy_range=3.0, cpu=4), output
+  parse via `parseVinaPdbqt`, sha256 hash for cross-node equality,
+  hardware reporting via `os`. Default 20-min timeout
+  (`VINA_TIMEOUT_MS` override). Cleans the per-WO temp dir on exit.
+- `assertBinariesAvailable()` runs `vina --version` + `obabel -V`
+  with a 10s budget — docking WOs fail loudly if either binary is
+  missing rather than silently fall back to fake results
+  (per `feedback_di_wiring`).
+- No sandboxing — same trust model as `trainer.ts` (subprocess
+  inherits parent env, no cgroups). We run our own binaries
+  against payloads we issued.
+
+Wiring (`work-order.execution.ts` + `work-order.loop.ts`):
+- `WorkOrderExecutionHelper.isDockingWorkOrder(wo)` — type
+  detection (string or JSON-payload introspection).
+- `executeDockingWorkOrder(workOrder, peerId)` — invokes
+  `runDocking` and JSON-serialises the resulting
+  `DockingSubmissionPayload` as the WO `result`. The coordinator's
+  complete-WO path will detect MOLECULAR_DOCKING type and route the
+  result to `DockingSubmissionService.ingest` (follow-up commit).
+- Loop dispatcher routes MOLECULAR_DOCKING as the FIRST branch
+  (before GPU/CPU inference) so a docking WO is never
+  accidentally classified as a generic inference task.
+- Quality-gate skip-on-failure list extended.
+
+Tests: 8 new specs covering MODEL/ENDMDL block parsing, REMARK
+extraction, PDBQT-type → element mapping (incl. aromatic A → C),
+malformed-ATOM resilience, empty input, and rank-ordering on
+unnumbered MODEL blocks. Full node suite passes (1336 / 1378).
+`tsup` build clean.
+
 ## [2026-04-28] feat(telemetry): GPU smoke test + node-runtime wiring + crash handlers (11468c1)
 
 Wires the TelemetryClient (847d502) end-to-end. The node now emits:
