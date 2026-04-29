@@ -1,5 +1,13 @@
 # Changelog — @synapseia/node
 
+## [2026-04-29] fix(node): use realHardware.gpuModel in shutdown telemetry (be1b9f98)
+
+`node-runtime.ts:468` was reading `hardware.gpuModel`, but `hardware`
+is the trimmed heartbeat shape (`{ cpuCores, ramGb, gpuVramGb, tier,
+hasOllama, hasCloudLlm }`) which has no `gpuModel`. Switched to
+`realHardware.gpuModel` to match the line 391 pattern. Resolves the
+TS2339 the final reviewer surfaced.
+
 ## [2026-04-29] feat(lora): node-side trainer + Python LoRA script + WO dispatch (238bc674)
 
 Layer 2 task 9/13 of the 4-layer pharma plan
