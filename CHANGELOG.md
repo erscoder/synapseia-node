@@ -1,5 +1,12 @@
 # Changelog — @synapseia/node
 
+## [2026-04-29] feat(observability): migrate LangSmith → Langfuse v5 SDK + self-hosted container (HASH)
+
+Replaced `langsmith/traceable` with `@langfuse/tracing` `startActiveObservation` (OTel-based).
+`LangGraphLlmService` and `ToolRunnerService` now trace to a self-hosted Langfuse v3 instance
+via `LANGFUSE_SECRET_KEY` opt-in. Added `instrumentation.ts` (OTel + `LangfuseSpanProcessor`),
+initialised in `cli/index.ts` before NestJS bootstrap.
+
 ## [2026-04-29] feat(observability): opt-in LangSmith traces on LangGraph agent — dev-only (71d51ab7)
 
 `LangGraphLlmService.generate` / `generateJSON` and

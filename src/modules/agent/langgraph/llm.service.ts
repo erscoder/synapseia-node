@@ -1,38 +1,27 @@
 /**
  * LangGraph LLM Service
- * NestJS injectable wrapper for LLM generation
- * Sprint B - Planning + Self-Critique
+ * NestJS injectable wrapper for LLM generation with opt-in Langfuse tracing.
+ * Tracing activates only when LANGFUSE_SECRET_KEY is set.
  */
 
 import { Injectable } from '@nestjs/common';
-import { traceable } from 'langsmith/traceable';
+import { startActiveObservation } from '@langfuse/tracing';
 import { LlmProviderHelper, type LLMModel, type LLMConfig } from '../../llm/llm-provider';
 
 @Injectable()
 export class LangGraphLlmService {
-  private readonly tracedGenerate: (model: LLMModel, prompt: string, config?: LLMConfig) => Promise<string>;
-  private readonly tracedGenerateJson: (model: LLMModel, prompt: string, config?: LLMConfig) => Promise<string>;
-
-  constructor(private readonly llmProviderHelper: LlmProviderHelper) {
-    // LangSmith `traceable` is a no-op when LANGCHAIN_TRACING_V2 is unset
-    // (a few µs of function-call overhead, no I/O). DEV-only: opt in via
-    // env var when debugging a specific run locally; never enable in
-    // production — traces leak prompt + LLM output to LangChain Inc and
-    // break Synapseia's per-node trust model. See `.env.example`.
-    this.tracedGenerate = traceable(
-      async (model: LLMModel, prompt: string, config?: LLMConfig) =>
-        this.llmProviderHelper.generateLLM(model, prompt, config),
-      { name: 'llm.generate', run_type: 'llm' },
-    );
-    this.tracedGenerateJson = traceable(
-      async (model: LLMModel, prompt: string, config?: LLMConfig) =>
-        this.llmProviderHelper.generateLLM(model, prompt, config, { forceJson: true }),
-      { name: 'llm.generateJSON', run_type: 'llm' },
-    );
-  }
+  constructor(private readonly llmProviderHelper: LlmProviderHelper) {}
 
   async generate(model: LLMModel, prompt: string, config?: LLMConfig): Promise<string> {
-    return this.tracedGenerate(model, prompt, config);
+    if (!process.env.LANGFUSE_SECRET_KEY) {
+      return this.llmProviderHelper.generateLLM(model, prompt, config);
+    }
+    return startActiveObservation('llm.generate', async (span) => {
+      span.update({ input: prompt, model: String(model) });
+      const output = await this.llmProviderHelper.generateLLM(model, prompt, config);
+      span.update({ output });
+      return output;
+    });
   }
 
   /**
@@ -47,6 +36,14 @@ export class LangGraphLlmService {
    * follow JSON instructions reliably enough that extra parsing is unnecessary.
    */
   async generateJSON(model: LLMModel, prompt: string, config?: LLMConfig): Promise<string> {
-    return this.tracedGenerateJson(model, prompt, config);
+    if (!process.env.LANGFUSE_SECRET_KEY) {
+      return this.llmProviderHelper.generateLLM(model, prompt, config, { forceJson: true });
+    }
+    return startActiveObservation('llm.generateJSON', async (span) => {
+      span.update({ input: prompt, model: String(model) });
+      const output = await this.llmProviderHelper.generateLLM(model, prompt, config, { forceJson: true });
+      span.update({ output });
+      return output;
+    });
   }
 }

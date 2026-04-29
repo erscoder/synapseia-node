@@ -35,6 +35,12 @@ setMaxListeners(Infinity);
     if (dotenvExists(f)) { dotenvConfig({ path: f, debug: false, quiet: true }); break; }
   }
 })();
+import { initTracing } from '../instrumentation';
+
+// Activate Langfuse OTel tracing before any NestJS module loads.
+// No-op when LANGFUSE_SECRET_KEY is unset.
+initTracing();
+
 import logger from '../utils/logger';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
