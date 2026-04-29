@@ -1,5 +1,19 @@
 # Changelog — @synapseia/node
 
+## [2026-04-29] feat(observability): opt-in LangSmith traces on LangGraph agent — dev-only (71d51ab7)
+
+`LangGraphLlmService.generate` / `generateJSON` and
+`ToolRunnerService.run` are now wrapped with `langsmith` `traceable`.
+No-op unless `LANGCHAIN_TRACING_V2=true`. When enabled, every ReAct
+LLM call + each tool invocation appears as a parent/child span on
+LangSmith with prompt, output, and latency.
+
+DEV ONLY — production deployments must never set the env var.
+Traces leak prompt + LLM output to LangChain Inc, which breaks the
+per-node trust model when nodes contain pre-publication discoveries
++ paper content. Setup guide: `docs/DEV-LANGSMITH-TRACING.md` in the
+root repo.
+
 ## [2026-04-29] fix(node): use realHardware.gpuModel in shutdown telemetry (be1b9f98)
 
 `node-runtime.ts:468` was reading `hardware.gpuModel`, but `hardware`
