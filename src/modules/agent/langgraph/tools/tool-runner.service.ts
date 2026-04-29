@@ -4,6 +4,7 @@
  */
 
 import { Injectable, Optional } from '@nestjs/common';
+import { traceable } from 'langsmith/traceable';
 import type { ToolCall, ToolResult } from './types';
 import { SearchCorpusTool } from './search-corpus.tool';
 import { QueryKgTool } from './query-kg.tool';
@@ -25,13 +26,21 @@ export class ToolRunnerService {
   ) {}
 
   async run(call: ToolCall): Promise<ToolResult> {
-    const start = Date.now();
-    try {
-      const result = await this.executeWithTimeout(call);
-      return { success: true, data: result, latencyMs: Date.now() - start };
-    } catch (error) {
-      return { success: false, data: null, latencyMs: Date.now() - start, error: (error as Error).message };
-    }
+    // Wrap each tool call so LangSmith (when LANGCHAIN_TRACING_V2=true,
+    // DEV ONLY) captures input + output + latency. No-op otherwise.
+    const traced = traceable(
+      async (c: ToolCall) => {
+        const start = Date.now();
+        try {
+          const data = await this.executeWithTimeout(c);
+          return { success: true, data, latencyMs: Date.now() - start } as ToolResult;
+        } catch (error) {
+          return { success: false, data: null, latencyMs: Date.now() - start, error: (error as Error).message } as ToolResult;
+        }
+      },
+      { name: `tool.${call.toolName}`, run_type: 'tool' },
+    );
+    return traced(call);
   }
 
   private async executeWithTimeout(call: ToolCall): Promise<unknown> {
