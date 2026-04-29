@@ -11,8 +11,8 @@ LangSmith with prompt, output, and latency.
 DEV ONLY — production deployments must never set the env var.
 Traces leak prompt + LLM output to LangChain Inc, which breaks the
 per-node trust model when nodes contain pre-publication discoveries
-+ paper content. Setup guide: `docs/DEV-LANGSMITH-TRACING.md` in the
-root repo.
++ paper content. Setup steps + cost ceiling documented in the
+`.env.example` LangSmith section in the root repo.
 
 ## [2026-04-29] fix(node): use realHardware.gpuModel in shutdown telemetry (be1b9f98)
 
