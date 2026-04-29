@@ -1,5 +1,40 @@
 # Changelog — @synapseia/node
 
+## [2026-04-29] feat(lora): node-side trainer + Python LoRA script + WO dispatch (238bc674)
+
+Layer 2 task 9/13 of the 4-layer pharma plan
+(`~/.claude/plans/lucky-mixing-dongarra.md`). Closes the node-side
+LoRA flow against the coordinator stack shipped in T8.
+
+`src/modules/lora/`:
+- `types.ts` mirrors the coordinator's payload shapes wire-byte for
+  wire-byte.
+- `runLora()` orchestrates: GPU detection (refuses LORA_GENERATION
+  on a CPU-only node loudly), spawn `python3 scripts/train_lora.py`
+  with the WO payload + outDir on stdin, read the adapter +
+  metrics.json the Python writes, sha256 the artifact, PUT to the
+  WO's pre-signed S3 URL via `fetch`, return a
+  `LoraSubmissionPayload`. 4h default timeout. Per-WO temp dir
+  cleaned on exit. Same trust model as `trainer.ts` (no sandbox).
+
+`scripts/train_lora.py` is a single-file Python entry point using
+HuggingFace `transformers` + `peft`. Subtype-aware:
+- `LORA_CLASSIFICATION` → AutoModelForSequenceClassification +
+  TaskType.SEQ_CLS, accuracy + macro-F1 metrics.
+- `LORA_GENERATION` → AutoModelForCausalLM + TaskType.CAUSAL_LM,
+  perplexity metric (asserts CUDA — defence in depth on top of
+  the TS-side GPU check).
+Device picks CUDA → MPS (CLASSIFICATION only) → CPU.
+
+Wiring: `WorkOrderExecutionHelper.isLoraWorkOrder` +
+`executeLoraWorkOrder`; the loop dispatcher routes LORA_TRAINING
+right after MOLECULAR_DOCKING and BEFORE generic GPU/CPU
+inference to avoid misclassification.
+
+Tests: 4 new specs (CPU-only refusal, happy-path with stub
+Python + stub uploader, missing-metrics failure, non-zero-exit
+failure). Build: `tsup` clean. Node suite: 1332 / 1374 pass.
+
 ## [2026-04-29] fix(node-runtime): use llmConfig.baseUrl instead of stale .url field (b8fd1c95)
 
 Single-line fix: `node-runtime.ts:399` was the only place reading
