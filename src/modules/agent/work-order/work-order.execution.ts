@@ -11,6 +11,8 @@ import { EmbeddingHelper } from '../../../shared/embedding';
 import { trainMicroModel } from '../../model/trainer';
 import { runDocking, DockingError } from '../../docking';
 import type { DockingWorkOrderPayload } from '../../docking/types';
+import { runLora, LoraError } from '../../lora/lora_trainer';
+import type { LoraWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
@@ -76,6 +78,14 @@ export class WorkOrderExecutionHelper {
     try {
       const p = JSON.parse(workOrder.description) as Partial<DockingWorkOrderPayload>;
       return !!(p.pairId && p.receptorPdbId && p.ligandSmiles && p.bindingSite && p.vinaSeed && p.vinaVersion);
+    } catch { return false; }
+  }
+
+  isLoraWorkOrder(workOrder: WorkOrder): boolean {
+    if ((workOrder.type as string) === 'LORA_TRAINING') return true;
+    try {
+      const p = JSON.parse(workOrder.description) as Partial<LoraWorkOrderPayload>;
+      return !!(p.adapterId && p.missionId && p.subtype && p.baseModel && p.uploadUrl && p.loraConfig);
     } catch { return false; }
   }
 
@@ -476,6 +486,39 @@ Abstract: ${payload.abstract}`;
       const msg = (err as Error).message;
       logger.error(` Docking failed ${stage}${msg}`);
       return { result: `Docking failed ${stage}${msg}`, success: false };
+    }
+  }
+
+  // ── LoRA biomedical fine-tuning ───────────────────────────────────────────
+
+  /**
+   * Execute a LORA_TRAINING work order. Spawns the Python LoRA trainer
+   * subprocess, uploads the resulting adapter to S3 via the WO's
+   * pre-signed URL, returns a JSON-serialised LoraSubmissionPayload as
+   * the WO result. The coordinator's complete-WO path detects the
+   * type and routes the result to LoraSubmissionService.ingest.
+   */
+  async executeLoraWorkOrder(
+    workOrder: WorkOrder,
+    peerId: string,
+  ): Promise<{ result: string; success: boolean }> {
+    logger.log(` Executing LORA_TRAINING: ${workOrder.title}`);
+    let payload: LoraWorkOrderPayload;
+    try { payload = JSON.parse(workOrder.description) as LoraWorkOrderPayload; }
+    catch { return { result: 'Invalid LoRA payload', success: false }; }
+
+    try {
+      const submission = await runLora({ workOrderId: workOrder.id, peerId, payload });
+      logger.log(
+        ` LoRA training complete — adapter=${submission.adapterId}, ` +
+        `metrics=${JSON.stringify(submission.reportedValMetrics)}`,
+      );
+      return { result: JSON.stringify(submission), success: true };
+    } catch (err) {
+      const stage = err instanceof LoraError ? `[${err.stage}] ` : '';
+      const msg = (err as Error).message;
+      logger.error(` LoRA training failed ${stage}${msg}`);
+      return { result: `LoRA training failed ${stage}${msg}`, success: false };
     }
   }
 
