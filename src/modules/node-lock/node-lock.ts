@@ -64,6 +64,22 @@ function readLockFile(): NodeLockInfo | null {
 export function getActiveLock(): NodeLockInfo | null {
   const info = readLockFile();
   if (!info) return null;
+
+  // If the lock PID matches ours but predates our own start, it's a stale lock
+  // from a previous process instance (e.g. container restart where PID 1 is reused).
+  if (info.pid === process.pid) {
+    const ourStartMs = Date.now() - process.uptime() * 1000;
+    const lockMs = new Date(info.startedAt).getTime();
+    if (lockMs < ourStartMs - 1000) {
+      try {
+        unlinkSync(lockFilePath());
+      } catch {
+        // Already gone — fine.
+      }
+      return null;
+    }
+  }
+
   if (!isProcessAlive(info.pid)) {
     try {
       unlinkSync(lockFilePath());
