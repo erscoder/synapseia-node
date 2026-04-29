@@ -1,6 +1,6 @@
 # Changelog — @synapseia/node
 
-## [2026-04-29] feat(observability): migrate LangSmith → Langfuse v5 SDK + self-hosted container (HASH)
+## [2026-04-29] feat(observability): migrate LangSmith → Langfuse v5 SDK + self-hosted container (30632bce)
 
 Replaced `langsmith/traceable` with `@langfuse/tracing` `startActiveObservation` (OTel-based).
 `LangGraphLlmService` and `ToolRunnerService` now trace to a self-hosted Langfuse v3 instance
