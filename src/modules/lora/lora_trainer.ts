@@ -61,7 +61,7 @@ export class LoraError extends Error {
 
 export async function runLora(input: RunLoraInput, options: RunLoraOptions = {}): Promise<LoraSubmissionPayload> {
   const { workOrderId, peerId, payload } = input;
-  if (payload.subtype === 'LORA_GENERATION' && !(options.forceGpu ?? hasGpu())) {
+  if (payload.subtype === 'LORA_GENERATION' && !(options.forceGpu ?? hasGpu(payload.subtype))) {
     throw new LoraError(
       `LORA_GENERATION (BioGPT-Large) requires a GPU; this node has none. Refusing to run on CPU.`,
       'precheck',
@@ -108,16 +108,29 @@ export async function runLora(input: RunLoraInput, options: RunLoraOptions = {})
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function hasGpu(): boolean {
-  // Heuristic: presence of either nvidia-smi (CUDA) or `metal` framework
-  // (Apple Silicon — torch supports MPS). Cheap to probe.
+/**
+ * Cheap GPU heuristic — true means "this node MAY be able to run a
+ * LoRA training subprocess on a GPU/MPS backend". The Python script
+ * runs the authoritative check via `torch.cuda.is_available()` and
+ * (for MPS) `torch.backends.mps.is_available()`. NOTE: Apple Silicon
+ * MPS is allowed for CLASSIFICATION only — `train_lora.py` rejects
+ * GENERATION on MPS as defence in depth, but we mirror that rule
+ * here so the precheck refuses GENERATION on MPS BEFORE we waste a
+ * model download.
+ *
+ * @param subtype optional — when provided, the heuristic refuses MPS
+ *                for `LORA_GENERATION` (Apple Silicon BioGPT-Large
+ *                doesn't fit / is unsupported by torch's MPS backend
+ *                at the model sizes we ship).
+ */
+function hasGpu(subtype?: 'LORA_CLASSIFICATION' | 'LORA_GENERATION'): boolean {
   if (process.env.SYN_FORCE_GPU === 'true') return true;
   if (process.env.SYN_FORCE_NO_GPU === 'true') return false;
-  // We avoid spawning nvidia-smi here to keep the precheck cheap; the
-  // trainer can still bail at python-side if torch.cuda.is_available()
-  // returns false.
   const platform = os.platform();
-  if (platform === 'darwin' && os.arch() === 'arm64') return true; // MPS-capable
+  if (platform === 'darwin' && os.arch() === 'arm64') {
+    // MPS-capable but only useful for CLASSIFICATION (encoder).
+    return subtype !== 'LORA_GENERATION';
+  }
   // Linux / Windows: rely on env var set by the launcher (e.g.
   // start-node detects nvidia-smi at startup and exports SYN_FORCE_GPU=true).
   return false;
