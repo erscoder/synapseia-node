@@ -38,8 +38,8 @@ setMaxListeners(Infinity);
 import { initTracing } from '../instrumentation';
 
 // Activate Langfuse OTel tracing before any NestJS module loads.
-// No-op when LANGFUSE_SECRET_KEY is unset.
-initTracing();
+// Dynamic import inside initTracing() — no-op (zero packages loaded) when LANGFUSE_SECRET_KEY is unset.
+await initTracing();
 
 import logger from '../utils/logger';
 import 'reflect-metadata';
