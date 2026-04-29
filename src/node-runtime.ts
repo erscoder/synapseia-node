@@ -465,7 +465,7 @@ export async function startNode(
             os: process.platform,
             arch: process.arch,
             appVersion: getNodeVersion(),
-            gpuModel: hardware.gpuModel,
+            gpuModel: realHardware.gpuModel,
           };
           services.telemetryClient.emit(makeShutdownEvent(hwFp, 'requested'));
           await services.telemetryClient.drainAll(2_000);
