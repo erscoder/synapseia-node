@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] fix(telemetry): expand inferSubsystem to recognize all real prefixes (5f7729c5)
+
+The previous switch only matched canonical names (training, inference, embedding,
+p2p, llm, ...) so 729/729 errors fell into `subsystem='other'`. Production logs
+use prefixes the switch never knew: ResearcherNode, SelfCritiqueNode,
+PlanExecutionNode, CriticNode, SynthesizerNode, ModelSubscriber, AgentGraph,
+MutationEngine, CoordWatchdog, Heartbeat, Backpressure.
+
+Added explicit mappings for all 11 plus keyword-based fallback for prefix-less
+messages (Generation failed → llm, Mutation engine → training).
+
 ## [2026-04-29] feat(observability): migrate LangSmith → Langfuse v5 SDK + self-hosted container (30632bce)
 
 Replaced `langsmith/traceable` with `@langfuse/tracing` `startActiveObservation` (OTel-based).
