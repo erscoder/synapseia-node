@@ -1,5 +1,13 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] feat(llm): circuit breaker around OllamaHelper.generate (e61588af)
+
+Process-wide CircuitBreaker (5 failures / 60s → open 30s) gates every
+generate() call. Suppresses retry storms during Ollama crashes — telemetry
+volume drops 5–20× while the underlying outage is readable. Self-contained
+utility in `utils/circuit-breaker.ts`; tests cover closed/open/half-open
+transitions and window expiry.
+
 ## [2026-04-30] feat(mutation-engine): preflight installed Ollama models before iterating (f690fd0e)
 
 Probe Ollama's `/api/tags` for installed model names and prune candidates
