@@ -1,5 +1,12 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] fix(trainer): memory preflight + OOM error context (58063409)
+
+Pre-spawn check estimates RSS need (python+torch + params + Adam + activations)
+and refuses to launch when freemem can't cover it with 30% headroom. When the
+cgroup kill fires anyway, the error string now carries hyperparams + memory
+snapshot at spawn time so OOMs are attributable without source-diving.
+
 ## [2026-04-30] fix(heartbeat): escalate warn→error only after N consecutive failures (99454ede)
 
 Single-cycle heartbeat failures during coordinator restarts no longer flood
