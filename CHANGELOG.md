@@ -1,5 +1,13 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] feat(mutation-engine): preflight installed Ollama models before iterating (f690fd0e)
+
+Probe Ollama's `/api/tags` for installed model names and prune candidates
+that are not present. Saves up to 8 log lines per training WO on CPU-only
+nodes that have none of the required models. Throws MutationEngineError
+immediately with an actionable hint ("ollama pull <model>"). Best-effort —
+falls through to the original loop when Ollama is unreachable.
+
 ## [2026-04-30] fix(telemetry): expand inferSubsystem to recognize all real prefixes (5f7729c5)
 
 The previous switch only matched canonical names (training, inference, embedding,
