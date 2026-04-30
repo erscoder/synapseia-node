@@ -61,6 +61,15 @@ export class HeartbeatHelper {
   private ownBundle: Buffer | null = null;
   private p2pNode?: P2PNode;
 
+  /**
+   * Consecutive failed heartbeat cycles. Only after N consecutive failures
+   * (across the existing 3-retry inner loop) do we escalate from warn → error.
+   * Single-cycle blips during coordinator restarts no longer flood telemetry
+   * with `severity=error` events that the operator can't act on anyway.
+   */
+  private consecutiveCycleFailures = 0;
+  private static readonly ERROR_ESCALATION_THRESHOLD = 5;
+
   /** Latest p2pNode reference — set before the initial heartbeat so
    *  _sendHeartbeat can call p2pNode.getPeerId() for the p2pPeerId field. */
   setP2PNode(p2pNode: P2PNode): void {
@@ -378,8 +387,24 @@ export class HeartbeatHelper {
         // Always send HTTP heartbeat to register with coordinator
         try {
           await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng, walletAddress);
+          if (this.consecutiveCycleFailures > 0) {
+            logger.info(`[Heartbeat] recovered after ${this.consecutiveCycleFailures} failed cycle(s)`);
+            this.consecutiveCycleFailures = 0;
+          }
         } catch (httpErr) {
-          logger.error('HTTP heartbeat failed:', (httpErr as Error).message);
+          this.consecutiveCycleFailures++;
+          const msg = (httpErr as Error).message;
+          // First few cycles → warn (transient, the coordinator might just
+          // be restarting). Sustained failure → escalate to error so the
+          // dashboard surfaces it as an actionable group.
+          if (this.consecutiveCycleFailures < HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
+            logger.warn(`[Heartbeat] cycle ${this.consecutiveCycleFailures} failed: ${msg}`);
+          } else if (this.consecutiveCycleFailures === HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
+            logger.error(`[Heartbeat] coordinator unreachable after ${this.consecutiveCycleFailures} consecutive cycles: ${msg}`);
+          } else {
+            // Already escalated — keep at warn so we don't re-fire error every cycle.
+            logger.warn(`[Heartbeat] still unreachable (cycle ${this.consecutiveCycleFailures}): ${msg}`);
+          }
         }
         // Sprint D: Discovery feedback — register available models with coordinator
         try {
