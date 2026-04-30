@@ -104,7 +104,8 @@ export class MutationEngineHelper {
       };
     }
 
-    const candidates = [primaryModel, ...fallbackModels];
+    const allCandidates = [primaryModel, ...fallbackModels];
+    const candidates = await this.filterByInstalledModels(allCandidates, llmConfig);
     const basePrompt = this.buildPrompt(topExperiments, bestLoss, capabilities);
     const strictPrompt = this.buildStrictPrompt(topExperiments, bestLoss, capabilities);
     const attempts: { model: string; error: string }[] = [];
@@ -126,6 +127,53 @@ export class MutationEngineHelper {
       `All mutation candidates failed (${candidates.map(m => m.modelId).join(', ')}). Training WO cannot proceed with a valid mutation proposal.`,
       attempts,
     );
+  }
+
+  /**
+   * Probe Ollama for installed models and prune candidates that are not
+   * available. Saves N×2 useless prompt attempts when the node has no
+   * compatible LLM installed (the dominant case on fresh CPU-only nodes).
+   *
+   * Best-effort: if Ollama is unreachable, returns the original list and
+   * lets the normal generate-loop surface the real failure.
+   */
+  private async filterByInstalledModels(
+    candidates: LLMModel[],
+    llmConfig?: LLMConfig,
+  ): Promise<LLMModel[]> {
+    // Only Ollama-backed candidates are subject to local-install gating;
+    // remote providers always pass through.
+    const remote = candidates.filter(m => m.provider !== 'ollama');
+    const local = candidates.filter(m => m.provider === 'ollama');
+    if (local.length === 0) return candidates;
+
+    let installed: string[] | null = null;
+    try {
+      // Dynamic import keeps the dep optional and avoids circular wiring.
+      const { OllamaHelper } = await import('../llm/ollama.js');
+      const status = await new OllamaHelper().checkOllama(
+        llmConfig?.baseUrl ?? process.env.OLLAMA_URL ?? 'http://localhost:11434',
+      );
+      if (status.available) installed = status.models;
+    } catch (err) {
+      // Ollama unreachable / library missing — fall through to original candidates
+      logger.debug(`[MutationEngine] preflight skipped: ${(err as Error).message}`);
+    }
+
+    if (installed === null) return candidates;
+
+    // Match by exact name OR base name (qwen2.5:0.5b vs qwen2.5:0.5b-instruct).
+    const installedSet = new Set(installed.map(m => m.toLowerCase()));
+    const matches = local.filter(m => installedSet.has(m.modelId.toLowerCase()));
+
+    if (matches.length === 0 && remote.length === 0) {
+      throw new MutationEngineError(
+        `No compatible LLM installed on this node. Required any of: ${local.map(m => m.modelId).join(', ')}. Installed: ${installed.length === 0 ? '(none)' : installed.join(', ')}. Run "ollama pull <model>" to enable training work-orders.`,
+        [],
+      );
+    }
+
+    return [...matches, ...remote];
   }
 
   private buildStrictPrompt(topExperiments: Experiment[], bestLoss: number, capabilities: string[]): string {
