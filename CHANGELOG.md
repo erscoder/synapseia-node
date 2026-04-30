@@ -1,5 +1,13 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] fix(cli): suppress benign libp2p StreamStateError unhandled rejections (e3e2afb1)
+
+Filter `process.on('unhandledRejection')` to drop reasons whose name is
+`StreamStateError` or `code === 'ERR_STREAM_RESET'`. These come from a
+gossipsub/Yamux race during peer churn — gossipsub recovers on the next
+tick. Drops to debug (no telemetry, no console noise) so real unhandled
+rejections stay visible.
+
 ## [2026-04-30] fix(trainer): memory preflight + OOM error context (58063409)
 
 Pre-spawn check estimates RSS need (python+torch + params + Adam + activations)
