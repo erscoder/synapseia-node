@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { Ollama } from 'ollama';
+import { CircuitBreaker } from '../../utils/circuit-breaker';
 
 /**
  * Ollama integration module for Synapseia nodes
@@ -33,6 +34,23 @@ export class OllamaHelper {
    * Check Ollama availability and installed models
    */
   private readonly logger = new Logger(OllamaHelper.name);
+
+  /**
+   * Per-process circuit breaker for `generate()`. When Ollama crashes
+   * under RAM pressure, the same generate calls fail in cascade. Without
+   * a breaker, every retry produces another `Generation failed: ...`
+   * log/telemetry event — 200+ events per minute observed in production.
+   *
+   * After 5 failures within 60s the breaker opens for 30s; subsequent
+   * calls throw CircuitOpenError immediately (no HTTP, no log spam) until
+   * the half-open probe succeeds.
+   */
+  private static readonly generateBreaker = new CircuitBreaker({
+    name: 'ollama-generate',
+    failureThreshold: 5,
+    windowMs: 60_000,
+    cooldownMs: 30_000,
+  });
 
   async checkOllama(url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<OllamaStatus> {
     try {
@@ -104,45 +122,47 @@ export class OllamaHelper {
     url: string = process.env.OLLAMA_URL || 'http://localhost:11434',
     options?: GenerateOptions,
   ): Promise<string> {
-    try {
-      let targetModel = model;
-      if (!targetModel) {
-        const status = await this.checkOllama(url);
-        if (!status.available) throw new Error('Ollama is not available');
-        targetModel = status.recommendedModel;
+    return OllamaHelper.generateBreaker.exec(async () => {
+      try {
+        let targetModel = model;
+        if (!targetModel) {
+          const status = await this.checkOllama(url);
+          if (!status.available) throw new Error('Ollama is not available');
+          targetModel = status.recommendedModel;
+        }
+
+        this.logger.log(`🧠 Generating with model: ${targetModel}`);
+        const ollamaClient = new Ollama({ host: url });
+
+        const response = await ollamaClient.chat({
+          model: targetModel,
+          messages: [{ role: 'user', content: prompt }],
+          stream: false,
+          // format: "json" enables grammar-based constrained decoding — the model
+          // is physically prevented from emitting non-JSON tokens, so JSON.parse
+          // never fails due to syntax errors (no fences, no trailing text, no
+          // unclosed strings). Still need to validate fields after parsing.
+          ...(options?.forceJson && { format: 'json' }),
+          options: {
+            // Raise context window above the Ollama default (2048) so research
+            // prompts carrying paper abstracts + related DOIs + ontology
+            // context don't get truncated — truncation was surfacing as
+            // "unexpected EOF" when the prompt end landed mid-token on the
+            // llama runner. Qwen2.5 supports 32k; 8192 is a safe fit for 0.5b
+            // on a 3.8 GiB Docker VM.
+            num_ctx: 8192,
+            ...(options?.temperature !== undefined && { temperature: options.temperature }),
+            ...(options?.maxTokens !== undefined && { num_predict: options.maxTokens }),
+            ...(options?.topP !== undefined && { top_p: options.topP }),
+          },
+        });
+
+        return response.message.content.trim();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Generation failed: ${errorMessage}`);
       }
-
-      this.logger.log(`🧠 Generating with model: ${targetModel}`);
-      const ollamaClient = new Ollama({ host: url });
-
-      const response = await ollamaClient.chat({
-        model: targetModel,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
-        // format: "json" enables grammar-based constrained decoding — the model
-        // is physically prevented from emitting non-JSON tokens, so JSON.parse
-        // never fails due to syntax errors (no fences, no trailing text, no
-        // unclosed strings). Still need to validate fields after parsing.
-        ...(options?.forceJson && { format: 'json' }),
-        options: {
-          // Raise context window above the Ollama default (2048) so research
-          // prompts carrying paper abstracts + related DOIs + ontology
-          // context don't get truncated — truncation was surfacing as
-          // "unexpected EOF" when the prompt end landed mid-token on the
-          // llama runner. Qwen2.5 supports 32k; 8192 is a safe fit for 0.5b
-          // on a 3.8 GiB Docker VM.
-          num_ctx: 8192,
-          ...(options?.temperature !== undefined && { temperature: options.temperature }),
-          ...(options?.maxTokens !== undefined && { num_predict: options.maxTokens }),
-          ...(options?.topP !== undefined && { top_p: options.topP }),
-        },
-      });
-
-      return response.message.content.trim();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Generation failed: ${errorMessage}`);
-    }
+    });
   }
 
   /**
