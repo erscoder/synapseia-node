@@ -1,5 +1,12 @@
 # Changelog — @synapseia/node
 
+## [2026-04-30] fix(heartbeat): escalate warn→error only after N consecutive failures (99454ede)
+
+Single-cycle heartbeat failures during coordinator restarts no longer flood
+telemetry as `severity=error`. Track consecutive failed cycles; emit `warn`
+for the first 4 (~60s of unreachability) and escalate to `error` once on
+the 5th. Recovery resets the counter and logs an `info` line.
+
 ## [2026-04-30] feat(llm): circuit breaker around OllamaHelper.generate (e61588af)
 
 Process-wide CircuitBreaker (5 failures / 60s → open 30s) gates every
