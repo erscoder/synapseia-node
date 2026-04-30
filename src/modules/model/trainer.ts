@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { freemem, totalmem } from 'os';
 import logger from '../../utils/logger';
 import type { MutationProposal } from './mutation-engine';
 
@@ -152,6 +153,41 @@ export class TrainerHelper {
     } catch { /* ignore */ }
   }
 
+  /**
+   * Estimate the resident-set memory the training spawn will need and
+   * compare to current free RAM. Heuristic, deliberately conservative:
+   *
+   *   python+torch import      ≈ 800 MB (fixed)
+   *   model params (fp32)      ≈ hiddenDim² × numLayers × 12 × 4 bytes
+   *   Adam state               ≈ 2× params
+   *   activations              ≈ batchSize × 256 (seq) × hiddenDim × numLayers × 4 bytes
+   *
+   * `numHeads` and the few other knobs don't move the RSS needle enough
+   * to bother modeling. If anything we under-count to err toward a more
+   * permissive preflight; the cgroup OOM killer catches actual blowups.
+   */
+  private checkMemoryHeadroom(hp: MutationProposal['hyperparams']): {
+    ok: boolean; freeMB: number; totalMB: number; estimatedMB: number;
+  } {
+    const PYTHON_TORCH_MB = 800;
+    const SEQ_LEN = 256;
+    const FLOAT_BYTES = 4;
+
+    const paramsBytes = hp.hiddenDim * hp.hiddenDim * hp.numLayers * 12 * FLOAT_BYTES;
+    const adamBytes = paramsBytes * 2;
+    const activationsBytes = hp.batchSize * SEQ_LEN * hp.hiddenDim * hp.numLayers * FLOAT_BYTES;
+
+    const estimatedMB = Math.round(
+      PYTHON_TORCH_MB + (paramsBytes + adamBytes + activationsBytes) / (1024 * 1024),
+    );
+    const freeMB = Math.round(freemem() / (1024 * 1024));
+    const totalMB = Math.round(totalmem() / (1024 * 1024));
+
+    // 30% safety headroom on top of the estimate.
+    const requiredMB = Math.round(estimatedMB * 1.3);
+    return { ok: freeMB >= requiredMB, freeMB, totalMB, estimatedMB };
+  }
+
   private resolveTrainScript(): string {
     try {
       const here = moduleDir();
@@ -191,8 +227,28 @@ export class TrainerHelper {
     // down or slow, we continue anyway; the spawn won't wait on this.
     await this.unloadOllamaModels().catch(() => { /* fire-and-forget */ });
 
+    // Memory preflight: refuse to spawn when free RAM is below the
+    // floor that python+torch needs to import. The cgroup OOM killer
+    // would catch us seconds later anyway with `SIGKILL` and no output —
+    // an upfront refusal with concrete numbers is cheaper to diagnose.
+    const memCheck = this.checkMemoryHeadroom(proposal.hyperparams);
+    if (!memCheck.ok) {
+      throw new Error(
+        `Insufficient memory for training: free=${memCheck.freeMB}MB, ` +
+        `estimated need=${memCheck.estimatedMB}MB ` +
+        `(hiddenDim=${proposal.hyperparams.hiddenDim}, batchSize=${proposal.hyperparams.batchSize}, ` +
+        `numLayers=${proposal.hyperparams.numLayers}, total=${memCheck.totalMB}MB). ` +
+        `Free RAM (raise mem_limit), or wait for other processes to release memory.`,
+      );
+    }
+
     let killProcess: (() => void) | null = null;
     const settledHolder = { current: false };
+
+    // Snapshot RAM at spawn time so the OOM error message can attribute
+    // the kill to the actual memory pressure the system was under.
+    const freememAtSpawnMB = Math.round(freemem() / (1024 * 1024));
+    const totalMemMB = Math.round(totalmem() / (1024 * 1024));
 
     const trainingPromise = new Promise<TrainingResult>((res, reject) => {
       const startTime = Date.now();
@@ -201,6 +257,7 @@ export class TrainerHelper {
       logger.log(`Spawning: python3 ${pythonScriptPath}`);
       logger.log(`Training timeout: ${(TRAINING_TIMEOUT_MS / 1000).toFixed(0)}s (TRAINING_TIMEOUT_MS env var overrides)`);
       logger.log(`Script exists: ${existsSync(pythonScriptPath)}`);
+      logger.log(`Memory at spawn: free=${freememAtSpawnMB}MB / total=${totalMemMB}MB`);
 
       // -u forces unbuffered stdout/stderr so JSON progress lines arrive
       // immediately instead of being held in Python's 4 KB block buffer.
@@ -277,10 +334,13 @@ export class TrainerHelper {
           const base = stderr.trim()
             ? `Training failed (exit ${code}, signal ${signal ?? 'none'}): ${stderr.trim().slice(0, 500)}`
             : `Training process exited with code ${code ?? 'null'}, signal ${signal ?? 'none'} — no output received`;
-          const errorMsg = killedByOom
-            ? `${base} — likely OOM (SIGKILL by cgroup). Raise container mem_limit or lower hiddenDim/batchSize.`
-            : base;
-          settle(new Error(errorMsg));
+          const oomContext = killedByOom
+            ? ` — likely OOM (SIGKILL by cgroup). hiddenDim=${proposal.hyperparams.hiddenDim}, ` +
+              `batchSize=${proposal.hyperparams.batchSize}, numLayers=${proposal.hyperparams.numLayers}; ` +
+              `memAtSpawn=${freememAtSpawnMB}MB/${totalMemMB}MB. ` +
+              `Raise container mem_limit or lower hiddenDim/batchSize.`
+            : '';
+          settle(new Error(base + oomContext));
           return;
         }
 
