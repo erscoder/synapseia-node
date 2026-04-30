@@ -96,16 +96,51 @@ describe('makeSubsystemErrorEvent', () => {
     expect(ev.subsystem).toBe('training');
   });
 
-  it('falls back to "other" if no prefix is present', () => {
-    const ev = makeSubsystemErrorEvent(HW, ['something went wrong']);
-    expect(ev.subsystem).toBe('other');
-  });
-
   it('captures errorName + stack from an Error in the args', () => {
     const err = new TypeError('boom');
     const ev = makeSubsystemErrorEvent(HW, ['[P2P]', err]);
     expect(ev.errorName).toBe('TypeError');
     expect(ev.stack).toBeDefined();
+  });
+
+  // --- Extended subsystem mapping (multi-agent, mutation, watchdog) ----
+
+  it.each([
+    ['[ResearcherNode] LLM call failed: ...',     'inference'],
+    ['[SelfCritiqueNode] Critique failed: ...',   'inference'],
+    ['[PlanExecutionNode] Failed to generate plan', 'inference'],
+    ['[CriticNode] No researcher output',         'inference'],
+    ['[SynthesizerNode] Missing inputs',          'inference'],
+    ['[ModelSubscriber] poll failed',             'inference'],
+    ['[AgentGraph] iteration=126 failed',         'training'],
+    ['[MutationEngine] candidate failed',         'training'],
+    ['[CoordWatchdog] reconnecting',              'p2p'],
+    ['[Heartbeat] coordinator unreachable',       'other'],
+    ['[Backpressure] At capacity',                'other'],
+  ])('maps %s → %s', (msg, expected) => {
+    const ev = makeSubsystemErrorEvent(HW, [msg]);
+    expect(ev.subsystem).toBe(expected);
+  });
+
+  // --- Keyword fallback when no [Prefix] is present --------------------
+
+  it('falls back to llm for "Generation failed: ..." with no prefix', () => {
+    const ev = makeSubsystemErrorEvent(HW, [
+      'Generation failed: model runner has unexpectedly stopped',
+    ]);
+    expect(ev.subsystem).toBe('llm');
+  });
+
+  it('falls back to training for "Mutation engine failed: ..." with no prefix', () => {
+    const ev = makeSubsystemErrorEvent(HW, [
+      'Mutation engine failed: All mutation candidates failed',
+    ]);
+    expect(ev.subsystem).toBe('training');
+  });
+
+  it('falls back to "other" for unrecognized prefix-less messages', () => {
+    const ev = makeSubsystemErrorEvent(HW, ['something went wrong']);
+    expect(ev.subsystem).toBe('other');
   });
 });
 
