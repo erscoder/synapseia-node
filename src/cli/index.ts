@@ -103,7 +103,20 @@ process.on('unhandledRejection', (reason: unknown) => {
     logger.log('\nBye 👋');
     process.exit(0);
   }
-  const e = reason as Error;
+  const e = reason as Error & { code?: string };
+
+  // Known-benign libp2p races: a peer disconnects between gossipsub
+  // queueing a control frame (subscriptions, heartbeats) and Yamux
+  // flushing it. Surfaces as `StreamStateError` from gossipsub's
+  // internal sendRpc/sendSubscriptions path, with a stack rooted in
+  // node_modules/@libp2p/gossipsub. The protocol recovers on the next
+  // gossipsub tick. Logging these as `error` produced ~12 telemetry
+  // events for each transient peer churn — drop to debug, no telemetry.
+  if (e?.name === 'StreamStateError' || e?.code === 'ERR_STREAM_RESET') {
+    logger.debug(`[p2p] benign stream race ignored: ${e?.name ?? 'StreamError'}: ${e?.message ?? ''}`);
+    return;
+  }
+
   emitTelemetryException('rejection', reason);
   logger.error(`[unhandledRejection] ${e?.name ?? 'Unknown'}: ${e?.message ?? JSON.stringify(reason)}`);
   if (e?.stack) logger.error(e.stack);
