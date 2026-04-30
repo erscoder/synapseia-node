@@ -84,46 +84,89 @@ export interface WorkOrderFailedContext {
 const newId = (): string => randomUUID();
 const now = (): string => new Date().toISOString();
 
+/**
+ * Maps a logger message to a closed-set subsystem label. The project
+ * logger uses `[Subsystem]` prefixes throughout; when present, the
+ * bracketed tag is matched against the synonym table below.
+ *
+ * If no prefix is present, fall back to keyword heuristics so messages
+ * coming from libraries (e.g. raw axios timeouts in heartbeat retry)
+ * still land in a meaningful bucket instead of `other`.
+ */
 function inferSubsystem(message: string): TelemetrySubsystem {
-  // The project logger uses [Subsystem] prefixes — extract the first
-  // bracketed token and map to the closed set.
-  const match = message.match(/^\[(\w+[\w-]*)\]/);
-  if (!match) return 'other';
+  const match = message.match(/^\s*\[(\w+[\w-]*)\]/);
+  if (!match) return inferSubsystemFromKeywords(message);
+
   const tag = match[1].toLowerCase();
   switch (tag) {
+    // Training / training-adjacent (mutation, agent graph)
     case 'training':
     case 'trainer':
     case 'micro':
+    case 'mutationengine':
+    case 'agentgraph':
       return 'training';
+
+    // Multi-agent inference nodes
     case 'inference':
     case 'infer':
+    case 'criticnode':
+    case 'synthesizernode':
+    case 'researchernode':
+    case 'selfcritiquenode':
+    case 'planexecutionnode':
+    case 'modelsubscriber':
       return 'inference';
+
     case 'embedding':
     case 'embeddings':
     case 'embed':
       return 'embedding';
+
     case 'p2p':
     case 'libp2p':
     case 'gossip':
+    case 'coordwatchdog':
       return 'p2p';
+
     case 'llm':
     case 'ollama':
       return 'llm';
+
     case 'wallet':
     case 'solana':
       return 'wallet';
+
     case 'auth':
     case 'identity':
       return 'auth';
+
     case 'boot':
     case 'startup':
       return 'boot';
+
     case 'gpu':
     case 'cuda':
       return 'gpu';
+
+    // Cross-cutting subsystems we don't have a dedicated bucket for —
+    // route to 'other' explicitly so future categorization is obvious.
+    case 'heartbeat':
+    case 'backpressure':
+    case 'unhandledrejection':
+    case 'uncaughtexception':
+      return 'other';
+
     default:
       return 'other';
   }
+}
+
+function inferSubsystemFromKeywords(message: string): TelemetrySubsystem {
+  if (/heartbeat/i.test(message)) return 'other';
+  if (/ollama|llm|generation failed/i.test(message)) return 'llm';
+  if (/training|trainer|mutation/i.test(message)) return 'training';
+  return 'other';
 }
 
 /** Joins logger args (strings + objects) to a single message string. */
