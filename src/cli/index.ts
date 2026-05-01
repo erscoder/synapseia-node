@@ -57,6 +57,7 @@ import { WalletService } from '../modules/wallet/services/wallet.service';
 import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
+import { WorkOrderPushQueue } from '../modules/agent/work-order/work-order-push-queue';
 import { P2pService } from '../modules/p2p/services/p2p.service';
 import { startNode } from '../node-runtime';
 import { input, select, confirm, password } from '@inquirer/prompts';
@@ -247,6 +248,7 @@ async function bootstrap() {
   const modelCatalogService = app.get(ModelCatalogHelper);
   const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
+  const workOrderPushQueue = app.get(WorkOrderPushQueue);
   const p2pService = app.get(P2pService);
   const heartbeatHelper =app.get(HeartbeatHelper)
 
@@ -600,11 +602,15 @@ async function bootstrap() {
             llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
             llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
             intervalMs: 30000,
+            // Fallback poll for /work-orders/available — overridable via env so
+            // load-test rigs can dial it down when needed. Default 5 min;
+            // gossipsub WORK_ORDER_AVAILABLE drives discovery in real time.
+            workOrderIntervalMs: parseInt(process.env.WO_POLL_INTERVAL_MS ?? '300000', 10),
             maxIterations: options.maxIterations,
             lat: config.lat,
             lng: config.lng,
           },
-          { p2pService, workOrderAgentService, telemetryClient },
+          { p2pService, workOrderAgentService, telemetryClient, workOrderPushQueue },
           hardware,
         );
 

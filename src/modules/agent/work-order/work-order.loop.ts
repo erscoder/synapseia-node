@@ -3,7 +3,7 @@
  * Orchestrates state, coordinator, execution, and peer services.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import logger from '../../../utils/logger';
 import type { AgentBrain } from '../agent-brain';
 import { AgentBrainHelper } from '../agent-brain';
@@ -13,12 +13,20 @@ import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
 import { WorkOrderExecutionHelper } from './work-order.execution';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 import { BackpressureService } from './backpressure.service';
+import { WorkOrderPushQueue, PushedWorkOrder } from './work-order-push-queue';
 import type { WorkOrderAgentConfig, WorkOrder, WorkOrderAgentState, ResearchResult } from './work-order.types';
 import { resolveTrainingChain } from '../../llm/training-llm';
 import type { LLMModel } from '../../llm/llm-provider';
 
 @Injectable()
 export class WorkOrderLoopHelper {
+  /**
+   * Resolved when the current sleep should be interrupted (e.g. push queue
+   * received a fresh WO from gossipsub). Cleared after every wake-up so
+   * subsequent sleeps install fresh resolvers.
+   */
+  private wakeUpResolve: (() => void) | null = null;
+
   constructor(
     private readonly state: WorkOrderStateHelper,
     private readonly coordinator: WorkOrderCoordinatorHelper,
@@ -27,7 +35,21 @@ export class WorkOrderLoopHelper {
     private readonly roundListener: RoundListenerHelper,
     private readonly agentBrain: AgentBrainHelper,
     private readonly backpressure: BackpressureService,
-  ) {}
+    @Optional() private readonly pushQueue?: WorkOrderPushQueue,
+  ) {
+    // If the queue was injected, register our wake hook so push messages
+    // can interrupt the long fallback sleep (5 min by default).
+    this.pushQueue?.setWakeCallback(() => this.interruptSleep());
+  }
+
+  /** Interrupts an in-flight `sleep()` so the loop can react to a push. */
+  interruptSleep(): void {
+    const resolve = this.wakeUpResolve;
+    if (resolve) {
+      this.wakeUpResolve = null;
+      resolve();
+    }
+  }
 
   getWorkOrderAgentState(): WorkOrderAgentState {
     return this.state.getState();
@@ -104,9 +126,21 @@ export class WorkOrderLoopHelper {
 
     logger.log(`..............................`);
     logger.log(`Iteration ${iteration} starting...`);
-    logger.log(' Polling for available work orders...');
 
-    const workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    // Phase 2A: prefer the local push queue (fed by gossipsub
+    // WORK_ORDER_AVAILABLE). Falls back to GET /work-orders/available only
+    // when the queue is empty — which keeps the network noise-floor near
+    // zero on idle nodes.
+    let workOrders: WorkOrder[] = [];
+    const pushed = this.pushQueue?.drain() ?? [];
+    if (pushed.length > 0) {
+      logger.log(` ${pushed.length} pushed work order(s) drained from gossip queue`);
+      workOrders = pushed.map(toWorkOrder).filter((wo) => this.matchesCapability(wo, capabilities));
+    }
+    if (workOrders.length === 0) {
+      logger.log(' Polling /work-orders/available (push queue empty)...');
+      workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    }
     if (workOrders.length === 0) { logger.log(' No work orders available'); return { completed: false }; }
 
     logger.log(` Found ${workOrders.length} available work order(s)`);
@@ -319,7 +353,31 @@ export class WorkOrderLoopHelper {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.wakeUpResolve = null;
+        resolve();
+      }, ms);
+      // Replace any stale resolver — only the latest sleep is interruptible.
+      this.wakeUpResolve = () => {
+        clearTimeout(timer);
+        this.wakeUpResolve = null;
+        resolve();
+      };
+    });
+  }
+
+  /**
+   * Cheap capability check on pushed work orders. Mirrors the server-side
+   * filter that GET /work-orders/available applies — required-capability
+   * match, with empty `requiredCapabilities` treated as universally
+   * eligible. Strict equality is intentional: the loop's downstream logic
+   * (selection, execution) already handles per-type routing.
+   */
+  private matchesCapability(wo: WorkOrder, capabilities: string[]): boolean {
+    const required = wo.requiredCapabilities ?? [];
+    if (required.length === 0) return true;
+    return required.every((c) => capabilities.includes(c));
   }
 
   /**
@@ -360,4 +418,17 @@ export class WorkOrderLoopHelper {
     }
     return result;
   }
+}
+
+/**
+ * Strip `receivedAt` and surface the gossip payload as a `WorkOrder` so
+ * downstream loop code (which already accepts the HTTP `/work-orders/
+ * available` response shape) can consume push messages identically. The
+ * coordinator's `toResponseDto` keeps both shapes in lockstep — the cast
+ * is safe by construction.
+ */
+function toWorkOrder(pushed: PushedWorkOrder): WorkOrder {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { receivedAt: _ignored, ...rest } = pushed;
+  return rest as unknown as WorkOrder;
 }

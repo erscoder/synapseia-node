@@ -5,6 +5,7 @@ import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 import { WorkOrderExecutionHelper } from './work-order.execution';
 import { WorkOrderLoopHelper } from './work-order.loop';
 import { BackpressureService } from './backpressure.service';
+import { WorkOrderPushQueue } from './work-order-push-queue';
 import { LlmModule } from '../../llm/llm.module';
 import { RoundListenerHelper } from '../round-listener';
 import { ReviewAgentHelper } from '../review-agent';
@@ -25,6 +26,13 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
     BackpressureService,
+    {
+      // Single shared queue. node-runtime registers the gossip subscription
+      // that pushes into it; WorkOrderLoopHelper drains it at iteration
+      // start. Phase 2A.
+      provide: WorkOrderPushQueue,
+      useFactory: () => new WorkOrderPushQueue(),
+    },
   ],
   // Re-export WorkOrderCoordinatorModule so downstream consumers that
   // already import WorkOrderModule keep getting the coordinator helper
@@ -36,6 +44,7 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderExecutionHelper,
     WorkOrderLoopHelper,
     BackpressureService,
+    WorkOrderPushQueue,
   ],
 })
 export class WorkOrderModule {}
