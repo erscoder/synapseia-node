@@ -1,5 +1,74 @@
 # Changelog — @synapseia/node
 
+## [2026-05-01] fix(telemetry): node error cleanup — Bug A/B/C + Phase 2 noise (3d7cc0c9)
+
+Reduces `node_telemetry_events` warnings/errors that survived the
+infra remediation (Postgres OOM cascade fix). 32 PG backend crashes
+between 2026-04-29 and 2026-05-01 cascaded into ~14k node telemetry
+events; the heartbeat / p2p / model-subscriber surge was symptomatic
+and resolved by `docker compose --profile observability` + Langfuse
+isolation + 8 GiB Docker VM. What follows are the residual real bugs.
+
+**Bug A — gossipsub publish on closed stream**
+  - `src/modules/p2p/p2p.ts:193-216` — wrap `pubsub.publish()` in
+    try/catch. `StreamStateError` (libp2p Yamux mid-publish close,
+    normal mesh churn) is now demoted to `logger.debug` instead of
+    surfacing as `unhandledRejection` (735 events / 7d, 4 fatals).
+
+**Bug B — Trainer SIGKILL containment + safety margin**
+  - `src/modules/model/trainer.ts:170-189` — bump `PYTHON_TORCH_MB`
+    800 → 900 and safety multiplier 1.3 → 1.5. The pre-flight
+    estimator was passing, then runtime OOM'd because torch + python
+    interpreter boot consumes ~700–900 MB before the user model is
+    touched.
+  - `src/modules/model/trainer.ts:359-376` — chain
+    `trainingPromise.finally(() => clearTimeout(...)).catch(() => {})`.
+    Root cause of 4 fatals: `.finally(...)` returns a derived promise
+    that propagates the trainer rejection; nothing observed it, so
+    OOM SIGKILLs surfaced as `unhandledRejection` and crashed the
+    node. Caller-side wrappers in `work-order.execution.ts:294` and
+    `agent-loop.ts:148→197` were already correct — the leak was
+    inside the trainer.
+
+**Bug C — SynthesizerNode missing-input diagnostic**
+  - `src/modules/agent/langgraph/nodes/synthesizer-node.ts:39-46` —
+    warning now lists exactly which input is missing
+    (researcherOutput / criticOutput / researchPayload). Fallback
+    control flow unchanged; only the diagnostic improves so the
+    upstream silent-fail can be traced (2174 warns / 7d).
+
+**Phase 2 — Noise reduction**
+  - `src/modules/agent/langgraph/nodes/fetch-work-orders.ts:34` —
+    backpressure-skip-poll `logger.warn` → `logger.info`.
+  - `src/modules/agent/work-order/work-order.loop.ts:175` —
+    backpressure-skip-remaining `logger.warn` → `logger.info`.
+  - `src/modules/agent/work-order/backpressure.service.ts:43` —
+    capacity-rejection `logger.warn` → `logger.info`. All three:
+    expected steady-state behaviour for a busy node, not anomaly.
+  - `src/modules/heartbeat/heartbeat.ts:218-221` — per-attempt
+    failure `logger.warn` → `logger.debug`. Cycle-level failure at
+    line 401 stays `warn`; final failure at line 444 stays `error`.
+
+**Tests**
+  - `src/__tests__/trainer.test.ts:7-26, 318-379` — added `os` mock
+    so `checkMemoryHeadroom` doesn't fail on low-RAM CI runners;
+    structural regression guard asserts the `.finally(...).catch(`
+    chain is in place; documented `it.skip` SIGKILL test pending
+    ts-jest ESM mock support (consistent with existing skipped
+    spawn-mocked tests in this file).
+  - `src/modules/agent/work-order/__tests__/backpressure.service.spec.ts:5-8`
+    — added `info: jest.fn()` to logger mock to match the demoted
+    level.
+
+Build: `npm run build` green. Test suites: 5 / 56 pass / 10
+pre-existing skips / 0 fail.
+
+Three Man Team workflow: Bug A + Bug D + 2 of 3 Phase 2 sites
+shipped manually by Arch (logged as a deviation in
+`handoff/BUILD-LOG.md` Step 1); remainder built by Bob and reviewed
+by Richard with 0 Must / 0 Should / 0 Escalate. Detailed line ranges
+in `handoff/REVIEW-REQUEST.md`.
+
 ## [2026-05-01] feat(p2p): WORK_ORDER_AVAILABLE consumer — push queue + 5min fallback (50b9743e)
 
 Phase 2A of the Tier 2 scalability plan, node side. Drops the 30s
