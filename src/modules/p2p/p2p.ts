@@ -193,7 +193,24 @@ export class P2PNode {
   async publish(topic: string, data: Record<string, unknown>): Promise<void> {
     if (!this.node) throw new Error('P2P node not started');
     const encoded = new TextEncoder().encode(JSON.stringify(data));
-    await this.node.services.pubsub.publish(topic, encoded);
+    try {
+      await this.node.services.pubsub.publish(topic, encoded);
+    } catch (err) {
+      // libp2p mesh churn: a peer's outbound stream can close mid-publish
+      // (Yamux close, gossipsub mesh prune, peer disconnect during fanout).
+      // The gossipsub library bubbles this as `StreamStateError: Cannot
+      // write to a stream that is closed`, which previously surfaced as an
+      // unhandledRejection (735 events / 7d, 4 fatals from
+      // `node_telemetry_events`). It is normal mesh behavior, not a bug —
+      // demote to debug, do not propagate.
+      const name = (err as Error)?.name ?? '';
+      const msg = (err as Error)?.message ?? String(err);
+      if (name === 'StreamStateError' || /closed|stream/i.test(msg)) {
+        logger.debug?.(`[p2p] publish to ${topic} dropped (peer stream closed): ${msg}`);
+        return;
+      }
+      throw err;
+    }
   }
 
   async publishHeartbeat(data: Record<string, unknown>): Promise<void> {

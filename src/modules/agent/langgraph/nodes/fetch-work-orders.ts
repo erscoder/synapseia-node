@@ -29,9 +29,10 @@ export class FetchWorkOrdersNode {
   private readonly completedWorkOrderIds = new Set<string>();
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
-    // Backpressure: if at capacity, skip polling entirely
+    // Backpressure: if at capacity, skip polling entirely. Expected steady-
+    // state behaviour for a busy node — log at info, not warn.
     if (!this.backpressure.canAccept()) {
-      logger.warn(
+      logger.info(
         `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping poll`,
       );
       return { availableWorkOrders: [] };

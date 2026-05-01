@@ -4,7 +4,7 @@ import { BackpressureService } from '../backpressure.service';
 // Suppress logger output during tests
 jest.mock('../../../../utils/logger', () => ({
   __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+  default: { log: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
 describe('BackpressureService', () => {

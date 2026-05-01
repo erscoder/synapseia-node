@@ -157,19 +157,23 @@ export class TrainerHelper {
    * Estimate the resident-set memory the training spawn will need and
    * compare to current free RAM. Heuristic, deliberately conservative:
    *
-   *   python+torch import      ≈ 800 MB (fixed)
+   *   python+torch import      ≈ 900 MB (fixed; observed range 700–900 MB
+   *                              before the user model is touched, see
+   *                              SIGKILL post-mortem 2026-04-30)
    *   model params (fp32)      ≈ hiddenDim² × numLayers × 12 × 4 bytes
    *   Adam state               ≈ 2× params
    *   activations              ≈ batchSize × 256 (seq) × hiddenDim × numLayers × 4 bytes
    *
    * `numHeads` and the few other knobs don't move the RSS needle enough
-   * to bother modeling. If anything we under-count to err toward a more
-   * permissive preflight; the cgroup OOM killer catches actual blowups.
+   * to bother modeling. The 50% safety multiplier below covers transient
+   * spikes (torch graph compilation, dataloader prefetch) that the static
+   * estimate misses; previously the pre-check passed yet the cgroup OOM
+   * killer still SIGKILL'd at runtime — bump tightens that gap.
    */
   private checkMemoryHeadroom(hp: MutationProposal['hyperparams']): {
     ok: boolean; freeMB: number; totalMB: number; estimatedMB: number;
   } {
-    const PYTHON_TORCH_MB = 800;
+    const PYTHON_TORCH_MB = 900;
     const SEQ_LEN = 256;
     const FLOAT_BYTES = 4;
 
@@ -183,8 +187,9 @@ export class TrainerHelper {
     const freeMB = Math.round(freemem() / (1024 * 1024));
     const totalMB = Math.round(totalmem() / (1024 * 1024));
 
-    // 30% safety headroom on top of the estimate.
-    const requiredMB = Math.round(estimatedMB * 1.3);
+    // 50% safety headroom on top of the estimate (previously 30%; raised
+    // after multiple SIGKILLs slipped through the pre-check).
+    const requiredMB = Math.round(estimatedMB * 1.5);
     return { ok: freeMB >= requiredMB, freeMB, totalMB, estimatedMB };
   }
 
@@ -363,7 +368,13 @@ export class TrainerHelper {
         if (killProcess) { killProcess(); killProcess = null; }
         reject(new Error(`Training timed out after ${TRAINING_TIMEOUT_MS / 1000}s`));
       }, TRAINING_TIMEOUT_MS);
-      trainingPromise.finally(() => clearTimeout(timeoutHandle));
+      // `.finally` returns a derived promise that propagates rejection from
+      // `trainingPromise`. Without this `.catch`, the derived promise's
+      // rejection is unobserved (Promise.race only sees the original) and
+      // surfaces as an `unhandledRejection` — that's how OOM/SIGKILL was
+      // crashing the process. Swallow here; the original rejection still
+      // reaches the caller via Promise.race below.
+      trainingPromise.finally(() => clearTimeout(timeoutHandle)).catch(() => { /* observed by Promise.race */ });
     });
 
     return await Promise.race([trainingPromise, timeoutPromise]);
