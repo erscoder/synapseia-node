@@ -12,8 +12,9 @@
 import type { Identity } from './modules/identity/identity';
 import logger from './utils/logger';
 import type { LLMModel, LLMConfig } from './modules/llm/llm-provider';
-import { P2PNode } from './modules/p2p/p2p';
+import { P2PNode, TOPICS } from './modules/p2p/p2p';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
+import { WorkOrderPushQueue, PushedWorkOrder } from './modules/agent/work-order/work-order-push-queue';
 import { IpifyService } from './modules/shared/infrastructure/ipify.service';
 import type { A2AServer } from './modules/a2a/a2a-server.service';
 import { preflightVersionCheck, UpdateStatus } from './utils/update-checker';
@@ -47,8 +48,18 @@ export interface NodeRuntimeConfig {
   llmModel: LLMModel;
   /** LLM auth/connection config */
   llmConfig: LLMConfig;
-  /** Work order polling interval in ms */
+  /** Heartbeat interval in ms (default 30000). */
   intervalMs?: number;
+  /**
+   * Fallback poll interval for `GET /work-orders/available` in ms.
+   *
+   * Phase 2A removed work-order polling from the hot path — newly-PENDING
+   * work orders are broadcast on gossipsub `WORK_ORDER_AVAILABLE` and the
+   * loop drains a local queue. This interval only runs when no push has
+   * arrived in a while, so it can safely be much longer than the previous
+   * 30s. Default 300000 (5 min).
+   */
+  workOrderIntervalMs?: number;
   /** Max iterations (0 = unlimited) */
   maxIterations?: number;
   /** Latitude for geo-location (optional) */
@@ -97,6 +108,14 @@ export async function startNode(
     };
     a2aServer?: A2AServer;
     telemetryClient?: TelemetryClient;
+    /**
+     * Optional. When provided, node-runtime subscribes to gossipsub
+     * `WORK_ORDER_AVAILABLE` and pushes incoming messages into the queue
+     * so `WorkOrderLoopHelper` can drain them in lieu of polling. If
+     * omitted, the loop falls back to HTTP polling at
+     * `workOrderIntervalMs`. Phase 2A.
+     */
+    workOrderPushQueue?: WorkOrderPushQueue;
   },
   realHardware?: Hardware,
 ): Promise<NodeRuntime> {
@@ -362,7 +381,37 @@ export async function startNode(
   logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
   logger.log(`   Mode: langgraph`);
 
+  // Phase 2A: subscribe to coordinator's WORK_ORDER_AVAILABLE topic and
+  // pipe incoming messages into the loop's push queue. Push events
+  // populate the queue + interrupt the loop's sleep so newly-PENDING
+  // work is picked up within ~milliseconds — the HTTP fallback poll
+  // (workOrderIntervalMs, 5 min default) only fires when push has been
+  // silent.
+  if (p2pNode && services.workOrderPushQueue) {
+    const queue = services.workOrderPushQueue;
+    p2pNode.onMessage(TOPICS.WORK_ORDER_AVAILABLE, (data) => {
+      try {
+        const op = (data as { op?: string }).op ?? 'CREATED';
+        const wo = (data as { wo?: Record<string, unknown> }).wo;
+        if (op !== 'CREATED' || !wo || typeof wo !== 'object') return;
+        // Coordinator publishes a `WorkOrderResponseDto` shape — see
+        // packages/coordinator/.../work-order.utils.ts ::toResponseDto
+        // and WorkOrderCreationService::recordCreated.
+        queue.push(wo as Omit<PushedWorkOrder, 'receivedAt'>);
+        const id = (wo as { id?: string }).id ?? '<unknown>';
+        const type = (wo as { type?: string }).type ?? '<unknown>';
+        logger.log(`[WO-Push] queued ${type} ${id} (queue size=${queue.size()})`);
+      } catch (err) {
+        logger.warn(`[WO-Push] dropped malformed WORK_ORDER_AVAILABLE: ${(err as Error).message}`);
+      }
+    });
+    logger.log('[WO-Push] subscribed to gossipsub WORK_ORDER_AVAILABLE');
+  } else if (!services.workOrderPushQueue) {
+    logger.log('[WO-Push] queue not provided — staying on HTTP polling for /work-orders/available');
+  }
+
   // Fire and forget — the LangGraph agent loop runs indefinitely
+  const woFallbackMs = config.workOrderIntervalMs ?? 300_000;
   services.workOrderAgentService
     .start({
       coordinatorUrl: config.coordinatorUrl,
@@ -370,7 +419,7 @@ export async function startNode(
       capabilities: config.capabilities,
       llmModel: config.llmModel,
       llmConfig: config.llmConfig,
-      intervalMs: config.intervalMs ?? 30000,
+      intervalMs: woFallbackMs,
       maxIterations: config.maxIterations,
     })
     .catch((err: Error) => {

@@ -31,6 +31,11 @@ export const TOPICS = {
   CHAT_AUCTION: '/synapseia/chat-auction/1.0.0',
   /** Signed bids published by nodes, consumed by the coordinator. */
   CHAT_BID: '/synapseia/chat-bid/1.0.0',
+  /** Coordinator broadcasts newly-PENDING work orders. Nodes maintain a
+   *  short-lived in-memory queue (WorkOrderPushQueue) so the agent loop can
+   *  skip GET /work-orders/available when push messages are flowing. The
+   *  HTTP fetch stays as a 5-min safety-net fallback. Phase 2A. */
+  WORK_ORDER_AVAILABLE: '/synapseia/work-order/1.0.0',
 } as const;
 
 /** Libp2p protocol the winning node serves to accept the grounded prompt +
