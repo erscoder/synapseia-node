@@ -1,5 +1,24 @@
 # Changelog — @synapseia/node
 
+## [2026-05-01] feat(p2p): WORK_ORDER_AVAILABLE consumer — push queue + 5min fallback (50b9743e)
+
+Phase 2A of the Tier 2 scalability plan, node side. Drops the 30s
+poll on `GET /work-orders/available` and replaces it with a local
+queue (`WorkOrderPushQueue`) fed by the coordinator's gossipsub
+broadcast on `/synapseia/work-order/1.0.0`. HTTP polling stays as a
+5-min safety-net fallback (`workOrderIntervalMs`, override via
+`WO_POLL_INTERVAL_MS`).
+
+- New `WorkOrderPushQueue` (60s TTL, drain-and-clear, wake hook).
+- `WorkOrderLoopHelper`: interruptible sleep + drain queue first;
+  HTTP only when queue empty.
+- `node-runtime`: subscribe to topic, push DTO into the queue, log
+  queue size on each receive.
+- `CLI`: app.get(WorkOrderPushQueue) → wire into runtime services.
+
+5 new specs cover queue ordering, dedup, TTL, wake callback
+isolation, and clear(). Full suite: 1356 passed.
+
 ## [2026-04-30] fix(cli): suppress benign libp2p StreamStateError unhandled rejections (e3e2afb1)
 
 Filter `process.on('unhandledRejection')` to drop reasons whose name is
