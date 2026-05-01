@@ -34,9 +34,22 @@ export interface MedicalResearcherParams {
   missionContext?: string;
 }
 
+/**
+ * Step 3 (2026-04-30) — long titles (observed up to 280 chars on Chinese
+ * oncology papers) inflate the prompt past the budget the small models
+ * can plan over. Truncate the prompt-time title to 120 chars; the full
+ * title remains in the work-order record for downstream consumers.
+ */
+const PROMPT_TITLE_MAX_CHARS = 120;
+function truncateTitleForPrompt(title: string): string {
+  if (!title || title.length <= PROMPT_TITLE_MAX_CHARS) return title;
+  return `${title.slice(0, PROMPT_TITLE_MAX_CHARS - 1)}…`;
+}
+
 export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string {
   const schemaBlock = renderDiscoverySchemasForPrompt();
 
+  const title = truncateTitleForPrompt(p.title);
   const doiLine = p.doi ? `\nDOI of this paper: ${p.doi}` : '';
   const kg = p.kgContext ? `\n\nKnowledge-graph context:\n${p.kgContext}` : '';
   const ref = p.referenceContext ? `\n\nReference corpus context:\n${p.referenceContext}` : '';
@@ -49,7 +62,7 @@ export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string
 
   return `You are a biomedical research analyst. Read the paper and propose exactly ONE structured discovery.${mission}
 
-Paper: ${p.title}
+Paper: ${title}
 Abstract: ${p.abstract}${doiLine}${kg}${ref}${related}
 
 Pick the ONE discoveryType that best fits the paper's main claim:

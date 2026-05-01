@@ -21,8 +21,29 @@ import logger from '../../../../utils/logger';
  * LLM call. The coordinator's DiscoveryValidator silently dropped
  * malformed payloads in the audit window — failing locally saves a
  * wasted POST + a wasted evaluator review on garbage.
+ *
+ * Step 3 (2026-04-30) — lowered from 3 → 2. The third retry rarely
+ * recovers when the first two failed for the same root cause (small-model
+ * comprehension limit, context overflow, etc.); the saved LLM call is
+ * material on CPU-only nodes.
  */
-const SCHEMA_VALIDATION_MAX_ATTEMPTS = 3;
+const SCHEMA_VALIDATION_MAX_ATTEMPTS = 2;
+
+/**
+ * Step 3 (2026-04-30) — concrete worked examples for the most common
+ * recurring schema failures. Sourced from `discovery-schema-validator.ts`
+ * error messages observed in `node_telemetry_events`. Kept under ~600
+ * chars so the retry feedback doesn't blow the prompt budget on small
+ * models.
+ */
+const SCHEMA_RETRY_FIELD_EXAMPLES =
+  'CONCRETE EXAMPLES of the three most common failures:\n' +
+  '- novel_contribution: WRONG: "" or "This study explores ALS." CORRECT: ' +
+  '"Riluzole at 50mg twice daily extends median ALS survival ~3 months versus placebo across replications, with consistent benefit in bulbar and limb-onset subgroups." (≥80 chars, references the discovery).\n' +
+  '- evidence_type: WRONG: "" or "study" or "Trial". CORRECT: one of ' +
+  '"randomized_trial" | "meta_analysis" | "literature_review" | "case_series" | "mechanism_study" | "contradiction_detected".\n' +
+  '- supporting_dois: WRONG: ["10.x", "10.x"] (duplicates) or [] or fabricated. CORRECT: ' +
+  '["10.1056/NEJM199403033300901","10.1016/S0140-6736(96)91680-3"] (≥2 distinct, real DOIs from the abstract or critique).';
 
 @Injectable()
 export class SynthesizerNode {
@@ -72,6 +93,30 @@ export class SynthesizerNode {
 
       final = this.parseResearchResult(output);
 
+      // Step 3 (2026-04-30) — context-overflow / silent-LLM short-circuit.
+      // When the LLM returns prose-only or empty content (summary AND
+      // proposal AND keyInsights all empty), retrying the same poison
+      // input wastes another LLM call. Bail to a controlled failure so
+      // SubmitResultNode skips the POST instead of looping.
+      const isPoisonOutput =
+        !final.summary.trim() &&
+        !final.proposal.trim() &&
+        final.keyInsights.length === 0;
+      if (isPoisonOutput) {
+        logger.warn(
+          `[SynthesizerNode] attempt ${attempt}/${SCHEMA_VALIDATION_MAX_ATTEMPTS}: ` +
+          `LLM emitted no parseable content (likely context overflow or silent failure) — short-circuiting`,
+        );
+        return {
+          researchResult: { summary: '', keyInsights: [], proposal: '' },
+          executionResult: {
+            success: false,
+            result: 'context_overflow_or_silent_llm',
+          },
+          qualityScore: 0,
+        };
+      }
+
       // Schema check — extract the {discoveryType, structuredData} block
       // out of the proposal and validate against the same contract the
       // coordinator enforces. A pass on the first attempt is the happy path.
@@ -105,7 +150,12 @@ export class SynthesizerNode {
         logger.warn(
           `[SynthesizerNode] attempt ${attempt}/${SCHEMA_VALIDATION_MAX_ATTEMPTS}: schema invalid (${validation.errors.length} errors) — retrying`,
         );
-        critiqueWithSchemaFeedback = `${criticOutput}\n\n[SCHEMA-RETRY] Previous attempt failed validation:\n${validation.errors.map((e) => `- ${e}`).join('\n')}\nFix every listed error. Use the EXACT schema field names — no aliases or capitalizations.`;
+        // Step 3 (2026-04-30): enrich retry feedback with WRONG/CORRECT
+        // examples for the three recurring failure fields. Generic "fix
+        // every listed error" was not enough signal for small models to
+        // self-correct — observed in node_telemetry_events as repeated
+        // novel_contribution / evidence_type / supporting_dois failures.
+        critiqueWithSchemaFeedback = `${criticOutput}\n\n[SCHEMA-RETRY] Previous attempt failed validation:\n${validation.errors.map((e) => `- ${e}`).join('\n')}\nFix every listed error. Use the EXACT schema field names — no aliases or capitalizations.\n\n${SCHEMA_RETRY_FIELD_EXAMPLES}`;
       }
     }
 

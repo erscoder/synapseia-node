@@ -5,12 +5,20 @@
 
 import { Injectable, Optional } from '@nestjs/common';
 import { startActiveObservation } from '@langfuse/tracing';
+import logger from '../../../../utils/logger';
 import type { ToolCall, ToolResult } from './types';
 import { SearchCorpusTool } from './search-corpus.tool';
 import { QueryKgTool } from './query-kg.tool';
 import { GenerateEmbeddingTool } from './generate-embedding.tool';
 import { DelegateToPeerTool } from './delegate-peer.tool';
 import { RequestPeerReviewTool } from './request-peer-review.tool';
+
+/** Bug I: thrown when a corpus/KG tool is called without a usable `topic`. */
+const MISSING_TOPIC_REASON = 'missing_topic';
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
 @Injectable()
 export class ToolRunnerService {
@@ -64,11 +72,25 @@ export class ToolRunnerService {
       case 'search_reference_corpus': {
         const { topic, limit, coordinatorUrl } = params as { topic: string; limit?: number; coordinatorUrl: string };
         if (!coordinatorUrl) throw new Error('coordinatorUrl is required for search_reference_corpus');
+        // Bug I: short-circuit when the ReAct LLM emits a tool call without
+        // a usable `topic`. Surfacing this as a structured failure lets the
+        // ReAct loop see the miss and adjust on the next iteration; before
+        // this guard the request reached the corpus fetcher with topic
+        // `"undefined"` and produced misleading "Failed to fetch context for
+        // topic 'undefined'" warnings on every call.
+        if (!isNonEmptyString(topic)) {
+          logger.info(`[ToolRunner] skipping ${toolName} — missing/invalid topic arg`);
+          return { success: false, reason: MISSING_TOPIC_REASON };
+        }
         return this.searchCorpusTool.execute({ topic, limit }, coordinatorUrl);
       }
       case 'query_knowledge_graph': {
         const { topic, missionId, coordinatorUrl } = params as { topic: string; missionId?: string; coordinatorUrl: string };
         if (!coordinatorUrl) throw new Error('coordinatorUrl is required for query_knowledge_graph');
+        if (!isNonEmptyString(topic)) {
+          logger.info(`[ToolRunner] skipping ${toolName} — missing/invalid topic arg`);
+          return { success: false, reason: MISSING_TOPIC_REASON };
+        }
         return this.queryKgTool.execute({ topic, missionId }, coordinatorUrl);
       }
       case 'generate_embedding': {
