@@ -3,6 +3,8 @@ import {
   extractFirstJsonStructure,
   parseLlmJson,
   jsonParseTailSnippet,
+  repairLlmJson,
+  stripCodeFence,
 } from '../parse-llm-json';
 
 describe('extractFirstJsonStructure', () => {
@@ -146,6 +148,119 @@ describe('parseLlmJson', () => {
   it('handles null and undefined gracefully', () => {
     expect(parseLlmJson<unknown>(null).ok).toBe(false);
     expect(parseLlmJson<unknown>(undefined).ok).toBe(false);
+  });
+});
+
+describe('repairLlmJson — tolerant preprocessor', () => {
+  it('strips trailing commas before }', () => {
+    const repaired = repairLlmJson('{"a":1,"b":2,}');
+    expect(JSON.parse(repaired)).toEqual({ a: 1, b: 2 });
+  });
+
+  it('strips trailing commas before ]', () => {
+    const repaired = repairLlmJson('[1,2,3,]');
+    expect(JSON.parse(repaired)).toEqual([1, 2, 3]);
+  });
+
+  it('strips line // comments', () => {
+    const repaired = repairLlmJson('{\n"a":1, // explanation\n"b":2}');
+    expect(JSON.parse(repaired)).toEqual({ a: 1, b: 2 });
+  });
+
+  it('strips block /* */ comments', () => {
+    const repaired = repairLlmJson('{"a":1,/* note */ "b":2}');
+    expect(JSON.parse(repaired)).toEqual({ a: 1, b: 2 });
+  });
+
+  it('preserves string-literal contents that look like comments', () => {
+    const repaired = repairLlmJson('{"url":"https://x.com/a/b","slash":"//notcomment"}');
+    expect(JSON.parse(repaired)).toEqual({
+      url: 'https://x.com/a/b',
+      slash: '//notcomment',
+    });
+  });
+
+  it('closes an unterminated trailing string and salvages structure', () => {
+    const repaired = repairLlmJson('{"a":1,"b":"truncated');
+    expect(JSON.parse(repaired)).toEqual({ a: 1, b: 'truncated' });
+  });
+
+  it('closes unbalanced braces from context-budget truncation', () => {
+    const repaired = repairLlmJson('{"a":{"b":1');
+    expect(JSON.parse(repaired)).toEqual({ a: { b: 1 } });
+  });
+
+  it('is idempotent on already-clean input', () => {
+    const clean = '{"a":1,"b":[2,3]}';
+    expect(repairLlmJson(clean)).toBe(clean);
+  });
+
+  it('returns input verbatim when nothing to repair', () => {
+    expect(repairLlmJson('')).toBe('');
+  });
+});
+
+describe('stripCodeFence — broadened fence detection', () => {
+  it('strips ```json fence', () => {
+    expect(stripCodeFence('```json\n{"x":1}\n```')).toBe('{"x":1}');
+  });
+
+  it('strips ```JSON (uppercase) fence', () => {
+    expect(stripCodeFence('```JSON\n{"x":1}\n```')).toBe('{"x":1}');
+  });
+
+  it('strips bare ``` fence with no language tag', () => {
+    expect(stripCodeFence('```\n{"x":1}\n```')).toBe('{"x":1}');
+  });
+
+  it('handles missing trailing fence (truncation)', () => {
+    expect(stripCodeFence('```json\n{"x":1}')).toBe('{"x":1}');
+  });
+
+  it('returns input verbatim when no fence is present', () => {
+    expect(stripCodeFence('{"x":1}')).toBe('{"x":1}');
+  });
+});
+
+describe('parseLlmJson — repair integration (Step 3 cases)', () => {
+  it('parses output with trailing comma after recovering via repair', () => {
+    const r = parseLlmJson<{ a: number; b: number }>('{"a":1,"b":2,}');
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ a: 1, b: 2 });
+  });
+
+  it('parses output with stray // comments inside the JSON envelope', () => {
+    const r = parseLlmJson<{ a: number }>(
+      'Here you go:\n{"a":1 // this is a comment\n}',
+    );
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ a: 1 });
+  });
+
+  it('parses output with block comments inside the JSON envelope', () => {
+    const r = parseLlmJson<{ a: number; b: number }>(
+      '{"a":1,/* mid-payload note */"b":2}',
+    );
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ a: 1, b: 2 });
+  });
+
+  it('recovers a truncated trailing string by closing the quote and brace', () => {
+    const r = parseLlmJson<{ a: number; b: string }>('{"a":1,"b":"truncated');
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ a: 1, b: 'truncated' });
+  });
+
+  it('recovers from ```JSON (uppercase) code-fenced output', () => {
+    const r = parseLlmJson<{ x: number }>('```JSON\n{"x":42}\n```');
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ x: 42 });
+  });
+
+  it('recovers from a bare ``` fence with no language tag', () => {
+    const r = parseLlmJson<{ x: number }>('```\n{"x":42}\n```');
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual({ x: 42 });
   });
 });
 

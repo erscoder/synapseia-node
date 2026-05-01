@@ -115,6 +115,32 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
 
   // ── Work order lifecycle ──────────────────────────────────────────────────
 
+  /**
+   * Bug H1: pre-submit status probe. Returns the coordinator-side WO record
+   * by id, or `null` on 404 / network failure. Used by SubmitResultNode to
+   * skip POSTing results for WOs the coordinator has already expired or
+   * reassigned (which today returns `WORK_ORDER_NOT_ACCEPTABLE` and bumps
+   * the warn-level error count for no actionable reason).
+   *
+   * Mirrors the unsigned fetch shape of `fetchAvailableWorkOrders` — this
+   * is a read-only probe and the coordinator does not require auth for it.
+   */
+  async getWorkOrder(coordinatorUrl: string, workOrderId: string): Promise<WorkOrder | null> {
+    try {
+      const response = await fetch(`${coordinatorUrl}/work-orders/${workOrderId}`);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        const err = await this.parseErrorResponse(response);
+        logger.warn(`[GetWO] ${err.code} (${response.status}) for ${workOrderId}: ${err.message}`);
+        return null;
+      }
+      return (await response.json() as WorkOrder) || null;
+    } catch (error) {
+      logger.warn('[GetWO] Network error:', (error as Error).message);
+      return null;
+    }
+  }
+
   async fetchAvailableWorkOrders(coordinatorUrl: string, peerId: string, capabilities: string[]): Promise<WorkOrder[]> {
     try {
       const capabilitiesParam = capabilities.join(',');
@@ -175,6 +201,14 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {
         const err = await this.parseErrorResponse(response);
+        // Bug H1 race-window reclassification: status flipped between the
+        // pre-submit probe and the POST. Treat 400 as `dropped` (info-level,
+        // no retry) instead of warn — there is no actionable problem.
+        if (response.status === 400) {
+          logger.info(`[Complete] dropping stale submission for WO ${workOrderId} (${err.code}): ${err.message}`);
+          addToCompleted(workOrderId);
+          return true;
+        }
         logger.warn(`[Complete] ${err.code} (${response.status}) for ${workOrderId}: ${err.message}`);
         return false;
       }

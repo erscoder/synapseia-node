@@ -24,12 +24,26 @@ export interface MedicalSynthesizerParams {
   criticFeedback: string;
 }
 
+/**
+ * Step 3 (2026-04-30) — long titles (observed up to 280 chars on Chinese
+ * oncology papers) consume so much of the prompt budget that small models
+ * regress to prose-only output and fail buildResearchResult. Truncate the
+ * prompt-time title to 120 chars; the full title remains in `payload.title`
+ * for the WO record.
+ */
+const PROMPT_TITLE_MAX_CHARS = 120;
+function truncateTitleForPrompt(title: string): string {
+  if (!title || title.length <= PROMPT_TITLE_MAX_CHARS) return title;
+  return `${title.slice(0, PROMPT_TITLE_MAX_CHARS - 1)}…`;
+}
+
 export function buildMedicalSynthesizerPrompt(p: MedicalSynthesizerParams): string {
   const schemaBlock = renderDiscoverySchemasForPrompt();
+  const title = truncateTitleForPrompt(p.title);
 
   return `You are a biomedical research synthesizer. Take the researcher's structured discovery and the peer-review critique, and produce the FINAL refined submission.
 
-Paper: ${p.title}
+Paper: ${title}
 
 Researcher's output (JSON):
 ${p.researcherJson}

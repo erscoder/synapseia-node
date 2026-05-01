@@ -5,16 +5,55 @@ import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import * as os from 'os';
 import logger from '../../utils/logger';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
-import { isPyTorchAvailable } from '../model/trainer';
+import { isPyTorchAvailable, TRAINING_MEM_FLOOR_MB } from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
 import { buildAuthHeaders } from '../../utils/node-auth';
 import { getNodeVersion } from '../../utils/version';
+
+/**
+ * Bug G1 (Step 3) — capability set advertised in the most recent heartbeat
+ * cycle. Used to detect transitions so the memory-pressure log fires only
+ * when the announced list actually changes (no per-cycle spam).
+ *
+ * Module-private (not on the class) because the helper is provider-scoped
+ * and we want one snapshot per process — multiple instantiation paths
+ * (CLI vs Nest module) must agree on the same "previous" set.
+ */
+let lastAnnouncedCapabilities: string[] | null = null;
+
+/**
+ * Capability tags that demand training-grade RAM headroom and must be
+ * stripped from the announced set when free RAM is below
+ * `TRAINING_MEM_FLOOR_MB`. Mirrors the four training-class tags
+ * `determineCapabilities` may emit: `cpu_training` (PyTorch CPU
+ * micro-transformer), `gpu_training` (CUDA / Metal), `lora_training`
+ * (LoRA fine-tune), `diloco_training` (DiLoCo distributed). The
+ * generic `training` tag is included as a defensive backstop in case
+ * any downstream code starts emitting it; today no caller does.
+ */
+const TRAINING_CAPABILITIES = new Set([
+  'training',
+  'cpu_training',
+  'gpu_training',
+  'lora_training',
+  'diloco_training',
+]);
+
+/**
+ * Test-only hook. Resets the module-private "previous" capability snapshot
+ * so each unit test starts from a clean slate. Production code never calls
+ * this — the snapshot is intentionally process-scoped at runtime.
+ */
+export function __resetCapabilitySnapshotForTests(): void {
+  lastAnnouncedCapabilities = null;
+}
 
 export interface HeartbeatPayload {
   peerId: string;
@@ -110,7 +149,12 @@ export class HeartbeatHelper {
     walletAddress?: string | null,
   ): Promise<HeartbeatResponse> {
     const startTime = Date.now();
-    const capabilities = await this.determineCapabilitiesAsync(hardware);
+    const rawCapabilities = await this.determineCapabilitiesAsync(hardware);
+    // Bug G1: strip training-class capabilities for THIS cycle when free RAM
+    // sits below the trainer's pre-flight floor. Coordinator stops routing
+    // training WOs to a node that the trainer would reject anyway. Capability
+    // returns automatically next cycle once memory recovers.
+    const capabilities = this.applyMemoryPressureFilter(rawCapabilities);
 
     // Resolve public IP for geo-lookup (cached 30 min)
     const publicIp = await this.ipifyService.resolvePublicIp();
@@ -292,6 +336,50 @@ export class HeartbeatHelper {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Bug G1: cycle-local capability gating on memory pressure.
+   *
+   * When `os.freemem()` is below `TRAINING_MEM_FLOOR_MB`, drop every
+   * training-class capability from the announced set so the coordinator
+   * stops handing this node training work it would refuse at runtime.
+   *
+   * The filter is per-cycle — no state is persisted, so capability
+   * automatically returns once memory recovers. The `info` log fires only
+   * when the announced list differs from the previous cycle, preventing
+   * per-heartbeat spam during sustained pressure.
+   *
+   * @internal Exposed for unit testing. The optional `freeMBOverride`
+   * lets tests inject a deterministic memory reading without having to
+   * spy on the `os` module — `jest.spyOn(os, 'freemem')` fails under
+   * ESM-mode jest because the imported namespace is frozen.
+   */
+  applyMemoryPressureFilter(capabilities: string[], freeMBOverride?: number): string[] {
+    const freeMB = freeMBOverride ?? Math.floor(os.freemem() / (1024 * 1024));
+    const underPressure = freeMB < TRAINING_MEM_FLOOR_MB;
+    const filtered = underPressure
+      ? capabilities.filter(cap => !TRAINING_CAPABILITIES.has(cap))
+      : capabilities;
+    const previous = lastAnnouncedCapabilities;
+    const sameAsPrevious = !!previous
+      && previous.length === filtered.length
+      && previous.every((cap, idx) => cap === filtered[idx]);
+    if (!sameAsPrevious && previous) {
+      const previousHadTraining = previous.some(cap => TRAINING_CAPABILITIES.has(cap));
+      const filteredHasTraining = filtered.some(cap => TRAINING_CAPABILITIES.has(cap));
+      if (underPressure && !filteredHasTraining && (previousHadTraining || filtered.length < capabilities.length)) {
+        logger.info(
+          `[Heartbeat] training capability suppressed this cycle (free=${freeMB}MB < floor=${TRAINING_MEM_FLOOR_MB}MB)`,
+        );
+      } else if (!underPressure && !previousHadTraining && filteredHasTraining) {
+        logger.info(
+          `[Heartbeat] training capability restored this cycle (free=${freeMB}MB >= floor=${TRAINING_MEM_FLOOR_MB}MB)`,
+        );
+      }
+    }
+    lastAnnouncedCapabilities = filtered;
+    return filtered;
   }
 
   determineCapabilities(hardware: Hardware): string[] {

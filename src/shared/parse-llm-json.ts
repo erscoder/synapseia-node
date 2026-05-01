@@ -23,6 +23,122 @@
 import { stripReasoning } from './sanitize-llm-output';
 
 /**
+ * Tolerant repair pass for common LLM-emitted JSON pathologies. Run on the
+ * already-extracted balanced substring before a second JSON.parse attempt.
+ *
+ * Step 3 (2026-04-30) — covers the residual error families observed in
+ * `node_telemetry_events` after the Step 1 sweep:
+ *   1. Single-line `// ...` and block `/* ... *\/` comments left in by chatty models.
+ *   2. Trailing commas before `]` or `}` (legal JS, illegal JSON).
+ *   3. Truncated trailing string at context-budget cutoff — close with `"` and
+ *      add a matching `}` if the structure is otherwise salvageable.
+ *
+ * Comment stripping is string-literal-aware so comment markers inside `"..."`
+ * are preserved; the same scan rules `extractFirstJsonStructure` uses.
+ *
+ * Returns the repaired string (or the input verbatim if no repair was
+ * applicable). Never throws.
+ */
+export function repairLlmJson(s: string): string {
+  if (!s) return s;
+
+  // Pass 1: strip line and block comments outside string literals.
+  let out = '';
+  let inStr = false;
+  let escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const next = s[i + 1];
+    if (inStr) {
+      out += ch;
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; out += ch; continue; }
+    // Line comment // ... newline
+    if (ch === '/' && next === '/') {
+      const eol = s.indexOf('\n', i + 2);
+      i = eol === -1 ? s.length : eol; // skip up to (and excluding) newline
+      continue;
+    }
+    // Block comment /* ... */
+    if (ch === '/' && next === '*') {
+      const end = s.indexOf('*/', i + 2);
+      i = end === -1 ? s.length : end + 1; // skip past closing slash
+      continue;
+    }
+    out += ch;
+  }
+
+  // Pass 2: drop trailing commas before `]` or `}` (re-walking the cleaned
+  // string is cheaper than threading state through pass 1).
+  let pass2 = '';
+  inStr = false;
+  escape = false;
+  for (let i = 0; i < out.length; i++) {
+    const ch = out[i];
+    if (inStr) {
+      pass2 += ch;
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; pass2 += ch; continue; }
+    if (ch === ',') {
+      // Look ahead past whitespace for the next non-ws char.
+      let j = i + 1;
+      while (j < out.length && /\s/.test(out[j])) j++;
+      if (j < out.length && (out[j] === '}' || out[j] === ']')) {
+        // skip the trailing comma
+        continue;
+      }
+    }
+    pass2 += ch;
+  }
+
+  // Pass 3: detect truncation. If the string ends inside an unterminated
+  // string literal, close it; if depth > 0, append matching `}`/`]`.
+  let depth = 0;
+  let bracketDepth = 0;
+  inStr = false;
+  escape = false;
+  for (let i = 0; i < pass2.length; i++) {
+    const ch = pass2[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    else if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+  }
+  if (inStr) pass2 += '"';
+  while (bracketDepth > 0) { pass2 += ']'; bracketDepth--; }
+  while (depth > 0) { pass2 += '}'; depth--; }
+
+  return pass2;
+}
+
+/**
+ * Strip a code-fenced wrapper — ```json\n…\n``` , ```JSON\n…``` , or a bare
+ * ```\n…\n``` fence — and return the inner payload. Returns the input
+ * verbatim if no fence is detected. Tolerant of missing trailing fence
+ * (truncation) and of language-tag casing.
+ */
+export function stripCodeFence(s: string): string {
+  if (!s) return s;
+  // Match opening fence with optional language tag, capture the body up to
+  // the next fence or end of string.
+  const m = s.match(/^\s*```[a-zA-Z]*\s*\n?([\s\S]*?)(?:\n?```|$)/);
+  if (m && m[1]) return m[1].trim();
+  return s;
+}
+
+/**
  * Walk `s` starting at the first `{` or `[` and return the first balanced
  * structure as a substring. Honours string literals (so braces/brackets
  * inside `"..."` don't shift depth) and escaped quotes (`\"`). Returns
@@ -108,13 +224,38 @@ export function parseLlmJson<T>(raw: unknown): ParseLlmJsonResult<T> {
     firstError = err as Error;
   }
 
-  const balanced = extractFirstJsonStructure(cleaned);
+  // Step 3 (2026-04-30): broaden code-fence stripping (catches ```JSON,
+  // bare ``` fences, and missing trailing fence) before extracting the
+  // balanced structure. The original regex `/^\s*```json\s*…/` only
+  // matched the lowercase tagged variant.
+  const fenceStripped = stripCodeFence(cleaned);
+  const balanced = extractFirstJsonStructure(fenceStripped);
   if (balanced) {
     try {
       const value = JSON.parse(balanced) as T;
       return { ok: true, value, cleaned, recoveredFrom: 'extraction' };
-    } catch { /* fall through to total failure */ }
+    } catch { /* fall through to repair */ }
+
+    // Step 3: tolerant repair pass for trailing commas, comments, and
+    // truncated strings. Cheaper than introducing a runtime dependency
+    // for a 40-line problem space.
+    try {
+      const repaired = repairLlmJson(balanced);
+      const value = JSON.parse(repaired) as T;
+      return { ok: true, value, cleaned, recoveredFrom: 'extraction' };
+    } catch { /* fall through to repair-on-raw */ }
   }
+
+  // Step 3 fallback: when the input is so badly truncated that
+  // `extractFirstJsonStructure` couldn't find a balanced span (e.g.
+  // `{"a":1,"b":"truncated`), still try `repairLlmJson` on the
+  // fence-stripped raw — repair will close the string and append the
+  // missing `}` so JSON.parse can succeed.
+  try {
+    const repaired = repairLlmJson(fenceStripped);
+    const value = JSON.parse(repaired) as T;
+    return { ok: true, value, cleaned, recoveredFrom: 'extraction' };
+  } catch { /* fall through to total failure */ }
 
   return { ok: false, value: null, cleaned, error: firstError?.message ?? 'unknown parse error' };
 }

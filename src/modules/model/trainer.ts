@@ -23,6 +23,20 @@ function moduleDir(): string {
   return __dirname;
 }
 
+/**
+ * Step 3 (2026-04-30) — minimum free RAM (MB) before a node should
+ * accept a training work order. Matches the python+torch import floor
+ * in `checkMemoryHeadroom`. Exported so the heartbeat can strip the
+ * `cpu_training` capability when the node is below this floor and
+ * automatically restore it when memory recovers.
+ *
+ * Single source of truth for the floor: bumping the trainer's runtime
+ * estimate must update the heartbeat's announced capability cycle in
+ * lockstep, otherwise the coordinator keeps routing training WOs to a
+ * node that the trainer pre-flight will refuse.
+ */
+export const TRAINING_MEM_FLOOR_MB = 900;
+
 export interface TrainingResult {
   runNumber: number;
   finalLoss: number;
@@ -173,7 +187,6 @@ export class TrainerHelper {
   private checkMemoryHeadroom(hp: MutationProposal['hyperparams']): {
     ok: boolean; freeMB: number; totalMB: number; estimatedMB: number;
   } {
-    const PYTHON_TORCH_MB = 900;
     const SEQ_LEN = 256;
     const FLOAT_BYTES = 4;
 
@@ -182,7 +195,7 @@ export class TrainerHelper {
     const activationsBytes = hp.batchSize * SEQ_LEN * hp.hiddenDim * hp.numLayers * FLOAT_BYTES;
 
     const estimatedMB = Math.round(
-      PYTHON_TORCH_MB + (paramsBytes + adamBytes + activationsBytes) / (1024 * 1024),
+      TRAINING_MEM_FLOOR_MB + (paramsBytes + adamBytes + activationsBytes) / (1024 * 1024),
     );
     const freeMB = Math.round(freemem() / (1024 * 1024));
     const totalMB = Math.round(totalmem() / (1024 * 1024));
