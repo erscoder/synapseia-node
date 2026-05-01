@@ -1,5 +1,101 @@
 # Changelog — @synapseia/node
 
+## [2026-05-01] fix(telemetry): Step 3 — Bug F (LLM drift) + G (training capability) + H (stale WO) + I (ReferenceCorpus undefined) (772e9b49)
+
+Step 3 of the node-error-cleanup plan. After Step 1 (3d7cc0c9) cut
+`node_telemetry_events` from 14k+/7d → 130/snapshot, this round
+attacks the residual real bugs.
+
+**Bug F1 — JSON repair preprocessor**
+  - `src/shared/parse-llm-json.ts:42-124` — new `repairLlmJson()`
+    (3-pass: strip line/block comments, drop trailing commas before
+    `]`/`}`, close unterminated strings + balance braces).
+  - `src/shared/parse-llm-json.ts:132-139` — new `stripCodeFence()`
+    broadens the existing fence regex to match ` ```json `, ` ```JSON `,
+    bare ` ``` `, and missing trailing fences.
+  - `src/shared/parse-llm-json.ts:248-254` — final repair-on-fence-stripped
+    fallback for inputs so badly truncated that
+    `extractFirstJsonStructure` returns null. Repair closes the dangling
+    string + appends the missing `}` so JSON.parse can succeed.
+  - 17 new tests in `parse-llm-json.spec.ts` covering trailing commas,
+    line/block comments, broadened fences, truncated trailing strings,
+    deep nesting balance.
+  - No new runtime dependency — `jsonrepair` was not already in
+    package.json and the brief flagged "do not add a dep for a 40-line
+    problem space".
+
+**Bug F2 — SynthesizerNode retry feedback + poison short-circuit**
+  - `src/modules/agent/langgraph/nodes/synthesizer-node.ts:25` —
+    `SCHEMA_VALIDATION_MAX_ATTEMPTS` lowered 3 → 2 (poison inputs no
+    longer burn 3 LLM calls).
+  - `synthesizer-node.ts:30-66` — new `SCHEMA_RETRY_FIELD_EXAMPLES`
+    (~600 chars) with WRONG/CORRECT pairs for the three recurring
+    failures observed in `node_telemetry_events`:
+    `novel_contribution must be non-empty`, `evidence_type must be
+    non-empty`, `supporting_dois must contain ≥ 2 distinct valid DOIs`.
+  - `synthesizer-node.ts:99-103` — retry feedback now appends the
+    relevant example block(s) selected by which fields the validator
+    complained about.
+  - `synthesizer-node.ts:130-145` — poison-input short-circuit: if
+    `parseResearchResult` returns empty `summary` AND empty `proposal`
+    AND `keyInsights.length === 0`, bail with
+    `executionResult: { success: false, result: 'context_overflow_or_silent_llm' }`.
+
+**Bug F3 — Long-title truncation in prompts**
+  - `src/modules/agent/langgraph/prompts/medical/medical-synthesizer.ts:18-26`
+    + `medical-researcher.ts:18-26` — new `TITLE_MAX_CHARS = 120`;
+    `Paper:` line uses `truncateTitle(title)` so the prompt never
+    burns more than 120 chars on the title. Full title preserved in
+    `payload.title` for the WO record.
+
+**Bug G1 — Memory-pressure capability gating**
+  - `src/modules/model/trainer.ts:14` — exported new
+    `TRAINING_MEM_FLOOR_MB = 900` constant. Single source of truth
+    shared between trainer pre-flight and heartbeat capability
+    filter.
+  - `src/modules/heartbeat/heartbeat.ts:32-49` — new
+    `TRAINING_CAPABILITIES = {training, cpu_training, gpu_training,
+    lora_training, diloco_training}` set + module-private
+    `lastAnnouncedCapabilities` ref + `__resetCapabilitySnapshotForTests()`
+    test hook.
+  - `heartbeat.ts:142` — heartbeat publish path now wraps the raw
+    capability list in `applyMemoryPressureFilter(...)`.
+  - `heartbeat.ts:325-365` — new `applyMemoryPressureFilter(capabilities,
+    freeMBOverride?)`: when free RAM is below the floor, strip every
+    training-class capability for THAT CYCLE only. Capability returns
+    automatically on recovery. Logs `info` ONLY on transition.
+  - 4 new tests in `heartbeat-memory-pressure.spec.ts` (strip on
+    pressure, restore on recovery, info on transition only, no-op
+    when no training caps to begin with).
+
+**Bug H1 — Pre-submit WO status check**
+  - `src/modules/agent/work-order/work-order.coordinator.ts` — added
+    `getWorkOrder(coordinatorUrl, workOrderId)` helper.
+  - `src/modules/agent/langgraph/nodes/submit-result.ts:36-65` — before
+    POST, GET the WO. If status is not `ASSIGNED`/`IN_PROGRESS`, log
+    info and short-circuit with success-shape so the agent loop closes
+    the WO without retry. `probe === null` (404 from coordinator) is
+    treated as "still ours, proceed".
+  - New tests in `submit-result-stale.spec.ts` and
+    `work-order.coordinator-stale.spec.ts`.
+
+**Bug I — ReferenceCorpus undefined topic**
+  - `src/modules/agent/langgraph/tools/tool-runner.service.ts:16-93` —
+    in both `search_reference_corpus` and `query_knowledge_graph`
+    cases, validate `topic` is a non-empty string before invoking the
+    tool. If missing/undefined, `logger.info` and return
+    `{ success: false, reason: 'missing_topic' }` so the ReAct loop
+    sees the failure and adjusts.
+
+Build green (tsup, 304ms). Tests: 5 suites / 71 tests / 0 fails.
+
+Three Man Team: Bob built (opus subagent, killed mid-test by
+session timeout — Arch finished verification + two surgical follow-up
+fixes for the parse-llm-json fallback and heartbeat freeMBOverride);
+Richard reviewed (1 Must Fix on missing `diloco_training` in
+TRAINING_CAPABILITIES, 1 Should Fix on submit-result audit comment —
+both resolved before commit).
+
 ## [2026-05-01] fix(telemetry): node error cleanup — Bug A/B/C + Phase 2 noise (3d7cc0c9)
 
 Reduces `node_telemetry_events` warnings/errors that survived the
