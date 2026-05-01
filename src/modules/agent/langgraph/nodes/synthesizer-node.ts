@@ -37,7 +37,12 @@ export class SynthesizerNode {
     const payload = state.researchPayload;
 
     if (!researchOutput || !criticOutput || !payload) {
-      logger.warn('[SynthesizerNode] Missing inputs — falling back to direct result');
+      const missing = [
+        !researchOutput && 'researcherOutput',
+        !criticOutput && 'criticOutput',
+        !payload && 'researchPayload',
+      ].filter(Boolean).join(', ');
+      logger.warn(`[SynthesizerNode] Missing inputs (${missing}) — falling back to direct result`);
       return this.fallbackResult(state);
     }
 

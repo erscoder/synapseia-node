@@ -170,9 +170,10 @@ export class WorkOrderLoopHelper {
     for (const workOrder of orderedByType) {
       logger.log(` Selected: "${workOrder.title}" (reward: ${workOrder.rewardAmount} SYN)`);
 
-      // Backpressure check: reject if at capacity
+      // Backpressure check: reject if at capacity. Expected behaviour, info
+      // level — see fetch-work-orders.ts for the polling counterpart.
       if (!this.backpressure.canAccept()) {
-        logger.warn(
+        logger.info(
           `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping remaining WOs`,
         );
         break;

@@ -40,7 +40,7 @@ export class BackpressureService {
       return true;
     }
     if (this.inFlight.size >= this.maxConcurrent) {
-      logger.warn(
+      logger.info(
         `[Backpressure] Rejected WO ${workOrderId} — at capacity ` +
           `(${this.inFlight.size}/${this.maxConcurrent})`,
       );

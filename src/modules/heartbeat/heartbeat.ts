@@ -215,7 +215,10 @@ export class HeartbeatHelper {
           throw error;
         }
 
-        logger.warn(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
+        // Per-attempt failures inside the retry loop are noisy and rarely
+        // actionable on their own; the cycle-level summary at line ~401
+        // and the final failure at line ~444 still surface as warn/error.
+        logger.debug(`Heartbeat attempt ${attempt + 1} failed: ${(error as Error).message}`);
 
         if (attempt < 2) {
           // Wait before retry: 1s, 2s

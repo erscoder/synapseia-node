@@ -13,6 +13,18 @@ jest.mock('child_process', () => ({
   spawn: mockSpawn,
 }));
 
+// Mock os.freemem so the trainer preflight (checkMemoryHeadroom) doesn't
+// reject on CI runners with constrained free RAM. 16 GB is far above any
+// preset model footprint we test with.
+jest.mock('os', () => {
+  const actual = jest.requireActual<typeof import('os')>('os');
+  return {
+    ...actual,
+    freemem: jest.fn(() => 16 * 1024 * 1024 * 1024),
+    totalmem: jest.fn(() => 32 * 1024 * 1024 * 1024),
+  };
+});
+
 describe('Trainer', () => {
   const mockProposal: MutationProposal = {
     model: { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
@@ -301,6 +313,69 @@ describe('Trainer', () => {
       expect(parsed.batchSize).toBe(32);
       expect(parsed.dataPath).toBe('./data/test.txt');
       expect(parsed.hardware).toBe('cpu');
+    });
+
+    // Regression: SIGKILL on the python child used to surface as an
+    // `unhandledRejection` because `trainingPromise.finally(...)` returned
+    // a derived promise whose rejection nobody observed (Promise.race only
+    // awaits the source promises). The fix wraps that derived promise in
+    // `.catch(() => {})` so the kernel-level OOM kill becomes a regular
+    // rejection on the awaited result. Skipped under ts-jest ESM (the
+    // `jest.mock('child_process')` factory does not hoist), aligning with
+    // every other spawn-mocked test in this file. The structural assertion
+    // below proves the fix is in place; this remains here as documentation
+    // of the failure mode for the day ESM mocking is enabled.
+    it.skip('contains SIGKILL as a regular rejection without firing unhandledRejection', async () => {
+      const mockProcess = new EventEmitter() as any;
+      mockProcess.killed = false;
+      mockProcess.kill = jest.fn();
+      mockProcess.stdin = { write: jest.fn(), end: jest.fn(), on: jest.fn() };
+      mockProcess.stdout = new EventEmitter();
+      mockProcess.stderr = new EventEmitter();
+
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
+      process.on('unhandledRejection', onUnhandled);
+
+      try {
+        const options: TrainingOptions = {
+          proposal: mockProposal,
+          datasetPath: './data/test.txt',
+          hardware: 'cpu',
+        };
+
+        const promise = trainMicroModel(options);
+
+        // Simulate cgroup OOM: code === null + signal === 'SIGKILL', no stdout.
+        setTimeout(() => {
+          mockProcess.emit('close', null, 'SIGKILL');
+        }, 10);
+
+        await expect(promise).rejects.toThrow(/SIGKILL|likely OOM/);
+
+        // Give the microtask queue a tick so any unhandledRejection from the
+        // `.finally` chain would surface before we assert.
+        await new Promise((res) => setTimeout(res, 20));
+        expect(unhandled).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+    });
+
+    // Structural guard: the fix wraps the `trainingPromise.finally(...)`
+    // chain in `.catch(() => { ... })` so a SIGKILL rejection cannot
+    // escape as an unhandled rejection. This reads the source and fails
+    // loudly if the catch is removed in a future refactor.
+    it('keeps a .catch on the trainingPromise.finally chain (regression guard for SIGKILL containment)', () => {
+      const fs = jest.requireActual<typeof import('fs')>('fs');
+      const path = jest.requireActual<typeof import('path')>('path');
+      const trainerSrc = fs.readFileSync(
+        path.resolve(__dirname, '..', 'modules', 'model', 'trainer.ts'),
+        'utf8',
+      );
+      expect(trainerSrc).toMatch(/trainingPromise\s*\.finally\([\s\S]*?\)\s*\.catch\(/);
     });
   });
 
