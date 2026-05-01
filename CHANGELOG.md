@@ -1,5 +1,42 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] release: v1.0.0 — public-network milestone
+
+First stable release of the Synapseia node agent.
+
+What "1.0.0" means in this codebase:
+
+- **Stable wire protocol with the coordinator** — REST endpoints,
+  WebSocket frames, and gossipsub topic schemas (`WORK_ORDER_AVAILABLE`,
+  presence, evaluation, discovery) are frozen for the 1.x line.
+- **libp2p stack productionised** — gossipsub + kad-dht + bootstrap +
+  noise + yamux + tcp; benign race logging tuned, MaxListeners warning
+  suppressed at the cli boundary, gossipsub `StreamStateError` is
+  surfaced as warn (not error) since the protocol self-recovers.
+- **LangGraph agent surface stabilised** — researcher / synthesizer /
+  reviewer / docking nodes share a single `LangGraphLlmService` with
+  retry + JSON-repair preprocessor, capability-gated heartbeat,
+  pre-submit work-order status probe, poison-input short-circuit.
+- **Auto-update + version gating** — node refuses to run against an
+  incompatible coordinator and self-updates from the official
+  release feed; trust model documented (public source, Synapseia-only
+  push).
+- **Telemetry hardened** — backpressure-aware batching, gossipsub
+  publish try/catch, trainer `.finally().catch()` chokepoint fixed,
+  Ollama mem_limit aligned with model footprint.
+
+Limits acknowledged for 1.0.0:
+
+- Some submission + evaluation paths still go through coordinator
+  HTTP (not gossipsub-only). Full P2P submission lands post-1.x.
+- Federated DiLoCo gradient sync still uses coordinator as the
+  rendez-vous. P2P AllReduce is roadmap.
+- Reputation lookup is read-only against coordinator; EigenTrust-
+  style P2P reputation is post-1.x.
+
+Version sync: matches `@synapseia/coordinator` 1.0.0 and
+`@synapseia/node-ui` 1.0.0.
+
 ## [2026-05-01] fix(telemetry): Step 3 — Bug F (LLM drift) + G (training capability) + H (stale WO) + I (ReferenceCorpus undefined) (772e9b49)
 
 Step 3 of the node-error-cleanup plan. After Step 1 (3d7cc0c9) cut
