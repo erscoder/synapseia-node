@@ -15,6 +15,8 @@ import type { LLMModel, LLMConfig } from './modules/llm/llm-provider';
 import { P2PNode, TOPICS } from './modules/p2p/p2p';
 import { HeartbeatHelper } from './modules/heartbeat/heartbeat';
 import { WorkOrderPushQueue, PushedWorkOrder } from './modules/agent/work-order/work-order-push-queue';
+import { loadCoordinatorPubkey } from './p2p/protocols/coordinator-pubkey';
+import { handleWorkOrderAvailable } from './p2p/topics/work-order-available';
 import { IpifyService } from './modules/shared/infrastructure/ipify.service';
 import type { A2AServer } from './modules/a2a/a2a-server.service';
 import { preflightVersionCheck, UpdateStatus } from './utils/update-checker';
@@ -389,23 +391,63 @@ export async function startNode(
   // silent.
   if (p2pNode && services.workOrderPushQueue) {
     const queue = services.workOrderPushQueue;
-    p2pNode.onMessage(TOPICS.WORK_ORDER_AVAILABLE, (data) => {
-      try {
-        const op = (data as { op?: string }).op ?? 'CREATED';
-        const wo = (data as { wo?: Record<string, unknown> }).wo;
-        if (op !== 'CREATED' || !wo || typeof wo !== 'object') return;
-        // Coordinator publishes a `WorkOrderResponseDto` shape — see
-        // packages/coordinator/.../work-order.utils.ts ::toResponseDto
-        // and WorkOrderCreationService::recordCreated.
-        queue.push(wo as Omit<PushedWorkOrder, 'receivedAt'>);
-        const id = (wo as { id?: string }).id ?? '<unknown>';
-        const type = (wo as { type?: string }).type ?? '<unknown>';
-        logger.log(`[WO-Push] queued ${type} ${id} (queue size=${queue.size()})`);
-      } catch (err) {
-        logger.warn(`[WO-Push] dropped malformed WORK_ORDER_AVAILABLE: ${(err as Error).message}`);
-      }
-    });
-    logger.log('[WO-Push] subscribed to gossipsub WORK_ORDER_AVAILABLE');
+
+    // Tier-2 §2.2: prefer the signed-envelope verified path when the
+    // operator has provisioned the coordinator pubkey. Fall back to the
+    // legacy unverified handler otherwise so existing nodes don't break
+    // during the staged rollout (§2.2.5 soak phase).
+    // TODO(Tier-2 post-soak): remove the unverified fallback once all
+    // production nodes have SYNAPSEIA_COORDINATOR_PUBKEY_BASE58 set.
+    let coordinatorPubkey: Uint8Array | null = null;
+    try {
+      coordinatorPubkey = loadCoordinatorPubkey({
+        pubkeyBase58: process.env.SYNAPSEIA_COORDINATOR_PUBKEY_BASE58,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        `[WO-Verify] ${msg} — falling back to UNVERIFIED gossipsub WORK_ORDER_AVAILABLE handler`,
+      );
+    }
+
+    const pushVerifiedWo = (wo: { id: string; [k: string]: unknown }): void => {
+      queue.push(wo as Omit<PushedWorkOrder, 'receivedAt'>);
+      const id = wo.id ?? '<unknown>';
+      const type = (wo.type as string | undefined) ?? '<unknown>';
+      logger.log(`[WO-Push] queued ${type} ${id} (queue size=${queue.size()})`);
+    };
+
+    if (coordinatorPubkey) {
+      const pubkey = coordinatorPubkey;
+      p2pNode.onRawMessage(TOPICS.WORK_ORDER_AVAILABLE, async (raw) => {
+        await handleWorkOrderAvailable({
+          pubkey,
+          msg: raw,
+          consumer: pushVerifiedWo,
+        });
+      });
+      logger.log(
+        '[WO-Push] subscribed to SIGNED gossipsub WORK_ORDER_AVAILABLE (Ed25519 verified)',
+      );
+    } else {
+      p2pNode.onMessage(TOPICS.WORK_ORDER_AVAILABLE, (data) => {
+        try {
+          const op = (data as { op?: string }).op ?? 'CREATED';
+          const wo = (data as { wo?: Record<string, unknown> }).wo;
+          if (op !== 'CREATED' || !wo || typeof wo !== 'object') return;
+          // Coordinator publishes a `WorkOrderResponseDto` shape — see
+          // packages/coordinator/.../work-order.utils.ts ::toResponseDto
+          // and WorkOrderCreationService::recordCreated.
+          queue.push(wo as Omit<PushedWorkOrder, 'receivedAt'>);
+          const id = (wo as { id?: string }).id ?? '<unknown>';
+          const type = (wo as { type?: string }).type ?? '<unknown>';
+          logger.log(`[WO-Push] queued ${type} ${id} (queue size=${queue.size()})`);
+        } catch (err) {
+          logger.warn(`[WO-Push] dropped malformed WORK_ORDER_AVAILABLE: ${(err as Error).message}`);
+        }
+      });
+      logger.log('[WO-Push] subscribed to gossipsub WORK_ORDER_AVAILABLE (UNVERIFIED fallback)');
+    }
   } else if (!services.workOrderPushQueue) {
     logger.log('[WO-Push] queue not provided — staying on HTTP polling for /work-orders/available');
   }
