@@ -1,5 +1,14 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] fix(coordinator-pubkey): inline base58 decoder, drop bs58 (320a821a)
+
+Even with a static import, `bs58 → base-x → safe-buffer` chain emits
+a dynamic `require('buffer')` that tsup's ESM bundle rejects, killing
+node-1 boot loop. Replaced with a 25-line inline base58 decoder using
+only `Uint8Array` primitives — no package dep, no bundler hazard,
+identical wire output for the 32-byte raw Ed25519 pubkey we care
+about. 4 / 4 specs stay green.
+
 ## [2026-05-02] fix(coordinator-pubkey): static bs58 import (T2.5 canary, ded38229)
 
 Live T2.5 canary boot logged `Dynamic require of "buffer" is not
