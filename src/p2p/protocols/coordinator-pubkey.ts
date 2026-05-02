@@ -12,28 +12,14 @@
  * Plan: Tier-2 §2.2.1.
  */
 
+// Static ESM import. The previous lazy `require('bs58')` worked in jest
+// (CommonJS) but raised `Dynamic require of "buffer" is not supported`
+// in the tsup-bundled ESM node runtime, falling back to the UNVERIFIED
+// gossipsub handler — which silently disables the T2.2 trust check.
+import bs58 from 'bs58';
+
 const ENV_NAME = 'SYNAPSEIA_COORDINATOR_PUBKEY_BASE58';
 const ED25519_RAW_PUBKEY_LEN = 32;
-
-let bs58Cache: { encode: (b: Uint8Array) => string; decode: (s: string) => Uint8Array } | null =
-  null;
-
-function getBs58(): {
-  encode: (b: Uint8Array) => string;
-  decode: (s: string) => Uint8Array;
-} {
-  if (bs58Cache) return bs58Cache;
-  // Lazy `require` keeps this loader synchronous (matches the plan API)
-  // while still picking bs58 up from the hoisted root `node_modules/`.
-  // bs58 ships both CJS and ESM; default-export is the API object.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require('bs58');
-  bs58Cache = (mod.default ?? mod) as {
-    encode: (b: Uint8Array) => string;
-    decode: (s: string) => Uint8Array;
-  };
-  return bs58Cache;
-}
 
 /**
  * Decode and validate the coordinator's Ed25519 public key.
@@ -53,7 +39,7 @@ export function loadCoordinatorPubkey(opts: {
 
   let decoded: Uint8Array;
   try {
-    decoded = getBs58().decode(raw);
+    decoded = bs58.decode(raw);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`${ENV_NAME} is not a valid base58 string: ${msg}`);
