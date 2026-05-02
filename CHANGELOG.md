@@ -1,5 +1,30 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] perf(heartbeat): default interval 30s → 60s + langgraph spec fixes (267ece4d)
+
+Tier 3 §3.C.2. Heartbeat default lowered from 30 s to 60 s — halves
+the coordinator HTTP heartbeat qps every node generates. The 5-min
+online cutoff in coord `peer.service.ts:292` still tolerates 5 missed
+cycles before marking a peer offline. Presence flusher cron stays at
+`EVERY_30_SECONDS`; its 45 s lock TTL is sized to the work the cron
+does, not correlated with heartbeat cadence.
+
+Bundled with two pre-existing langgraph spec fixes that were gating
+the node suite (project rule: "fix all tests before completing a
+task"):
+
+- `langgraph-coverage.test.ts`: add `getWorkOrder` to the
+  `WorkOrderCoordinatorHelper` mock — `submit-result.ts:53` started
+  calling it but the comprehensive coverage mock wasn't updated.
+- `synthesizer-node-schema-retry.spec.ts`: replace
+  `Record<string, unknown>` annotation with `any` (jest's babel-jest
+  hoist pre-parser, no TS preset, treats `<string,…>` as the `<`
+  operator and chokes); flip retry-cap expectation 3 → 2 to mirror
+  the production constant `SCHEMA_VALIDATION_MAX_ATTEMPTS` lowered on
+  2026-04-30.
+
+92 / 92 suites green, 1390 / 1390 tests pass (43 skipped — pre-existing).
+
 ## [2026-05-02] release: v1.0.0 — public-network milestone
 
 First stable release of the Synapseia node agent.
