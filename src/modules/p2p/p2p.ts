@@ -45,10 +45,12 @@ export const CHAT_PROTOCOL = '/synapseia/chat/1.0.0';
 
 export type Topic = (typeof TOPICS)[keyof typeof TOPICS];
 type MsgCb = (data: Record<string, unknown>, from: string) => void;
+type RawMsgCb = (data: Uint8Array, from: string) => void | Promise<void>;
 
 export class P2PNode {
   private node: any = null;
   private handlers: Map<string, MsgCb[]> = new Map();
+  private rawHandlers: Map<string, RawMsgCb[]> = new Map();
 
   constructor(private readonly identity: Identity) {}
 
@@ -80,11 +82,26 @@ export class P2PNode {
     await this.node.start();
 
     this.node.services.pubsub.addEventListener('message', (evt: any) => {
+      const { topic, data, from } = evt.detail;
+      const peer = from?.toString() ?? 'unknown';
+
+      // Raw-bytes handlers run FIRST and independently of JSON parsing —
+      // they are the only path the signed-envelope verifier can use to
+      // re-hash the publisher's exact payload bytes.
+      const rawCbs = this.rawHandlers.get(topic as string) ?? [];
+      for (const cb of rawCbs) {
+        try {
+          // Fire-and-forget — handler is responsible for its own errors.
+          void cb(data as Uint8Array, peer);
+        } catch {
+          // ignore raw-handler exceptions
+        }
+      }
+
       try {
-        const { topic, data, from } = evt.detail;
         const parsed = JSON.parse(new TextDecoder().decode(data as Uint8Array));
         for (const cb of (this.handlers.get(topic as string) ?? [])) {
-          cb(parsed as Record<string, unknown>, from?.toString() ?? 'unknown');
+          cb(parsed as Record<string, unknown>, peer);
         }
       } catch {
         // ignore malformed messages
@@ -188,6 +205,16 @@ export class P2PNode {
   onMessage(topic: string, cb: MsgCb): void {
     const existing = this.handlers.get(topic) ?? [];
     this.handlers.set(topic, [...existing, cb]);
+  }
+
+  /**
+   * Subscribe to raw gossipsub message bytes for a topic. Used by paths
+   * that need the original wire payload (e.g. signed-envelope verifiers
+   * that must reconstruct the exact bytes the publisher signed).
+   */
+  onRawMessage(topic: string, cb: RawMsgCb): void {
+    const existing = this.rawHandlers.get(topic) ?? [];
+    this.rawHandlers.set(topic, [...existing, cb]);
   }
 
   async publish(topic: string, data: Record<string, unknown>): Promise<void> {
