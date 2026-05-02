@@ -36,6 +36,10 @@ export const TOPICS = {
    *  skip GET /work-orders/available when push messages are flowing. The
    *  HTTP fetch stays as a 5-min safety-net fallback. Phase 2A. */
   WORK_ORDER_AVAILABLE: '/synapseia/work-order/1.0.0',
+  /** Coordinator broadcasts a signed kick on every newly-INSERTed
+   *  evaluation row so the addressed evaluator's node fires
+   *  `kickReviewCycle` immediately. Tier 3 §3.C.1. */
+  EVALUATION_ASSIGNMENTS: '/synapseia/evaluation-assignments/1.0.0',
 } as const;
 
 /** Libp2p protocol the winning node serves to accept the grounded prompt +

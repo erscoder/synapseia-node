@@ -51,7 +51,7 @@ export interface ReviewScores {
 @Injectable()
 export class ReviewAgentHelper implements OnModuleInit {
   private readonly llmProvider = new LlmProviderHelper();
-  private static readonly POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+  static readonly POLL_INTERVAL_MS = 10 * 60 * 1000;
 
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private running = false;
@@ -257,6 +257,14 @@ Respond ONLY with valid JSON (no markdown):
       logger.warn(`[ReviewAgent] postEvaluation error: ${(err as Error).message}`);
       return false;
     }
+  }
+
+  async kickReviewCycle(
+    coordinatorUrl: string,
+    peerId: string,
+    llmConfig: LLMReviewConfig,
+  ): Promise<number> {
+    return this.runReviewPollCycle(coordinatorUrl, peerId, llmConfig);
   }
 
   async runReviewPollCycle(

@@ -58,6 +58,7 @@ import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { WorkOrderPushQueue } from '../modules/agent/work-order/work-order-push-queue';
+import { ReviewAgentHelper } from '../modules/agent/review-agent';
 import { P2pService } from '../modules/p2p/services/p2p.service';
 import { startNode } from '../node-runtime';
 import { input, select, confirm, password } from '@inquirer/prompts';
@@ -249,6 +250,7 @@ async function bootstrap() {
   const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
   const workOrderPushQueue = app.get(WorkOrderPushQueue);
+  const reviewAgentHelper = app.get(ReviewAgentHelper);
   const p2pService = app.get(P2pService);
   const heartbeatHelper =app.get(HeartbeatHelper)
 
@@ -610,7 +612,7 @@ async function bootstrap() {
             lat: config.lat,
             lng: config.lng,
           },
-          { p2pService, workOrderAgentService, telemetryClient, workOrderPushQueue },
+          { p2pService, workOrderAgentService, telemetryClient, workOrderPushQueue, reviewAgentHelper },
           hardware,
         );
 
