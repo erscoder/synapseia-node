@@ -40,6 +40,16 @@ export const TOPICS = {
    *  evaluation row so the addressed evaluator's node fires
    *  `kickReviewCycle` immediately. Tier 3 §3.C.1. */
   EVALUATION_ASSIGNMENTS: '/synapseia/evaluation-assignments/1.0.0',
+  /** Coordinator broadcasts the `(peerId, shardId, expiresAt, signature)`
+   *  ownership snapshot every 10 min (and on revocation). Nodes that
+   *  match `peerId` upsert / drop the grant in `KgShardOwnershipStore`.
+   *  Plan D.3 / D.4. */
+  KG_SHARD_OWNERSHIP: '/synapseia/kg-shard-ownership/1.0.0',
+  /** Coordinator publishes a redirect hint when a `/knowledge-graph/query`
+   *  request maps to a shard hosted off-coord. Authorised hosts dial the
+   *  requester directly over `/synapseia/kg-shard-query/1.0.0`. Plan
+   *  D.3 / D.4. */
+  KG_QUERY_REDIRECT: '/synapseia/kg-query-redirect/1.0.0',
 } as const;
 
 /** Libp2p protocol the winning node serves to accept the grounded prompt +
