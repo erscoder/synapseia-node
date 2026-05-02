@@ -1,5 +1,23 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] feat(kg-shard): node-side hosting + signed-envelope handlers (D.4) (aa81e1a2)
+
+Plan D.4. Skeleton for node-side KG-shard hosting. Adds:
+- `verifyKgShardEnvelope` — Ed25519 verifier copy of the coord-side
+  contract (canonical sorted-key JSON, 12-byte SPKI prefix, 2 min
+  replay window).
+- `KgShardOwnershipStore` — in-memory grant set with TTL prune.
+- Gossipsub handlers for `KG_SHARD_OWNERSHIP` (upsert / revoke local
+  grants) and `KG_QUERY_REDIRECT` (dial requester back when we own
+  the shard).
+- Libp2p stream handler `/synapseia/kg-shard-query/1.0.0` with
+  pluggable `IKgShardSearcher`. Stub returns empty hits — HNSW plugs
+  in here as the follow-up (TODO(D.4-followup)).
+- Wire-up gated by `SYNAPSEIA_KG_SHARD_HOSTING=true`. Default OFF.
+
+No new runtime dependencies. 5 new specs, 47 new cases. Full node
+suite stays green: 103/104 suites, 1466 tests pass.
+
 ## [2026-05-02] fix(coordinator-pubkey): inline base58 decoder, drop bs58 (320a821a)
 
 Even with a static import, `bs58 → base-x → safe-buffer` chain emits
