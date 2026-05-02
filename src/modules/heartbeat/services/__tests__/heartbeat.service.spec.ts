@@ -56,7 +56,7 @@ describe('HeartbeatService', () => {
     expect(result).toBe(mockResponse);
   });
 
-  it('startPeriodic() delegates to heartbeatHelper.startPeriodicHeartbeat with defaults', () => {
+  it('startPeriodic() delegates to heartbeatHelper.startPeriodicHeartbeat with 60s default (Tier 3 §3.C.2)', () => {
     const cleanup = jest.fn();
     (heartbeatHelper.startPeriodicHeartbeat as jest.Mock<any>).mockReturnValue(cleanup);
     const result = service.startPeriodic('http://localhost:3001', mockIdentity as any, mockHardware as any);
@@ -64,7 +64,7 @@ describe('HeartbeatService', () => {
       'http://localhost:3001',
       mockIdentity,
       mockHardware,
-      30000,
+      60000,
       undefined,
     );
     expect(result).toBe(cleanup);

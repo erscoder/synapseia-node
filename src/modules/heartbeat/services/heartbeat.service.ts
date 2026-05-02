@@ -20,7 +20,7 @@ export class HeartbeatService {
     coordinatorUrl: string,
     identity: Identity,
     hardware: Hardware,
-    intervalMs = 30000,
+    intervalMs = 60000,
     p2pNode?: P2PNode,
   ): () => void {
     return this.heartbeatHelper.startPeriodicHeartbeat(coordinatorUrl, identity, hardware, intervalMs, p2pNode);

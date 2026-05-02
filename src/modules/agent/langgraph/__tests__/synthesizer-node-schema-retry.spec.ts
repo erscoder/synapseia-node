@@ -11,7 +11,11 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SynthesizerNode } from '../nodes/synthesizer-node';
 
-function makeState(overrides: Record<string, unknown> = {}) {
+// `Record<string, unknown>` annotation removed: jest's babel-jest hoist
+// pre-parser (no TS preset) reads `<string,` as the `<` operator and
+// chokes. ts-jest does the actual transform, but the hoist parser runs
+// first. Plain `any` keeps the spec valid for both passes.
+function makeState(overrides: any = {}) {
   return {
     selectedWorkOrder: { id: 'wo-1', type: 'RESEARCH' },
     researcherOutput: JSON.stringify({
@@ -57,7 +61,10 @@ describe('SynthesizerNode — schema retry loop', () => {
     expect(result.executionResult?.success).toBe(true);
   });
 
-  it('retries up to 3 times then marks the execution as failed when payload stays invalid', async () => {
+  it('retries up to SCHEMA_VALIDATION_MAX_ATTEMPTS (2) then marks the execution as failed when payload stays invalid', async () => {
+    // Cap was lowered 3 → 2 on 2026-04-30 (synthesizer-node.ts:25-30):
+    // the third retry almost never recovered and just inflated latency
+    // + LLM cost. Test must mirror the production constant.
     const generateLLM = jest.fn().mockResolvedValue(JSON.stringify({
       summary: 'attempt summary',
       keyInsights: ['a', 'b'],
@@ -70,7 +77,7 @@ describe('SynthesizerNode — schema retry loop', () => {
 
     const result = await node.execute(makeState());
 
-    expect(generateLLM).toHaveBeenCalledTimes(3);
+    expect(generateLLM).toHaveBeenCalledTimes(2);
     expect(result.executionResult?.success).toBe(false);
     expect(result.executionResult?.result).toMatch(/schema_invalid_after_retries/);
   });

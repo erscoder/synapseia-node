@@ -28,6 +28,10 @@ jest.mock('../../work-order/work-order.coordinator', () => ({
     submitToResearchQueue: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     completeWorkOrder: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
     submitResearchResult: (jest.fn() as any).mockResolvedValue(undefined),
+    // submit-result.ts probes WO status before submitting to short-circuit
+    // stale results. Default to `null` so the probe doesn't drop the
+    // submit (null = "coord blip, treat as still ours").
+    getWorkOrder: (jest.fn() as any).mockResolvedValue(null),
   })),
 }));
 jest.mock('../../work-order/work-order.evaluation', () => ({

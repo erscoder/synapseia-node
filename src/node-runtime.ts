@@ -48,7 +48,7 @@ export interface NodeRuntimeConfig {
   llmModel: LLMModel;
   /** LLM auth/connection config */
   llmConfig: LLMConfig;
-  /** Heartbeat interval in ms (default 30000). */
+  /** Heartbeat interval in ms (default 60000 — Tier 3 §3.C.2). */
   intervalMs?: number;
   /**
    * Fallback poll interval for `GET /work-orders/available` in ms.
@@ -278,7 +278,7 @@ export async function startNode(
     config.coordinatorUrl,
     config.identity,
     hardware,
-    config.intervalMs ?? 30000,
+    config.intervalMs ?? 60000,
     p2pNode ?? undefined,
     config.lat,
     config.lng,
@@ -286,7 +286,7 @@ export async function startNode(
     config.llmConfig?.baseUrl,
   );
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
-  logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+  logger.log(`   Interval: ${((config.intervalMs ?? 60000) / 1000).toFixed(0)}s`);
 
   // ── 3. A2A Server ──────────────────────────────────────────────
   let a2aRunning = false;
@@ -378,7 +378,7 @@ export async function startNode(
   logger.log(`   Coordinator: ${config.coordinatorUrl}`);
   logger.log(`   Capabilities: ${config.capabilities.join(', ')}`);
   logger.log(`   Model: ${config.llmModel.providerId ? config.llmModel.providerId + '/' : ''}${config.llmModel.modelId}`);
-  logger.log(`   Interval: ${((config.intervalMs ?? 30000) / 1000).toFixed(0)}s`);
+  logger.log(`   Interval: ${((config.intervalMs ?? 60000) / 1000).toFixed(0)}s`);
   logger.log(`   Mode: langgraph`);
 
   // Phase 2A: subscribe to coordinator's WORK_ORDER_AVAILABLE topic and

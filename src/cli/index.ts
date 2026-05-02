@@ -601,7 +601,7 @@ async function bootstrap() {
             capabilities,
             llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
             llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
-            intervalMs: 30000,
+            intervalMs: 60000,
             // Fallback poll for /work-orders/available — overridable via env so
             // load-test rigs can dial it down when needed. Default 5 min;
             // gossipsub WORK_ORDER_AVAILABLE drives discovery in real time.
