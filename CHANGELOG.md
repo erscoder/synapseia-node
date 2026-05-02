@@ -1,5 +1,36 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] feat(eval-assignments-verify): kick review cycle on signed envelope (7baa063)
+
+T3.C.1. Worker nodes now subscribe to the coordinator's new
+`EVALUATION_ASSIGNMENTS` gossipsub topic. Every verified envelope
+addressed to the local peer fires
+`ReviewAgentHelper.kickReviewCycle()` immediately, so peer review
+starts within milliseconds of the coord inserting a PENDING row
+instead of waiting up to the safety-net poll interval.
+
+The HTTP poll fallback at `GET /evaluations/assignments?nodeId=X`
+stays in place but its interval is bumped from 2 min to 10 min —
+the gossipsub kick handles the hot path, the slower HTTP loop
+catches dropped envelopes during a coord restart or transient mesh
+partition. When `SYNAPSEIA_COORDINATOR_PUBKEY_BASE58` is unset the
+subscription is skipped with a single warn; the 10-min HTTP poll
+continues unaffected.
+
+- `p2p/topics/evaluation-assignments.ts` (NEW) — parse + verify
+  Ed25519 over `JSON.stringify({payload,ts})`, drop stale (>60s),
+  drop forged.
+- `node-runtime.ts` — new wiring block alongside the WO
+  subscription; injects `ReviewAgentHelper` from DI and reuses the
+  same trust anchor loader.
+- `modules/agent/review-agent.ts` — public `kickReviewCycle()`
+  wrapper + `POLL_INTERVAL_MS` bumped to 10 min.
+- `modules/p2p/p2p.ts` — `EVALUATION_ASSIGNMENTS` added to TOPICS
+  so the auto-subscription loop covers it.
+
+Tests: 5 envelope specs + 6 wiring specs (match / non-match /
+forged / stale / env-unset / 10-min interval).
+
 ## [2026-05-02] feat(wo-poll-killswitch): SYNAPSEIA_DISABLE_WO_POLL killswitch (b7c538b8)
 
 Tier 2 §2.4.1 ships the per-peer opt-in for gossipsub-only work-order
