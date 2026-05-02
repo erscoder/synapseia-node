@@ -1,5 +1,45 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] feat(node-p2p-verify): signed WO envelope handler + cli wiring (5df9b657)
+
+Tier 2 §2.2 closes the consumer leg of the signed gossipsub pipeline.
+Nodes now verify each `WORK_ORDER_AVAILABLE` envelope's Ed25519
+signature against the coordinator's trust-anchor pubkey before
+queueing the WO for execution.
+
+- §2.2.1: `p2p/protocols/coordinator-pubkey.ts` — synchronous
+  bs58 loader that asserts a 32-byte raw Ed25519 pubkey decoded from
+  the new `SYNAPSEIA_COORDINATOR_PUBKEY_BASE58` env var. Throws with
+  the env-var name baked into every error so operators get an
+  actionable message on misconfiguration.
+- §2.2.2: `p2p/topics/work-order-available.ts` — pure handler (no
+  libp2p import) that parses raw envelope bytes, verifies the
+  Ed25519 signature over `JSON.stringify({wo, ts})` via node's
+  native `crypto.verify`, drops envelopes outside the 60 s
+  freshness window, and rejects payloads with no `wo.id`. All
+  rejection paths warn with a sanitized prefix and never invoke
+  the consumer. Companion `verify-ed25519.ts` mirrors the SPKI
+  wrapping the coordinator's `ed25519-verify.ts` already uses.
+- §2.2.3: `node-runtime.ts` — load the pubkey ONCE at startup, then
+  register a raw-bytes handler on the new `P2PNode.onRawMessage`
+  API. When the env var is unset the boot path logs a warn and
+  falls back to the legacy unverified handler so the §2.2.5 soak
+  phase doesn't break existing nodes that haven't deployed the env
+  yet (TODO marker for fallback removal post-rollout). `p2p.ts`
+  gains a parallel raw-bytes dispatch path so the verifier can
+  re-hash the publisher's exact payload bytes; the existing
+  parsed-JSON `onMessage` API is untouched.
+
+13 new tests: 4 trust-anchor (happy + unset + empty + wrong-length),
+5 envelope handler (verified passthrough, forged drop, stale drop,
+malformed JSON drop, missing-wo.id drop), 4 cli wiring (forged
+silently rejected, trusted forwarded, refuses to wire on empty or
+wrong-length pubkey). Fixtures sign with node `crypto` Ed25519 keys
+locally — no libp2p in any spec.
+
+Suite: 1403 passing (+13 from 1390 baseline), 0 failures, 95 of 96
+suites green; 1 pre-existing skipped suite unchanged.
+
 ## [2026-05-02] perf(heartbeat): default interval 30s → 60s + langgraph spec fixes (267ece4d)
 
 Tier 3 §3.C.2. Heartbeat default lowered from 30 s to 60 s — halves
