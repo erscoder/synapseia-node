@@ -454,7 +454,10 @@ export class HeartbeatHelper {
   }
 
   /**
-   * Start periodic heartbeat (every 30 seconds)
+   * Start periodic heartbeat. Default 60 s (Tier 3 §3.C.2 — halves the
+   * coordinator HTTP heartbeat qps; 5-min online cutoff in
+   * `peer.service.ts` still tolerates 5 missed cycles before marking a
+   * peer offline).
    * If p2pNode is provided, heartbeat is published via GossipSub.
    * Falls back to HTTP if P2P is not available.
    */
@@ -462,7 +465,7 @@ export class HeartbeatHelper {
     coordinatorUrl: string,
     identity: Identity,
     hardware: Hardware,
-    intervalMs: number = 30000,
+    intervalMs: number = 60000,
     p2pNode?: P2PNode,
     lat?: number,
     lng?: number,
