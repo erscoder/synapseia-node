@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] refactor(kg-shard): drop SYNAPSEIA_KG_SHARD_HOSTING opt-in (3c28862b)
+
+Dev-mode cleanup. KG-shard hosting is the read path, not an opt-in.
+The wiring block now runs unconditionally when `p2pNode` is up, and
+`loadCoordinatorPubkey` throws on missing
+`SYNAPSEIA_COORDINATOR_PUBKEY_BASE58` — matching the loud-throw
+contract every other signed gossipsub handler in this file uses
+(work-order-available, evaluation-assignments). Per-shard
+authorisation still gates serving via `KgShardOwnershipStore`: only
+shards the coord has explicitly granted are served. p2p suite 47/47.
+
 ## [2026-05-02] feat(kg-shard): node-side hosting + signed-envelope handlers (D.4) (aa81e1a2)
 
 Plan D.4. Skeleton for node-side KG-shard hosting. Adds:
