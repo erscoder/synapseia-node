@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] fix(coordinator-pubkey): static bs58 import (T2.5 canary, ded38229)
+
+Live T2.5 canary boot logged `Dynamic require of "buffer" is not
+supported — falling back to UNVERIFIED gossipsub WORK_ORDER_AVAILABLE
+handler`, silently disabling envelope-signature verification. Root
+cause: lazy `require('bs58')` works under jest (CJS) but tsup's ESM
+bundle errors on the dynamic require for transitive 'buffer'.
+Static `import bs58 from 'bs58'` resolves at build time. Without the
+fix, canary nodes accept FORGED gossipsub envelopes — the whole point
+of the T2 trust anchor disappears.
+
 ## [2026-05-02] feat(eval-assignments-verify): kick review cycle on signed envelope (7baa063)
 
 T3.C.1. Worker nodes now subscribe to the coordinator's new
