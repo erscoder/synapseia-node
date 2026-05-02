@@ -1,5 +1,25 @@
 # Changelog — @synapseia/node
 
+## [2026-05-02] feat(wo-poll-killswitch): SYNAPSEIA_DISABLE_WO_POLL killswitch (b7c538b8)
+
+Tier 2 §2.4.1 ships the per-peer opt-in for gossipsub-only work-order
+discovery. Operators set `SYNAPSEIA_DISABLE_WO_POLL=true` (case-
+insensitive) and the legacy `GET /work-orders/available` poll loop is
+skipped at boot — the node still subscribes to the signed gossipsub
+`WORK_ORDER_AVAILABLE` topic and drains the push queue, so newly-
+PENDING work orders arrive within milliseconds. Any other value
+(unset, empty, `false`, `0`) keeps the existing fallback poll.
+
+- `src/node-runtime.ts`: extracted two pure helpers — `isWoPollDisabled`
+  and `maybeStartWorkOrderPoll` — and rewired the §4 work-order block
+  through the new wrapper. `sanitizeForLog` is now exported so the
+  echoed env-var value in the info log can't carry CR/LF or ANSI
+  bytes (log-injection guard for an operator-controlled string).
+- `src/__tests__/wo-poll-killswitch.spec.ts`: 19 new specs covering
+  the four scenarios from the plan (unset, `'true'`, `'false'`,
+  `'TRUE'`) plus substring guards (`'truthy'`, `'truee'`),
+  whitespace trimming, error forwarding, and the sanitizer.
+
 ## [2026-05-02] feat(node-p2p-verify): signed WO envelope handler + cli wiring (5df9b657)
 
 Tier 2 §2.2 closes the consumer leg of the signed gossipsub pipeline.
