@@ -87,7 +87,12 @@ export class SynthesizerNode {
           { forceJson: true },
         );
       } catch (err) {
-        logger.error('[SynthesizerNode] LLM call failed:', (err as Error).message);
+        // Generation failures (fetch timeouts, provider 5xx) are recoverable:
+        // we fall through to fallbackResult() which builds a submissible
+        // payload from the researcher output. Warn keeps the operator
+        // signal but stops the dashboard from flagging routine LLM blips
+        // as severity=error events.
+        logger.warn('[SynthesizerNode] LLM call failed, using researcher fallback:', (err as Error).message);
         return this.fallbackResult(state);
       }
 
@@ -124,7 +129,10 @@ export class SynthesizerNode {
       if (!extraction.success) {
         lastSchemaErrors = [`extraction failed: ${extraction.reason}`];
         if (attempt < SCHEMA_VALIDATION_MAX_ATTEMPTS) {
-          logger.warn(
+          // Intermediate retry — final outcome is still pending. The
+          // `giving up after N attempts` log at line ~179 fires at warn
+          // when the chain ultimately exhausts.
+          logger.info(
             `[SynthesizerNode] attempt ${attempt}/${SCHEMA_VALIDATION_MAX_ATTEMPTS}: ${lastSchemaErrors[0]} — retrying with feedback`,
           );
           critiqueWithSchemaFeedback = `${criticOutput}\n\n[SCHEMA-RETRY] Previous attempt could not be parsed: ${extraction.reason}. Output exactly ONE JSON object {discoveryType, structuredData} embedded in the proposal prose, using the EXACT field names from the schema (drug_rxnorm_id, disease_mesh_id, umls_cui, supporting_dois — no capitalized variants).`;
@@ -147,7 +155,8 @@ export class SynthesizerNode {
 
       lastSchemaErrors = validation.errors;
       if (attempt < SCHEMA_VALIDATION_MAX_ATTEMPTS) {
-        logger.warn(
+        // Intermediate retry — see note above; final exhaust is logged at warn.
+        logger.info(
           `[SynthesizerNode] attempt ${attempt}/${SCHEMA_VALIDATION_MAX_ATTEMPTS}: schema invalid (${validation.errors.length} errors) — retrying`,
         );
         // Step 3 (2026-04-30): enrich retry feedback with WRONG/CORRECT
@@ -223,7 +232,11 @@ export class SynthesizerNode {
         qualityScore: 0,
       };
     } catch (err) {
-      logger.error('[SynthesizerNode] LLM call failed:', (err as Error).message);
+      // Reached only if the post-validation block above (logger.log,
+      // reportHyperparamExperiment) throws — neither of which calls the LLM.
+      // Mislabelled as "LLM call failed" historically; rename + warn since
+      // fallback still yields a submissible payload.
+      logger.warn('[SynthesizerNode] post-validation step failed, using fallback:', (err as Error).message);
       return this.fallbackResult(state);
     }
   }

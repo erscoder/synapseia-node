@@ -55,6 +55,14 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private currentModelId: string | null = null;
   private swapHook: ModelSwapHook | null = null;
+  /**
+   * Consecutive `tick()` poll failures. The poll runs every 60s on a flaky
+   * coordinator link and a single timeout is not actionable, so the first
+   * few are logged at debug. We escalate to warn only once the link looks
+   * persistently broken.
+   */
+  private consecutivePollFailures = 0;
+  private static readonly POLL_WARN_THRESHOLD = 3;
 
   constructor(private readonly serving: SynapseiaServingClient) {}
 
@@ -106,8 +114,20 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
           : null;
       }
     } catch (err) {
-      logger.warn(`[ModelSubscriber] poll failed: ${(err as Error).message}`);
+      this.consecutivePollFailures++;
+      const msg = (err as Error).message;
+      if (this.consecutivePollFailures < ActiveModelSubscriber.POLL_WARN_THRESHOLD) {
+        logger.debug(`[ModelSubscriber] poll failed (${this.consecutivePollFailures}): ${msg}`);
+      } else if (this.consecutivePollFailures === ActiveModelSubscriber.POLL_WARN_THRESHOLD) {
+        logger.warn(`[ModelSubscriber] poll failed for ${this.consecutivePollFailures} consecutive ticks: ${msg}`);
+      }
+      // After the threshold, stay silent until recovery — re-emitting every
+      // tick floods telemetry without adding signal.
       return 'no-active';
+    }
+    if (this.consecutivePollFailures > 0) {
+      logger.info(`[ModelSubscriber] poll recovered after ${this.consecutivePollFailures} failed tick(s)`);
+      this.consecutivePollFailures = 0;
     }
 
     if (!active || !active.modelId) return 'no-active';

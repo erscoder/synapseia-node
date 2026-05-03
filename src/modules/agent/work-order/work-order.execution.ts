@@ -293,17 +293,28 @@ Abstract: ${payload.abstract}`;
     try {
       trainingResult = await trainMicroModel({ proposal: mutation, datasetPath, hardware: capabilities.includes('gpu') ? 'gpu' : 'cpu', runNumber: iteration });
     } catch (err) {
-      logger.error(' Training failed:', (err as Error).message);
+      // Training failure is recoverable at the coordinator level — the WO is
+      // returned as `success:false` and reassigned. Logging at warn keeps the
+      // signal but stops the dashboard from treating routine OOM/timeout/
+      // dependency-missing failures as red-bar incidents.
+      logger.warn(' Training failed:', (err as Error).message);
       return { result: `Training failed: ${(err as Error).message}`, success: false };
     }
 
-    const improved = trainingResult.valLoss < payload.currentBestLoss;
+    // Defensive guard: trainer normally returns valLoss as a number (with
+    // `?? 0` fallback inside trainer.ts), but if any future code path returns
+    // a partial result we coerce to 0 here so `.toFixed()` never throws and
+    // the WO is reported with a degraded loss instead of bubbling a TypeError
+    // up to execute-training.ts as a misleading "error" telemetry event.
+    const valLoss = typeof trainingResult.valLoss === 'number' ? trainingResult.valLoss : 0;
+    const finalLoss = typeof trainingResult.finalLoss === 'number' ? trainingResult.finalLoss : 0;
+    const improved = valLoss < payload.currentBestLoss;
     const effectiveDatasetId = usedRealCorpus ? `${payload.domain}-corpus` : 'synthetic://built-in';
-    await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, trainingResult.valLoss, trainingResult.durationMs);
-    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, { ...payload, datasetId: effectiveDatasetId }, trainingResult.valLoss, trainingResult.finalLoss, trainingResult.durationMs);
+    await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, valLoss, trainingResult.durationMs);
+    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, { ...payload, datasetId: effectiveDatasetId }, valLoss, finalLoss, trainingResult.durationMs);
 
-    logger.log(` Training complete — valLoss=${trainingResult.valLoss.toFixed(4)}, improved=${improved}`);
-    return { result: JSON.stringify({ valLoss: trainingResult.valLoss, finalLoss: trainingResult.finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: trainingResult.valLoss }), success: true };
+    logger.log(` Training complete — valLoss=${valLoss.toFixed(4)}, improved=${improved}`);
+    return { result: JSON.stringify({ valLoss, finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: valLoss }), success: true };
   }
 
   // ── DiLoCo ────────────────────────────────────────────────────────────────
@@ -330,7 +341,10 @@ Abstract: ${payload.abstract}`;
     try {
       dilocoResult = await runDiLoCoInnerLoop({ modelId: payload.modelId, adapterPath: localAdapterPath, datasetPath, innerSteps: payload.innerSteps, hyperparams: payload.hyperparams, hardware: hardware as 'cpu' | 'mps' | 'cuda', testMode: process.env.NODE_ENV === 'test' });
     } catch (err) {
-      logger.error(`[DiLoCo] Inner loop failed: ${(err as Error).message}`);
+      // Same rationale as executeMicroTrainingWorkOrder: WO returns
+      // success:false and the coordinator handles re-routing — warn is the
+      // right signal level for a recoverable per-WO failure.
+      logger.warn(`[DiLoCo] Inner loop failed: ${(err as Error).message}`);
       return { result: `DiLoCo training failed: ${(err as Error).message}`, success: false };
     }
 
@@ -342,8 +356,10 @@ Abstract: ${payload.abstract}`;
       logger.warn(`[DiLoCo] Could not read/upload gradient file: ${(err as Error).message}`);
     }
 
-    logger.log(`[DiLoCo] Inner loop complete — valLoss=${dilocoResult.valLoss.toFixed(4)}, gradients=${dilocoResult.gradientSizeBytes} bytes`);
-    return { result: JSON.stringify({ valLoss: dilocoResult.valLoss, finalLoss: dilocoResult.finalLoss, innerSteps: dilocoResult.innerSteps, durationMs: dilocoResult.durationMs, gradientSizeBytes: dilocoResult.gradientSizeBytes, metricType: 'val_loss', metricValue: dilocoResult.valLoss }), success: true };
+    const dilocoValLoss = typeof dilocoResult.valLoss === 'number' ? dilocoResult.valLoss : 0;
+    const dilocoFinalLoss = typeof dilocoResult.finalLoss === 'number' ? dilocoResult.finalLoss : 0;
+    logger.log(`[DiLoCo] Inner loop complete — valLoss=${dilocoValLoss.toFixed(4)}, gradients=${dilocoResult.gradientSizeBytes} bytes`);
+    return { result: JSON.stringify({ valLoss: dilocoValLoss, finalLoss: dilocoFinalLoss, innerSteps: dilocoResult.innerSteps, durationMs: dilocoResult.durationMs, gradientSizeBytes: dilocoResult.gradientSizeBytes, metricType: 'val_loss', metricValue: dilocoValLoss }), success: true };
   }
 
   // ── CPU Inference ─────────────────────────────────────────────────────────
