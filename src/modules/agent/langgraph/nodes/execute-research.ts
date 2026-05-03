@@ -54,10 +54,11 @@ export class ExecuteResearchNode {
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(` Research ReAct execution failed: ${msg}`);
-
-      // Fallback: use legacy executor
-      logger.log(` Falling back to legacy executor`);
+      // ReAct can legitimately fail (LLM JSON drift, missing summary/proposal,
+      // tool budget exhaustion) and the legacy executor below recovers.
+      // Warn — not error — so the dashboard treats it as a quality signal,
+      // not an outage.
+      logger.warn(` Research ReAct execution failed, falling back to legacy executor: ${msg}`);
       const research = await this.execution.executeResearchWorkOrder(
         selectedWorkOrder, config.llmModel, config.llmConfig, coordinatorUrl, state.peerId,
       );

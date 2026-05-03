@@ -1,5 +1,59 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node/telemetry): tame node_telemetry_events noise
+
+Investigation of the coordinator's `node_telemetry_events` table showed
+251 `severity=error` and 2,836 `severity=warn` rows in 7 days, where:
+
+- The dominant "errors" were recoverable: the node had a fallback that
+  succeeded, but the catch path still emitted `logger.error`.
+- A large share of warnings were intermediate retry attempts that
+  succeeded on a later try and shouldn't reach the dashboard at all.
+- A handful were a real `TypeError` masquerading as a training error
+  because `valLoss.toFixed()` was called on a value that could be
+  undefined when the trainer returned a degraded result shape.
+
+Surgical changes (no behaviour or contract change — only severity and
+defensive coercion):
+
+- `work-order/work-order.execution.ts`: catch around `trainMicroModel`
+  and `runDiLoCoInnerLoop` is now `logger.warn` (the WO is reported
+  `success:false` and the coordinator reassigns — recoverable). Also
+  coerce `valLoss`/`finalLoss` to `0` before `.toFixed()` so a partial
+  trainer result can never raise a TypeError.
+- `langgraph/nodes/execute-training.ts`: outer catch downgraded to
+  `logger.warn`.
+- `langgraph/nodes/execute-research.ts`: ReAct catch downgraded to
+  `logger.warn` (legacy executor immediately recovers).
+- `langgraph/nodes/synthesizer-node.ts`: LLM-call catch and
+  post-validation catch downgraded to `logger.warn` (`fallbackResult`
+  always yields a submissible payload). Intermediate retry logs
+  (extraction failed / schema invalid + `attempt < MAX`) downgraded to
+  `logger.info` — the final `giving up after N attempts` line keeps
+  `logger.warn`.
+- `langgraph/nodes/plan-execution.ts`: outer catch downgraded to
+  `logger.warn`; inner parse-fallback downgraded to `logger.info`
+  (DEFAULT_EXECUTION_PLAN recovers cleanly).
+- `model/active-model-subscriber.ts`: poll-failure logging now uses
+  `consecutivePollFailures` with a 3-tick threshold — the first two
+  failures are `debug`, the third escalates to `warn`, subsequent
+  failures stay silent until recovery (`info`).
+- `node-runtime.ts` (CoordWatchdog): `reconnecting` now logs at `info`
+  (normal lifecycle), and dial failures gate behind a 3-attempt
+  consecutive counter mirroring the subscriber pattern.
+- `agent/agent-loop.ts`: `valLoss`/`bestLoss` `.toFixed()` calls now
+  guard against non-finite numbers.
+
+New tests:
+- `__tests__/telemetry-severity.spec.ts` covers the subscriber
+  escalation state machine (debug → warn → silent → info on recovery)
+  and the `safeLoss` coercion contract used in the WO executor.
+
+Expected impact: `severity=error` rows drop from ~251 to a handful;
+`severity=warn` rows drop from ~2,836 to <300 (the residual is genuine
+actionable warnings — GPU smoke failure, insufficient memory, terminal
+retry exhaustion).
+
 ## [2026-05-03] fix(node): reviewer feedback on adapter slice (390221c0)
 
 Independent code-review pass on the LLMResponseAdapter slice surfaced

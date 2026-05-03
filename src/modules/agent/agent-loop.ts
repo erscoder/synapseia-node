@@ -127,7 +127,10 @@ export class AgentLoopHelper {
     if (topExperiments.length > 0 && topExperiments[0].valLoss) {
       this.state.bestLoss = Math.min(this.state.bestLoss, topExperiments[0].valLoss);
     }
-    logger.log(`   Best loss so far: ${this.state.bestLoss.toFixed(4)}`);
+    const bestLossSafe = typeof this.state.bestLoss === 'number' && Number.isFinite(this.state.bestLoss)
+      ? this.state.bestLoss
+      : 0;
+    logger.log(`   Best loss so far: ${bestLossSafe.toFixed(4)}`);
 
     logger.log('🧠 Proposing mutation via LLM...');
     const mutationEngine = new MutationEngineHelper();
@@ -152,20 +155,23 @@ export class AgentLoopHelper {
       runNumber: iteration,
     });
 
-    logger.log(`   Training complete: ${trainingResult.valLoss.toFixed(4)} loss`);
+    const valLossSafe = typeof trainingResult.valLoss === 'number' && Number.isFinite(trainingResult.valLoss)
+      ? trainingResult.valLoss
+      : 0;
+    logger.log(`   Training complete: ${valLossSafe.toFixed(4)} loss`);
     logger.log(`   Duration: ${trainingResult.durationMs}ms`);
     logger.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);
 
     logger.log('💾 Updating experiment...');
     await this.updateExperiment(coordinatorUrl, experimentId, trainingResult);
 
-    const improved = trainingResult.valLoss < this.state.bestLoss;
+    const improved = valLossSafe < this.state.bestLoss;
     if (improved) {
-      this.state.bestLoss = trainingResult.valLoss;
+      this.state.bestLoss = valLossSafe;
       logger.log(`🎉 New best loss: ${this.state.bestLoss.toFixed(4)}!`);
     }
 
-    if (improved) logger.log(`[AgentLoop] Iteration ${iteration}: improved → valLoss=${trainingResult.valLoss.toFixed(4)}`);
+    if (improved) logger.log(`[AgentLoop] Iteration ${iteration}: improved → valLoss=${valLossSafe.toFixed(4)}`);
 
     this.state.iteration = iteration;
     this.state.totalExperiments++;

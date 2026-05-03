@@ -43,7 +43,12 @@ export class ExecuteTrainingNode {
       return { executionResult: { result: training.result, success: training.success } };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(` Training execution failed: ${msg}`);
+      // Recoverable: the surrounding agent loop returns success:false and the
+      // coordinator reassigns. The error path here is mostly defensive (the
+      // executor itself catches its own failures); when it does fire it's
+      // typically a programming guard (e.g. invalid input shape) rather than
+      // an outage, so warn is the right signal level.
+      logger.warn(` Training execution failed: ${msg}`);
       return { executionResult: { result: `Training failed: ${msg}`, success: false } };
     }
   }

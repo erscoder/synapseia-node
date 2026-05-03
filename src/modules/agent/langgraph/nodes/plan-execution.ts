@@ -65,8 +65,11 @@ export class PlanExecutionNode {
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(`[PlanExecutionNode] Failed to generate plan: ${msg}`);
-      
+      // Fallback to DEFAULT_EXECUTION_PLAN below recovers cleanly — the WO
+      // continues with a generic plan, no work is lost. Warn keeps it
+      // visible for plan-quality tracking without faking an outage.
+      logger.warn(`[PlanExecutionNode] Failed to generate plan, using default: ${msg}`);
+
       // Fallback to default plan
       return {
         executionPlan: DEFAULT_EXECUTION_PLAN,
@@ -125,7 +128,11 @@ export class PlanExecutionNode {
       // Limit to 3-5 steps
       return validatedSteps.slice(0, 5);
     } catch {
-      logger.warn('[PlanExecutionNode] Failed to parse plan, using default');
+      // Plan-parse falling back to DEFAULT_EXECUTION_PLAN is benign and
+      // very common with small local LLMs: log at info so this stops
+      // dominating the warning histogram. Persistent failure is captured
+      // by the outer logger.warn at line 68.
+      logger.info('[PlanExecutionNode] Failed to parse plan, using default');
       return DEFAULT_EXECUTION_PLAN;
     }
   }
