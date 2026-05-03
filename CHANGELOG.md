@@ -1,5 +1,29 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): reviewer feedback on adapter slice (390221c0)
+
+Independent code-review pass on the LLMResponseAdapter slice surfaced
+four issues. All fixed:
+
+- HIGH: `checkCloudLLM` pinged each provider with `maxTokens: 1`. For
+  Anthropic that returns `stop_reason: max_tokens` with empty
+  `content[]`, which the adapter (correctly) rejects as "no text
+  blocks" — flipping the availability check to false for valid keys.
+  Bumped the budget to 16 tokens so the parse path actually exercises
+  successfully across all six vendors.
+- LOW: `migrateModelSlug` was rewriting whitelisted-provider slugs
+  with off-list model ids back to the top tier on every boot,
+  silently demoting operator overrides (e.g. `openai/gpt-7-turbo` →
+  `openai/gpt-5`). Migration now tolerates these — runtime
+  `parseModel()` already accepts them.
+- MEDIUM: migration WARNs redact querystrings (where API keys hide if
+  pasted into `llmUrl`) and clip overlong `defaultModel` slugs in
+  case an operator typed a secret into the wrong field.
+- LOW: adapter URL fallback in moonshot/minimax/zhipu was silently
+  duplicating the hardcoded endpoint when the provider table missed
+  the entry — replaced with a constructor-time throw so a deploy bug
+  fails loudly instead of routing through stale state.
+
 ## [2026-05-03] feat(node): provider whitelist + LLMResponseAdapter strategy (83311241)
 
 Reworked the cloud-LLM dispatch so every provider goes through a small
