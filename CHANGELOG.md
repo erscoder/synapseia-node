@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] refactor(identity): hardcode COORDINATOR_PUBKEY_BASE58, drop env var (5f1d7359)
+
+Replaces the runtime `SYNAPSEIA_COORDINATOR_PUBKEY_BASE58` env var
+with a `COORDINATOR_PUBKEY_BASE58` constant in
+`p2p/protocols/coordinator-pubkey.ts`. The pubkey is public by
+definition — no secret to hide — so embedding it in source ships
+the trust anchor inside the DMG with zero env wiring. Operators no
+longer set anything for the node to verify signed envelopes.
+`loadCoordinatorPubkey()` is now zero-arg. Three call sites in
+`node-runtime.ts` (work-order-available, evaluation-assignments,
+KG-shard) drop the `process.env.…` argument. Wiring specs keep
+testing verifier behaviour against synthetic raw pubkeys; the
+hardcoded constant is exercised by `coordinator-pubkey.spec.ts`.
+p2p + cli suites green (53/53).
+
 ## [2026-05-03] refactor(kg-shard): drop SYNAPSEIA_KG_SHARD_HOSTING opt-in (3c28862b)
 
 Dev-mode cleanup. KG-shard hosting is the read path, not an opt-in.
