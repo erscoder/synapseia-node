@@ -1,5 +1,32 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): resolve usearch via createRequire under ESM, drop bundle inline (b3973e07)
+
+`startNode` aborted on boot with `Error: Dynamic require of "usearch"
+is not supported` inside the tsup-bundled ESM output. The crash was
+caught quietly enough that node-1 still answered HTTP polling for
+`/work-orders/available`, but the WS `RoundListener` (and every other
+post-`startNode` initialiser) never ran. Result: no Socket.IO
+connection to the coordinator, no `round.evaluating` reception, and
+the 93 PENDING peer-review assignments queued during the WS-gateway
+incident kept piling up with no consumer.
+
+- `tsup.config.ts`: marked `usearch` as `external` so its native N-API
+  wrapper stays out of the bundle. tsup's prior inlining produced a
+  dynamic `require('usearch')` against an unreachable bundle slot.
+- `src/p2p/kg-shard/KgShardHnswSearcher.ts`: replaced the inline
+  `require('usearch').Index` with a runtime-aware `loadUsearchIndex()`
+  helper. CJS path (ts-jest) calls `require` directly; ESM path
+  (production tsup output) uses `createRequire(import.meta.url)`.
+  `import.meta.url` is read through a `new Function(...)` probe so
+  ts-jest's CJS transformer never sees the literal token (mirrors
+  `heartbeat.ts:resolveImportMetaUrl`). Also replaced the local
+  `require('crypto')` with a top-of-file `import { createHash }`.
+
+1514 tests green (12 in `KgShardHnswSearcher.spec`, 19 in
+`wo-poll-killswitch.spec` were previously aborted by the same parser
+issue and now pass).
+
 ## [2026-05-03] feat(kg-shard): bump KG_SHARD_COUNT_DEFAULT 16 → 32 (mirror) (ad13f287)
 
 Mirror of coord-side commit 166f5097. Pre-soak rebalance — halves
