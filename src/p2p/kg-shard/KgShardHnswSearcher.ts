@@ -68,13 +68,21 @@ function loadUsearchIndex(): unknown {
     /* fall through to ESM */
   }
 
+  // ESM path: read `import.meta.url` via direct `eval`. Inside an ESM
+  // module, `eval('import.meta.url')` resolves the bare expression in
+  // the caller's lexical scope and returns the module URL. The
+  // `new Function(...)` trick used in heartbeat.ts does NOT work here
+  // because `new Function` produces a function whose body runs in the
+  // *global* scope, where `import.meta` is not a valid binding —
+  // probe always returned null and we fell through to a throw.
+  // Under ts-jest's CJS transform the eval string is a SyntaxError
+  // (`import` is a reserved word outside an ESM module) and we
+  // already returned via the `typeof require === 'function'` branch
+  // above before reaching this line.
   let metaUrl: string | null = null;
   try {
-    const probe = new Function(
-      'try { return typeof import !== "undefined" && import.meta && import.meta.url || null; } catch { return null; }',
-    );
-    const result = probe();
-    if (typeof result === 'string') metaUrl = result;
+    // eslint-disable-next-line no-eval
+    metaUrl = eval('import.meta.url') as string;
   } catch {
     metaUrl = null;
   }
