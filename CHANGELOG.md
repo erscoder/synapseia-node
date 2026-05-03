@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): use direct eval('import.meta.url') for usearch ESM resolve (e9319821)
+
+Follow-up to b3973e07. The `new Function(...)` probe used to read
+`import.meta.url` always returned null under tsup ESM output because
+`new Function` bodies execute in global scope where `import.meta` is
+not a valid binding. node-1 still aborted at boot with
+`[KgShardHnswSearcher] cannot resolve usearch — no CJS require and no
+import.meta.url available`. Switched to `eval('import.meta.url')`
+which inherits lexical scope under ESM (returns the URL) and throws a
+SyntaxError under ts-jest CJS (caught — the CJS branch already
+returned earlier via `typeof require === 'function'`).
+
 ## [2026-05-03] fix(node): resolve usearch via createRequire under ESM, drop bundle inline (b3973e07)
 
 `startNode` aborted on boot with `Error: Dynamic require of "usearch"
