@@ -10,6 +10,14 @@ export default defineConfig({
   outExtension: () => ({ js: '.js' }),
   target: 'es2022', // ES2022 has native decorator support
   clean: true,
+  // Keep `usearch` outside the bundle — it ships prebuilt N-API binaries
+  // for darwin-arm64 / linux-x64 / linux-arm64 that tsup can't introspect
+  // (they're loaded via dlopen at runtime). Bundling it produced a
+  // `Dynamic require of "usearch" is not supported` ESM crash inside
+  // KgShardHnswSearcher's `require('usearch')` factory; with `external`
+  // set, the require call survives in the output and the runtime
+  // `createRequire(import.meta.url)` shim resolves it from node_modules.
+  external: ['usearch'],
   // Minification can break design:paramtypes — keep off
   minify: false,
   swcMinify: false,

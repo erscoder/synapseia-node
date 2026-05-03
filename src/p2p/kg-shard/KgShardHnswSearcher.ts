@@ -43,6 +43,46 @@ import {
 import type { IKgShardStorage, SnapshotRecord } from './KgShardStorage';
 import * as path from 'path';
 import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
+import { createRequire } from 'module';
+import { createHash } from 'crypto';
+
+/**
+ * `usearch` ships native N-API bindings — its CJS entry point loads the
+ * platform-specific `.node` file via dlopen. tsup compiles this package
+ * to ESM where dynamic `require()` does not exist, so this loader
+ * resolves the module differently per runtime:
+ *
+ *   - ts-jest (CJS): a real `require` function is injected into module
+ *     scope by Node, so `typeof require === 'function'` is true and we
+ *     call it directly.
+ *   - tsup ESM (production): `require` is undefined, so we fall through
+ *     to `createRequire(import.meta.url)` — wrapped in `new Function`
+ *     so ts-jest's parser never evaluates the literal `import.meta`
+ *     reference and explodes with TS1343 / SyntaxError.
+ */
+function loadUsearchIndex(): unknown {
+  try {
+    // @ts-expect-error: `require` is injected by Node in CJS only
+    if (typeof require === 'function') return require('usearch').Index;
+  } catch {
+    /* fall through to ESM */
+  }
+
+  let metaUrl: string | null = null;
+  try {
+    const probe = new Function(
+      'try { return typeof import !== "undefined" && import.meta && import.meta.url || null; } catch { return null; }',
+    );
+    const result = probe();
+    if (typeof result === 'string') metaUrl = result;
+  } catch {
+    metaUrl = null;
+  }
+  if (!metaUrl) {
+    throw new Error('[KgShardHnswSearcher] cannot resolve usearch — no CJS require and no import.meta.url available');
+  }
+  return createRequire(metaUrl)('usearch').Index;
+}
 
 const VECTOR_DIM = 768;
 const DEFAULT_PERSIST_DEBOUNCE_MS = 60 * 1000;
@@ -88,10 +128,7 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
 
   constructor(private readonly opts: KgShardHnswSearcherOpts) {
     this.persistDebounceMs = opts.persistDebounceMs ?? DEFAULT_PERSIST_DEBOUNCE_MS;
-    const factory = opts.usearchFactory ?? (() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('usearch').Index;
-    });
+    const factory = opts.usearchFactory ?? loadUsearchIndex;
     this.UsearchIndex = factory();
   }
 
@@ -102,8 +139,6 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
   /** sha256-derived bigint key from the embeddingId string. usearch
    *  needs bigint keys; we keep both directions of the map. */
   private keyFor(id: string): bigint {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createHash } = require('crypto');
     const buf: Buffer = createHash('sha256').update(id, 'utf8').digest();
     // Use the low 8 bytes — collisions at this scale are astronomically
     // improbable across a single shard's worst-case 1M ids.
