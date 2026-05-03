@@ -1,5 +1,15 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(kg-shard): reviewer item #7 — KgShardStorage.appendMany batches fsync (31136878)
+
+Reviewer flagged that `appendOne` opened/fsynced/closed the file
+PER record, brutal on SSDs at 50 records × N envelopes/sec. Adds
+`appendMany(shardId, records[])` that does a single open +
+concatenated write + close per batch. Delta handler now feeds the
+whole batch through `appendMany` (records share a shardId by
+construction). `appendOne` kept as a thin wrapper for back-compat.
+90/90 node p2p specs green.
+
 ## [2026-05-03] feat(kg-shard): node delta handler with anti-route-spoof + searcher hook — D.4-distribution.7 (625664ea)
 
 `handleKgEmbeddingDelta` consumes the signed `KG_EMBEDDING_DELTA`
