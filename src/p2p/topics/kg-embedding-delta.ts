@@ -160,35 +160,48 @@ export async function handleKgEmbeddingDelta(
     return;
   }
 
+  // Reviewer item #7 — single open/write/close per batch instead of
+  // per-record. The handler already validated every record's vector
+  // dim + shardId parity above, so a partial-write failure here is
+  // an actual disk fault and abort-on-fail is the right behaviour
+  // (we re-emit on the next delta cycle once disk recovers).
+  const asSnapshots: SnapshotRecord[] = records.map((r) => ({
+    embeddingId: r.embeddingId,
+    shardId: r.shardId,
+    vector: r.vector,
+    sourceType: r.sourceType,
+    sourceId: r.sourceId,
+    domain: r.domain,
+    evidenceLevel: r.evidenceLevel,
+    createdAtMs: r.createdAtMs,
+  }));
+  let applied = 0;
+  try {
+    await args.storage.appendMany(shardId, asSnapshots);
+    applied = records.length;
+  } catch (err) {
+    warn(
+      `[kg-delta] storage appendMany failed shard=${shardId} records=${records.length}: ${(err as Error).message}`,
+    );
+    return;
+  }
+
+  // Searcher hook is per-record because HNSW APIs are id-keyed —
+  // no batched insert.
+  let searcherFailed = 0;
   for (const r of records) {
-    const onDisk: SnapshotRecord = {
-      embeddingId: r.embeddingId,
-      shardId: r.shardId,
-      vector: r.vector,
-      sourceType: r.sourceType,
-      sourceId: r.sourceId,
-      domain: r.domain,
-      evidenceLevel: r.evidenceLevel,
-      createdAtMs: r.createdAtMs,
-    };
-    try {
-      await args.storage.appendOne(shardId, onDisk);
-    } catch (err) {
-      // A storage failure on one record should not abort the whole
-      // batch — log loud and keep going so we don't strand the rest.
-      warn(
-        `[kg-delta] storage append failed shard=${shardId} embeddingId=${r.embeddingId}: ${(err as Error).message}`,
-      );
-      continue;
-    }
     try {
       args.searcher?.addItem(r.vector, r.embeddingId);
     } catch (err) {
+      searcherFailed++;
       warn(
         `[kg-delta] searcher hook failed shard=${shardId} embeddingId=${r.embeddingId}: ${(err as Error).message}`,
       );
     }
   }
 
-  logger.log(`[kg-delta] applied shard=${shardId} records=${records.length}`);
+  logger.log(
+    `[kg-delta] applied shard=${shardId} records=${applied}` +
+      (searcherFailed > 0 ? ` searcherFailed=${searcherFailed}` : ''),
+  );
 }

@@ -41,6 +41,10 @@ export interface IKgShardStorage {
   }>;
   /** Append a single record to an existing shard file (delta path). */
   appendOne(shardId: number, record: SnapshotRecord): Promise<void>;
+  /** Append N records in a single open/write/close cycle. Amortises
+   *  the per-call fsync overhead — used by the delta handler when a
+   *  batched envelope arrives. Reviewer item #7. */
+  appendMany(shardId: number, records: SnapshotRecord[]): Promise<void>;
   /** Stream every persisted record for `shardId` to `onRecord`. Returns
    *  total records seen. */
   read(shardId: number, onRecord: (r: SnapshotRecord) => void): Promise<number>;
@@ -128,10 +132,18 @@ export class KgShardStorage implements IKgShardStorage {
   }
 
   async appendOne(shardId: number, record: SnapshotRecord): Promise<void> {
+    return this.appendMany(shardId, [record]);
+  }
+
+  async appendMany(shardId: number, records: SnapshotRecord[]): Promise<void> {
+    if (records.length === 0) return;
     mkdirSync(this.shardsDir, { recursive: true, mode: 0o700 });
     const handle = await fsp.open(this.pathFor(shardId), 'a', 0o600);
     try {
-      await handle.write(frameFor(record));
+      // One concatenated write per batch — kernel-side this lands as
+      // a single contiguous append. Reviewer item #7.
+      const frames: Buffer[] = records.map(frameFor);
+      await handle.write(Buffer.concat(frames));
     } finally {
       await handle.close();
     }
