@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): WS handshake auth as callback so reconnects refresh timestamp (5106efc9)
+
+socket.io-client's `auth: { ... }` option captures the payload once at
+`io()` call time. The coord's `verifyWsHandshake` enforces
+`TIMESTAMP_TOLERANCE_MS = 5 minutes`, so after 5 minutes every
+reconnect was rejected with `Timestamp expired or invalid` and the
+client eventually stopped trying. Reproduced in the wild — node-1
+disconnected during the coord rebuild and never came back, even though
+the relay path on the coord side was healthy.
+
+Switched to the callback form (`auth: (cb) => cb({...})`). socket.io-client
+invokes the callback on every connection attempt, so each (re)connection
+regenerates a fresh `{ timestamp, signature }` and stays inside the
+tolerance window indefinitely.
+
 ## [2026-05-03] fix(node): sign WS handshake so coord-ws accepts the round listener (d70afbb0)
 
 After the createRequire-for-usearch fix landed, the RoundListener
