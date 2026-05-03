@@ -1,5 +1,30 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): node-runtime wiring + SIGTERM persistAll + widened searcher hook (72d27355)
+
+End-to-end runtime integration of the D.4-distribution + D.4-hnsw
+slice. `node-runtime.ts` now wires `KgShardStorage` +
+`KgShardHintStore` + `KgShardHnswSearcher` + `KgShardSnapshotClient`
+into the live runtime.
+
+Background bootstrap on every newly-granted shard:
+1. If `<nodeHome>/shards/shard-<id>.bin` missing → `kgSnapshotClient.fetch`
+   (peer-first via hints reversed for freshest-last, coord fallback).
+2. `kgSearcher.loadShard(shardId)` — fast-load `.hnsw` else build.
+3. `publishShardReady(...)` so other peers can chained-sync from us.
+
+Topic subscriptions: `KG_SHARD_SNAPSHOT_READY` updates `kgHints`,
+`KG_EMBEDDING_DELTA` appends to storage AND inserts into HNSW.
+`makeKgShardQueryHandler` wires `kgSearcher` (no more stub) so
+`/synapseia/kg-shard-query/1.0.0` returns real ANN hits.
+
+Reviewer #8 — SIGTERM+SIGINT once-handlers call `persistAll()`
+so dirty HNSW inserts within the debounce window survive shutdown.
+Reviewer #10 — `hintsFor(shardId).reverse()` dials freshest first.
+Searcher hook widened to `addItemToShard(shardId, vec, id)`.
+
+Node p2p suite 105/105 green.
+
 ## [2026-05-03] fix(kg-shard): final reviewer items #1 #2 #3 — atomic save + drop dead addItem + searcher hook TODO (e405e7d3)
 
 Closes 3 items from the D.4-hnsw final reviewer pass:
