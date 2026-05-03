@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(p2p): multi-frame stream codec helpers — D.4-distribution.2 mirror (84600417)
+
+Mirror of coord-side codec extension (sub coord 64789aad). Adds
+`sendJsonFrame` (no closeWrite per frame), `endJsonStream`, and
+`readJsonFramesUntilDone<T,D>(stream, onFrame, isDone)` to
+`src/modules/p2p/stream-codec.ts`. Same wire format as
+`sendJsonOverStream` — parity vector with coord still holds.
+
+Used by D.4-distribution.4 (`KgShardSnapshotClient`) to read the
+multi-frame snapshot stream served by the coord-side handler. 9/9
+codec specs green (5 new + 4 pre-existing).
+
 ## [2026-05-03] feat(kg-shard): shardIdFor helper + KG_SHARD_SNAPSHOT_READY/DELTA topics + KG_SHARD_SNAPSHOT_PROTOCOL — D.4-distribution.3 (797a2102)
 
 Mirror of coord-side commit `36667779`. Adds the byte-identical
