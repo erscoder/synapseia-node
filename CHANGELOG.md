@@ -1,5 +1,23 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): KgShardHnswSearcher backed by usearch — D.4-hnsw.0-5 (322c714b)
+
+Adds `usearch` 2.25.1 (prebuilt N-API binaries for darwin-arm64,
+darwin-x64, linux-arm64, linux-x64). Smoke-test (D.4-hnsw.0)
+confirmed query p99 = 0.29ms on 100k × 768d (target ≤5ms),
+persist 1.05× raw f32 (target ≤2x). Build cost ~770 rec/sec
+mitigated by `.hnsw` persistence (`Index.load()` mmap on subsequent
+boot).
+
+`KgShardHnswSearcher` implements `IKgShardSearcher` per shard:
+fast-path `.hnsw` load else build from `.bin` + persist;
+`addItemToShard` for delta hot path; `markDeleted` tombstone with
+post-search filter (HNSW has no O(1) delete); over-fetches by
+tombstone count so filtered top-k still returns k. Vectors L2-
+normalised on insert+query; sha256-derived bigint keys with
+reverse string map. Debounced persist (60s default) +
+`persistAll()` for SIGTERM. 12 specs green.
+
 ## [2026-05-03] fix(kg-shard): reviewer item #7 — KgShardStorage.appendMany batches fsync (31136878)
 
 Reviewer flagged that `appendOne` opened/fsynced/closed the file
