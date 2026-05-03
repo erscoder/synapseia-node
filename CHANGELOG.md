@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(kg-shard): final reviewer items #1 #2 #3 — atomic save + drop dead addItem + searcher hook TODO (e405e7d3)
+
+Closes 3 items from the D.4-hnsw final reviewer pass:
+- #1 `KgShardHnswSearcher.atomicSave()` — `.tmp + rename` instead
+  of in-place `Index.save(fp)`. Crash-safety on mid-save.
+- #2 dropped dead `addItem(vec, id)` (was effectively noop; the
+  `IKgShardSearcher` interface only requires `search()`).
+  `addItemToShard` is the documented insert path.
+- #3 TODO comment on `IKgShardSearcherHook` flagging the future
+  widening to `addItemToShard(shardId, vec, id)` once node-runtime
+  wires the searcher per shard.
+
+Item #8 (SIGTERM `persistAll`) needs node-runtime work — tracked
+in the deferred wiring slice. 93/93 node p2p specs green.
+
 ## [2026-05-03] feat(kg-shard): KgShardHnswSearcher backed by usearch — D.4-hnsw.0-5 (322c714b)
 
 Adds `usearch` 2.25.1 (prebuilt N-API binaries for darwin-arm64,
