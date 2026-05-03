@@ -1,5 +1,23 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): align submit-result probe to coord WorkOrderStatus enum (a1dd9095)
+
+`SubmitResultNode`'s pre-submit status guard required `ASSIGNED` or
+`IN_PROGRESS`, but those literals do not exist in the coordinator's
+`WorkOrderStatus` enum (`PENDING|ACCEPTED|COMPLETED|VERIFIED|CANCELLED`).
+A WO accepted by the node stays in `ACCEPTED` until completion, so the
+guard always classified the result as "stale", logged
+`dropping stale result for WO ... (status=ACCEPTED)`, and skipped the
+POST to `/work-orders/:id/complete`. Research rounds therefore ended
+with `submissionCount=0` even though the node had finished the work and
+saved it to its local brain.
+
+- `submit-result.ts`: drop only when `probe.status !== 'ACCEPTED'`.
+- `work-order.types.ts`: realign `WorkOrder.status` union with the
+  coordinator enum (`PENDING|ACCEPTED|COMPLETED|VERIFIED|CANCELLED`).
+- Tests: cover `ACCEPTED → submit` and
+  `COMPLETED/VERIFIED/CANCELLED → drop`.
+
 ## [2026-05-03] fix(node/telemetry): reviewer follow-up — tighten safeLoss + extract helper
 
 Reviewer feedback on the prior commit:
