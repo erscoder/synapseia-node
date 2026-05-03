@@ -68,28 +68,16 @@ function loadUsearchIndex(): unknown {
     /* fall through to ESM */
   }
 
-  // ESM path: read `import.meta.url` via direct `eval`. Inside an ESM
-  // module, `eval('import.meta.url')` resolves the bare expression in
-  // the caller's lexical scope and returns the module URL. The
-  // `new Function(...)` trick used in heartbeat.ts does NOT work here
-  // because `new Function` produces a function whose body runs in the
-  // *global* scope, where `import.meta` is not a valid binding —
-  // probe always returned null and we fell through to a throw.
-  // Under ts-jest's CJS transform the eval string is a SyntaxError
-  // (`import` is a reserved word outside an ESM module) and we
-  // already returned via the `typeof require === 'function'` branch
-  // above before reaching this line.
-  let metaUrl: string | null = null;
-  try {
-    // eslint-disable-next-line no-eval
-    metaUrl = eval('import.meta.url') as string;
-  } catch {
-    metaUrl = null;
-  }
-  if (!metaUrl) {
-    throw new Error('[KgShardHnswSearcher] cannot resolve usearch — no CJS require and no import.meta.url available');
-  }
-  return createRequire(metaUrl)('usearch').Index;
+  // ESM path. tsup's banner already reconstructs `__filename` from
+  // `import.meta.url` per chunk (see tsup.config.ts), so `__filename`
+  // is a real on-disk path during ESM init. `createRequire(__filename)`
+  // returns a NodeRequire bound to this module's directory, which
+  // resolves `usearch` against node_modules without ever needing the
+  // bare `import.meta.url` token (which ts-jest's CJS transform can
+  // not parse and esbuild rewrites unpredictably under direct eval).
+  // Under ts-jest CJS the typeof-require branch above already returned;
+  // this code is unreachable in the test runtime.
+  return createRequire(__filename)('usearch').Index;
 }
 
 const VECTOR_DIM = 768;
