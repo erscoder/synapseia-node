@@ -1,5 +1,15 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): shardIdFor helper + KG_SHARD_SNAPSHOT_READY/DELTA topics + KG_SHARD_SNAPSHOT_PROTOCOL — D.4-distribution.3 (797a2102)
+
+Mirror of coord-side commit `36667779`. Adds the byte-identical
+`shardIdFor` helper at `src/p2p/kg-shard/shard-hash.ts`, the
+`KG_SHARD_SNAPSHOT_READY` + `KG_EMBEDDING_DELTA` topics on the
+node-side TOPICS map, and the `KG_SHARD_SNAPSHOT_PROTOCOL` libp2p
+stream protocol constant. Both helpers MUST stay byte-identical or
+shard routing breaks; the shared 5-fixture regression spec catches
+any drift on either side. 5/5 green.
+
 ## [2026-05-03] refactor(identity): hardcode COORDINATOR_PUBKEY_BASE58, drop env var (5f1d7359)
 
 Replaces the runtime `SYNAPSEIA_COORDINATOR_PUBKEY_BASE58` env var
