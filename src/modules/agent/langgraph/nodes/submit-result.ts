@@ -33,25 +33,20 @@ export class SubmitResultNode {
     const completedIds = new Set<string>(state.completedWorkOrderIds ?? []);
     const updatedIds = [...completedIds];
 
-    // Bug H1: pre-submit status probe. The coordinator expires WOs on a
-    // cron and may have reassigned this WO to another node. Posting a
-    // result for a WO that is no longer ASSIGNED/IN_PROGRESS yields a
-    // 400 WORK_ORDER_NOT_ACCEPTABLE — drop the result, arm the cooldown,
-    // and let the agent loop close cleanly without a retry.
+    // Pre-submit status probe. The coordinator expires WOs on a cron and may
+    // have reassigned this WO to another node. Posting a result for a WO that
+    // is no longer ACCEPTED yields a 400 WORK_ORDER_NOT_ACCEPTABLE — drop the
+    // result, arm the cooldown, and let the agent loop close cleanly.
     //
-    // Drop states (anything ≠ ASSIGNED/IN_PROGRESS): PENDING (not yet
-    // claimed by anyone — should not happen for a WO this node was
-    // about to submit, but treat as stale), COMPLETED (already
-    // submitted by us or another node), FAILED (terminal cron-expired
-    // or coordinator-rejected). The brief writes the gate as
-    // `status !== 'ACCEPTED'`; the WorkOrder type has no `'ACCEPTED'`
-    // literal — the active states post-`acceptWorkOrder` are
-    // `ASSIGNED` then `IN_PROGRESS`, and we keep submitting while in
-    // either of those. `probe === null` (404 from coordinator) is
-    // treated as "still ours, proceed" so a transient coord blip
-    // doesn't drop a legitimate result.
+    // Coordinator's WorkOrderStatus enum: PENDING | ACCEPTED | COMPLETED |
+    // VERIFIED | CANCELLED. Post-`acceptWorkOrder` the WO stays in `ACCEPTED`
+    // until completion — that is the only state in which a submission is
+    // valid. Any other status means the WO was completed by someone else,
+    // already verified, or cancelled — drop. `probe === null` (404 from
+    // coordinator) is treated as "still ours, proceed" so a transient coord
+    // blip doesn't drop a legitimate result.
     const probe = await this.coordinator.getWorkOrder(coordinatorUrl, selectedWorkOrder.id);
-    if (probe && probe.status !== 'ASSIGNED' && probe.status !== 'IN_PROGRESS') {
+    if (probe && probe.status !== 'ACCEPTED') {
       logger.info(`[Submit] dropping stale result for WO ${selectedWorkOrder.id} (status=${probe.status})`);
       this.fetchNode.markCompleted(selectedWorkOrder);
       updatedIds.push(selectedWorkOrder.id);

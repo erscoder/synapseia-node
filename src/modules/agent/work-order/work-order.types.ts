@@ -21,7 +21,7 @@ export interface WorkOrder {
   description: string;
   requiredCapabilities: string[];
   rewardAmount: string; // BigInt as string
-  status: 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'ACCEPTED' | 'COMPLETED' | 'VERIFIED' | 'CANCELLED';
   creatorAddress: string;
   assigneeAddress?: string;
   createdAt: number;
