@@ -1,5 +1,15 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): node delta handler with anti-route-spoof + searcher hook — D.4-distribution.7 (625664ea)
+
+`handleKgEmbeddingDelta` consumes the signed `KG_EMBEDDING_DELTA`
+envelope from coord. Validation gates: envelope sig verifies +
+body.shardId === record.shardId === shardIdFor(embeddingId)
+(anti-route-spoof) + vector.length === 768. Owned shards →
+`storage.appendOne` per record + optional `searcher.addItem` hook
+(NO-OP until D.4-hnsw). Non-owned shards silently dropped. Per-
+record failures are logged but don't abort the batch. 7 specs.
+
 ## [2026-05-03] feat(kg-shard): node-signed KG_SHARD_SNAPSHOT_READY topic + hint store — D.4-distribution.5 (273d389f)
 
 Adds the chained-sync hint topic — a NODE-signed envelope that
