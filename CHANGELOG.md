@@ -1,5 +1,12 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): bump KG_SHARD_COUNT_DEFAULT 16 → 32 (mirror) (ad13f287)
+
+Mirror of coord-side commit 166f5097. Pre-soak rebalance — halves
+RAM/shard, doubles slots. Both helpers byte-identical; 5-fixture
+regression vector catches drift. Recomputed expected values at
+count=32. Node p2p 93/93 green.
+
 ## [2026-05-03] feat(kg-shard): node-runtime wiring + SIGTERM persistAll + widened searcher hook (72d27355)
 
 End-to-end runtime integration of the D.4-distribution + D.4-hnsw
