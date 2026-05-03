@@ -1,4 +1,10 @@
-import { sendJsonOverStream, readJsonFromStream } from '../stream-codec';
+import {
+  sendJsonOverStream,
+  readJsonFromStream,
+  sendJsonFrame,
+  endJsonStream,
+  readJsonFramesUntilDone,
+} from '../stream-codec';
 
 /**
  * Mirror of the coordinator's stream-codec.spec.ts. The parity vector at
@@ -75,6 +81,96 @@ describe('stream-codec (node)', () => {
     const header = new Uint8Array(4);
     new DataView(header.buffer).setUint32(0, (1 << 20) + 1, true);
     await expect(readJsonFromStream(new MockStream([header]))).rejects.toThrow(/frame length/);
+  });
+});
+
+// Multi-frame variants — D.4-distribution.2/4 stream protocols send N
+// records terminated by a `{ done: true, total: N }` sentinel. Mirror
+// of the coord-side specs.
+describe('stream-codec multi-frame helpers', () => {
+  it('sendJsonFrame does NOT closeWrite (caller composes multiple frames)', async () => {
+    const stream = new MockStream();
+    await sendJsonFrame(stream, { a: 1 });
+    await sendJsonFrame(stream, { a: 2 });
+    expect(stream.writeClosed).toBe(false);
+    expect(stream.sunk.length).toBe(2);
+  });
+
+  it('endJsonStream calls closeWrite exactly once', async () => {
+    const stream = new MockStream();
+    await sendJsonFrame(stream, { a: 1 });
+    await endJsonStream(stream);
+    expect(stream.writeClosed).toBe(true);
+  });
+
+  it('readJsonFramesUntilDone iterates frames then stops on sentinel', async () => {
+    const enc = (o: unknown): Uint8Array => {
+      const j = new TextEncoder().encode(JSON.stringify(o));
+      const out = new Uint8Array(4 + j.byteLength);
+      new DataView(out.buffer, out.byteOffset, 4).setUint32(0, j.byteLength, true);
+      out.set(j, 4);
+      return out;
+    };
+    const stream = new MockStream([
+      enc({ id: 'a' }),
+      enc({ id: 'b' }),
+      enc({ id: 'c' }),
+      enc({ done: true, total: 3 }),
+    ]);
+    const frames: any[] = [];
+    const done = await readJsonFramesUntilDone<{ id: string }, { done: true; total: number }>(
+      stream,
+      (f) => { frames.push(f); },
+      (f): f is { done: true; total: number } => (f as any).done === true,
+    );
+    expect(frames.map((f) => f.id)).toEqual(['a', 'b', 'c']);
+    expect(done.total).toBe(3);
+  });
+
+  it('readJsonFramesUntilDone handles multiple frames packed in one chunk', async () => {
+    const enc = (o: unknown): Uint8Array => {
+      const j = new TextEncoder().encode(JSON.stringify(o));
+      const out = new Uint8Array(4 + j.byteLength);
+      new DataView(out.buffer, out.byteOffset, 4).setUint32(0, j.byteLength, true);
+      out.set(j, 4);
+      return out;
+    };
+    const all = new Uint8Array(
+      enc({ id: 'x' }).byteLength + enc({ id: 'y' }).byteLength + enc({ done: true, total: 2 }).byteLength,
+    );
+    let off = 0;
+    for (const o of [{ id: 'x' }, { id: 'y' }, { done: true, total: 2 }]) {
+      const c = enc(o);
+      all.set(c, off);
+      off += c.byteLength;
+    }
+    const stream = new MockStream([all]);
+    const frames: any[] = [];
+    const done = await readJsonFramesUntilDone<{ id: string }, { done: true; total: number }>(
+      stream,
+      (f) => { frames.push(f); },
+      (f): f is { done: true; total: number } => (f as any).done === true,
+    );
+    expect(frames.map((f) => f.id)).toEqual(['x', 'y']);
+    expect(done.total).toBe(2);
+  });
+
+  it('readJsonFramesUntilDone throws when stream ends before done frame', async () => {
+    const enc = (o: unknown): Uint8Array => {
+      const j = new TextEncoder().encode(JSON.stringify(o));
+      const out = new Uint8Array(4 + j.byteLength);
+      new DataView(out.buffer, out.byteOffset, 4).setUint32(0, j.byteLength, true);
+      out.set(j, 4);
+      return out;
+    };
+    const stream = new MockStream([enc({ id: 'orphan' })]);
+    await expect(
+      readJsonFramesUntilDone(
+        stream,
+        () => undefined,
+        (f): f is { done: true } => (f as any).done === true,
+      ),
+    ).rejects.toThrow(/before done frame/);
   });
 });
 
