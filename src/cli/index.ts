@@ -56,6 +56,7 @@ import { NodeConfigService } from '../modules/config/services/node-config.servic
 import { WalletService } from '../modules/wallet/services/wallet.service';
 import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
+import { CLOUD_PROVIDERS } from '../modules/llm/providers';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { WorkOrderPushQueue } from '../modules/agent/work-order/work-order-push-queue';
 import { ReviewAgentHelper } from '../modules/agent/review-agent';
@@ -263,7 +264,6 @@ async function bootstrap() {
     .command('start')
     .description('Start Synapseia node')
     .option('--model <name>', 'Model to use (default: recommended for hardware)')
-    .option('--llm-url <url>', 'Custom LLM API base URL (for openai-compat provider)')
     .option('--llm-key <key>', 'API key for cloud LLM provider')
     .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3701)')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
@@ -275,7 +275,6 @@ async function bootstrap() {
     .action(
       async (options: {
         model?: string;
-        llmUrl?: string;
         llmKey?: string;
         coordinator?: string;
         maxIterations?: number;
@@ -338,17 +337,11 @@ async function bootstrap() {
         const inferenceModels = options.inferenceModels
           ? options.inferenceModels.split(',')
           : (config.inferenceModels ?? []);
-        const llmUrl = options.llmUrl || config.llmUrl;
         const llmKey = options.llmKey || config.llmKey;
 
         let selectedModel: ModelInfo | null = null;
         if (model) {
-          const isCloud =
-            model?.startsWith('openai-compat/') ||
-            model?.startsWith('anthropic/') ||
-            model?.startsWith('moonshot/') ||
-            model?.startsWith('kimi/') ||
-            model?.startsWith('minimax/');
+          const isCloud = configService.isCloudModel(model);
 
           if (!isCloud) {
             selectedModel = modelCatalogService.getModelByName(model);
@@ -533,7 +526,6 @@ async function bootstrap() {
         } else {
           logger.log(`Model: ${model} (cloud)`);
         }
-        if (llmUrl) logger.log(`LLM URL: ${llmUrl}`);
         if (inferenceEnabled) {
           const modelsStr = inferenceModels.length > 0 ? inferenceModels.join(', ') : 'auto-detect from Ollama';
           logger.log(`Inference: ENABLED  models: ${modelsStr}`);
@@ -541,12 +533,7 @@ async function bootstrap() {
 
         // Auto-prefix bare model names with 'ollama/' when no provider prefix is present
         const rawModel = model || 'ollama/qwen2.5:0.5b';
-        const modelWithPrefix =
-          rawModel.includes('/') ||
-          rawModel.startsWith('openai-compat') ||
-          rawModel.startsWith('anthropic')
-            ? rawModel
-            : `ollama/${rawModel}`;
+        const modelWithPrefix = rawModel.includes('/') ? rawModel : `ollama/${rawModel}`;
         const llmModel = llmService.parseModel(modelWithPrefix);
         if (!llmModel) {
           // Non-fatal for Tier 0 nodes — they can still do training WOs without LLM
@@ -557,11 +544,6 @@ async function bootstrap() {
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
         capabilities.push(`tier-${hardware.tier}`);
         if (inferenceEnabled) capabilities.push('inference');
-        // If a custom LLM URL is provided (e.g. remote Ollama), treat node as having 'llm' capability
-        if (llmUrl && !capabilities.includes('llm')) {
-          capabilities.push('llm');
-          logger.log('LLM capability added via --llm-url');
-        }
 
         // ── SYN token account activation ─────────────────────────────────────
         logger.log('\nChecking SYN token account activation...');
@@ -602,7 +584,7 @@ async function bootstrap() {
             coordinatorUrl,
             capabilities,
             llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
-            llmConfig: { apiKey: llmKey, baseUrl: llmUrl },
+            llmConfig: { apiKey: llmKey },
             intervalMs: 60000,
             // Fallback poll for /work-orders/available — overridable via env so
             // load-test rigs can dial it down when needed. Default 5 min;
@@ -998,8 +980,8 @@ async function bootstrap() {
     .option('--set-name <name>', 'Set node name')
     .option('--set-coordinator-url <url>', 'Set coordinator URL')
     .option('--set-model <model>', 'Set default model (provider/model format)')
-    .option('--set-llm-url <url>', 'Set LLM API base URL')
     .option('--set-llm-key <key>', 'Set LLM API key')
+    .option('--set-llm-url <url>', '[DEPRECATED, ignored] LLM endpoints are now hardcoded per provider')
     .action(async (options: {
       show?: boolean;
       setName?: string;
@@ -1047,13 +1029,14 @@ async function bootstrap() {
       }
 
       if (options.setLlmUrl) {
-        if (!/^https?:\/\//.test(options.setLlmUrl)) {
-          logger.error(`❌ Invalid LLM URL. Must start with http:// or https://`);
-          process.exit(1);
-        }
-        config.llmUrl = options.setLlmUrl;
-        configService.save(config);
-        logger.log(`✅ LLM API URL set`);
+        // Backward-compat: the flag is preserved so older `synapseia-ui`
+        // builds and operator scripts that still pass --set-llm-url
+        // don't fail outright. The value is no longer persisted because
+        // every cloud provider has a hardcoded endpoint now.
+        logger.warn(
+          `⚠️  --set-llm-url is deprecated and ignored. ` +
+            `Endpoints are hardcoded per provider; pick one via 'synapseia config' or the desktop UI.`,
+        );
         process.exit(0);
       }
 
@@ -1158,15 +1141,19 @@ async function bootstrap() {
           }
 
           if (modelMode === 'cloud') {
-            choices = [
-              { name: 'Minimax', value: 'minimax/MiniMax-M2.7', description: 'MiniMax model' },
-              { name: 'ASI1', value: 'openai-compat/asi1', description: 'ASI1 model' },
-              {
-                name: 'Custom OpenAI-compatible URL',
-                value: 'openai-compat/custom',
-                description: 'Bring your own endpoint',
-              },
-            ];
+            // One choice per (provider, tier). Endpoints are hardcoded so
+            // there is no "Custom URL" option — pick a vendor and a tier.
+            choices = CLOUD_PROVIDERS.flatMap((p) =>
+              (['top', 'mid', 'budget'] as const).map((tier) => {
+                const desc = p.models[tier];
+                const tierLabel = tier === 'top' ? 'Top' : tier === 'mid' ? 'Mid' : 'Budget';
+                return {
+                  name: `${p.label} — ${tierLabel} (${desc.modelId})`,
+                  value: `${p.id}/${desc.modelId}`,
+                  description: `Provider: ${p.label}, tier: ${tierLabel}`,
+                };
+              }),
+            );
           }
 
           // Minimum model for the multi-agent research pipeline (coordinator pattern)
@@ -1212,20 +1199,7 @@ async function bootstrap() {
         if (step === 'llmConfig') {
           const usingCloud = configService.isCloudModel(config.defaultModel);
           if (usingCloud) {
-            logger.log('\n  ☁️  Cloud LLM configuration, url: ', config.llmUrl);
-            const llmUrl = await safePrompt(() =>
-              input({
-                message: 'API base URL:',
-                default: config.llmUrl || 'https://api.asi1.ai/v1',
-                validate: (v) => {
-                  if (!v) return 'Required';
-                  if (!v.startsWith('http')) return 'Must start with http';
-                  return true;
-                },
-              })
-            );
-            if (llmUrl === null) { logger.log('\nCancelled.'); return; }
-            config.llmUrl = llmUrl;
+            logger.log('\n  ☁️  Cloud LLM configuration (endpoint hardcoded for selected provider).');
 
             const hasKey = await safePrompt(() =>
               confirm({ message: 'Do you have an API key?', default: true })
@@ -1240,27 +1214,10 @@ async function bootstrap() {
             } else {
               logger.log('  ⚠ Provide --llm-key when starting the node.');
             }
-          } else {
-            const useCustom = await safePrompt(() =>
-              confirm({
-                message: 'Use a custom Ollama URL?',
-                default: !!config.llmUrl,
-              })
-            );
-            if (useCustom === null) { logger.log('\nCancelled.'); return; }
-            if (useCustom) {
-              const ollamaUrl = await safePrompt(() =>
-                input({
-                  message: 'Ollama URL:',
-                  default: config.llmUrl || 'http://localhost:11434',
-                })
-              );
-              if (ollamaUrl === null) { logger.log('\nCancelled.'); return; }
-              config.llmUrl = ollamaUrl;
-            } else {
-              config.llmUrl = undefined;
-            }
           }
+          // Ollama path: nothing to configure here. Custom Ollama URLs are
+          // no longer supported via the wizard — the CLI talks to the local
+          // ollama daemon at the standard 127.0.0.1:11434 endpoint.
           step = 'inference';
         }
 
@@ -1343,8 +1300,8 @@ async function bootstrap() {
     .option('--name <name>', 'Node name')
     .option('--coordinator-url <url>', 'Coordinator URL')
     .option('--model <model>', 'Default model (provider/model)')
-    .option('--llm-url <url>', 'LLM API base URL')
     .option('--llm-key <key>', 'LLM API key')
+    .option('--llm-url <url>', '[DEPRECATED, ignored] Endpoints are hardcoded per provider')
     .action(async (options: {
       name?: string;
       coordinatorUrl?: string;
@@ -1377,7 +1334,9 @@ async function bootstrap() {
         if (options.name) cfg.name = options.name;
         if (options.coordinatorUrl) cfg.coordinatorUrl = options.coordinatorUrl;
         if (options.model) cfg.defaultModel = options.model;
-        if (options.llmUrl) cfg.llmUrl = options.llmUrl;
+        if (options.llmUrl) {
+          logger.warn('⚠️  --llm-url is deprecated and ignored (endpoints are hardcoded per provider)');
+        }
         if (options.llmKey) cfg.llmKey = options.llmKey;
         cfgService.save(cfg);
 

@@ -1,6 +1,14 @@
 /**
  * LLM Provider Abstraction Layer
- * Unifies Ollama and Cloud APIs under a common interface
+ *
+ * Routes a `provider/model` slug to one of three execution paths:
+ *   - Ollama (local HTTP)
+ *   - Synapseia (F3 internal serving via SynapseiaServingClient)
+ *   - Cloud (one of six whitelisted vendors via LLMResponseAdapter)
+ *
+ * The HTTP wire-protocol details for each cloud vendor live in
+ * ./adapters/ so this file only handles dispatch, retries and
+ * post-processing (reasoning strip + transient classification).
  */
 
 import { Injectable, Optional } from '@nestjs/common';
@@ -8,9 +16,19 @@ import { OllamaHelper, type GenerateOptions } from './ollama';
 import { stripReasoning } from '../../shared/sanitize-llm-output';
 import { SynapseiaServingClient } from './synapseia-serving-client';
 import logger from '../../utils/logger';
+import {
+  CLOUD_PROVIDERS,
+  CLOUD_PROVIDERS_BY_ID,
+  OLLAMA_DEFAULT_MODELS,
+  type CloudProviderId,
+  type ModelDescriptor,
+} from './providers';
+import { getAdapter } from './adapters';
+import { type ChatRequest } from './adapters/llm-response-adapter';
+
+export type { CloudProviderId } from './providers';
 
 export type LLMProvider = 'ollama' | 'cloud' | 'synapseia';
-export type CloudProviderId = 'anthropic' | 'moonshot' | 'minimax' | 'openai-compat';
 
 export interface LLMModel {
   provider: LLMProvider;
@@ -36,39 +54,61 @@ export interface LLMStatus {
 
 export interface LLMConfig {
   apiKey?: string;
+  /**
+   * @deprecated Endpoints are now hardcoded per provider in providers.ts.
+   * The field is kept on the type for one release so older config files
+   * still parse without an error; the value is ignored at request-build
+   * time and a WARN is logged when a non-empty value reaches a cloud path.
+   */
   baseUrl?: string;
   timeoutMs?: number;
 }
 
 /**
- * Supported LLM models configuration
+ * Generate `SUPPORTED_MODELS` from the providers whitelist so the
+ * single source of truth lives in providers.ts. Anything else (CLI
+ * autocompletion, UI dropdowns, model catalog tests) reads from here.
  */
-export const SUPPORTED_MODELS: Record<string, LLMModel> = {
-  'ollama/qwen2.5:0.5b': { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
-  'ollama/qwen2.5:3b': { provider: 'ollama', providerId: '', modelId: 'qwen2.5:3b' },
-  'ollama/gemma3:4b': { provider: 'ollama', providerId: '', modelId: 'gemma3:4b' },
-  'ollama/llama3.2:3b': { provider: 'ollama', providerId: '', modelId: 'llama3.2:3b' },
-  'anthropic/sonnet-4.6': { provider: 'cloud', providerId: 'anthropic', modelId: 'sonnet-4.6' },
-  'kimi/k2.5': { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.5' },
-  'minimax/MiniMax-M2.7': { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.7' },
-  'openai-compat/asi1': { provider: 'cloud', providerId: 'openai-compat', modelId: 'asi1' },
-  'openai-compat/custom': { provider: 'cloud', providerId: 'openai-compat', modelId: 'custom' },
-};
+function buildSupportedModels(): Record<string, LLMModel> {
+  const out: Record<string, LLMModel> = {};
+  // Cloud entries
+  for (const entry of CLOUD_PROVIDERS) {
+    for (const tier of ['top', 'mid', 'budget'] as const) {
+      const desc = entry.models[tier];
+      out[`${entry.id}/${desc.modelId}`] = {
+        provider: 'cloud',
+        providerId: entry.id,
+        modelId: desc.modelId,
+      };
+    }
+  }
+  // Ollama defaults
+  for (const m of OLLAMA_DEFAULT_MODELS) {
+    out[`ollama/${m.modelId}`] = {
+      provider: 'ollama',
+      providerId: '',
+      modelId: m.modelId,
+    };
+  }
+  return out;
+}
 
-/**
- * Model metadata (latency, cost, max tokens)
- */
-export const MODEL_METADATA = {
-  'qwen2.5:0.5b': { latencyMs: 300, maxTokens: 4096 },
-  'qwen2.5:3b': { latencyMs: 800, maxTokens: 8192 },
-  'gemma3:4b': { latencyMs: 1200, maxTokens: 8192 },
-  'llama3.2:3b': { latencyMs: 900, maxTokens: 8192 },
-  'sonnet-4.6': { latencyMs: 200, maxTokens: 200000, costPerCall: 0.003 },
-  'kimi-k2.5': { latencyMs: 300, maxTokens: 131072, costPerCall: 0.002 },
-  'MiniMax-M2.7': { latencyMs: 250, maxTokens: 131072, costPerCall: 0.0015 },
-  'asi1': { latencyMs: 400, maxTokens: 8192, costPerCall: 0.001 },
-  'custom': { latencyMs: 500, maxTokens: 4096 },
-};
+function buildModelMetadata(): Record<string, ModelDescriptor> {
+  const out: Record<string, ModelDescriptor> = {};
+  for (const entry of CLOUD_PROVIDERS) {
+    for (const tier of ['top', 'mid', 'budget'] as const) {
+      const d = entry.models[tier];
+      out[d.modelId] = d;
+    }
+  }
+  for (const m of OLLAMA_DEFAULT_MODELS) {
+    out[m.modelId] = m;
+  }
+  return out;
+}
+
+export const SUPPORTED_MODELS: Record<string, LLMModel> = buildSupportedModels();
+export const MODEL_METADATA: Record<string, ModelDescriptor> = buildModelMetadata();
 
 /**
  * Decide whether an LLM error is worth retrying. We retry transient/server-side
@@ -84,7 +124,7 @@ export const MODEL_METADATA = {
  *   and "%!w(<nil>)" (Go format-string leak when Ollama wraps a nil error).
  */
 export function isTransientLlmError(err: unknown): boolean {
-  const msg = String((err as any)?.message ?? err ?? '').toLowerCase();
+  const msg = String((err as { message?: unknown })?.message ?? err ?? '').toLowerCase();
   return (
     msg.includes('2064') ||
     msg.includes('high load') ||
@@ -104,7 +144,8 @@ export function isTransientLlmError(err: unknown): boolean {
     msg.includes('runner process') ||
     msg.includes('%!w') ||
     msg.includes('unexpected eof') ||
-    msg.includes('try again')
+    msg.includes('try again') ||
+    msg.includes('(transient)')
   );
 }
 
@@ -123,33 +164,42 @@ export class LlmProviderHelper {
 
   toErrorMessage(error: unknown): string {
     try {
-      return String((error as any)?.message ?? 'Unknown error');
+      return String((error as { message?: unknown })?.message ?? 'Unknown error');
     } catch {
       return 'Unknown error';
     }
   }
 
-  getOptionalString<T>(obj: T | null | undefined, key: keyof T): string | undefined {
-    if (obj == null) return undefined;
-    const value = obj[key];
-    return typeof value === 'string' ? value : undefined;
-  }
-
+  /**
+   * Resolve a slug against the whitelist. Returns null for anything we
+   * don't recognise so callers (CLI, config validation) can decide
+   * whether to migrate or hard-fail.
+   */
   parseModel(modelStr: string): LLMModel | null {
-    const model = SUPPORTED_MODELS[modelStr];
-    if (model) return model;
+    const known = SUPPORTED_MODELS[modelStr];
+    if (known) return known;
 
-    if (modelStr.startsWith('openai-compat/')) {
-      const modelId = modelStr.slice('openai-compat/'.length);
-      if (modelId) return { provider: 'cloud', providerId: 'openai-compat', modelId };
+    const slash = modelStr.indexOf('/');
+    if (slash <= 0) return null;
+    const provider = modelStr.slice(0, slash);
+    const modelId = modelStr.slice(slash + 1);
+    if (!modelId) return null;
+
+    if (provider === 'ollama') {
+      // Ollama is open-ended: any pulled model id is valid even if it's
+      // not in the curated default list. Trust the runtime check.
+      return { provider: 'ollama', providerId: '', modelId };
     }
-    if (modelStr.startsWith('minimax/')) {
-      const modelId = modelStr.slice('minimax/'.length);
-      if (modelId) return { provider: 'cloud', providerId: 'minimax', modelId };
+
+    if (provider === 'synapseia') {
+      return { provider: 'synapseia', providerId: '', modelId };
     }
-    if (modelStr.startsWith('kimi/') || modelStr.startsWith('moonshot/')) {
-      const modelId = modelStr.split('/')[1];
-      if (modelId) return { provider: 'cloud', providerId: 'moonshot', modelId };
+
+    if (CLOUD_PROVIDERS_BY_ID.has(provider as CloudProviderId)) {
+      // Provider whitelisted but model id off-list. Allow the call —
+      // vendors release new models faster than we can update the table —
+      // but the metadata estimate (latency/cost) won't be available.
+      return { provider: 'cloud', providerId: provider as CloudProviderId, modelId };
     }
 
     return null;
@@ -188,7 +238,14 @@ export class LlmProviderHelper {
         break;
       } catch (err) {
         lastErr = err;
-        if (attempt >= RETRY_SCHEDULE_MS.length || !isTransientLlmError(err)) {
+        const adapterTransient =
+          model.provider === 'cloud' && model.providerId
+            ? this.adapterIsTransient(model.providerId as CloudProviderId, err)
+            : false;
+        if (
+          attempt >= RETRY_SCHEDULE_MS.length ||
+          (!isTransientLlmError(err) && !adapterTransient)
+        ) {
           throw err;
         }
         const wait = RETRY_SCHEDULE_MS[attempt];
@@ -234,21 +291,21 @@ export class LlmProviderHelper {
         return { available: false, model, estimatedLatencyMs: 0, error: status.error || 'Ollama not available' };
       }
 
-      const modelMetadata = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA];
+      const meta = MODEL_METADATA[model.modelId];
       const modelAvailable = status.models.includes(model.modelId);
 
       if (!modelAvailable) {
         return {
           available: false, model,
-          estimatedLatencyMs: modelMetadata?.latencyMs ?? 500,
+          estimatedLatencyMs: meta?.latencyMs ?? 500,
           error: `Model ${model.modelId} not found. Pull with: ollama pull ${model.modelId}`,
         };
       }
 
       return {
         available: true, model,
-        estimatedLatencyMs: modelMetadata?.latencyMs ?? 500,
-        maxTokens: modelMetadata?.maxTokens,
+        estimatedLatencyMs: meta?.latencyMs ?? 500,
+        maxTokens: meta?.maxTokens,
       };
     } catch (error) {
       return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
@@ -265,216 +322,94 @@ export class LlmProviderHelper {
     if (!config?.apiKey) {
       return { available: false, model, estimatedLatencyMs: 0, error: 'API key required for cloud provider' };
     }
-
-    switch (model.providerId) {
-      case 'anthropic': return this.checkAnthropic(model, config.apiKey);
-      case 'moonshot': return this.checkMoonshot(model, config.apiKey);
-      case 'minimax': return this.checkMinimax(model, config.apiKey);
-      case 'openai-compat': return this.checkOpenAICompat(model, config.apiKey, config.baseUrl);
-      default: return { available: false, model, estimatedLatencyMs: 0, error: 'Unknown cloud provider' };
+    if (config.baseUrl) {
+      logger.warn(
+        `[LLM] config.baseUrl is set ('${config.baseUrl}') but is ignored — endpoints are hardcoded per provider`,
+      );
+    }
+    if (!model.providerId || !CLOUD_PROVIDERS_BY_ID.has(model.providerId as CloudProviderId)) {
+      return { available: false, model, estimatedLatencyMs: 0, error: `Unknown cloud provider '${model.providerId}'` };
+    }
+    const meta = MODEL_METADATA[model.modelId];
+    try {
+      // Ping the model with a 1-token request. We deliberately use the
+      // same code path as a real generate() so adapter changes get caught
+      // by the availability check, not just at first real call.
+      await this.runAdapterRequest(model, 'Hi', config.apiKey, { maxTokens: 1 });
+      return {
+        available: true, model,
+        estimatedLatencyMs: meta?.latencyMs ?? 400,
+        estimatedCostPerCall: meta?.costPerCall,
+        maxTokens: meta?.maxTokens,
+      };
+    } catch (error) {
+      return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
     }
   }
 
   private async generateCloudLLM(
-    model: LLMModel, prompt: string, config?: LLMConfig, hyperparams?: GenerateOptions,
+    model: LLMModel,
+    prompt: string,
+    config?: LLMConfig,
+    hyperparams?: GenerateOptions,
   ): Promise<string> {
     if (!config?.apiKey) throw new Error('API key required for cloud provider');
-
-    switch (model.providerId) {
-      case 'anthropic': return this.generateAnthropic(model, prompt, config.apiKey, hyperparams);
-      case 'moonshot': return this.generateMoonshot(model, prompt, config.apiKey, hyperparams);
-      case 'minimax': return this.generateMinimax(model, prompt, config.apiKey, config.baseUrl, hyperparams);
-      case 'openai-compat': return this.generateOpenAICompat(model, prompt, config.apiKey, config.baseUrl, hyperparams);
-      default: throw new Error('Unknown cloud provider');
+    if (!model.providerId || !CLOUD_PROVIDERS_BY_ID.has(model.providerId as CloudProviderId)) {
+      throw new Error(`Unknown cloud provider '${model.providerId}'`);
     }
+    if (config.baseUrl) {
+      logger.warn(
+        `[LLM] config.baseUrl is set ('${config.baseUrl}') but is ignored — endpoints are hardcoded per provider`,
+      );
+    }
+    return this.runAdapterRequest(model, prompt, config.apiKey, hyperparams);
   }
 
-  // ── Private: Anthropic ────────────────────────────────────────────────────
-
-  private async checkAnthropic(model: LLMModel, apiKey: string): Promise<LLMStatus> {
-    try {
-      const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({ model: model.modelId, max_tokens: 1, messages: [{ role: 'user', content: 'Hi' }] }),
-      });
-      if (!response.ok) {
-        const error = await response.json() as any;
-        throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-      }
-      return { available: true, model, estimatedLatencyMs: meta?.latencyMs ?? 200, estimatedCostPerCall: meta?.costPerCall, maxTokens: meta?.maxTokens };
-    } catch (error) {
-      return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
-    }
-  }
-
-  private async generateAnthropic(model: LLMModel, prompt: string, apiKey: string, hyperparams?: GenerateOptions): Promise<string> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: model.modelId, max_tokens: hyperparams?.maxTokens ?? 4096,
-        ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-    }
-    const data = await response.json() as any;
-    return data.content[0].text;
-  }
-
-  // ── Private: Moonshot (Kimi) ──────────────────────────────────────────────
-
-  private async checkMoonshot(model: LLMModel, apiKey: string): Promise<LLMStatus> {
-    try {
-      const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: model.modelId, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 }),
-      });
-      if (!response.ok) {
-        const error = await response.json() as any;
-        throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-      }
-      return { available: true, model, estimatedLatencyMs: meta?.latencyMs ?? 300, estimatedCostPerCall: meta?.costPerCall, maxTokens: meta?.maxTokens };
-    } catch (error) {
-      return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
-    }
-  }
-
-  private async generateMoonshot(model: LLMModel, prompt: string, apiKey: string, hyperparams?: GenerateOptions): Promise<string> {
-    const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: model.modelId, messages: [{ role: 'user', content: prompt }],
-        ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
-        ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
-      }),
-    });
-    if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-    }
-    const data = await response.json() as any;
-    return data.choices[0].message.content;
-  }
-
-  // ── Private: Minimax ──────────────────────────────────────────────────────
-
-  private async checkMinimax(model: LLMModel, apiKey: string): Promise<LLMStatus> {
-    try {
-      const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const response = await fetch('https://api.minimax.io/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: model.modelId, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 }),
-      });
-      if (!response.ok) {
-        const error = await response.json() as any;
-        throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
-      }
-      return { available: true, model, estimatedLatencyMs: meta?.latencyMs ?? 250, estimatedCostPerCall: meta?.costPerCall, maxTokens: meta?.maxTokens };
-    } catch (error) {
-      return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
-    }
-  }
-
-  private async generateMinimax(
-    model: LLMModel, prompt: string, apiKey: string, baseUrl?: string, hyperparams?: GenerateOptions,
+  private async runAdapterRequest(
+    model: LLMModel,
+    prompt: string,
+    apiKey: string,
+    hyperparams?: GenerateOptions,
   ): Promise<string> {
-    const url = baseUrl ?? 'https://api.minimax.io/v1/chat/completions';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: model.modelId, messages: [{ role: 'user', content: prompt }],
-        ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
-        ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
-      }),
-    });
+    const adapter = getAdapter(model.providerId as CloudProviderId);
+    const chatReq: ChatRequest = {
+      model: model.modelId,
+      prompt,
+      apiKey,
+      hyperparams: hyperparams
+        ? {
+            temperature: hyperparams.temperature,
+            maxTokens: hyperparams.maxTokens,
+            forceJson: hyperparams.forceJson,
+          }
+        : undefined,
+    };
+    const { url, init } = adapter.buildRequest(chatReq);
+    const response = await fetch(url, init);
+    // Read once; provider error pages are sometimes HTML.
+    const text = await response.text().catch(() => '');
+    let body: unknown = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
+    }
     if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(this.getOptionalString(error.error, 'message') ?? response.statusText);
+      throw adapter.parseError(response.status, body, text);
     }
-    const data = await response.json() as any;
-    return data.choices[0].message.content;
+    const normalized = adapter.parseResponse(response.status, body);
+    return normalized.text;
   }
 
-  // ── Private: OpenAI-compatible ─────────────────────────────────────────────
-
-  /**
-   * Build the chat-completions URL for any OpenAI-compatible endpoint.
-   * Accepts `baseUrl` as either a root host (`https://api.minimax.io`) or
-   * an already-complete endpoint (`https://api.minimax.io/v1/chat/
-   * completions`). Previously the code blindly appended `/v1/chat/
-   * completions` which, with the latter form, produced a doubled path
-   * and a 404 that crashed JSON.parse with "position 4" on HTML error
-   * pages.
-   */
-  private buildOpenAICompatUrl(baseUrl: string | undefined): string {
-    const trimmed = (baseUrl ?? 'https://api.openai.com').replace(/\/+$/, '');
-    return trimmed.endsWith('/chat/completions')
-      ? trimmed
-      : `${trimmed}/v1/chat/completions`;
-  }
-
-  /** Safe error body reader: errors pages may be HTML, not JSON. */
-  private async extractHttpErrorMessage(response: Response): Promise<string> {
-    const body = await response.text().catch(() => '');
+  private adapterIsTransient(providerId: CloudProviderId, err: unknown): boolean {
     try {
-      const json = JSON.parse(body);
-      const msg = this.getOptionalString(json?.error, 'message') ?? this.getOptionalString(json, 'message');
-      if (msg) return msg;
-    } catch { /* body wasn't JSON */ }
-    const snippet = body.slice(0, 200).replace(/\s+/g, ' ').trim();
-    return `HTTP ${response.status} ${response.statusText}${snippet ? `: ${snippet}` : ''}`;
-  }
-
-  private async checkOpenAICompat(model: LLMModel, apiKey: string, baseUrl?: string): Promise<LLMStatus> {
-    try {
-      const meta = MODEL_METADATA[model.modelId as keyof typeof MODEL_METADATA] as any;
-      const url = this.buildOpenAICompatUrl(baseUrl);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: model.modelId, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 }),
-      });
-      if (!response.ok) throw new Error(await this.extractHttpErrorMessage(response));
-      return { available: true, model, estimatedLatencyMs: meta?.latencyMs ?? 400, estimatedCostPerCall: meta?.costPerCall, maxTokens: meta?.maxTokens };
-    } catch (error) {
-      return { available: false, model, estimatedLatencyMs: 0, error: this.toErrorMessage(error) };
+      const adapter = getAdapter(providerId);
+      return Boolean(adapter.isTransientError?.(err));
+    } catch {
+      return false;
     }
-  }
-
-  private async generateOpenAICompat(
-    model: LLMModel, prompt: string, apiKey: string, baseUrl?: string, hyperparams?: GenerateOptions,
-  ): Promise<string> {
-    const url = this.buildOpenAICompatUrl(baseUrl);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: model.modelId, messages: [{ role: 'user', content: prompt }],
-        ...(hyperparams?.temperature !== undefined && { temperature: hyperparams.temperature }),
-        ...(hyperparams?.maxTokens !== undefined && { max_tokens: hyperparams.maxTokens }),
-        // response_format enforces valid JSON on OpenAI-compat endpoints
-        ...(hyperparams?.forceJson && { response_format: { type: 'json_object' } }),
-      }),
-    });
-    if (!response.ok) throw new Error(await this.extractHttpErrorMessage(response));
-    const data = await response.json() as any;
-    return data.choices[0].message.content;
   }
 
   // ── Private: Synapseia (F3-C7) ────────────────────────────────────────────

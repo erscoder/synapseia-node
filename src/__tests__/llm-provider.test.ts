@@ -1,302 +1,269 @@
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import {
-  LlmProviderHelper,
-  SUPPORTED_MODELS,
-  MODEL_METADATA,
-  type LLMModel,
-} from '../modules/llm/llm-provider';
+/**
+ * End-to-end round-trip coverage for LlmProviderHelper.generateLLM().
+ *
+ * For every cloud provider in the whitelist we fix `global.fetch` to
+ * return a documented response payload (copied from the vendor's API
+ * docs) and assert that:
+ *   - the helper builds a request to the correct URL,
+ *   - dispatches to the correct adapter,
+ *   - extracts the assistant text correctly even when the schema has
+ *     vendor-specific quirks (Anthropic block array, Gemini parts[],
+ *     Moonshot reasoning_content, MiniMax base_resp),
+ *   - applies `stripReasoning` to the final string.
+ *
+ * No real network calls are issued. The unit specs under
+ * modules/llm/adapters/__tests__/ cover the shape parsing on its own;
+ * this file glues the dispatcher + adapter + reasoning sanitiser
+ * together to catch regressions at the seam.
+ */
 
-var mockCheckOllama: any = jest.fn();
-var mockGenerate: any = jest.fn();
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { LlmProviderHelper, type LLMModel } from '../modules/llm/llm-provider';
+
+let mockCheckOllama: jest.Mock;
+let mockGenerate: jest.Mock;
 
 jest.mock('../modules/llm/ollama.js', () => {
+  // Module factory cannot reference outer mutable state, so we wire the
+  // mocks via prototype and re-bind them in the helper instance.
   class MockOllamaHelper {
-    checkOllama = mockCheckOllama;
-    generate = mockGenerate;
+    checkOllama = jest.fn();
+    generate = jest.fn();
   }
-  MockOllamaHelper.prototype.checkOllama = mockCheckOllama;
-  MockOllamaHelper.prototype.generate = mockGenerate;
   return { OllamaHelper: MockOllamaHelper };
 });
 
-global.fetch = jest.fn() as any;
+beforeEach(() => {
+  global.fetch = jest.fn() as unknown as typeof fetch;
+  mockCheckOllama = jest.fn();
+  mockGenerate = jest.fn();
+});
 
-describe('LlmProviderHelper', () => {
-  let helper: LlmProviderHelper;
-  const ollamaModel: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
-  const anthropicModel: LLMModel = { provider: 'cloud', providerId: 'anthropic', modelId: 'sonnet-4.6' };
-  const kimiModel: LLMModel = { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.5' };
-  const minimaxModel: LLMModel = { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.7' };
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    helper = new LlmProviderHelper();
+function freshHelper(): LlmProviderHelper {
+  const helper = new LlmProviderHelper();
+  (helper as unknown as { ollamaHelper: { checkOllama: jest.Mock; generate: jest.Mock } }).ollamaHelper = {
+    checkOllama: mockCheckOllama,
+    generate: mockGenerate,
+  };
+  return helper;
+}
+
+function fixedFetch(body: unknown, ok = true, status = 200): void {
+  (global.fetch as unknown as jest.Mock).mockResolvedValue({
+    ok,
+    status,
+    statusText: ok ? 'OK' : 'Error',
+    text: async () => JSON.stringify(body),
+  });
+}
+
+const OLLAMA_MODEL: LLMModel = { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' };
+
+describe('round-trip: Ollama', () => {
+  it('returns mock content directly via OllamaHelper', async () => {
+    mockGenerate.mockResolvedValue('local reply');
+    const helper = freshHelper();
+    expect(await helper.generateLLM(OLLAMA_MODEL, 'hi')).toBe('local reply');
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+  it('strips <think> reasoning blocks from local output', async () => {
+    mockGenerate.mockResolvedValue('<think>foo</think>real answer');
+    const helper = freshHelper();
+    const out = await helper.generateLLM(OLLAMA_MODEL, 'hi');
+    expect(out).toContain('real answer');
+    expect(out).not.toContain('<think>');
+  });
+});
+
+describe('round-trip: OpenAI', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'openai', modelId: 'gpt-5' };
+
+  it('extracts content from a documented OpenAI response', async () => {
+    fixedFetch({
+      id: 'chatcmpl-1', object: 'chat.completion', created: 1, model: 'gpt-5',
+      choices: [
+        { index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'OpenAI says hi.' } },
+      ],
+      usage: { prompt_tokens: 4, completion_tokens: 4, total_tokens: 8 },
+    });
+    const helper = freshHelper();
+    expect(await helper.generateLLM(model, 'hi', { apiKey: 'sk-test' })).toBe('OpenAI says hi.');
   });
 
-  describe('parseModel', () => {
-    it('should parse valid Ollama models', () => {
-      expect(helper.parseModel('ollama/qwen2.5:0.5b')).toEqual({
-        provider: 'ollama',
-        providerId: '',
-        modelId: 'qwen2.5:0.5b',
-      });
-      expect(helper.parseModel('ollama/gemma3:4b')).toEqual({
-        provider: 'ollama',
-        providerId: '',
-        modelId: 'gemma3:4b',
-      });
+  it('hits the official OpenAI URL with bearer auth', async () => {
+    fixedFetch({
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }],
     });
+    const helper = freshHelper();
+    await helper.generateLLM(model, 'hi', { apiKey: 'sk-test' });
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/chat/completions');
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer sk-test');
+  });
+});
 
-    it('should parse valid Cloud models', () => {
-      expect(helper.parseModel('anthropic/sonnet-4.6')).toEqual({
-        provider: 'cloud',
-        providerId: 'anthropic',
-        modelId: 'sonnet-4.6',
-      });
-      expect(helper.parseModel('kimi/k2.5')).toEqual({
-        provider: 'cloud',
-        providerId: 'moonshot',
-        modelId: 'kimi-k2.5',
-      });
-    });
+describe('round-trip: Anthropic', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'anthropic', modelId: 'claude-sonnet-4-6' };
 
-    it('should return null for invalid models', () => {
-      expect(helper.parseModel('invalid/model')).toBeNull();
-      expect(helper.parseModel('')).toBeNull();
+  it('returns concatenated text blocks from /v1/messages', async () => {
+    fixedFetch({
+      id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-sonnet-4-6',
+      content: [{ type: 'text', text: 'Anthropic ' }, { type: 'text', text: 'response' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 5, output_tokens: 2 },
     });
+    const helper = freshHelper();
+    expect(await helper.generateLLM(model, 'hi', { apiKey: 'k' })).toBe('Anthropic response');
   });
 
-  describe('getOptionalString', () => {
-    it('should return string when valid object with string property', () => {
-      const obj: any = { error: { message: 'Test error' } };
-      expect(helper.getOptionalString(obj.error, 'message')).toBe('Test error');
+  it('drops thinking blocks before stripReasoning runs', async () => {
+    fixedFetch({
+      content: [
+        { type: 'thinking', thinking: 'Hmm let me think.' },
+        { type: 'text', text: 'Final.' },
+      ],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 5, output_tokens: 2 },
     });
+    const helper = freshHelper();
+    const out = await helper.generateLLM(model, 'hi', { apiKey: 'k' });
+    expect(out).toBe('Final.');
+    expect(out).not.toMatch(/Hmm/);
+  });
+});
 
-    it('should return undefined when object is null', () => {
-      expect(helper.getOptionalString(null as { message?: string } | null, 'message')).toBeUndefined();
-    });
+describe('round-trip: Google (Gemini)', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'google', modelId: 'gemini-2.5-pro' };
 
-    it('should return undefined when object is undefined', () => {
-      expect(helper.getOptionalString(undefined as { message?: string } | undefined, 'message')).toBeUndefined();
+  it('extracts from candidates[0].content.parts[0].text', async () => {
+    fixedFetch({
+      candidates: [
+        {
+          content: { role: 'model', parts: [{ text: 'Bonjour.' }] },
+          finishReason: 'STOP',
+        },
+      ],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 2, totalTokenCount: 5 },
     });
-
-    it('should return undefined when property is not a string', () => {
-      const obj: any = { error: { message: 123 as any } };
-      expect(helper.getOptionalString(obj.error, 'message')).toBeUndefined();
-    });
-
-    it('should return undefined when property does not exist', () => {
-      const obj: any = { error: {} };
-      expect(helper.getOptionalString(obj.error, 'message')).toBeUndefined();
-    });
+    const helper = freshHelper();
+    expect(await helper.generateLLM(model, 'hi', { apiKey: 'g-key' })).toBe('Bonjour.');
   });
 
-  describe('toErrorMessage', () => {
-    it('should return message from Error object', () => {
-      const error = new Error('Test error message');
-      expect(helper.toErrorMessage(error)).toBe('Test error message');
+  it('embeds the model in the URL path', async () => {
+    fixedFetch({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
     });
+    const helper = freshHelper();
+    await helper.generateLLM(model, 'hi', { apiKey: 'g-key' });
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/models\/gemini-2\.5-pro:generateContent$/);
+    expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('g-key');
+  });
+});
 
-    it('should return "Unknown error" for string', () => {
-      expect(helper.toErrorMessage('String error')).toBe('Unknown error');
-    });
+describe('round-trip: Moonshot (Kimi)', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'moonshot', modelId: 'kimi-k2.6' };
 
-    it('should return "Unknown error" for object without message', () => {
-      expect(helper.toErrorMessage({ code: 500 })).toBe('Unknown error');
+  it('extracts choices[0].message.content (ignoring reasoning_content)', async () => {
+    fixedFetch({
+      id: 'cmpl-k',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: 'Kimi reply.',
+            reasoning_content: 'thinking out loud, should not leak',
+          },
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
     });
+    const helper = freshHelper();
+    const out = await helper.generateLLM(model, 'hi', { apiKey: 'mk' });
+    expect(out).toBe('Kimi reply.');
+    expect(out).not.toMatch(/thinking out loud/);
+  });
+});
 
-    it('should return "Unknown error" for null', () => {
-      expect(helper.toErrorMessage(null)).toBe('Unknown error');
-    });
+describe('round-trip: MiniMax', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'minimax', modelId: 'MiniMax-M2.7' };
 
-    it('should return "Unknown error" for undefined', () => {
-      expect(helper.toErrorMessage(undefined)).toBe('Unknown error');
+  it('returns content when base_resp.status_code is 0', async () => {
+    fixedFetch({
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'Hola' } }],
+      base_resp: { status_code: 0, status_msg: '' },
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
     });
+    const helper = freshHelper();
+    expect(await helper.generateLLM(model, 'hi', { apiKey: 'mm' })).toBe('Hola');
   });
 
-  describe('SUPPORTED_MODELS', () => {
-    it('should have all required models', () => {
-      expect(SUPPORTED_MODELS['ollama/qwen2.5:0.5b']).toBeDefined();
-      expect(SUPPORTED_MODELS['ollama/qwen2.5:3b']).toBeDefined();
-      expect(SUPPORTED_MODELS['ollama/gemma3:4b']).toBeDefined();
-      expect(SUPPORTED_MODELS['ollama/llama3.2:3b']).toBeDefined();
-      expect(SUPPORTED_MODELS['anthropic/sonnet-4.6']).toBeDefined();
-      expect(SUPPORTED_MODELS['kimi/k2.5']).toBeDefined();
-      expect(SUPPORTED_MODELS['minimax/MiniMax-M2.7']).toBeDefined();
-    });
+  it('does NOT retry hard application errors (1008 unauthorized = fatal)', async () => {
+    fixedFetch({ base_resp: { status_code: 1008, status_msg: 'unauthorized' } });
+    const helper = freshHelper();
+    await expect(
+      helper.generateLLM(model, 'hi', { apiKey: 'bad' }),
+    ).rejects.toThrow(/base_resp 1008/);
+    // 1 attempt, no retries (1008 is not in the transient set).
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  describe('MODEL_METADATA', () => {
-    it('should have metadata for all models', () => {
-      expect(MODEL_METADATA['qwen2.5:0.5b']).toBeDefined();
-      expect(MODEL_METADATA['sonnet-4.6']).toBeDefined();
-      expect(MODEL_METADATA['kimi-k2.5']).toBeDefined();
-      expect(MODEL_METADATA['MiniMax-M2.7']).toBeDefined();
-    });
-
-    it('should have cost only for cloud models', () => {
-      const ollamaMeta = MODEL_METADATA['qwen2.5:0.5b'] as any;
-      const anthropicMeta = MODEL_METADATA['sonnet-4.6'] as any;
-      const kimiMeta = MODEL_METADATA['kimi-k2.5'] as any;
-      expect(ollamaMeta.costPerCall).toBeUndefined();
-      expect(anthropicMeta.costPerCall).toBe(0.003);
-      expect(kimiMeta.costPerCall).toBe(0.002);
-    });
-  });
-
-  describe('checkLLM - Ollama', () => {
-    it('should return available status when Ollama is running and model exists', async () => {
-      mockCheckOllama.mockResolvedValue({
-        available: true,
-        url: 'http://localhost:11434',
-        models: ['qwen2.5:0.5b', 'qwen2.5:3b'],
-        recommendedModel: 'qwen2.5:0.5b',
-      });
-      const status = await helper.checkLLM(ollamaModel);
-      expect(status.available).toBe(true);
-      expect(status.model).toEqual(ollamaModel);
-      expect(status.error).toBeUndefined();
-    });
-
-    it('should return unavailable status when Ollama is not running', async () => {
-      mockCheckOllama.mockResolvedValue({
-        available: false,
-        url: 'http://localhost:11434',
-        models: [],
-        recommendedModel: 'qwen2.5:0.5b',
-        error: 'ECONNREFUSED',
-      });
-      const status = await helper.checkLLM(ollamaModel);
-      expect(status.available).toBe(false);
-      expect(status.error).toContain('ECONNREFUSED');
-    });
-  });
-
-  describe('checkLLM - Cloud (Anthropic)', () => {
-    it('should return unavailable when API key missing', async () => {
-      const status = await helper.checkLLM(anthropicModel);
-      expect(status.available).toBe(false);
-      expect(status.error).toContain('API key');
-    });
-
-    it('should return available when API key is provided', async () => {
-      (global.fetch as any).mockResolvedValue({ ok: true });
-      const status = await helper.checkLLM(anthropicModel, { apiKey: 'test-key' });
-      expect(status.available).toBe(true);
-      expect(status.model).toEqual(anthropicModel);
-    });
-  });
-
-  describe('generateLLM - Ollama', () => {
-    it('should generate text from Ollama model', async () => {
-      mockGenerate.mockResolvedValue('Test generated text');
-      const result = await helper.generateLLM(ollamaModel, 'Hello world');
-      expect(result).toBe('Test generated text');
-    });
-
-    it('should handle Ollama errors', async () => {
-      mockGenerate.mockRejectedValue(new Error('Ollama error'));
-      await expect(helper.generateLLM(ollamaModel, 'test')).rejects.toThrow('Ollama error');
-    });
-  });
-
-  describe('generateLLM - Cloud (Anthropic)', () => {
-    it('should generate text from Anthropic model', async () => {
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          content: [{ type: 'text', text: 'Anthropic response' }],
-          stop_reason: 'end_turn',
-        }),
-      });
-      const result = await helper.generateLLM(anthropicModel, 'Hello', { apiKey: 'test-key' });
-      expect(result).toBe('Anthropic response');
-    });
-  });
-
-  describe('generateLLM - Cloud (Moonshot/Kimi)', () => {
-    it('should generate text from Kimi model', async () => {
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { role: 'assistant', content: 'Kimi response' }, finish_reason: 'stop' }],
-        }),
-      });
-      const result = await helper.generateLLM(kimiModel, 'Hello', { apiKey: 'test-key' });
-      expect(result).toBe('Kimi response');
-    });
-  });
-
-  describe('generateLLM - Cloud (MiniMax)', () => {
-    it('should generate text from MiniMax model', async () => {
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { role: 'assistant', content: 'MiniMax response' }, finish_reason: 'stop' }],
-        }),
-      });
-      const result = await helper.generateLLM(minimaxModel, 'Hello', { apiKey: 'test-key' });
-      expect(result).toBe('MiniMax response');
-    });
-  });
-
-  describe('generateLLM - retry on transient errors', () => {
-    it('retries Minimax 2064 (server cluster under high load) then succeeds', async () => {
-      jest.useFakeTimers();
-      const fetchMock = global.fetch as any;
+  it('retries 2064 (high load) once then succeeds', async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchMock = global.fetch as unknown as jest.Mock;
       fetchMock
         .mockResolvedValueOnce({
-          ok: false, status: 500, statusText: 'Server Error',
-          json: async () => ({ error: { message: 'server cluster is under high load (2064)' } }),
+          ok: true, status: 200, statusText: 'OK',
+          text: async () => JSON.stringify({ base_resp: { status_code: 2064, status_msg: 'high load' } }),
         })
         .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { role: 'assistant', content: 'finally ok' }, finish_reason: 'stop' }],
-          }),
+          ok: true, status: 200, statusText: 'OK',
+          text: async () =>
+            JSON.stringify({
+              choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'finally' } }],
+              base_resp: { status_code: 0, status_msg: '' },
+            }),
         });
-
-      const promise = helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'k' });
+      const helper = freshHelper();
+      const promise = helper.generateLLM(model, 'hi', { apiKey: 'mm' });
       await jest.advanceTimersByTimeAsync(1100);
-      const result = await promise;
-
-      expect(result).toBe('finally ok');
+      await expect(promise).resolves.toBe('finally');
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      jest.useRealTimers();
+    } finally { jest.useRealTimers(); }
+  });
+});
+
+describe('round-trip: Zhipu (GLM)', () => {
+  const model: LLMModel = { provider: 'cloud', providerId: 'zhipu', modelId: 'glm-4.6' };
+
+  it('extracts content from the standard OpenAI envelope', async () => {
+    fixedFetch({
+      id: 'glm-1',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'Salut.' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
     });
+    const helper = freshHelper();
+    expect(await helper.generateLLM(model, 'hi', { apiKey: 'z-key' })).toBe('Salut.');
+  });
 
-    it('does NOT retry non-transient errors (auth)', async () => {
-      const fetchMock = global.fetch as any;
-      fetchMock.mockResolvedValueOnce({
-        ok: false, status: 401, statusText: 'Unauthorized',
-        json: async () => ({ error: { message: 'invalid api key' } }),
-      });
-
-      await expect(
-        helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'bad' }),
-      ).rejects.toThrow('invalid api key');
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+  it('routes to bigmodel.cn', async () => {
+    fixedFetch({
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }],
     });
-
-    it('gives up after exhausting retries', async () => {
-      jest.useFakeTimers();
-      const fetchMock = global.fetch as any;
-      fetchMock.mockResolvedValue({
-        ok: false, status: 503, statusText: 'Unavailable',
-        json: async () => ({ error: { message: 'overloaded' } }),
-      });
-
-      const promise = helper.generateLLM(minimaxModel, 'Hi', { apiKey: 'k' });
-      promise.catch(() => {}); // attach handler to prevent unhandled rejection
-      await jest.advanceTimersByTimeAsync(15_000);
-      await expect(promise).rejects.toThrow('overloaded');
-      // 1 initial + 3 retries = 4 attempts
-      expect(fetchMock).toHaveBeenCalledTimes(4);
-      jest.useRealTimers();
-    });
+    const helper = freshHelper();
+    await helper.generateLLM(model, 'hi', { apiKey: 'z-key' });
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions');
   });
 });

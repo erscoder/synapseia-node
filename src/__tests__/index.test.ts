@@ -49,12 +49,12 @@ describe('CLI Model Parsing', () => {
       process.env.SYN_LLMAPI_KEY = 'test-anthropic-key';
 
       const options = {
-        model: 'anthropic/sonnet-4.6',
+        model: 'anthropic/claude-sonnet-4-6',
       };
 
       const parts = options.model.split('/');
       const provider = parts[0];
-      const modelId = parts[1] || 'sonnet-4.6';
+      const modelId = parts[1] || 'claude-sonnet-4-6';
 
       let llmProvider: LLMProvider = 'ollama';
       let providerId: CloudProviderId | '' = '';
@@ -71,7 +71,7 @@ describe('CLI Model Parsing', () => {
 
       expect(model.provider).toBe('cloud');
       expect(model.providerId).toBe('anthropic');
-      expect(model.modelId).toBe('sonnet-4.6');
+      expect(model.modelId).toBe('claude-sonnet-4-6');
       expect(process.env.SYN_LLMAPI_KEY).toBe('test-anthropic-key');
     });
 
