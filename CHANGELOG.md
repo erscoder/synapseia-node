@@ -1,5 +1,24 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node/telemetry): reviewer follow-up — tighten safeLoss + extract helper
+
+Reviewer feedback on the prior commit:
+
+- SHOULD FIX #3 (correctness): `typeof === 'number'` accepted `NaN`,
+  which would JSON-stringify to `null` and trip the coordinator's
+  typed schema as a different telemetry error. Tightened to
+  `Number.isFinite(...)`.
+- SHOULD FIX #2 (testability/coverage): inlined coercion in
+  `work-order.execution.ts` and `agent-loop.ts` extracted to
+  `modules/agent/work-order/safe-loss.ts`. Both production sites and
+  the new test now go through the same helper, so coverage tooling
+  credits the production lines instead of an inlined re-implementation
+  in the test file.
+- SHOULD FIX #1 (docs): plan item B1 (heartbeat attempt warns) was
+  already done in a prior commit — `heartbeat.ts:265` already uses
+  `logger.debug`. No code change needed; noting here so the audit
+  trail matches the plan.
+
 ## [2026-05-03] fix(node/telemetry): tame node_telemetry_events noise
 
 Investigation of the coordinator's `node_telemetry_events` table showed

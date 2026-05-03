@@ -13,6 +13,7 @@ import { Injectable } from '@nestjs/common';
 import logger from '../../utils/logger';
 import { MutationEngineHelper, type MutationProposal } from '../model/mutation-engine';
 import { trainMicroModel, validateTrainingConfig, type TrainingResult } from '../model/trainer';
+import { safeLoss } from './work-order/safe-loss';
 import type { Experiment } from '../../types';
 
 export interface AgentLoopConfig {
@@ -127,9 +128,7 @@ export class AgentLoopHelper {
     if (topExperiments.length > 0 && topExperiments[0].valLoss) {
       this.state.bestLoss = Math.min(this.state.bestLoss, topExperiments[0].valLoss);
     }
-    const bestLossSafe = typeof this.state.bestLoss === 'number' && Number.isFinite(this.state.bestLoss)
-      ? this.state.bestLoss
-      : 0;
+    const bestLossSafe = safeLoss(this.state.bestLoss);
     logger.log(`   Best loss so far: ${bestLossSafe.toFixed(4)}`);
 
     logger.log('🧠 Proposing mutation via LLM...');
@@ -155,9 +154,7 @@ export class AgentLoopHelper {
       runNumber: iteration,
     });
 
-    const valLossSafe = typeof trainingResult.valLoss === 'number' && Number.isFinite(trainingResult.valLoss)
-      ? trainingResult.valLoss
-      : 0;
+    const valLossSafe = safeLoss(trainingResult.valLoss);
     logger.log(`   Training complete: ${valLossSafe.toFixed(4)} loss`);
     logger.log(`   Duration: ${trainingResult.durationMs}ms`);
     logger.log(`   Steps: ${trainingResult.lossCurve.length * 10}`);

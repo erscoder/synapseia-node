@@ -19,6 +19,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 import { ActiveModelSubscriber } from '../modules/model/active-model-subscriber';
+import { safeLoss } from '../modules/agent/work-order/safe-loss';
 import logger from '../utils/logger';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -124,26 +125,28 @@ describe('ActiveModelSubscriber poll failure escalation', () => {
   });
 });
 
-describe('WorkOrderExecutionHelper valLoss defensive guard', () => {
-  // The work-order helper imports a wide tree of NestJS-decorated services;
-  // re-implement the minimal `.toFixed()` guard contract directly so we
-  // exercise the same coercion the production code now uses without dragging
-  // in the full module graph.
-  function safeLoss(input: unknown): number {
-    return typeof input === 'number' ? input : 0;
-  }
-
-  it('coerces undefined/null/NaN/string into 0 before .toFixed()', () => {
-    for (const bad of [undefined, null, NaN, 'oops', {}, []]) {
-      expect(() => safeLoss(bad).toFixed(4)).not.toThrow();
-      // NaN passes the `typeof === 'number'` check and stays NaN — guard
-      // documents that explicit Number.isFinite filtering is the caller's
-      // job for monitoring math, but `.toFixed()` itself never throws.
-      expect(typeof safeLoss(bad).toFixed(4)).toBe('string');
+describe('safeLoss — WO trainer-result coercion', () => {
+  it('coerces undefined / null / NaN / Infinity / non-numeric to 0', () => {
+    for (const bad of [undefined, null, NaN, Infinity, -Infinity, 'oops', {}, [], true]) {
+      const out = safeLoss(bad);
+      expect(out).toBe(0);
+      expect(Number.isFinite(out)).toBe(true);
+      // `.toFixed()` must never throw — the whole point of the guard.
+      expect(() => out.toFixed(4)).not.toThrow();
     }
   });
 
-  it('preserves a real valLoss numeric value untouched', () => {
-    expect(safeLoss(0.4321).toFixed(4)).toBe('0.4321');
+  it('preserves a finite numeric value untouched', () => {
+    expect(safeLoss(0.4321)).toBe(0.4321);
+    expect(safeLoss(0)).toBe(0);
+    expect(safeLoss(-1.5)).toBe(-1.5);
+  });
+
+  it('JSON-stringifying a coerced value yields a number, never null', () => {
+    // The production concern: NaN renders as `null` in JSON, which trips
+    // the coordinator's typed schema and surfaces as a different telemetry
+    // error. After coercion, JSON must always carry a real number.
+    const payload = JSON.stringify({ valLoss: safeLoss(NaN) });
+    expect(payload).toBe('{"valLoss":0}');
   });
 });
