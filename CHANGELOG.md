@@ -1,5 +1,31 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): sign WS handshake so coord-ws accepts the round listener (d70afbb0)
+
+After the createRequire-for-usearch fix landed, the RoundListener
+finally connected to coord-http but the coord WS auth guard rejected
+every connection with `Missing required auth fields: peerId, publicKey,
+timestamp, signature`. Without an authenticated socket the node never
+received `round.evaluating` events, the review loop never started, and
+93 PENDING peer-review assignments stayed undrained — the originally
+reported "no se generan discoveries" symptom persisted because nodes
+were silently being bounced from the WS namespace.
+
+- `utils/node-auth.ts`: added `buildWsHandshakeAuth({ privateKey,
+  publicKey, peerId })`. Signs `${timestamp}:websocket:handshake` per
+  the `verifyWsHandshake` contract on the coord side. Identity files
+  store keys as PKCS8 / SPKI DER (`Node KeyObject.export({ format:
+  'der' })`); the helper slices the trailing 32 bytes before signing,
+  matching what the coord guard accepts.
+- `round-listener.ts`: optionally injects `IdentityHelper`, loads the
+  on-disk identity, and passes the signed payload via the
+  `socket.io-client` `auth: { ... }` option. Falls back to anonymous
+  connection when the helper isn't available (test stubs without the
+  identity module).
+- `identity.module.ts`: exports `IdentityHelper` so `AgentModule` can
+  resolve it via `IdentityModule` (only `IdentityService` was exported
+  before).
+
 ## [2026-05-03] fix(node): use createRequire(__filename) for usearch — no eval (ab26805c)
 
 `eval('import.meta.url')` also failed under tsup ESM output: esbuild
