@@ -70,7 +70,8 @@ describe('resolveTrainingLlmModel', () => {
     // works with prefix-inferred routing (`minimax/...` → generateMinimax),
     // so training must do the same to avoid silently diverging.
     const result = await resolveTrainingLlmModel({
-      env: { LLM_CLOUD_MODEL: 'minimax/MiniMax-M2.7', LLM_CLOUD_PROVIDER: 'openai-compat' },
+      // LLM_CLOUD_PROVIDER is misconfigured but the prefix wins.
+      env: { LLM_CLOUD_MODEL: 'minimax/MiniMax-M2.7', LLM_CLOUD_PROVIDER: 'zhipu' },
       fetchInstalledModels: async () => [],
     });
     expect(result).toEqual({
@@ -82,12 +83,12 @@ describe('resolveTrainingLlmModel', () => {
 
   it('uses LLM_CLOUD_PROVIDER only when the model has no known prefix', async () => {
     const result = await resolveTrainingLlmModel({
-      env: { LLM_CLOUD_MODEL: 'some-custom-model', LLM_CLOUD_PROVIDER: 'openai-compat' },
+      env: { LLM_CLOUD_MODEL: 'some-custom-model', LLM_CLOUD_PROVIDER: 'zhipu' },
       fetchInstalledModels: async () => [],
     });
     expect(result).toEqual({
       provider: 'cloud',
-      providerId: 'openai-compat',
+      providerId: 'zhipu',
       modelId: 'some-custom-model',
     });
   });

@@ -51,7 +51,7 @@ describe('Config Module', () => {
       expect(config.defaultModel).toBe('ollama/qwen2.5:0.5b');
     });
 
-    it('should load config from file when it exists', () => {
+    it('should load config from file when it exists (and migrate deprecated llmUrl away)', () => {
       const savedConfig = {
         coordinatorUrl: 'http://example.com:3001',
         defaultModel: 'ollama/llama2',
@@ -64,8 +64,37 @@ describe('Config Module', () => {
 
       expect(config.coordinatorUrl).toBe('http://example.com:3001');
       expect(config.defaultModel).toBe('ollama/llama2');
-      expect(config.llmUrl).toBe('https://api.custom.com');
+      // llmUrl is now deprecated and stripped on load; the value lands in
+      // a one-shot WARN log but is not surfaced to callers.
+      expect(config.llmUrl).toBeUndefined();
       expect(config.llmKey).toBe('secret-key');
+    });
+
+    it('migrates kimi/* slugs to moonshot/* on load', () => {
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'kimi/kimi-k2.6' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('moonshot/kimi-k2.6');
+    });
+
+    it('falls back to anthropic/sonnet-4.6 for openai-compat/* slugs', () => {
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'openai-compat/asi1' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('anthropic/claude-sonnet-4-6');
+    });
+
+    it('snaps off-list cloud model id to the top tier of that provider', () => {
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'openai/gpt-99-experimental' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('openai/gpt-5');
     });
 
     it('should return default config when file has invalid JSON', () => {
@@ -135,12 +164,17 @@ describe('Config Module', () => {
   });
 
   describe('isCloudModel', () => {
-    it('should identify cloud models correctly', () => {
-      expect(helper.isCloudModel('anthropic/sonnet-4.6')).toBe(true);
-      expect(helper.isCloudModel('kimi/k2.5')).toBe(true);
-      expect(helper.isCloudModel('minimax/MiniMax')).toBe(true);
-      expect(helper.isCloudModel('openai-compat/gpt-4')).toBe(true);
+    it('should identify cloud models against the current whitelist', () => {
+      expect(helper.isCloudModel('openai/gpt-5')).toBe(true);
+      expect(helper.isCloudModel('anthropic/claude-sonnet-4-6')).toBe(true);
+      expect(helper.isCloudModel('google/gemini-2.5-pro')).toBe(true);
+      expect(helper.isCloudModel('moonshot/kimi-k2.6')).toBe(true);
+      expect(helper.isCloudModel('minimax/MiniMax-M2.7')).toBe(true);
+      expect(helper.isCloudModel('zhipu/glm-4.6')).toBe(true);
       expect(helper.isCloudModel('ollama/qwen2.5:0.5b')).toBe(false);
+      // Legacy slugs are not cloud — they no longer have a routable adapter.
+      expect(helper.isCloudModel('kimi/k2.5')).toBe(false);
+      expect(helper.isCloudModel('openai-compat/gpt-4')).toBe(false);
     });
   });
 });

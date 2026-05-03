@@ -28,11 +28,13 @@ import type { LLMModel, CloudProviderId } from './llm-provider';
  * which the upstream endpoint rejects as "model not found".
  */
 const CLOUD_PREFIXES: Array<{ prefix: string; providerId: CloudProviderId }> = [
-  { prefix: 'anthropic/',     providerId: 'anthropic' },
-  { prefix: 'moonshot/',      providerId: 'moonshot' },
-  { prefix: 'kimi/',          providerId: 'moonshot' },
-  { prefix: 'minimax/',       providerId: 'minimax' },
-  { prefix: 'openai-compat/', providerId: 'openai-compat' },
+  { prefix: 'openai/',    providerId: 'openai' },
+  { prefix: 'anthropic/', providerId: 'anthropic' },
+  { prefix: 'google/',    providerId: 'google' },
+  { prefix: 'moonshot/',  providerId: 'moonshot' },
+  { prefix: 'kimi/',      providerId: 'moonshot' },
+  { prefix: 'minimax/',   providerId: 'minimax' },
+  { prefix: 'zhipu/',     providerId: 'zhipu' },
 ];
 
 /**
