@@ -288,17 +288,13 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
   const port = config.port !== undefined && config.port !== null ? config.port : 8080;
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-      res.writeHead(200);
-      res.end();
-      return;
-    }
+    // S0.5: strict local-only CORS. Pre-S0.5 this server returned
+    // `Allow-Origin: *`, exposing it to any open browser tab via DNS
+    // rebinding (audit P0 #5). The shared helper echoes the request
+    // origin only when it matches localhost / 127.0.0.1 / tauri://,
+    // and short-circuits OPTIONS preflights.
+    const { applyLocalCors } = await import('../../shared/local-cors');
+    if (applyLocalCors(req, res)) return;
 
     const url = req.url || '';
 

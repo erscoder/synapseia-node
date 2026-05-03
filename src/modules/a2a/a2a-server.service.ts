@@ -91,16 +91,12 @@ export class A2AServer implements OnModuleDestroy {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Public-Key, Authorization');
-
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
+    // S0.5: replace `Allow-Origin: *` with a strict local-only
+    // allowlist (audit P0 #5). DNS rebinding from a malicious site can
+    // no longer pivot to this server because foreign origins get no
+    // CORS headers and any preflight is rejected with 403.
+    const { applyLocalCors } = await import('../../shared/local-cors');
+    if (applyLocalCors(req, res)) return;
 
     const url = req.url ?? '/';
 

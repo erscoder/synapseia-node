@@ -712,10 +712,10 @@ describe('inference-server', () => {
         const notFoundRes = await httpGet('/nonexistent');
         expect(notFoundRes.statusCode).toBe(404);
 
-        // Test OPTIONS (CORS)
-        // Test OPTIONS (CORS)
+        // Test OPTIONS (CORS) — S0.5 local-only CORS replies 204
+        // for the no-origin / server-to-server case.
         const optionsRes = await httpRequest('/health', 'OPTIONS');
-        expect(optionsRes.statusCode).toBe(200);
+        expect(optionsRes.statusCode).toBe(204);
 
         // Test /v1/chat/completions (with real Ollama call mocked)
         const chatRes = await httpRequest('/v1/chat/completions', 'POST', JSON.stringify({

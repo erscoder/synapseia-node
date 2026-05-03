@@ -37,19 +37,26 @@ const getSolanaRpcUrl = () => requireEnv('SOLANA_RPC_URL');
 const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-// Aliases resolved on first use (inside functions, never at module load time)
+// Lazy resolvers. Pre-S1.9 these were Proxy wrappers that returned
+// raw property values, which broke `this`-binding inside PublicKey
+// methods (`STAKING_PROGRAM_ID.toBase58()` ran with `this === proxy`,
+// not the real PublicKey, producing corrupted bytes — audit P0 #8).
+// We now resolve to a real `PublicKey` on first use and call the
+// helper getters everywhere — `STAKING_PROGRAM_ID()` returns the same
+// PublicKey instance every time.
 let _STAKING_PROGRAM_ID: PublicKey | null = null;
 let _SYN_MINT: PublicKey | null = null;
 let _SOLANA_RPC_URL: string | null = null;
-const STAKING_PROGRAM_ID = new Proxy({} as PublicKey, { get: (_t, prop) => ((_STAKING_PROGRAM_ID ??= getStakingProgramId()) as any)[prop] });
-const SYN_MINT = new Proxy({} as PublicKey, { get: (_t, prop) => ((_SYN_MINT ??= getSynMint()) as any)[prop] });
+const STAKING_PROGRAM_ID = (): PublicKey =>
+  (_STAKING_PROGRAM_ID ??= getStakingProgramId());
+const SYN_MINT = (): PublicKey => (_SYN_MINT ??= getSynMint());
 const SOLANA_RPC_URL_GETTER = () => (_SOLANA_RPC_URL ??= getSolanaRpcUrl());
 
 // Derive vault authority PDA
 function getVaultAuthorityPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('stake_vault_authority')],
-    STAKING_PROGRAM_ID
+    STAKING_PROGRAM_ID(),
   );
 }
 
@@ -59,7 +66,7 @@ function getVaultAuthorityPDA(): [PublicKey, number] {
 function getStakingPoolPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('staking_pool')],
-    STAKING_PROGRAM_ID
+    STAKING_PROGRAM_ID(),
   );
 }
 
@@ -133,21 +140,21 @@ export async function sendAndConfirmFresh(
 // Get stake vault ATA
 async function getStakeVaultATA(connection: Connection): Promise<PublicKey> {
   const [vaultAuthority] = getVaultAuthorityPDA();
-  return getAssociatedTokenAddress(SYN_MINT, vaultAuthority, true);
+  return getAssociatedTokenAddress(SYN_MINT(), vaultAuthority, true);
 }
 
 // Get treasury authority PDA
 function getTreasuryAuthorityPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('treasury_authority')],
-    STAKING_PROGRAM_ID
+    STAKING_PROGRAM_ID(),
   );
 }
 
 // Get treasury token account
 async function getTreasuryTokenAccount(connection: Connection): Promise<PublicKey> {
   const [treasuryAuthority] = getTreasuryAuthorityPDA();
-  return getAssociatedTokenAddress(SYN_MINT, treasuryAuthority, true);
+  return getAssociatedTokenAddress(SYN_MINT(), treasuryAuthority, true);
 }
 
 // Wallet encryption constants
@@ -221,7 +228,7 @@ export async function loadWalletWithPassword(): Promise<Keypair> {
 
 // Get user's SYN token account
 async function getUserTokenAccount(connection: Connection, wallet: PublicKey): Promise<PublicKey> {
-  return getAssociatedTokenAddress(SYN_MINT, wallet);
+  return getAssociatedTokenAddress(SYN_MINT(), wallet);
 }
 
 // Create instruction data for stake
@@ -280,7 +287,7 @@ export async function stakeTokens(amount: number): Promise<string> {
     const { coordinatorAuthority } = await coordInfoRes.json() as { coordinatorAuthority: string };
 
     const initIx = new TransactionInstruction({
-      programId: STAKING_PROGRAM_ID,
+      programId: STAKING_PROGRAM_ID(),
       data: createInitializeStakeInstructionData(1), // tier 1 = minimum valid (contract requires 1-5)
       keys: [
         { pubkey: stakeAccount.publicKey, isSigner: true, isWritable: true },
@@ -310,14 +317,14 @@ export async function stakeTokens(amount: number): Promise<string> {
   // The staking_pool PDA is REQUIRED (contract reads daily_pool_lamports +
   // total_staked to accrue rewards). Missing it was the CLI regression.
   const stakeIx = new TransactionInstruction({
-    programId: STAKING_PROGRAM_ID,
+    programId: STAKING_PROGRAM_ID(),
     data: createStakeInstructionData(amount),
     keys: [
       { pubkey: stakeAccountPubkey, isSigner: false, isWritable: true },
       { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
       { pubkey: userTokenAccount, isSigner: false, isWritable: true },
       { pubkey: stakeVault, isSigner: false, isWritable: true },
-      { pubkey: SYN_MINT, isSigner: false, isWritable: false },
+      { pubkey: SYN_MINT(), isSigner: false, isWritable: false },
       { pubkey: vaultAuthority, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: stakingPool, isSigner: false, isWritable: true },
@@ -359,14 +366,14 @@ export async function unstakeTokens(amount: number): Promise<string> {
   logger.log(`\n📥 Unstaking ${amount} SYN tokens...`);
 
   const unstakeIx = new TransactionInstruction({
-    programId: STAKING_PROGRAM_ID,
+    programId: STAKING_PROGRAM_ID(),
     data: createUnstakeInstructionData(amount),
     keys: [
       { pubkey: stakeAccount, isSigner: false, isWritable: true },
       { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
       { pubkey: userTokenAccount, isSigner: false, isWritable: true },
       { pubkey: stakeVault, isSigner: false, isWritable: true },
-      { pubkey: SYN_MINT, isSigner: false, isWritable: false },
+      { pubkey: SYN_MINT(), isSigner: false, isWritable: false },
       { pubkey: vaultAuthority, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: stakingPool, isSigner: false, isWritable: true },
@@ -432,7 +439,7 @@ export async function claimStakingRewards(): Promise<string> {
         wallet.publicKey,
         treasuryTokenAccount,
         treasuryAuthority,
-        SYN_MINT,
+        SYN_MINT(),
         TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID,
       ),
@@ -441,7 +448,7 @@ export async function claimStakingRewards(): Promise<string> {
   }
 
   const claimIx = new TransactionInstruction({
-    programId: STAKING_PROGRAM_ID,
+    programId: STAKING_PROGRAM_ID(),
     data: createClaimRewardsInstructionData(),
     keys: [
       { pubkey: new PublicKey(stakeAccountAddress), isSigner: false, isWritable: true },
@@ -449,7 +456,7 @@ export async function claimStakingRewards(): Promise<string> {
       { pubkey: userTokenAccount, isSigner: false, isWritable: true },
       { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
       { pubkey: treasuryAuthority, isSigner: false, isWritable: false },
-      { pubkey: SYN_MINT, isSigner: false, isWritable: false },
+      { pubkey: SYN_MINT(), isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: stakingPool, isSigner: false, isWritable: false },
     ]
@@ -566,12 +573,12 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
   const destination = new PublicKey(destinationAddress);
   
   // Get source ATA
-  const sourceTokenAccount = await getAssociatedTokenAddress(SYN_MINT, wallet.publicKey);
+  const sourceTokenAccount = await getAssociatedTokenAddress(SYN_MINT(), wallet.publicKey);
   
   // Get or create destination ATA
   let destTokenAccount: PublicKey;
   try {
-    destTokenAccount = await getAssociatedTokenAddress(SYN_MINT, destination);
+    destTokenAccount = await getAssociatedTokenAddress(SYN_MINT(), destination);
     
     // Check if destination ATA exists
     const destAccountInfo = await connection.getAccountInfo(destTokenAccount);
@@ -581,7 +588,7 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
     }
   } catch (e) {
     // Will create ATA inline
-    destTokenAccount = await getAssociatedTokenAddress(SYN_MINT, destination, true);
+    destTokenAccount = await getAssociatedTokenAddress(SYN_MINT(), destination, true);
   }
   
   const amountLamports = Math.floor(amount * 1_000_000_000);
@@ -607,7 +614,7 @@ export async function withdrawSyn(amount: number, destinationAddress: string): P
         wallet.publicKey,
         destTokenAccount,
         destination,
-        SYN_MINT,
+        SYN_MINT(),
         TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID,
       ),
@@ -704,7 +711,7 @@ export async function getWalletBalance(): Promise<{
 // Find stake account for wallet
 async function findStakeAccount(connection: Connection, owner: PublicKey): Promise<string | null> {
   try {
-    const accounts = await connection.getProgramAccounts(STAKING_PROGRAM_ID, {
+    const accounts = await connection.getProgramAccounts(STAKING_PROGRAM_ID(), {
       filters: [
         {
           memcmp: {
