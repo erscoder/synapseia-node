@@ -1,16 +1,18 @@
 /**
  * Wiring spec for the signed-envelope EVALUATION_ASSIGNMENTS handler.
  *
- * Replicates the production wiring block in `node-runtime.ts`: load the
- * trust anchor at boot, then register a raw-bytes handler that delegates
- * to `handleEvaluationAssignments`. The consumer compares the envelope
- * `nodeId` with the local peer and calls `kickReviewCycle` only on match.
+ * Mirrors the production wiring block in `node-runtime.ts`: install a
+ * raw-bytes handler that delegates to `handleEvaluationAssignments`.
+ * The consumer compares the envelope `nodeId` with the local peer and
+ * calls `kickReviewCycle` only on match. The trust anchor is hardcoded
+ * in `coordinator-pubkey.ts`; this test passes a synthetic raw pubkey
+ * directly so each case can exercise verifier behaviour without
+ * coupling to the production constant.
  *
- * Plan: Tier-3 §3.C.1.
+ * Plan: Tier-3 §3.C.1, refined plan D dev cleanup (2026-05-03).
  */
 import { generateKeyPairSync, sign } from 'crypto';
 
-import { loadCoordinatorPubkey } from '../../p2p/protocols/coordinator-pubkey';
 import { handleEvaluationAssignments } from '../../p2p/topics/evaluation-assignments';
 import { ReviewAgentHelper } from '../../modules/agent/review-agent';
 
@@ -41,23 +43,19 @@ class FakeP2PNode {
   async deliver(msg: Uint8Array): Promise<void> {
     if (this.rawCb) await this.rawCb(msg);
   }
-  hasSubscription(): boolean {
-    return this.rawCb !== null;
-  }
 }
 
 interface WireOpts {
-  pubkeyBase58: string;
+  pubkey: Uint8Array;
   p2p: FakeP2PNode;
   myPeerId: string;
   kicker: jest.Mock;
 }
 
 function wireVerifiedHandler(opts: WireOpts): void {
-  const pubkey = loadCoordinatorPubkey({ pubkeyBase58: opts.pubkeyBase58 });
   opts.p2p.onRawMessage('/synapseia/evaluation-assignments/1.0.0', async (raw) => {
     await handleEvaluationAssignments({
-      pubkey,
+      pubkey: opts.pubkey,
       msg: raw,
       consumer: ({ nodeId }) => {
         if (nodeId !== opts.myPeerId) return;
@@ -69,13 +67,11 @@ function wireVerifiedHandler(opts: WireOpts): void {
 
 describe('node-runtime wiring — signed EVALUATION_ASSIGNMENTS', () => {
   it('kicks the review cycle exactly once on a matching nodeId', async () => {
-    const { default: bs58 } = await import('bs58');
     const trusted = makeKeyPair();
-    const pubkeyBase58 = bs58.encode(trusted.rawPubKey);
 
     const kicker = jest.fn();
     const p2p = new FakeP2PNode();
-    wireVerifiedHandler({ pubkeyBase58, p2p, myPeerId: 'peer-A', kicker });
+    wireVerifiedHandler({ pubkey: trusted.rawPubKey, p2p, myPeerId: 'peer-A', kicker });
 
     const ts = Math.floor(Date.now() / 1000);
     await p2p.deliver(buildEnvelope({ nodeId: 'peer-A' }, ts, trusted.privateKey));
@@ -84,13 +80,11 @@ describe('node-runtime wiring — signed EVALUATION_ASSIGNMENTS', () => {
   });
 
   it('ignores envelopes addressed to a different nodeId (no kick, no warn)', async () => {
-    const { default: bs58 } = await import('bs58');
     const trusted = makeKeyPair();
-    const pubkeyBase58 = bs58.encode(trusted.rawPubKey);
 
     const kicker = jest.fn();
     const p2p = new FakeP2PNode();
-    wireVerifiedHandler({ pubkeyBase58, p2p, myPeerId: 'peer-A', kicker });
+    wireVerifiedHandler({ pubkey: trusted.rawPubKey, p2p, myPeerId: 'peer-A', kicker });
 
     const ts = Math.floor(Date.now() / 1000);
     await p2p.deliver(buildEnvelope({ nodeId: 'peer-B' }, ts, trusted.privateKey));
@@ -99,14 +93,12 @@ describe('node-runtime wiring — signed EVALUATION_ASSIGNMENTS', () => {
   });
 
   it('drops forged envelopes (kicker not called)', async () => {
-    const { default: bs58 } = await import('bs58');
     const trusted = makeKeyPair();
     const forger = makeKeyPair();
-    const pubkeyBase58 = bs58.encode(trusted.rawPubKey);
 
     const kicker = jest.fn();
     const p2p = new FakeP2PNode();
-    wireVerifiedHandler({ pubkeyBase58, p2p, myPeerId: 'peer-A', kicker });
+    wireVerifiedHandler({ pubkey: trusted.rawPubKey, p2p, myPeerId: 'peer-A', kicker });
 
     const ts = Math.floor(Date.now() / 1000);
     await p2p.deliver(buildEnvelope({ nodeId: 'peer-A' }, ts, forger.privateKey));
@@ -115,32 +107,16 @@ describe('node-runtime wiring — signed EVALUATION_ASSIGNMENTS', () => {
   });
 
   it('drops stale envelopes (>60 s)', async () => {
-    const { default: bs58 } = await import('bs58');
     const trusted = makeKeyPair();
-    const pubkeyBase58 = bs58.encode(trusted.rawPubKey);
 
     const kicker = jest.fn();
     const p2p = new FakeP2PNode();
-    wireVerifiedHandler({ pubkeyBase58, p2p, myPeerId: 'peer-A', kicker });
+    wireVerifiedHandler({ pubkey: trusted.rawPubKey, p2p, myPeerId: 'peer-A', kicker });
 
     const oldTs = Math.floor(Date.now() / 1000) - 600;
     await p2p.deliver(buildEnvelope({ nodeId: 'peer-A' }, oldTs, trusted.privateKey));
 
     expect(kicker).not.toHaveBeenCalled();
-  });
-
-  it('refuses to wire when SYNAPSEIA_COORDINATOR_PUBKEY_BASE58 is unset', () => {
-    const kicker = jest.fn();
-    const p2p = new FakeP2PNode();
-    expect(() =>
-      wireVerifiedHandler({
-        pubkeyBase58: '' as unknown as string,
-        p2p,
-        myPeerId: 'peer-A',
-        kicker,
-      }),
-    ).toThrow(/SYNAPSEIA_COORDINATOR_PUBKEY_BASE58/);
-    expect(p2p.hasSubscription()).toBe(false);
   });
 
   it('uses the 10-min HTTP poll interval as the safety net', () => {

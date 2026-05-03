@@ -1,48 +1,29 @@
 /**
- * Tests for `loadCoordinatorPubkey` — the trust-anchor loader for the
- * signed `WORK_ORDER_AVAILABLE` envelopes published by the coordinator.
- *
- * Plan: Tier-2 §2.2.1.
+ * Tests for `loadCoordinatorPubkey` — the trust-anchor decoder for
+ * signed coordinator envelopes. The pubkey is hardcoded in source
+ * (plan D dev cleanup, 2026-05-03), so the loader is now zero-arg and
+ * just decodes + length-checks the constant.
  */
-import { randomBytes } from 'crypto';
-
-let fixturePubkeyBase58: string;
-let fixtureRawPubkey: Buffer;
-
-beforeAll(async () => {
-  const { default: bs58 } = await import('bs58');
-  fixtureRawPubkey = randomBytes(32);
-  fixturePubkeyBase58 = bs58.encode(fixtureRawPubkey);
-});
 
 describe('loadCoordinatorPubkey', () => {
-  it('returns the Ed25519 pubkey from SYNAPSEIA_COORDINATOR_PUBKEY_BASE58', async () => {
+  it('decodes the hardcoded COORDINATOR_PUBKEY_BASE58 to a 32-byte raw pubkey', async () => {
     const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
-    const pubkey = loadCoordinatorPubkey({ pubkeyBase58: fixturePubkeyBase58 });
+    const pubkey = loadCoordinatorPubkey();
     expect(pubkey).toHaveLength(32);
-    expect(Buffer.from(pubkey).equals(fixtureRawPubkey)).toBe(true);
   });
 
-  it('throws when env is unset', async () => {
+  it('returns a stable result across calls (idempotent decode)', async () => {
     const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
-    expect(() => loadCoordinatorPubkey({ pubkeyBase58: undefined })).toThrow(
-      /SYNAPSEIA_COORDINATOR_PUBKEY_BASE58.*required/,
-    );
+    const a = loadCoordinatorPubkey();
+    const b = loadCoordinatorPubkey();
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
   });
 
-  it('throws when env is empty string', async () => {
-    const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
-    expect(() => loadCoordinatorPubkey({ pubkeyBase58: '' })).toThrow(
-      /SYNAPSEIA_COORDINATOR_PUBKEY_BASE58.*required/,
-    );
-  });
-
-  it('throws when decoded length is not 32 bytes', async () => {
-    const { default: bs58 } = await import('bs58');
-    const tooShort = bs58.encode(Buffer.alloc(16, 0));
-    const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
-    expect(() => loadCoordinatorPubkey({ pubkeyBase58: tooShort })).toThrow(
-      /SYNAPSEIA_COORDINATOR_PUBKEY_BASE58.*32/,
-    );
+  it('exports COORDINATOR_PUBKEY_BASE58 as a non-empty base58 string', async () => {
+    const { COORDINATOR_PUBKEY_BASE58 } = await import('../coordinator-pubkey');
+    expect(typeof COORDINATOR_PUBKEY_BASE58).toBe('string');
+    expect(COORDINATOR_PUBKEY_BASE58.length).toBeGreaterThan(40);
+    // Sanity: only base58 alphabet characters (no `0`, `O`, `I`, `l`).
+    expect(COORDINATOR_PUBKEY_BASE58).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/);
   });
 });
