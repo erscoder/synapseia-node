@@ -88,13 +88,17 @@ describe('Config Module', () => {
       expect(cfg.defaultModel).toBe('anthropic/claude-sonnet-4-6');
     });
 
-    it('snaps off-list cloud model id to the top tier of that provider', () => {
+    it('tolerates off-list cloud model ids on whitelisted providers (no silent rewrite)', () => {
+      // Vendors release new models faster than we update providers.ts.
+      // If the operator deliberately pinned an off-list model id under
+      // a whitelisted provider, migration must NOT rewrite it back to
+      // the top tier — runtime parseModel() accepts these.
       writeFileSync(
         CONFIG_FILE,
         JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'openai/gpt-99-experimental' }),
       );
       const cfg = helper.loadConfig();
-      expect(cfg.defaultModel).toBe('openai/gpt-5');
+      expect(cfg.defaultModel).toBe('openai/gpt-99-experimental');
     });
 
     it('should return default config when file has invalid JSON', () => {

@@ -15,7 +15,9 @@ import { CLOUD_PROVIDERS_BY_ID } from '../providers';
  */
 export class ZhipuAdapter extends OpenAICompatAdapter {
   readonly providerId = 'zhipu';
-  protected readonly endpoint =
-    CLOUD_PROVIDERS_BY_ID.get('zhipu')?.endpoint ??
-    'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  protected readonly endpoint = (() => {
+    const e = CLOUD_PROVIDERS_BY_ID.get('zhipu')?.endpoint;
+    if (!e) throw new Error('zhipu provider missing from CLOUD_PROVIDERS table');
+    return e;
+  })();
 }

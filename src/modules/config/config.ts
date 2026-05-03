@@ -77,15 +77,17 @@ export function migrateModelSlug(slug: string): { slug: string; reason: string }
     return null;
   }
 
-  // Whitelisted provider, unknown model id → top tier of that provider
+  // Whitelisted provider but off-list model id: tolerate it. Vendors
+  // release new models faster than we can update the table and the
+  // runtime parseModel() in llm-provider.ts accepts off-list models on
+  // whitelisted providers. Rewriting here would silently demote a
+  // deliberate override (e.g. operator pinning openai/gpt-7-turbo)
+  // back to gpt-5 on every boot.
   const slash = slug.indexOf('/');
   if (slash > 0) {
     const provider = slug.slice(0, slash);
     if (CLOUD_PROVIDERS_BY_ID.has(provider as CloudProviderId)) {
-      return {
-        slug: topSlugFor(provider as CloudProviderId),
-        reason: `unknown model in ${provider}; using top tier`,
-      };
+      return null;
     }
   }
 
@@ -139,16 +141,26 @@ export class NodeConfigHelper {
 
     const migration = migrateModelSlug(next.defaultModel);
     if (migration) {
+      // Sanitise the slug we log: keep at most a 'provider/<id>' shape so
+      // an operator who accidentally typed a secret into defaultModel
+      // doesn't see it printed back. Real model ids are short tokens; if
+      // someone wrote 60+ chars they almost certainly pasted something
+      // they shouldn't have.
+      const safeSlug = next.defaultModel.length > 80
+        ? `${next.defaultModel.slice(0, 40)}…<truncated>`
+        : next.defaultModel;
       logger.warn(
-        `[config] migrated defaultModel '${next.defaultModel}' → '${migration.slug}' (${migration.reason})`,
+        `[config] migrated defaultModel '${safeSlug}' → '${migration.slug}' (${migration.reason})`,
       );
       next.defaultModel = migration.slug;
       changed = true;
     }
 
     if (next.llmUrl !== undefined) {
+      // Same defensive redaction — strip querystring (where keys hide).
+      const safeUrl = String(next.llmUrl).split('?')[0];
       logger.warn(
-        `[config] dropping deprecated 'llmUrl' (${next.llmUrl}) — endpoints are hardcoded per provider`,
+        `[config] dropping deprecated 'llmUrl' (${safeUrl}) — endpoints are hardcoded per provider`,
       );
       delete next.llmUrl;
       changed = true;

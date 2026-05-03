@@ -20,7 +20,9 @@ import { CLOUD_PROVIDERS_BY_ID } from '../providers';
  */
 export class MoonshotAdapter extends OpenAICompatAdapter {
   readonly providerId = 'moonshot';
-  protected readonly endpoint =
-    CLOUD_PROVIDERS_BY_ID.get('moonshot')?.endpoint ??
-    'https://api.moonshot.ai/v1/chat/completions';
+  protected readonly endpoint = (() => {
+    const e = CLOUD_PROVIDERS_BY_ID.get('moonshot')?.endpoint;
+    if (!e) throw new Error('moonshot provider missing from CLOUD_PROVIDERS table');
+    return e;
+  })();
 }

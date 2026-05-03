@@ -30,9 +30,11 @@ const MINIMAX_TRANSIENT_CODES = new Set<number>([1002, 1004, 1027, 2013, 2064]);
  */
 export class MinimaxAdapter extends OpenAICompatAdapter {
   readonly providerId = 'minimax';
-  protected readonly endpoint =
-    CLOUD_PROVIDERS_BY_ID.get('minimax')?.endpoint ??
-    'https://api.minimax.io/v1/chat/completions';
+  protected readonly endpoint = (() => {
+    const e = CLOUD_PROVIDERS_BY_ID.get('minimax')?.endpoint;
+    if (!e) throw new Error('minimax provider missing from CLOUD_PROVIDERS table');
+    return e;
+  })();
 
   protected validateResponseBody(body: unknown): void {
     const code = readNumber(body, 'base_resp', 'status_code');
