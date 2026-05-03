@@ -189,10 +189,10 @@ describe('handleKgEmbeddingDelta', () => {
     store.set(SHARD, Date.now() + 60_000);
     const body = buildBody(SHARD, ids);
     const msg = buildEnvelopeBytes(coordKP, body);
-    const calls: Array<{ id: string; len: number }> = [];
+    const calls: Array<{ shardId: number; id: string; len: number }> = [];
     const searcher = {
-      addItem: (vec: number[], id: string): void => {
-        calls.push({ id, len: vec.length });
+      addItemToShard: (s: number, vec: number[], id: string): void => {
+        calls.push({ shardId: s, id, len: vec.length });
       },
     };
     await handleKgEmbeddingDelta({
@@ -200,6 +200,7 @@ describe('handleKgEmbeddingDelta', () => {
     });
     expect(calls).toHaveLength(3);
     expect(calls.every((c) => c.len === 768)).toBe(true);
+    expect(calls.every((c) => c.shardId === SHARD)).toBe(true);
     expect(calls.map((c) => c.id).sort()).toEqual(ids.slice().sort());
   });
 });

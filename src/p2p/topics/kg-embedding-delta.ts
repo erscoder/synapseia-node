@@ -47,20 +47,12 @@ export interface KgEmbeddingDeltaBody extends Record<string, unknown> {
   publishedAtMs: number;
 }
 
-/** Optional adapter — D.4-hnsw ships `KgShardHnswSearcher` whose
- *  `addItemToShard(shardId, vec, id)` is the actual hot path. The
- *  shape here is `addItem(vec, id)` for backward compatibility
- *  with the original D.4-distribution.7 stub.
- *
- *  TODO(node-runtime wiring): widen this interface to
- *  `addItemToShard(shardId, vec, id)` and pipe `body.shardId`
- *  through, so the runtime can pass `KgShardHnswSearcher` directly
- *  without an adapter layer. The current shape works as long as the
- *  searcher implementation knows which shard it belongs to (one
- *  searcher instance per shard is also valid).
- */
+/** Searcher hook — pipes each delta record into the live ANN
+ *  index. `KgShardHnswSearcher.addItemToShard(shardId, vec, id)`
+ *  satisfies this directly so node-runtime wires it without an
+ *  adapter layer. */
 export interface IKgShardSearcherHook {
-  addItem(vec: number[], id: string): void;
+  addItemToShard(shardId: number, vec: number[], id: string): void;
 }
 
 export interface HandleKgEmbeddingDeltaArgs {
@@ -200,7 +192,7 @@ export async function handleKgEmbeddingDelta(
   let searcherFailed = 0;
   for (const r of records) {
     try {
-      args.searcher?.addItem(r.vector, r.embeddingId);
+      args.searcher?.addItemToShard(shardId, r.vector, r.embeddingId);
     } catch (err) {
       searcherFailed++;
       warn(
