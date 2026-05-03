@@ -63,26 +63,30 @@ export class RoundListenerHelper {
     if (this.socket) return;
 
     // Build the signed Ed25519 handshake the coordinator's WS auth guard
-    // expects (presentation/websocket/ws-auth.guard.ts). Without this the
-    // server rejects the connection with `Missing required auth fields`,
-    // the review loop never starts, and every PENDING peer-review
-    // assignment piles up indefinitely (root cause of the 93-eval
-    // backlog observed 2026-05-03). Falls back to anonymous connection
-    // if the identity helper is not available — tests pass a stub
-    // gateway and don't enforce auth.
-    let authPayload: Record<string, string> | undefined;
-    if (this.identityHelper) {
-      try {
-        const identity = this.identityHelper.loadIdentity();
-        authPayload = buildWsHandshakeAuth({
-          privateKey: Buffer.from(identity.privateKey, 'hex'),
-          publicKey: Buffer.from(identity.publicKey, 'hex'),
-          peerId: identity.peerId,
-        });
-      } catch (err) {
-        logger.warn(`[RoundListener] Failed to load identity for WS auth: ${(err as Error).message} — connecting anonymously`);
-      }
-    }
+    // expects (presentation/websocket/ws-auth.guard.ts). The `auth`
+    // option is a CALLBACK — socket.io-client invokes it on every
+    // (re)connection attempt, so the timestamp is fresh and never trips
+    // the 5-minute TIMESTAMP_TOLERANCE_MS window on reconnect (a static
+    // payload would get bounced after 5 minutes and the client would
+    // give up reconnecting). Falls back to anonymous when the identity
+    // helper isn't available (test stubs).
+    const identityHelper = this.identityHelper;
+    const authProvider = identityHelper
+      ? (cb: (data: object) => void): void => {
+          try {
+            const identity = identityHelper.loadIdentity();
+            const payload = buildWsHandshakeAuth({
+              privateKey: Buffer.from(identity.privateKey, 'hex'),
+              publicKey: Buffer.from(identity.publicKey, 'hex'),
+              peerId: identity.peerId,
+            });
+            cb(payload);
+          } catch (err) {
+            logger.warn(`[RoundListener] Failed to sign WS handshake: ${(err as Error).message} — connecting anonymously`);
+            cb({});
+          }
+        }
+      : undefined;
 
     this.socket = io(coordinatorUrl, {
       transports: ['polling', 'websocket'],
@@ -90,7 +94,7 @@ export class RoundListenerHelper {
       reconnectionDelay: 5000,
       reconnectionAttempts: Infinity,
       query: { version: getNodeVersion() },
-      auth: authPayload,
+      auth: authProvider,
     });
 
     this.socket.on('connect', () => {
