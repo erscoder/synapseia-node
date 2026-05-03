@@ -419,7 +419,11 @@ async function bootstrap() {
             // Step 1: install python3 if missing or wrong version
             const pythonVersionRaw = spawnSync('python3', ['--version'], { stdio: 'pipe' });
             const pythonVersionStr = (pythonVersionRaw.stdout?.toString() ?? '').trim(); // e.g. "Python 3.14.3"
-            const pythonMinor = parseInt(pythonVersionStr.match(/Python 3\.(\.\d+)/)?.[1] ?? '0', 10);
+            // S2.8: regex was /Python 3\.(\.\d+)/ which never matches
+            // (literal `.` followed by `\.\d+` = `..\d+`). Result was
+            // pythonMinor=0 every boot, triggering a pointless reinstall
+            // each time. Fixed to capture the minor digit group only.
+            const pythonMinor = parseInt(pythonVersionStr.match(/^Python 3\.(\d+)/)?.[1] ?? '0', 10);
             const hasPythonCorrect = hasPython && pythonMinor >= REQUIRED_PYTHON_MINOR;
 
             if (!hasPythonCorrect) {

@@ -105,7 +105,22 @@ export class AgentBrainHelper {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      fs.writeFileSync(resolvedPath, JSON.stringify(brain, null, 2), 'utf-8');
+      // S2.6: write-then-rename for atomic persistence (audit P1).
+      // Pre-S2.6 a crash mid-write left the file truncated; the next
+      // boot read invalid JSON and silently dropped the entire
+      // AgentBrain memory. POSIX renameSync is atomic on the same
+      // filesystem, so a crash either leaves the old file intact or
+      // exposes the new file fully — never a partial.
+      const tmpPath = `${resolvedPath}.tmp.${process.pid}`;
+      fs.writeFileSync(tmpPath, JSON.stringify(brain, null, 2), 'utf-8');
+      try {
+        fs.renameSync(tmpPath, resolvedPath);
+      } catch (renameErr) {
+        // Best-effort cleanup of the orphan tmp file. Even if this
+        // fails the next save attempt will overwrite it.
+        try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+        throw renameErr;
+      }
       logger.debug(`[AgentBrain] Saved brain to disk: ${resolvedPath} (${brain.totalExperiments} experiments, ${brain.memory.length} memories)`);
     } catch (error) {
       logger.error(`[AgentBrain] Failed to save brain to ${resolvedPath}:`, (error as Error).message);
