@@ -392,7 +392,10 @@ describe('ActiveModelSubscriber — hardening', () => {
     jest.useRealTimers();
   });
 
-  it('tick() callback inside setInterval actually runs (kills empty-body mutant)', () => {
+  it('tick() callback inside the scheduled loop actually runs (kills empty-body mutant)', async () => {
+    // S1.8: the loop now self-schedules via setTimeout, which is async,
+    // so we need advanceTimersByTimeAsync to flush both timers AND
+    // pending microtasks between each tick.
     jest.useFakeTimers();
     process.env.MODEL_POLL_INTERVAL_MS = '100';
     (global.fetch as any).mockResolvedValue(failResp(500));
@@ -400,7 +403,7 @@ describe('ActiveModelSubscriber — hardening', () => {
     const tickSpy = jest.spyOn(sub, 'tick');
     sub.start();
     tickSpy.mockClear();
-    jest.advanceTimersByTime(300); // 3 interval ticks
+    await jest.advanceTimersByTimeAsync(350); // ~3 interval ticks
     expect(tickSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
     sub.onModuleDestroy();
     jest.useRealTimers();

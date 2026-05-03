@@ -475,7 +475,21 @@ export class HeartbeatHelper {
     this.p2pNode = p2pNode;
     const intervalStartTime = Date.now();
     const modelDiscovery = new ModelDiscovery();
-    const intervalId = setInterval(async () => {
+
+    // S1.8: replace `setInterval(async)` with a self-scheduling loop
+    // (audit P0 #7). The original `setInterval(async () => …)` would
+    // fire a fresh tick at every `intervalMs` even if the previous
+    // tick was still in flight. Two ticks racing through this body
+    // mutated `consecutiveCycleFailures` non-atomically and could
+    // double-publish heartbeats. The replacement awaits the previous
+    // tick fully (success or error) before scheduling the next, so
+    // we get exactly one heartbeat per `intervalMs` of wall time
+    // even when the coordinator is slow / unreachable.
+    let cancelled = false;
+    let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async (): Promise<void> => {
+      if (cancelled) return;
       try {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
         // Always send HTTP heartbeat to register with coordinator
@@ -488,15 +502,11 @@ export class HeartbeatHelper {
         } catch (httpErr) {
           this.consecutiveCycleFailures++;
           const msg = (httpErr as Error).message;
-          // First few cycles → warn (transient, the coordinator might just
-          // be restarting). Sustained failure → escalate to error so the
-          // dashboard surfaces it as an actionable group.
           if (this.consecutiveCycleFailures < HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
             logger.warn(`[Heartbeat] cycle ${this.consecutiveCycleFailures} failed: ${msg}`);
           } else if (this.consecutiveCycleFailures === HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
             logger.error(`[Heartbeat] coordinator unreachable after ${this.consecutiveCycleFailures} consecutive cycles: ${msg}`);
           } else {
-            // Already escalated — keep at warn so we don't re-fire error every cycle.
             logger.warn(`[Heartbeat] still unreachable (cycle ${this.consecutiveCycleFailures}): ${msg}`);
           }
         }
@@ -511,18 +521,12 @@ export class HeartbeatHelper {
           const capabilities = await this.determineCapabilitiesAsync(hardware);
           // Do NOT include `publicKey` in the payload we pass in —
           // `p2pNode.publishHeartbeat` canonicalises + signs the
-          // payload THEN tacks `publicKey` on post-signing. If we
-          // pre-included publicKey the node canonical would sign
-          // over it, but the coord's P2PHeartbeatBridge canonical
-          // strips BOTH `signature` and `publicKey` before verify
-          // → byte mismatch → every heartbeat logs
-          //   `[P2P] Invalid signature for heartbeat from <peerId>`
-          // even though the key pair is valid. Leaving publicKey out
-          // of the signed payload keeps the two canonicals aligned
-          // with the same rule already used for bid signatures.
+          // payload THEN tacks `publicKey` on post-signing. Leaving
+          // publicKey out of the signed payload keeps the two
+          // canonicals (node + coord) aligned.
           await p2pNode.publishHeartbeat({
             peerId: p2pNode.getPeerId(),
-            p2pPeerId: identity.peerId,  // Ed25519 peerId — stored as nodes.peerId
+            p2pPeerId: identity.peerId,
             name: identity.name,
             walletAddress: walletAddress ?? null,
             tier: hardware.tier,
@@ -536,10 +540,22 @@ export class HeartbeatHelper {
         }
       } catch (error) {
         logger.error('Heartbeat failed:', (error as Error).message);
+      } finally {
+        if (!cancelled) {
+          pendingTimeout = setTimeout(tick, intervalMs);
+        }
       }
-    }, intervalMs);
+    };
 
-    return () => clearInterval(intervalId);
+    // Kick off the first tick on the next event-loop turn so callers
+    // can subscribe to logs / cleanup the returned canceller before
+    // anything fires.
+    pendingTimeout = setTimeout(tick, 0);
+
+    return () => {
+      cancelled = true;
+      if (pendingTimeout) clearTimeout(pendingTimeout);
+    };
   }
 }
 

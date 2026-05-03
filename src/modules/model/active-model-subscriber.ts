@@ -52,7 +52,15 @@ const DEFAULT_INTERVAL_MS = 60_000;
 
 @Injectable()
 export class ActiveModelSubscriber implements OnModuleDestroy {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  // S1.8: self-scheduling tick (audit P0 #7). The previous
+  // setInterval(() => void this.tick()) variant fired a fresh tick
+  // even while the previous one was still downloading + swapping a
+  // model — which raced `currentModelId`, `consecutivePollFailures`
+  // and could even start a second hot-swap mid-download. The new
+  // model uses setTimeout chaining so each tick fully resolves
+  // before scheduling the next.
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private cancelled = false;
   private currentModelId: string | null = null;
   private swapHook: ModelSwapHook | null = null;
   /**
@@ -81,17 +89,30 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
     if (process.env.MODEL_SUBSCRIBER_DISABLED === 'true') return;
     const intervalMs =
       parseInt(process.env.MODEL_POLL_INTERVAL_MS ?? '', 10) || DEFAULT_INTERVAL_MS;
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, intervalMs);
+    this.cancelled = false;
+
+    const loop = async (): Promise<void> => {
+      if (this.cancelled) return;
+      try {
+        await this.tick();
+      } catch (err) {
+        logger.warn(`[ModelSubscriber] tick threw: ${(err as Error).message}`);
+      } finally {
+        if (!this.cancelled) {
+          this.timer = setTimeout(loop, intervalMs);
+        }
+      }
+    };
+
     logger.info(`[ModelSubscriber] started — interval=${intervalMs}ms`);
-    // Prime immediately so a freshly-booted node picks the active
-    // version without waiting a full interval.
-    void this.tick();
+    // Prime on the next event-loop turn so the first tick is awaited
+    // before subsequent ones can schedule.
+    this.timer = setTimeout(loop, 0);
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.cancelled = true;
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
 

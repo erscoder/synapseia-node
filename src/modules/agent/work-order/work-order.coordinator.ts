@@ -410,7 +410,30 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
   }
 
   async downloadDataset(coordinatorUrl: string, domain: string): Promise<string> {
-    const cacheDir = path.join(this.getDatasetCacheDir(), domain);
+    // S1.7: `domain` arrives from the coordinator-issued WO payload —
+    // a malicious / compromised coord could ship `domain="../../etc/..."`
+    // and write outside the cache root (audit P0 #6).
+    //   1. Strict allowlist of characters: lowercase alphanumerics,
+    //      hyphen and underscore. Anything else is rejected outright,
+    //      not normalised — domain values used in the network are
+    //      short tokens like `medical`, `gpu-medical`, `protein_v2`.
+    //   2. Belt-and-suspenders: resolve the joined path and confirm it
+    //      stays inside the dataset cache root. Catches future
+    //      regressions in (1) without re-reading the audit.
+    if (!/^[a-z0-9_-]{1,64}$/.test(domain)) {
+      throw new Error(
+        `[downloadDataset] refusing dataset domain '${domain}': must match /^[a-z0-9_-]{1,64}$/`,
+      );
+    }
+    const root = this.getDatasetCacheDir();
+    const cacheDir = path.resolve(path.join(root, domain));
+    const rootResolved = path.resolve(root);
+    const rel = path.relative(rootResolved, cacheDir);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(
+        `[downloadDataset] resolved cache dir '${cacheDir}' escapes root '${rootResolved}'`,
+      );
+    }
     const corpusPath = path.join(cacheDir, 'corpus.txt');
     const metaPath = path.join(cacheDir, 'cache-meta.json');
 

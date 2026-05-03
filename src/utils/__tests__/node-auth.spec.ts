@@ -75,12 +75,12 @@ describe('buildAuthHeaders', () => {
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  it('signs `${ts}:${path}:${bodyHash}` verifiable with real Ed25519', async () => {
+  it('signs `${peerId}:${ts}:${path}:${bodyHash}` verifiable with real Ed25519', async () => {
     const body = { x: 1, y: 2 };
     const h = await buildAuthHeaders({
       method: 'POST', path: '/p', body, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/p:${hashBody(JSON.stringify(body))}`;
+    const expected = `p:${h['X-Timestamp']}:/p:${hashBody(JSON.stringify(body))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -92,7 +92,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/real', body: {}, privateKey, publicKey, peerId: 'p',
     });
-    const wrong = `${h['X-Timestamp']}:/different:${hashBody('{}')}`;
+    const wrong = `p:${h['X-Timestamp']}:/different:${hashBody('{}')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(wrong),
@@ -104,7 +104,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/p', body: { b: 2, a: 1 }, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/p:${hashBody(JSON.stringify({ a: 1, b: 2 }))}`;
+    const expected = `p:${h['X-Timestamp']}:/p:${hashBody(JSON.stringify({ a: 1, b: 2 }))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -116,7 +116,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'GET', path: '/n', body: null, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/n:${hashBody('')}`;
+    const expected = `p:${h['X-Timestamp']}:/n:${hashBody('')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -128,7 +128,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'GET', path: '/u', body: undefined, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/u:${hashBody('')}`;
+    const expected = `p:${h['X-Timestamp']}:/u:${hashBody('')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -140,7 +140,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/s', body: 'plain', privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/s:${hashBody('plain')}`;
+    const expected = `p:${h['X-Timestamp']}:/s:${hashBody('plain')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -152,7 +152,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/n', body: 42, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/n:${hashBody('42')}`;
+    const expected = `p:${h['X-Timestamp']}:/n:${hashBody('42')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -166,7 +166,7 @@ describe('buildAuthHeaders', () => {
       privateKey, publicKey, peerId: 'p',
     });
     const expectedBody = JSON.stringify({ other: 3, outer: { a: 2, z: 1 } });
-    const expected = `${h['X-Timestamp']}:/nst:${hashBody(expectedBody)}`;
+    const expected = `p:${h['X-Timestamp']}:/nst:${hashBody(expectedBody)}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -180,7 +180,7 @@ describe('buildAuthHeaders', () => {
       privateKey, publicKey, peerId: 'p',
     });
     const expectedBody = JSON.stringify([{ a: 2, z: 1 }, { b: 3 }]);
-    const expected = `${h['X-Timestamp']}:/ao:${hashBody(expectedBody)}`;
+    const expected = `p:${h['X-Timestamp']}:/ao:${hashBody(expectedBody)}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -193,7 +193,7 @@ describe('buildAuthHeaders', () => {
       method: 'POST', path: '/arr', body: [3, 1, 2],
       privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/arr:${hashBody(JSON.stringify([3, 1, 2]))}`;
+    const expected = `p:${h['X-Timestamp']}:/arr:${hashBody(JSON.stringify([3, 1, 2]))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -235,7 +235,7 @@ describe('buildAuthHeaders', () => {
       method: 'POST', path: '/nn', body: { a: null, b: { c: null } },
       privateKey, publicKey, peerId: 'p',
     });
-    const expected = `${h['X-Timestamp']}:/nn:${hashBody(JSON.stringify({ a: null, b: { c: null } }))}`;
+    const expected = `p:${h['X-Timestamp']}:/nn:${hashBody(JSON.stringify({ a: null, b: { c: null } }))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),

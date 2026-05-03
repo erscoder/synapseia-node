@@ -2,10 +2,15 @@
  * Shared Ed25519 signing utilities for node → coordinator requests.
  * Used by both WorkOrderCoordinatorHelper (NestJS HTTP) and HeartbeatHelper (axios).
  *
- * Signed message format: `${timestamp}:${path}:${bodyHash}`
+ * Signed message format (post-S0.6): `${peerId}:${timestamp}:${path}:${bodyHash}`
+ * - peerId: libp2p peer id (binds the signature to the claimed identity)
  * - timestamp: Unix milliseconds
  * - path: URL path (e.g. /peer/heartbeat)
  * - bodyHash: SHA-256 of JSON-stringified body, base64-encoded
+ *
+ * peerId was added so that two peers sharing a null DB key (e.g.
+ * mid-self-registration) cannot replay each other's signed payloads.
+ * The coordinator's NodeSignatureGuard expects the same format.
  */
 import * as ed from '@noble/ed25519';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
@@ -46,7 +51,7 @@ export async function buildAuthHeaders(params: {
       : String(body ?? '');
 
   const bodyHash = Buffer.from(sha256(new TextEncoder().encode(bodyStr))).toString('base64');
-  const message = `${timestamp}:${path}:${bodyHash}`;
+  const message = `${peerId}:${timestamp}:${path}:${bodyHash}`;
   const messageBytes = new TextEncoder().encode(message);
   const signature = sign(messageBytes, privateKey);
 

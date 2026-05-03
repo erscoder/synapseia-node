@@ -401,7 +401,10 @@ describe('startInferenceServer', () => {
       expect(nf.json.error.type).toBe('not_found_error');
 
       const opts = await httpJson(port, { method: 'OPTIONS', path: '/v1/chat/completions' });
-      expect(opts.status).toBe(200);
+      // S0.5: the local-only CORS handler responds 204 to preflight
+      // (no body). Pre-S0.5 returned 200 with `Access-Control-Allow-
+      // Origin: *`, which exposed the server to DNS rebinding.
+      expect(opts.status).toBe(204);
     } finally {
       close();
       await new Promise((r) => server.once('close', r));
