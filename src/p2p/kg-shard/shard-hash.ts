@@ -18,7 +18,12 @@
 
 import { createHash } from 'crypto';
 
-export const KG_SHARD_COUNT_DEFAULT = 16;
+/** Bumped 16 → 32 on 2026-05-03 BEFORE devnet soak. Mirror of
+ *  coord-side rationale — see
+ *  `packages/coordinator/src/application/knowledge-graph/shard-hash.ts`
+ *  for the math (half RAM/shard, double slots, migration cheap
+ *  at current 933-row corpus). */
+export const KG_SHARD_COUNT_DEFAULT = 32;
 
 export function shardIdFor(
   embeddingId: string,

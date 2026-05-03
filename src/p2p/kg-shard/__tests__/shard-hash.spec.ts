@@ -8,11 +8,13 @@ import { shardIdFor, KG_SHARD_COUNT_DEFAULT } from '../shard-hash';
  */
 
 // HARDCODED — must stay byte-identical with the coord-side fixture.
+// `expected` is shardId at KG_SHARD_COUNT_DEFAULT (32 since
+// 2026-05-03 — bumped from 16 before devnet soak).
 const FIXTURES: Array<{ id: string; expected: number; expected4: number }> = [
-  { id: 'embedding-fixture-001',                   expected: 14, expected4: 2 },
-  { id: '00000000-0000-0000-0000-000000000000',    expected: 12, expected4: 0 },
-  { id: 'pubmed-39427281-abstract',                expected: 6,  expected4: 2 },
-  { id: '🧠-emoji-id',                              expected: 3,  expected4: 3 },
+  { id: 'embedding-fixture-001',                   expected: 30, expected4: 2 },
+  { id: '00000000-0000-0000-0000-000000000000',    expected: 28, expected4: 0 },
+  { id: 'pubmed-39427281-abstract',                expected: 22, expected4: 2 },
+  { id: '🧠-emoji-id',                              expected: 19, expected4: 3 },
   { id: '',                                        expected: 2,  expected4: 2 },
 ];
 
@@ -46,7 +48,7 @@ describe('shardIdFor (node)', () => {
     }
   });
 
-  it('exports KG_SHARD_COUNT_DEFAULT === 16', () => {
-    expect(KG_SHARD_COUNT_DEFAULT).toBe(16);
+  it('exports KG_SHARD_COUNT_DEFAULT === 32', () => {
+    expect(KG_SHARD_COUNT_DEFAULT).toBe(32);
   });
 });
