@@ -35,11 +35,11 @@ describe('WorkOrderCoordinatorHelper — stale-WO handling (Bug H1)', () => {
     fetchSpy.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'wo-1', status: 'ASSIGNED' }),
+      json: async () => ({ id: 'wo-1', status: 'ACCEPTED' }),
     } as any);
 
     const wo = await helper.getWorkOrder('http://coord', 'wo-1');
-    expect(wo).toEqual({ id: 'wo-1', status: 'ASSIGNED' });
+    expect(wo).toEqual({ id: 'wo-1', status: 'ACCEPTED' });
   });
 
   it('getWorkOrder returns null on 404', async () => {

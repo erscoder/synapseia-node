@@ -1,10 +1,10 @@
 /**
- * Bug H1 — SubmitResultNode pre-submit status check + 400 race reclassification.
+ * Bug H1 — SubmitResultNode pre-submit status check.
  *
  * Verifies that the node:
- *   (a) skips POST + logs info when the WO is no longer ASSIGNED/IN_PROGRESS;
- *   (b) POSTs as usual when status is still acceptable;
- *   (c) treats a 400 from the POST as `dropped`, not an error retry path.
+ *   (a) skips POST + logs info when the WO is no longer ACCEPTED;
+ *   (b) POSTs when status is still ACCEPTED;
+ *   (c) POSTs when probe returns null (transient 404).
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
@@ -27,7 +27,7 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     description: 'd',
     requiredCapabilities: ['cpu_inference'],
     rewardAmount: '1',
-    status: 'ASSIGNED',
+    status: 'ACCEPTED',
     creatorAddress: 'creator',
     createdAt: 0,
   };
@@ -54,7 +54,7 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     infoSpy.mockRestore();
   });
 
-  it('drops the result without POST when status is no longer acceptable', async () => {
+  it('drops the result without POST when status is COMPLETED', async () => {
     coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'COMPLETED' });
 
     const out = await node.execute(baseState);
@@ -68,23 +68,32 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     );
   });
 
-  it('proceeds to POST when status is ASSIGNED', async () => {
-    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'ASSIGNED' });
+  it('drops the result without POST when status is VERIFIED', async () => {
+    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'VERIFIED' });
+
+    const out = await node.execute(baseState);
+
+    expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+    expect(out.submitted).toBe(true);
+  });
+
+  it('drops the result without POST when status is CANCELLED', async () => {
+    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'CANCELLED' });
+
+    const out = await node.execute(baseState);
+
+    expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+    expect(out.submitted).toBe(true);
+  });
+
+  it('proceeds to POST when status is ACCEPTED', async () => {
+    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'ACCEPTED' });
     coordinator.completeWorkOrder.mockResolvedValue(true);
 
     const out = await node.execute(baseState);
 
     expect(coordinator.completeWorkOrder).toHaveBeenCalledTimes(1);
     expect(out.submitted).toBe(true);
-  });
-
-  it('proceeds to POST when status is IN_PROGRESS', async () => {
-    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'IN_PROGRESS' });
-    coordinator.completeWorkOrder.mockResolvedValue(true);
-
-    await node.execute(baseState);
-
-    expect(coordinator.completeWorkOrder).toHaveBeenCalledTimes(1);
   });
 
   it('proceeds to POST when probe returns null (404 or network glitch)', async () => {
