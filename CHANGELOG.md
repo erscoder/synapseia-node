@@ -1,5 +1,27 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): node-signed KG_SHARD_SNAPSHOT_READY topic + hint store — D.4-distribution.5 (273d389f)
+
+Adds the chained-sync hint topic — a NODE-signed envelope that
+announces "I have shard S persisted and ready" so future cold-boot
+peers dial the announcer first instead of always falling back to
+coord. Three pieces:
+
+1. `KgShardHintStore` — in-memory `Map<shardId, Set<peerId>>`
+   consulted by `KgShardSnapshotClient.fetch` before its coord
+   fallback.
+2. `handleKgShardSnapshotReady` — verifier. Anti-spoof:
+   `pubkeyHex.startsWith(body.peerId)` BEFORE Ed25519 verify so a
+   hostile peer can't claim shard ownership under a different
+   peerId. Drops self-announces, stale envelopes, bad sigs,
+   malformed bodies.
+3. `publishShardReady` — signs canonical JSON of `{body,
+   publishedAt}` with the node's private key. Carries the full
+   32-byte pubkeyHex so verifiers can extract the pubkey without
+   a coord round-trip.
+
+8 verifier + producer specs.
+
 ## [2026-05-03] feat(kg-shard): node snapshot client + append-only storage — D.4-distribution.4 (c1b9509d)
 
 Adds `KgShardStorage` (disk-only per-shard append-only file at
