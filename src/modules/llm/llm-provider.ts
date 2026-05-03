@@ -323,8 +323,12 @@ export class LlmProviderHelper {
       return { available: false, model, estimatedLatencyMs: 0, error: 'API key required for cloud provider' };
     }
     if (config.baseUrl) {
+      // Drop the querystring before logging in case the operator embedded
+      // an API key in it (a known bad pattern with `?key=...` Google URLs
+      // and some self-hosted gateways).
+      const safeUrl = config.baseUrl.split('?')[0];
       logger.warn(
-        `[LLM] config.baseUrl is set ('${config.baseUrl}') but is ignored — endpoints are hardcoded per provider`,
+        `[LLM] config.baseUrl is set ('${safeUrl}') but is ignored — endpoints are hardcoded per provider`,
       );
     }
     if (!model.providerId || !CLOUD_PROVIDERS_BY_ID.has(model.providerId as CloudProviderId)) {
@@ -332,10 +336,13 @@ export class LlmProviderHelper {
     }
     const meta = MODEL_METADATA[model.modelId];
     try {
-      // Ping the model with a 1-token request. We deliberately use the
-      // same code path as a real generate() so adapter changes get caught
-      // by the availability check, not just at first real call.
-      await this.runAdapterRequest(model, 'Hi', config.apiKey, { maxTokens: 1 });
+      // Ping the model with a small budget. 1 token is too tight: Anthropic
+      // returns `stop_reason: max_tokens` with an empty content[] before any
+      // text block lands, which the adapter (correctly) treats as "no text"
+      // and throws on. 16 tokens leaves enough room for a one-word reply
+      // across all six vendors so the availability check actually exercises
+      // the full parsing path without false negatives.
+      await this.runAdapterRequest(model, 'Hi', config.apiKey, { maxTokens: 16 });
       return {
         available: true, model,
         estimatedLatencyMs: meta?.latencyMs ?? 400,
@@ -358,8 +365,12 @@ export class LlmProviderHelper {
       throw new Error(`Unknown cloud provider '${model.providerId}'`);
     }
     if (config.baseUrl) {
+      // Drop the querystring before logging in case the operator embedded
+      // an API key in it (a known bad pattern with `?key=...` Google URLs
+      // and some self-hosted gateways).
+      const safeUrl = config.baseUrl.split('?')[0];
       logger.warn(
-        `[LLM] config.baseUrl is set ('${config.baseUrl}') but is ignored — endpoints are hardcoded per provider`,
+        `[LLM] config.baseUrl is set ('${safeUrl}') but is ignored — endpoints are hardcoded per provider`,
       );
     }
     return this.runAdapterRequest(model, prompt, config.apiKey, hyperparams);
