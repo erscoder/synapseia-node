@@ -1,5 +1,20 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(kg-shard): node snapshot client + append-only storage — D.4-distribution.4 (c1b9509d)
+
+Adds `KgShardStorage` (disk-only per-shard append-only file at
+`<nodeHome>/shards/shard-<id>.bin`, atomic `tmp + rename` commit,
+`appendOne` for delta path) and `KgShardSnapshotClient` (peer-first
+sequential candidate iteration, coord fallback, Ed25519-signed
+request, multi-frame stream consumption with vector-dim filter,
+commit only on `done` sentinel).
+
+Frame format on disk = same `[u32 LE len][JSON bytes]` as the wire
+codec so a single parser reads both. `openSync` drops stale `.tmp`
+from a prior crash before opening fresh.
+
+15/15 specs green (8 storage + 7 client).
+
 ## [2026-05-03] feat(p2p): multi-frame stream codec helpers — D.4-distribution.2 mirror (84600417)
 
 Mirror of coord-side codec extension (sub coord 64789aad). Adds
