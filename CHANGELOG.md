@@ -1,5 +1,16 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] fix(node): use createRequire(__filename) for usearch — no eval (ab26805c)
+
+`eval('import.meta.url')` also failed under tsup ESM output: esbuild
+rewrites direct eval into an indirect helper whose scope no longer
+includes the original module's `import.meta`. Switched to
+`createRequire(__filename)`. The tsup banner already injects
+`__filename` per chunk by calling `fileURLToPath(import.meta.url)`
+once at top-of-chunk, so the variable is a real on-disk path during
+ESM init. Same line works under ts-jest CJS where `__filename` is the
+native Node CJS global.
+
 ## [2026-05-03] fix(node): use direct eval('import.meta.url') for usearch ESM resolve (e9319821)
 
 Follow-up to b3973e07. The `new Function(...)` probe used to read
