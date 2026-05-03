@@ -47,9 +47,18 @@ export interface KgEmbeddingDeltaBody extends Record<string, unknown> {
   publishedAtMs: number;
 }
 
-/** Optional adapter — D.4-hnsw will pass the live HNSW searcher.
- *  In D.4-distribution.7 the field is undefined and the call is a
- *  no-op. */
+/** Optional adapter — D.4-hnsw ships `KgShardHnswSearcher` whose
+ *  `addItemToShard(shardId, vec, id)` is the actual hot path. The
+ *  shape here is `addItem(vec, id)` for backward compatibility
+ *  with the original D.4-distribution.7 stub.
+ *
+ *  TODO(node-runtime wiring): widen this interface to
+ *  `addItemToShard(shardId, vec, id)` and pipe `body.shardId`
+ *  through, so the runtime can pass `KgShardHnswSearcher` directly
+ *  without an adapter layer. The current shape works as long as the
+ *  searcher implementation knows which shard it belongs to (one
+ *  searcher instance per shard is also valid).
+ */
 export interface IKgShardSearcherHook {
   addItem(vec: number[], id: string): void;
 }

@@ -42,7 +42,7 @@ import {
 } from '../protocols/kg-shard-query';
 import type { IKgShardStorage, SnapshotRecord } from './KgShardStorage';
 import * as path from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
 
 const VECTOR_DIM = 768;
 const DEFAULT_PERSIST_DEBOUNCE_MS = 60 * 1000;
@@ -178,11 +178,15 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
       }
       count = recs.length;
       source = recs.length > 0 ? 'bin' : 'empty';
-      // Persist for next boot.
+      // Persist for next boot. Atomic via tmp + rename — reviewer
+      // item #1: `Index.save(fp)` is NOT atomic; a crash mid-save
+      // would leave a corrupt `.hnsw` that the next boot fails to
+      // `load()`. We then fall back to .bin rebuild — graceful, but
+      // we lose the persisted index until the next successful save.
       if (count > 0) {
         try {
           mkdirSync(path.dirname(hnswFp), { recursive: true, mode: 0o700 });
-          index.save(hnswFp);
+          this.atomicSave(index, hnswFp);
         } catch (err) {
           logger.warn(
             `[kg-shard-hnsw] initial save failed shard=${shardId}: ${(err as Error).message}`,
@@ -232,34 +236,12 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
     logger.log(`[kg-shard-hnsw] index unloaded shard=${shardId}`);
   }
 
-  /** Sync — called from the delta handler hot path. Schedules a
-   *  debounced persist. */
-  addItem(vec: number[], id: string): void {
-    if (vec.length !== VECTOR_DIM) return;
-    // Find the owning shard via the same hash the publisher uses.
-    // We don't import shardIdFor here to keep the searcher decoupled;
-    // the runtime caller knows which shard the record belongs to and
-    // can call `addItemToShard(shardId, vec, id)` directly.
-    // For the IKgShardSearcher contract we look up across all loaded
-    // shards. At our shard count (16) the loop is negligible.
-    for (const [shardId, state] of this.shards) {
-      // Insert into the shard whose id-map already has this id, OR
-      // unconditionally insert if none of them do (delta handler
-      // semantics — record routed by shardIdFor at coord side).
-      if (state.idToKey.has(id)) {
-        // Already present — overwrite by re-add not supported by
-        // usearch; treat as no-op (delta is upsert at coord, but
-        // the same id should never re-publish per publisher dedup).
-        return;
-      }
-      // Without the explicit shardId from the caller we can't pick
-      // the right shard. The runtime path goes through
-      // `addItemToShard` instead.
-      void shardId;
-    }
-  }
-
-  /** Explicit-shard variant — preferred by node-runtime wiring. */
+  /** Explicit-shard variant — the only insert path. The
+   *  `IKgShardSearcher` interface only requires `search()`, so
+   *  there is no contract `addItem(vec, id)` to satisfy. The delta
+   *  handler routes records through this method using the shardId
+   *  carried in the envelope body (`shardIdFor(embeddingId)` at
+   *  publish time). */
   addItemToShard(shardId: number, vec: number[], id: string): void {
     if (vec.length !== VECTOR_DIM) return;
     const state = this.shards.get(shardId);
@@ -325,13 +307,23 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
     const fp = this.hnswPath(shardId);
     try {
       mkdirSync(path.dirname(fp), { recursive: true, mode: 0o700 });
-      state.index.save(fp);
+      this.atomicSave(state.index, fp);
       state.dirty = false;
     } catch (err) {
       logger.warn(
         `[kg-shard-hnsw] persist failed shard=${shardId}: ${(err as Error).message}`,
       );
     }
+  }
+
+  /** Reviewer item #1 — `Index.save` writes in place; a crash
+   *  mid-write leaves a corrupt file that fails to `load()`. Save
+   *  to `.tmp` then rename for atomicity. */
+  private atomicSave(index: any, fp: string): void {
+    const tmp = fp + '.tmp';
+    try { unlinkSync(tmp); } catch { /* no stale tmp */ }
+    index.save(tmp);
+    renameSync(tmp, fp);
   }
 
   /** Persist every loaded shard — call on SIGTERM. */
