@@ -50,12 +50,34 @@ export const TOPICS = {
    *  requester directly over `/synapseia/kg-shard-query/1.0.0`. Plan
    *  D.3 / D.4. */
   KG_QUERY_REDIRECT: '/synapseia/kg-query-redirect/1.0.0',
+  /** A node announces "I have shard S persisted and ready" after a
+   *  successful snapshot pull. Other peers add the announcer to their
+   *  in-memory `Map<shardId, Set<peerId>>` so future cold-boot peers
+   *  dial them first (chained sync) and coord uplink stays ≈ zero.
+   *  Signed by the NODE (not coord); envelope carries the full 32-byte
+   *  pubkeyHex so the verifier can check `pubkeyHex.startsWith(peerId)`.
+   *  Plan D.4-distribution.5. */
+  KG_SHARD_SNAPSHOT_READY: '/synapseia/kg-shard-snapshot-ready/1.0.0',
+  /** Coordinator broadcasts every newly-inserted PubMedBERT 768d
+   *  embedding as a signed batched envelope. Authorised hosts append
+   *  to local shard storage and (later) the live HNSW index. Coord
+   *  rate-limits to ≤ MAX_BATCH=50 records / envelope; topic is global
+   *  (every peer subscribes and filters by owned shard set). Plan
+   *  D.4-distribution.6/7/8. */
+  KG_EMBEDDING_DELTA: '/synapseia/kg-embedding-delta/1.0.0',
 } as const;
 
 /** Libp2p protocol the winning node serves to accept the grounded prompt +
  *  write back the OpenAI-shaped response. Runs over the same libp2p
  *  connection used for gossip — no extra TCP/TLS. */
 export const CHAT_PROTOCOL = '/synapseia/chat/1.0.0';
+
+/** Libp2p stream protocol — peers dial each other (or coord as
+ *  fallback) on this protocol to pull a full per-shard snapshot.
+ *  Authenticated by libp2p Noise; per-request signature verifies the
+ *  dialer holds an active `kg_shard_authorizations` row.
+ *  Plan D.4-distribution.2/4. */
+export const KG_SHARD_SNAPSHOT_PROTOCOL = '/synapseia/kg-shard-snapshot/1.0.0';
 
 export type Topic = (typeof TOPICS)[keyof typeof TOPICS];
 type MsgCb = (data: Record<string, unknown>, from: string) => void;
