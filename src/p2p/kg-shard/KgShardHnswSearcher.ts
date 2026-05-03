@@ -129,7 +129,7 @@ export class KgShardHnswSearcher implements IKgShardSearcher {
     const start = Date.now();
     const hnswFp = this.hnswPath(shardId);
     let index: any;
-    let source: 'hnsw' | 'bin' | 'empty';
+    let source: 'hnsw' | 'bin' | 'empty' = 'empty';
     let count = 0;
 
     if (existsSync(hnswFp)) {
