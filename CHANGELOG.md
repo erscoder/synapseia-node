@@ -1,5 +1,50 @@
 # Changelog — @synapseia/node
 
+## [2026-05-03] feat(node): provider whitelist + LLMResponseAdapter strategy (83311241)
+
+Reworked the cloud-LLM dispatch so every provider goes through a small
+strategy class (`LLMResponseAdapter`) instead of the old per-vendor
+methods on `LlmProviderHelper`. Each adapter owns request shaping and
+response parsing for one vendor — Anthropic's heterogeneous
+`content[]` block array, Google's `candidates[].content.parts[]`,
+OpenAI/Moonshot/MiniMax/Zhipu's `choices[].message.content`, and
+MiniMax's 200-OK-with-`base_resp.status_code` quirk.
+
+The provider list is now a closed whitelist sourced from a single
+table in `src/modules/llm/providers.ts`:
+
+| Provider | Endpoint | Top / Mid / Budget |
+|---|---|---|
+| openai | `api.openai.com/v1/chat/completions` | gpt-5 / gpt-4o / gpt-4o-mini |
+| anthropic | `api.anthropic.com/v1/messages` | claude-opus-4-7 / claude-sonnet-4-6 / claude-haiku-4-5 |
+| google | `generativelanguage.googleapis.com/.../generateContent` | gemini-2.5-pro / -flash / -flash-lite |
+| moonshot (Kimi) | `api.moonshot.ai/v1/chat/completions` | kimi-k2.6 / kimi-k2-0711-preview / moonshot-v1-32k |
+| minimax | `api.minimax.io/v1/chat/completions` | MiniMax-M2.7 / abab7-chat-preview / abab6.5s-chat |
+| zhipu (GLM) | `open.bigmodel.cn/api/paas/v4/chat/completions` | glm-4.6 / glm-4-plus / glm-4-flash |
+
+The `openai-compat/*` slug and the `Custom…` UI option are gone — every
+endpoint is hardcoded so the response schema matches the adapter that
+parses it. Operator configs that still carry obsolete slugs are
+auto-migrated on boot:
+- `kimi/X` → `moonshot/X` (rebrand of internal id)
+- `openai-compat/*`, `custom` → `anthropic/claude-sonnet-4-6`
+- whitelisted provider, off-list model → top tier of that provider
+- `llmUrl` field → stripped from `config.json` (one WARN, persisted)
+
+Test coverage:
+- 6 adapter unit specs in `src/modules/llm/adapters/__tests__/`
+  — fixtures copied from each vendor's published response shape
+- `llm-provider.spec.ts` rewritten to focus on dispatch + retry
+- `__tests__/llm-provider.test.ts` is now a round-trip suite with
+  one mock-fetch test per provider end-to-end through `generateLLM()`
+
+CLI:
+- `--llm-url` / `--set-llm-url` are kept on the parser as deprecated
+  flags that log WARN and ignore the value (so older `synapseia-ui`
+  builds and operator scripts that still pass them don't break).
+- `synapseia config` interactive cloud picker now offers one entry
+  per `(provider, tier)` pair, no `Custom URL` option.
+
 ## [2026-05-03] fix(node): WS handshake auth as callback so reconnects refresh timestamp (5106efc9)
 
 socket.io-client's `auth: { ... }` option captures the payload once at
