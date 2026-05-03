@@ -16,6 +16,7 @@ import type { LoraWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
+import { safeLoss } from './safe-loss';
 import type { AgentBrain } from '../agent-brain';
 import type {
   WorkOrder,
@@ -303,11 +304,13 @@ Abstract: ${payload.abstract}`;
 
     // Defensive guard: trainer normally returns valLoss as a number (with
     // `?? 0` fallback inside trainer.ts), but if any future code path returns
-    // a partial result we coerce to 0 here so `.toFixed()` never throws and
-    // the WO is reported with a degraded loss instead of bubbling a TypeError
-    // up to execute-training.ts as a misleading "error" telemetry event.
-    const valLoss = typeof trainingResult.valLoss === 'number' ? trainingResult.valLoss : 0;
-    const finalLoss = typeof trainingResult.finalLoss === 'number' ? trainingResult.finalLoss : 0;
+    // a partial or NaN result we coerce to 0 here so `.toFixed()` never
+    // throws AND the JSON payload sent to the coordinator never carries
+    // `NaN` (which `JSON.stringify` would render as `null`, tripping the
+    // coordinator's typed schema and surfacing as a different telemetry
+    // error).
+    const valLoss = safeLoss(trainingResult.valLoss);
+    const finalLoss = safeLoss(trainingResult.finalLoss);
     const improved = valLoss < payload.currentBestLoss;
     const effectiveDatasetId = usedRealCorpus ? `${payload.domain}-corpus` : 'synthetic://built-in';
     await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, valLoss, trainingResult.durationMs);
@@ -356,8 +359,8 @@ Abstract: ${payload.abstract}`;
       logger.warn(`[DiLoCo] Could not read/upload gradient file: ${(err as Error).message}`);
     }
 
-    const dilocoValLoss = typeof dilocoResult.valLoss === 'number' ? dilocoResult.valLoss : 0;
-    const dilocoFinalLoss = typeof dilocoResult.finalLoss === 'number' ? dilocoResult.finalLoss : 0;
+    const dilocoValLoss = safeLoss(dilocoResult.valLoss);
+    const dilocoFinalLoss = safeLoss(dilocoResult.finalLoss);
     logger.log(`[DiLoCo] Inner loop complete — valLoss=${dilocoValLoss.toFixed(4)}, gradients=${dilocoResult.gradientSizeBytes} bytes`);
     return { result: JSON.stringify({ valLoss: dilocoValLoss, finalLoss: dilocoFinalLoss, innerSteps: dilocoResult.innerSteps, durationMs: dilocoResult.durationMs, gradientSizeBytes: dilocoResult.gradientSizeBytes, metricType: 'val_loss', metricValue: dilocoValLoss }), success: true };
   }
