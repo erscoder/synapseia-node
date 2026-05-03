@@ -12,6 +12,8 @@ import { CommitRevealV2Helper } from './commit-reveal-v2';
 import { setActiveMissions, type MissionBrief } from './mission-context-state';
 import { recordRoundOutcome } from './performance-state';
 import { getNodeVersion } from '../../utils/version';
+import { buildWsHandshakeAuth } from '../../utils/node-auth';
+import { IdentityHelper } from '../identity/identity';
 
 interface RoundWinner {
   rank: number;
@@ -54,10 +56,33 @@ export class RoundListenerHelper {
   constructor(
     private readonly reviewAgentHelper: ReviewAgentHelper,
     @Optional() private readonly commitRevealV2?: CommitRevealV2Helper,
+    @Optional() private readonly identityHelper?: IdentityHelper,
   ) {}
 
   startRoundListener(coordinatorUrl: string, peerId: string, llmConfig?: LLMReviewConfig): void {
     if (this.socket) return;
+
+    // Build the signed Ed25519 handshake the coordinator's WS auth guard
+    // expects (presentation/websocket/ws-auth.guard.ts). Without this the
+    // server rejects the connection with `Missing required auth fields`,
+    // the review loop never starts, and every PENDING peer-review
+    // assignment piles up indefinitely (root cause of the 93-eval
+    // backlog observed 2026-05-03). Falls back to anonymous connection
+    // if the identity helper is not available — tests pass a stub
+    // gateway and don't enforce auth.
+    let authPayload: Record<string, string> | undefined;
+    if (this.identityHelper) {
+      try {
+        const identity = this.identityHelper.loadIdentity();
+        authPayload = buildWsHandshakeAuth({
+          privateKey: Buffer.from(identity.privateKey, 'hex'),
+          publicKey: Buffer.from(identity.publicKey, 'hex'),
+          peerId: identity.peerId,
+        });
+      } catch (err) {
+        logger.warn(`[RoundListener] Failed to load identity for WS auth: ${(err as Error).message} — connecting anonymously`);
+      }
+    }
 
     this.socket = io(coordinatorUrl, {
       transports: ['polling', 'websocket'],
@@ -65,6 +90,7 @@ export class RoundListenerHelper {
       reconnectionDelay: 5000,
       reconnectionAttempts: Infinity,
       query: { version: getNodeVersion() },
+      auth: authPayload,
     });
 
     this.socket.on('connect', () => {
