@@ -1,6 +1,6 @@
 {
   "name": "@synapseia/node",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "private": true,
   "description": "Synapseia Node CLI Software",
   "type": "module",
