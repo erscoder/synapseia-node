@@ -44,6 +44,11 @@ const AgentStateAnnotation = Annotation.Root({
   config: Annotation<WorkOrderAgentConfig | null>({ default: () => null, reducer: (_a: any, b: any) => b }),
   coordinatorUrl: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   peerId: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
+  // Solana wallet base58 address — required by accept/complete/submit
+  // bodies. LangGraph drops fields that aren't annotated, which is
+  // why the previous `initialState.walletAddress` assignment didn't
+  // survive into accept-wo / submit-result.
+  walletAddress: Annotation<string>({ default: () => '', reducer: (_a, b) => b }),
   capabilities: Annotation<string[]>({ default: () => [], reducer: (_a, b) => b }),
   relevantMemories: Annotation<MemoryEntry[]>({ default: () => [], reducer: (_a, b) => b }),
   executionPlan: Annotation<ExecutionStep[]>({ default: () => [], reducer: (_a, b) => b }),
