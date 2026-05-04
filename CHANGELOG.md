@@ -1,5 +1,14 @@
 # Changelog — @synapseia/node
 
+## [2026-05-04] fix: S10-C C-1 honest per-channel heartbeat status log (c249fa72)
+
+Old `[P2P+HTTP] Heartbeat sent via both channels` lied — fired
+after the P2P publish regardless of whether HTTP succeeded. Now
+each tick logs `[Heartbeat] tick (http={ok|FAIL:msg|skipped},
+p2p={ok|FAIL:msg|skipped})`. P2P publish wrapped in its own
+try/catch so a publish error no longer aborts the rest of the
+tick.
+
 ## [2026-05-03] fix(node): align submit-result probe to coord WorkOrderStatus enum (a1dd9095)
 
 `SubmitResultNode`'s pre-submit status guard required `ASSIGNED` or
