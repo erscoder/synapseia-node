@@ -220,6 +220,7 @@ export class AgentGraphService {
       config,
       coordinatorUrl: config.coordinatorUrl,
       peerId: config.peerId,
+      walletAddress: config.walletAddress,
       capabilities: config.capabilities,
       // Sprint B initial state
       relevantMemories: [],
