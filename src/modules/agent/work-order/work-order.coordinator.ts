@@ -159,11 +159,21 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     }
   }
 
-  async acceptWorkOrder(coordinatorUrl: string, workOrderId: string, peerId: string, nodeCapabilities: string[] = []): Promise<boolean> {
+  async acceptWorkOrder(
+    coordinatorUrl: string,
+    workOrderId: string,
+    peerId: string,
+    walletAddress: string,
+    nodeCapabilities: string[] = [],
+  ): Promise<boolean> {
     const url = `${coordinatorUrl}/work-orders/${workOrderId}/accept`;
     logger.log(` [Accept] POST ${url}`);
     try {
-      const body = { workOrderId, assigneeAddress: peerId, nodeCapabilities };
+      // assigneeAddress = SOLANA wallet address. Coord cross-checks
+      // it against the wallet bound to the authenticated peer; pre-fix
+      // the node passed `peerId` here and got 403 NODE_FORBIDDEN
+      // every WO acceptance.
+      const body = { workOrderId, assigneeAddress: walletAddress, nodeCapabilities };
       const { url: fetchUrl, init } = await this.signedFetch(url, 'POST', body);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {
@@ -184,6 +194,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     coordinatorUrl: string,
     workOrderId: string,
     peerId: string,
+    walletAddress: string,
     result: string,
     success = true,
     completedIds: Set<string>,
@@ -196,7 +207,9 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       return true;
     }
     try {
-      const body = { workOrderId, assigneeAddress: peerId, result, success };
+      // assigneeAddress = SOLANA wallet address (audit P0 #3); peerId
+      // is sent in the signed header by signedFetch().
+      const body = { workOrderId, assigneeAddress: walletAddress, result, success };
       const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/work-orders/${workOrderId}/complete`, 'POST', body);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {

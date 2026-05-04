@@ -13,7 +13,7 @@ export class SubmitResultNode {
 
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
-    const { selectedWorkOrder, executionResult, researchResult, coordinatorUrl, peerId } = state;
+    const { selectedWorkOrder, executionResult, researchResult, coordinatorUrl, peerId, walletAddress } = state;
     if (!selectedWorkOrder || !executionResult) return { submitted: false };
 
     // Hard guard: never ship a failed execution. QualityGateNode is supposed
@@ -55,7 +55,7 @@ export class SubmitResultNode {
 
     logger.log(' Reporting result...');
     const completed = await this.coordinator.completeWorkOrder(
-      coordinatorUrl, selectedWorkOrder.id, peerId,
+      coordinatorUrl, selectedWorkOrder.id, peerId, walletAddress,
       executionResult.result, executionResult.success,
       completedIds,
       (id: string) => updatedIds.push(id),

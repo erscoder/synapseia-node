@@ -122,7 +122,7 @@ export class WorkOrderLoopHelper {
     iteration: number,
     brain?: AgentBrain,
   ): Promise<{ workOrder?: WorkOrder; completed: boolean; researchResult?: ResearchResult }> {
-    const { coordinatorUrl, peerId, capabilities, llmModel, llmConfig } = config;
+    const { coordinatorUrl, peerId, walletAddress, capabilities, llmModel, llmConfig } = config;
 
     logger.log(`..............................`);
     logger.log(`Iteration ${iteration} starting...`);
@@ -206,7 +206,7 @@ export class WorkOrderLoopHelper {
         continue;
       }
 
-      const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, capabilities);
+      const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, workOrder.id, peerId, walletAddress, capabilities);
       if (!accepted) {
         this.backpressure.release(workOrder.id);
         logger.log(' Failed to accept work order (likely race condition), trying next...');
@@ -322,7 +322,7 @@ export class WorkOrderLoopHelper {
 
         logger.log(' Reporting result...');
         const completed = await this.coordinator.completeWorkOrder(
-          coordinatorUrl, workOrder.id, peerId, result, success,
+          coordinatorUrl, workOrder.id, peerId, walletAddress, result, success,
           new Set(this.state.getState().completedWorkOrderIds),
           (id) => this.state.markCompleted(id),
           (lamports) => this.state.addRewards(lamports),

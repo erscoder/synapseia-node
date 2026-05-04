@@ -73,6 +73,12 @@ export interface AgentState {
   coordinatorUrl: string;
   /** This node's peer ID */
   peerId: string;
+  /**
+   * This node's Solana wallet address. Coord cross-checks
+   * `dto.assigneeAddress` on accept / complete / submit-result against
+   * the wallet bound to the authenticated peer (audit P0 #3).
+   */
+  walletAddress: string;
   /** This node's capabilities */
   capabilities: string[];
 
@@ -134,6 +140,7 @@ export function createInitialAgentState(config: WorkOrderAgentConfig): AgentStat
     config,
     coordinatorUrl: config.coordinatorUrl,
     peerId: config.peerId,
+    walletAddress: config.walletAddress,
     capabilities: config.capabilities,
     // Sprint B - Planning + Self-Critique
     relevantMemories: [],
