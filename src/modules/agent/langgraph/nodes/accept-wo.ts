@@ -13,7 +13,7 @@ export class AcceptWorkOrderNode {
 
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
-    const { selectedWorkOrder, coordinatorUrl, peerId, capabilities } = state;
+    const { selectedWorkOrder, coordinatorUrl, peerId, walletAddress, capabilities } = state;
     if (!selectedWorkOrder) return { accepted: false };
 
     // Acquire backpressure slot before accepting
@@ -23,7 +23,7 @@ export class AcceptWorkOrderNode {
     }
 
     logger.log(' Accepting work order...');
-    const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, selectedWorkOrder.id, peerId, capabilities);
+    const accepted = await this.coordinator.acceptWorkOrder(coordinatorUrl, selectedWorkOrder.id, peerId, walletAddress, capabilities);
     if (accepted) {
       logger.log(' Work order accepted');
     } else {

@@ -8,6 +8,14 @@ import type { LLMConfig, LLMModel } from '../../llm/llm-provider';
 export interface WorkOrderAgentConfig {
   coordinatorUrl: string;
   peerId: string;
+  /**
+   * Solana wallet base58 address (the node's reward / signing wallet).
+   * Coord's WorkOrderCompletionService cross-checks every accept /
+   * complete / submit-result body against the wallet on file for the
+   * authenticated peer (audit P0 #3); pre-fix the node passed peerId
+   * here, which never matched and produced 403 NODE_FORBIDDEN.
+   */
+  walletAddress: string;
   capabilities: string[];
   llmModel: LLMModel;
   llmConfig?: LLMConfig;
