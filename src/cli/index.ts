@@ -265,6 +265,10 @@ async function bootstrap() {
     .description('Start Synapseia node')
     .option('--model <name>', 'Model to use (default: recommended for hardware)')
     .option('--llm-key <key>', 'API key for cloud LLM provider')
+    .option(
+      '--llm-url <url>',
+      '[DEPRECATED, ignored] LLM endpoints are hardcoded per provider; flag kept so existing docker-compose / systemd configs that still pass it boot cleanly instead of crashing on commander.js validation.',
+    )
     .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3701)')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
     .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
@@ -276,6 +280,7 @@ async function bootstrap() {
       async (options: {
         model?: string;
         llmKey?: string;
+        llmUrl?: string;
         coordinator?: string;
         maxIterations?: number;
         inference?: boolean;
@@ -283,6 +288,11 @@ async function bootstrap() {
         lat?: string;
         lng?: string;
       }) => {
+        if (options.llmUrl) {
+          logger.warn(
+            `⚠️  --llm-url is deprecated and ignored (endpoints are hardcoded per provider). Drop it from your start command.`,
+          );
+        }
         // Fail fast if another Synapseia node is already running somewhere
         // on this machine (either from the CLI or from the desktop UI).
         // Doing this BEFORE the password prompt / RPC work saves the user
