@@ -490,24 +490,38 @@ export class HeartbeatHelper {
 
     const tick = async (): Promise<void> => {
       if (cancelled) return;
+      // S10-C C-1: track per-channel outcome so the end-of-tick log
+      // can be honest. Pre-fix this branch swallowed HTTP failures
+      // in the inner try/catch, then logged "Heartbeat sent via
+      // both channels" unconditionally after the P2P publish —
+      // operators reading the log thought heartbeats were fine
+      // when in reality coord wasn't receiving any (live
+      // observation 2026-05-04: 0 hits to /peer/heartbeat in 30 min
+      // while the node logged "sent via both channels" every minute).
+      let httpStatus: 'ok' | 'fail' | 'skipped' = 'skipped';
+      let httpDetail: string | undefined;
+      let p2pStatus: 'ok' | 'fail' | 'skipped' = 'skipped';
+      let p2pDetail: string | undefined;
       try {
         const uptimeSeconds = Math.floor((Date.now() - intervalStartTime) / 1000);
         // Always send HTTP heartbeat to register with coordinator
         try {
           await this.sendHeartbeat(coordinatorUrl, identity, hardware, lat, lng, walletAddress);
+          httpStatus = 'ok';
           if (this.consecutiveCycleFailures > 0) {
             logger.info(`[Heartbeat] recovered after ${this.consecutiveCycleFailures} failed cycle(s)`);
             this.consecutiveCycleFailures = 0;
           }
         } catch (httpErr) {
+          httpStatus = 'fail';
+          httpDetail = (httpErr as Error).message;
           this.consecutiveCycleFailures++;
-          const msg = (httpErr as Error).message;
           if (this.consecutiveCycleFailures < HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
-            logger.warn(`[Heartbeat] cycle ${this.consecutiveCycleFailures} failed: ${msg}`);
+            logger.warn(`[Heartbeat] cycle ${this.consecutiveCycleFailures} failed: ${httpDetail}`);
           } else if (this.consecutiveCycleFailures === HeartbeatHelper.ERROR_ESCALATION_THRESHOLD) {
-            logger.error(`[Heartbeat] coordinator unreachable after ${this.consecutiveCycleFailures} consecutive cycles: ${msg}`);
+            logger.error(`[Heartbeat] coordinator unreachable after ${this.consecutiveCycleFailures} consecutive cycles: ${httpDetail}`);
           } else {
-            logger.warn(`[Heartbeat] still unreachable (cycle ${this.consecutiveCycleFailures}): ${msg}`);
+            logger.warn(`[Heartbeat] still unreachable (cycle ${this.consecutiveCycleFailures}): ${httpDetail}`);
           }
         }
         // Sprint D: Discovery feedback — register available models with coordinator
@@ -518,25 +532,46 @@ export class HeartbeatHelper {
         }
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
-          const capabilities = await this.determineCapabilitiesAsync(hardware);
-          // Do NOT include `publicKey` in the payload we pass in —
-          // `p2pNode.publishHeartbeat` canonicalises + signs the
-          // payload THEN tacks `publicKey` on post-signing. Leaving
-          // publicKey out of the signed payload keeps the two
-          // canonicals (node + coord) aligned.
-          await p2pNode.publishHeartbeat({
-            peerId: p2pNode.getPeerId(),
-            p2pPeerId: identity.peerId,
-            name: identity.name,
-            walletAddress: walletAddress ?? null,
-            tier: hardware.tier,
-            capabilities,
-            uptime: uptimeSeconds,
-            timestamp: Math.floor(Date.now() / 1000),
-          });
-          logger.log('[P2P+HTTP] Heartbeat sent via both channels');
+          try {
+            const capabilities = await this.determineCapabilitiesAsync(hardware);
+            // Do NOT include `publicKey` in the payload we pass in —
+            // `p2pNode.publishHeartbeat` canonicalises + signs the
+            // payload THEN tacks `publicKey` on post-signing. Leaving
+            // publicKey out of the signed payload keeps the two
+            // canonicals (node + coord) aligned.
+            await p2pNode.publishHeartbeat({
+              peerId: p2pNode.getPeerId(),
+              p2pPeerId: identity.peerId,
+              name: identity.name,
+              walletAddress: walletAddress ?? null,
+              tier: hardware.tier,
+              capabilities,
+              uptime: uptimeSeconds,
+              timestamp: Math.floor(Date.now() / 1000),
+            });
+            p2pStatus = 'ok';
+          } catch (p2pErr) {
+            p2pStatus = 'fail';
+            p2pDetail = (p2pErr as Error).message;
+            // Pre-S10 the P2P branch had no try/catch so a publish
+            // failure bubbled up to the outer "Heartbeat failed"
+            // catch and aborted the tick. Now we surface it
+            // explicitly without breaking the cycle.
+            logger.warn(`[Heartbeat] p2p publish failed: ${p2pDetail}`);
+          }
+        }
+        // Single honest end-of-tick line. Old `[P2P+HTTP] Heartbeat
+        // sent via both channels` lied when HTTP had silently
+        // failed; the reader now sees exactly which channels
+        // succeeded.
+        const httpStr = httpStatus === 'fail' ? `FAIL:${httpDetail}` : httpStatus;
+        const p2pStr = p2pStatus === 'fail' ? `FAIL:${p2pDetail}` : p2pStatus;
+        if (httpStatus === 'ok' || p2pStatus === 'ok') {
+          logger.info(`[Heartbeat] tick (http=${httpStr}, p2p=${p2pStr})`);
         } else {
-          logger.debug('Heartbeat sent via HTTP only');
+          // Both channels failed — already warned per-channel above,
+          // so this is a low-priority debug summary.
+          logger.debug(`[Heartbeat] tick (http=${httpStr}, p2p=${p2pStr})`);
         }
       } catch (error) {
         logger.error('Heartbeat failed:', (error as Error).message);
