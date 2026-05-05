@@ -23,7 +23,15 @@ export interface AgentCard {
     schemes: string[];
   };
   metadata: {
-    tier: number;
+    /** Hardware class (VRAM-bucket-derived, range 0-5). Self-reported by the
+     *  node. Mirror of the heartbeat `hardwareClass` field — never the
+     *  staking tier. */
+    hardwareClass: number;
+    /** Optional staking tier (SYN-stake-derived, range 0-5). Populated when
+     *  the runtime has resolved the wallet's on-chain stake; left undefined
+     *  otherwise so consumers can distinguish "no stake info" from
+     *  "tier 0". */
+    stakingTier?: number;
     domain: string;
     uptime: number;
     peerId: string;
@@ -62,7 +70,12 @@ export interface A2ARequest {
 
 export interface A2ANodeConfig {
   peerId: string;
-  tier: number;
+  /** Hardware class (VRAM-bucket-derived, range 0-5). Mirror of the
+   *  heartbeat `hardwareClass` field. */
+  hardwareClass: number;
+  /** Optional staking tier (SYN-stake-derived). Set by node-runtime when the
+   *  wallet's on-chain stake is known. */
+  stakingTier?: number;
   domain: string;
   capabilities: string[];
   a2aPort: number;

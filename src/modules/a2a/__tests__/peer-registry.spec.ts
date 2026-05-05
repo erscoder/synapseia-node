@@ -14,7 +14,7 @@ describe('PeerRegistryService', () => {
     peerId: `peer-${++seq}`,
     a2aUrl: `http://192.168.1.${10 + seq}:8080`,
     capabilities: ['llm', 'embedding'],
-    tier: 2,
+    hardwareClass: 2,
     domain: 'research',
     lastSeen: Date.now(),
     ...overrides,
@@ -31,10 +31,10 @@ describe('PeerRegistryService', () => {
     });
 
     it('should update existing peer', () => {
-      const p = makePeer({ tier: 2 });
+      const p = makePeer({ hardwareClass: 2 });
       registry.updatePeer(p);
-      registry.updatePeer({ ...p, tier: 3 });
-      expect(registry.getPeer(p.peerId)?.tier).toBe(3);
+      registry.updatePeer({ ...p, hardwareClass: 3 });
+      expect(registry.getPeer(p.peerId)?.hardwareClass).toBe(3);
     });
   });
 
@@ -110,9 +110,9 @@ describe('PeerRegistryService', () => {
     });
 
     it('should return peer info', () => {
-      const p = makePeer({ tier: 5 });
+      const p = makePeer({ hardwareClass: 5 });
       registry.updatePeer(p);
-      expect(registry.getPeer(p.peerId)?.tier).toBe(5);
+      expect(registry.getPeer(p.peerId)?.hardwareClass).toBe(5);
     });
   });
 

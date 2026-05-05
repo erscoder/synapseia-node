@@ -30,7 +30,7 @@ function makeCardService(): AgentCardService {
   const service = new AgentCardService();
   service.configure({
     peerId: 'test-peer-id-12345678',
-    tier: 1,
+    hardwareClass: 1,
     domain: 'test',
     capabilities: [],
     a2aPort: 8080,

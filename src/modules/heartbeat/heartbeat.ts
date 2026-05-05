@@ -85,18 +85,10 @@ export interface HeartbeatPayload {
   /**
    * Hardware class (0-5). NOT the staking tier — the coord ignores this
    * value for WO acceptance gating and instead reads `nodes.tier`
-   * (Postgres, on-chain-synced). The wire payload also carries `tier` as
-   * a deprecated alias for one deploy cycle so older coords keep parsing
-   * heartbeats from new nodes; once every coord ships this rename the
-   * alias drops.
+   * (Postgres, on-chain-synced). S13-D: legacy `tier` alias removed
+   * from the wire payload — coord only accepts the canonical key now.
    */
   hardwareClass: number;
-  /**
-   * @deprecated alias for `hardwareClass`. Sent in parallel for ONE
-   * deploy cycle so legacy coords still find the value at the old key.
-   * Drop after the cycle completes.
-   */
-  tier: number;
   capabilities: string[];
   uptime: number;
   name?: string;
@@ -218,9 +210,6 @@ export class HeartbeatHelper {
       publicKey: identity.publicKey,  // Full Ed25519 public key for node signature verification
       walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts
       hardwareClass: hardware.hardwareClass,
-      // Deprecated alias kept for one deploy cycle so coords without the
-      // rename still find the value at the legacy key. Drop next release.
-      tier: hardware.hardwareClass,
       capabilities,
       uptime: Math.floor(process.uptime()), // Seconds since process start
       lat,
@@ -594,8 +583,6 @@ export class HeartbeatHelper {
               name: identity.name,
               walletAddress: walletAddress ?? null,
               hardwareClass: hardware.hardwareClass,
-              // Deprecated alias for one deploy cycle (see HeartbeatPayload).
-              tier: hardware.hardwareClass,
               capabilities,
               uptime: uptimeSeconds,
               timestamp: Math.floor(Date.now() / 1000),

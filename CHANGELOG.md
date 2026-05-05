@@ -1,5 +1,12 @@
 # Changelog — @synapseia/node
 
+### S13-D — Heartbeat DTO strict-only on hardwareClass
+
+Node binaries older than commit `14ddfca5` (sent legacy `tier:` field)
+register with `hardwareClass=0` after this change. All Synapseia-team
+nodes have been rebuilt; third-party operators need to rebuild or
+their nodes will tier-down.
+
 ## [2026-05-04] fix: S10-C C-1 honest per-channel heartbeat status log (c249fa72)
 
 Old `[P2P+HTTP] Heartbeat sent via both channels` lied — fired

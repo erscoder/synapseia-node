@@ -18,7 +18,7 @@ describe('PeerSelectorService', () => {
     peerId: `peer-${++seq}-${Date.now()}`,
     a2aUrl: `http://192.168.1.${20 + seq}:8080`,
     capabilities: ['llm'],
-    tier: 2,
+    hardwareClass: 2,
     domain: 'research',
     lastSeen: Date.now(),
     ...overrides,
@@ -43,16 +43,16 @@ describe('PeerSelectorService', () => {
     });
 
     it('should prefer same-domain peers', () => {
-      registry.updatePeer(makePeer({ peerId: 'peer-research', domain: 'research', tier: 1 }));
-      registry.updatePeer(makePeer({ peerId: 'peer-finance', domain: 'finance', tier: 3 }));
+      registry.updatePeer(makePeer({ peerId: 'peer-research', domain: 'research', hardwareClass: 1 }));
+      registry.updatePeer(makePeer({ peerId: 'peer-finance', domain: 'finance', hardwareClass: 3 }));
 
       const selected = selector.selectPeer('llm', 'research');
       expect(selected?.domain).toBe('research');
     });
 
     it('should prefer higher tier when domain same', () => {
-      registry.updatePeer(makePeer({ peerId: 'peer-low', tier: 1 }));
-      registry.updatePeer(makePeer({ peerId: 'peer-high', tier: 5 }));
+      registry.updatePeer(makePeer({ peerId: 'peer-low', hardwareClass: 1 }));
+      registry.updatePeer(makePeer({ peerId: 'peer-high', hardwareClass: 5 }));
 
       const selected = selector.selectPeer('llm', 'research');
       expect(selected?.peerId).toBe('peer-high');
