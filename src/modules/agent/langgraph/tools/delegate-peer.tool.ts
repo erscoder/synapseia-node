@@ -21,7 +21,7 @@ export class DelegateToPeerTool {
       properties: {
         capability: {
           type: 'string',
-          description: 'The capability required (e.g. "llm", "embedding", "tier-1")',
+          description: 'The capability required (e.g. "llm", "embedding", "inference"). Higher-tier peers are preferred automatically by the selector via the nodes.tier column — do NOT pass "tier-N" here, it is not a capability value.',
         },
         taskType: {
           type: 'string',
