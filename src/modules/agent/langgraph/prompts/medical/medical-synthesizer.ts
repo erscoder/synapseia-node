@@ -98,5 +98,16 @@ Note four things in the proposal field:
 - supporting_dois must contain ≥ 2 real DOIs (format "10.xxxx/yyyy"). NEVER invent a DOI — only use DOIs present in the researcher's output, abstract, or critique.
 - If the researcher's structuredData was valid, preserve IDs unless the critique explicitly invalidates them.
 - If the critique identifies a fatal flaw (missing DOIs, wrong schema, invented IDs), emit a safer discoveryType that can be fully grounded, even if it is a weaker claim.
-- Use the EXACT schema field names. The coordinator strictly validates them and silently drops payloads with wrong keys.`;
+- Use the EXACT schema field names. The coordinator strictly validates them and silently drops payloads with wrong keys.
+
+❌ DO NOT confuse \`discoveryType\` (the structural class of the finding —
+one of drug_repurposing | combination_therapy | biomarker | mechanism_link |
+procedure_refinement) with \`evidence_type\` (the methodological class of the
+underlying study — one of literature_review | meta_analysis | gap_analysis |
+hypothesis_generation | contradiction_detected). They are TWO independent
+fields. \`gap_analysis\`, \`hypothesis_generation\`, \`literature_review\`,
+\`meta_analysis\`, and \`contradiction_detected\` are NEVER discoveryTypes —
+only valid \`evidence_type\` values inside \`structuredData\`. The coordinator
+rejects submissions like \`"discoveryType":"gap_analysis"\` with
+\`Unknown discoveryType: gap_analysis\`.`;
 }

@@ -22,11 +22,18 @@
  * The wrong-schema-key risk that the 2026-04-26 raise guarded against
  * is now handled upstream by the universal-field validator
  * (`extractStructuredPayloadFromProposal` + `validateDiscoverySchema` in
- * synthesizer-node). So the parser drops the og floor to a tier:
- *   - ID-bearing types (drug_repurposing, combination_therapy, biomarker,
- *     procedure_refinement) on ID-bearing evidence → og ≥ 7
- *   - mechanism_link OR review/gap/hypothesis evidence_type → og ≥ 5
- *   - unknown context (parser called without context) → og ≥ 7 (safe default)
+ * synthesizer-node). So the parser tiers BOTH the og floor AND the avg
+ * floor:
+ *   - Strict (ID-bearing types on direct evidence): avg ≥ 7.0, og ≥ 7.
+ *   - Relaxed (mechanism_link OR review/gap/hypothesis evidence): avg ≥ 5.5, og ≥ 5.
+ *   - Unknown context (parser called without context) → strict default.
+ *
+ * Why avg ≥ 5.5 (not 5.0) on the relaxed tier: an avg of exactly 5.0
+ * means literally every dimension scored 5/10, i.e. mediocre across the
+ * board. The relaxed tier exists for ID-sparse work (review papers,
+ * pathway-only mechanisms), not low-quality output. 5.5 accepts the
+ * "4 strong dims + 1 weak" pattern typical of legitimate reviews while
+ * still rejecting blanket 5/10 critiques.
  */
 
 import type { SelfCritiquePromptParams, SelfCritiqueResponse } from '../self-critique';
@@ -86,10 +93,17 @@ Score each dimension 0-10:
 Output ONLY a JSON object (no markdown, no extra text):
 {"accuracy":<0-10>,"completeness":<0-10>,"novelty":<0-10>,"actionability":<0-10>,"ontologyGrounding":<0-10>,"feedback":"<one sentence, cite the weakest dimension>","passed":<true|false>}
 
-\`passed\` should be true only when the five-dimension average is ≥ 7.0 AND ontologyGrounding clears the tier floor:
-  • discoveryType in {drug_repurposing, combination_therapy, biomarker, procedure_refinement}
-    AND evidence_type NOT in {literature_review, gap_analysis, hypothesis_generation} → og ≥ 7
-  • discoveryType=mechanism_link OR evidence_type in {literature_review, gap_analysis, hypothesis_generation} → og ≥ 5
+\`passed\` is tiered on (discoveryType, evidence_type):
+  • Strict tier — discoveryType in {drug_repurposing, combination_therapy,
+    biomarker, procedure_refinement} AND evidence_type NOT in
+    {literature_review, gap_analysis, hypothesis_generation}:
+    five-dimension average ≥ 7.0 AND ontologyGrounding ≥ 7.
+  • Relaxed tier — discoveryType=mechanism_link OR evidence_type in
+    {literature_review, gap_analysis, hypothesis_generation}:
+    five-dimension average ≥ 5.5 AND ontologyGrounding ≥ 5. (Review-class
+    work and pathway-only mechanisms cannot reasonably hit the strict
+    7.0 average — the relaxed avg accepts 4 strong dims + 1 weak, but
+    not "mediocre across the board".)
 A single invented DOI, fabricated ID, wrong schema key, or multi-object paste fails the whole critique.`;
 }
 
@@ -115,15 +129,44 @@ const RELAXED_EVIDENCE_TYPES = new Set([
 ]);
 
 /**
- * Resolve the ontologyGrounding floor from optional context. ID-bearing
- * discoveries on direct evidence keep the strict floor (≥ 7); relaxed
- * types or review/gap/hypothesis evidence drop to ≥ 5.
+ * Strict pass thresholds — ID-bearing discoveryTypes on direct (non-review)
+ * evidence: avg of 5 dims ≥ 7.0 AND ontologyGrounding ≥ 7.
  */
-function resolveOntologyGroundingFloor(ctx?: MedicalSelfCritiqueContext): number {
-  if (!ctx) return 7;
-  if (ctx.discoveryType && RELAXED_DISCOVERY_TYPES.has(ctx.discoveryType)) return 5;
-  if (ctx.evidenceType && RELAXED_EVIDENCE_TYPES.has(ctx.evidenceType)) return 5;
-  return 7;
+const STRICT_AVG_FLOOR = 7.0;
+const STRICT_OG_FLOOR = 7;
+
+/**
+ * Relaxed pass thresholds (2026-05-05) — mechanism_link or review-class
+ * evidence (literature_review / gap_analysis / hypothesis_generation):
+ * avg ≥ 5.5 AND ontologyGrounding ≥ 5. The avg floor stays above 5.0 so
+ * "all dims at 5/10" (mediocre across the board) still fails — the relaxed
+ * tier exists for legitimately ID-sparse work, not for low-quality output.
+ */
+const RELAXED_AVG_FLOOR = 5.5;
+const RELAXED_OG_FLOOR = 5;
+
+/** Resolved tier thresholds for `passed` evaluation. */
+interface PassThresholds {
+  avgFloor: number;
+  ogFloor: number;
+}
+
+/**
+ * Resolve pass thresholds from optional context. ID-bearing discoveries on
+ * direct evidence keep the strict tier (avg ≥ 7.0, og ≥ 7); mechanism_link
+ * and review-class evidence drop to the relaxed tier (avg ≥ 5.5, og ≥ 5).
+ *
+ * No context (parser called without payload extraction) → strict default.
+ */
+function resolvePassThresholds(ctx?: MedicalSelfCritiqueContext): PassThresholds {
+  if (!ctx) return { avgFloor: STRICT_AVG_FLOOR, ogFloor: STRICT_OG_FLOOR };
+  if (ctx.discoveryType && RELAXED_DISCOVERY_TYPES.has(ctx.discoveryType)) {
+    return { avgFloor: RELAXED_AVG_FLOOR, ogFloor: RELAXED_OG_FLOOR };
+  }
+  if (ctx.evidenceType && RELAXED_EVIDENCE_TYPES.has(ctx.evidenceType)) {
+    return { avgFloor: RELAXED_AVG_FLOOR, ogFloor: RELAXED_OG_FLOOR };
+  }
+  return { avgFloor: STRICT_AVG_FLOOR, ogFloor: STRICT_OG_FLOOR };
 }
 
 /**
@@ -172,15 +215,20 @@ export function parseMedicalSelfCritiqueResponse(
   const ac = clamp(parsed.actionability as number);
   const og = clamp(parsed.ontologyGrounding as number);
 
-  // Pass if 5-dim avg ≥ 7.0 AND grounding clears the tier floor. The
-  // floor is 7 by default and drops to 5 for mechanism_link / review-type
-  // evidence (see resolveOntologyGroundingFloor). The 2026-04-26 og=8
-  // raise guarded against wrong-schema-key payloads slipping through;
-  // that risk is now caught upstream by the universal-field validator
-  // in synthesizer-node, so the floor here can be relaxed.
+  // Pass thresholds tier on (discoveryType, evidence_type):
+  //   - strict (ID-bearing types on direct evidence): avg ≥ 7.0, og ≥ 7
+  //   - relaxed (mechanism_link OR review-class evidence): avg ≥ 5.5, og ≥ 5
+  // The relaxed avg floor is 5.5 (not 5.0) so a critique that scores all
+  // 5 dims at exactly 5/10 still fails — that's mediocre across the
+  // board, not just one weak dimension. 5.5 admits "4 strong + 1 weak"
+  // patterns typical of legitimate review/gap-analysis work without
+  // letting genuinely weak output through.
+  // The 2026-04-26 og=8 raise guarded against wrong-schema-key payloads
+  // slipping through; that risk is now caught upstream by the
+  // universal-field validator in synthesizer-node.
   const avg = (a + c + n + ac + og) / 5;
-  const ogFloor = resolveOntologyGroundingFloor(context);
-  const passed = avg >= 7.0 && og >= ogFloor;
+  const { avgFloor, ogFloor } = resolvePassThresholds(context);
+  const passed = avg >= avgFloor && og >= ogFloor;
 
   return {
     accuracy: a,
