@@ -34,7 +34,8 @@ export class AgentCardService {
       skills: this.buildSkills(this.config.capabilities),
       authentication: { schemes: ['ed25519-signature'] },
       metadata: {
-        tier: this.config.tier,
+        hardwareClass: this.config.hardwareClass,
+        stakingTier: this.config.stakingTier,
         domain: this.config.domain,
         uptime: Math.floor((Date.now() - this.startTime) / 1000),
         peerId: this.config.peerId,

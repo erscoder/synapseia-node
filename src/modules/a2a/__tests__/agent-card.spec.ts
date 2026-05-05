@@ -16,7 +16,7 @@ describe('AgentCardService', () => {
     it('should store the configuration', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234abcd1234abcd1234abcd1234',
-        tier: 3,
+        hardwareClass: 3,
         domain: 'research',
         capabilities: ['llm', 'embedding'],
         a2aPort: 8080,
@@ -27,7 +27,7 @@ describe('AgentCardService', () => {
 
       const card = service.getCard();
       expect(card.metadata.peerId).toBe(config.peerId);
-      expect(card.metadata.tier).toBe(3);
+      expect(card.metadata.hardwareClass).toBe(3);
     });
   });
 
@@ -39,7 +39,7 @@ describe('AgentCardService', () => {
     it('should return a valid AgentCard', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234abcd1234abcd1234abcd1234',
-        tier: 2,
+        hardwareClass: 2,
         domain: 'training',
         capabilities: ['cpu_training', 'gpu_training'],
         a2aPort: 9090,
@@ -55,7 +55,7 @@ describe('AgentCardService', () => {
       expect(card.capabilities.streaming).toBe(false);
       expect(card.capabilities.pushNotifications).toBe(false);
       expect(card.authentication.schemes).toContain('ed25519-signature');
-      expect(card.metadata.tier).toBe(2);
+      expect(card.metadata.hardwareClass).toBe(2);
       expect(card.metadata.domain).toBe('training');
       expect(card.metadata.peerId).toBe('abcd1234abcd1234abcd1234abcd1234');
       expect(typeof card.metadata.uptime).toBe('number');
@@ -64,7 +64,7 @@ describe('AgentCardService', () => {
     it('should include health_check skill by default', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234abcd1234abcd1234abcd1234',
-        tier: 1,
+        hardwareClass: 1,
         domain: 'test',
         capabilities: [],
         a2aPort: 8080,
@@ -81,7 +81,7 @@ describe('AgentCardService', () => {
     it('should map capability strings to skills', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234abcd1234abcd1234abcd1234',
-        tier: 1,
+        hardwareClass: 1,
         domain: 'test',
         capabilities: ['llm', 'embedding', 'cpu_training', 'gpu_training'],
         a2aPort: 8080,
@@ -101,7 +101,7 @@ describe('AgentCardService', () => {
     it('should use a2aHost when provided', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234abcd1234abcd1234abcd1234',
-        tier: 1,
+        hardwareClass: 1,
         domain: 'test',
         capabilities: [],
         a2aPort: 8080,
@@ -117,7 +117,7 @@ describe('AgentCardService', () => {
     it('should derive node name from peerId', () => {
       const config: A2ANodeConfig = {
         peerId: 'abcd1234567890abcdef1234567890ab',
-        tier: 1,
+        hardwareClass: 1,
         domain: 'test',
         capabilities: [],
         a2aPort: 8080,

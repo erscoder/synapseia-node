@@ -12,7 +12,9 @@ export interface PeerA2AInfo {
   peerId: string;
   a2aUrl: string;
   capabilities: string[];
-  tier: number;
+  /** Hardware class (VRAM-bucket-derived, range 0-5). Mirrored from the
+   *  remote AgentCard's `metadata.hardwareClass`. */
+  hardwareClass: number;
   domain: string;
   lastSeen: number;
 }

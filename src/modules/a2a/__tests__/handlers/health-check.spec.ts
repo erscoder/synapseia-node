@@ -13,7 +13,7 @@ describe('HealthCheckHandler', () => {
     const cardService = new AgentCardService();
     cardService.configure({
       peerId: 'test-peer-id-12345678',
-      tier: 1,
+      hardwareClass: 1,
       domain: 'test',
       capabilities: ['llm', 'embedding'],
       a2aPort: 8080,
