@@ -3,7 +3,7 @@ import * as http from 'node:http';
 
 type InferenceServerConfig = {
   peerId: string;
-  tier: number;
+  hardwareClass: number;
   models: string[];
   port?: number;
 };
@@ -414,7 +414,7 @@ describe('inference-server', () => {
 
       const config: InferenceServerConfig = {
         peerId: 'test-peer-123',
-        tier: 3,
+        hardwareClass: 3,
         models: ['llama2', 'mistral'],
       };
 
@@ -423,7 +423,7 @@ describe('inference-server', () => {
       expect(writeHeadSpy).toHaveBeenCalledWith(200, { 'Content-Type': 'application/json' });
       const response = JSON.parse(endSpy.mock.calls[0][0] as string);
       expect(response.peerId).toBe('test-peer-123');
-      expect(response.tier).toBe(3);
+      expect(response.hardwareClass).toBe(3);
       expect(response.models).toEqual(['llama2', 'mistral']);
       expect(typeof response.uptime).toBe('number');
     });
@@ -433,7 +433,7 @@ describe('inference-server', () => {
 
       const config: InferenceServerConfig = {
         peerId: 'test-peer-123',
-        tier: 1,
+        hardwareClass: 1,
         models: [],
       };
 
@@ -443,19 +443,19 @@ describe('inference-server', () => {
       expect(response.models).toEqual([]);
     });
 
-    it('should handle different tier values', async () => {
+    it('should handle different hardwareClass values', async () => {
       const { handleState } = await import('../modules/inference/inference-server.js');
 
       const config: InferenceServerConfig = {
         peerId: 'test-tier-5',
-        tier: 5,
+        hardwareClass: 5,
         models: ['gemma3'],
       };
 
       await handleState({} as http.IncomingMessage, mockRes as http.ServerResponse, config);
 
       const response = JSON.parse(endSpy.mock.calls[0][0] as string);
-      expect(response.tier).toBe(5);
+      expect(response.hardwareClass).toBe(5);
     });
   });
 
@@ -613,7 +613,7 @@ describe('inference-server', () => {
       const instance = startInferenceServer({
         port: 0,
         peerId: 'test-peer',
-        tier: 2,
+        hardwareClass: 2,
         models: ['llama2'],
       });
 
@@ -637,7 +637,7 @@ describe('inference-server', () => {
       const instance = startInferenceServer({
         port: 0,
         peerId: 'default-peer',
-        tier: 0,
+        hardwareClass: 0,
         models: [],
       });
 
@@ -663,7 +663,7 @@ describe('inference-server', () => {
       const instance = startInferenceServer({
         port: 0,
         peerId: 'e2e-peer',
-        tier: 3,
+        hardwareClass: 3,
         models: ['gemma3'],
       });
 

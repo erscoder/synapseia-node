@@ -329,16 +329,16 @@ describe('handleChatCompletions', () => {
 
 // ── handleState ───────────────────────────────────────────────────────────
 describe('handleState', () => {
-  it('returns peerId / tier / models / uptime as integer seconds', async () => {
+  it('returns peerId / hardwareClass / models / uptime as integer seconds', async () => {
     const res = new FakeRes();
     const cfg: InferenceServerConfig = {
-      peerId: 'p', tier: 2, models: ['llama', 'qwen'],
+      peerId: 'p', hardwareClass: 2, models: ['llama', 'qwen'],
     };
     await handleState({} as any, res as any, cfg);
     expect(res.statusCode).toBe(200);
     const body = parseJson(res.body);
     expect(body.peerId).toBe('p');
-    expect(body.tier).toBe(2);
+    expect(body.hardwareClass).toBe(2);
     expect(body.models).toEqual(['llama', 'qwen']);
     expect(Number.isInteger(body.uptime)).toBe(true);
   });
@@ -376,7 +376,7 @@ describe('startInferenceServer', () => {
   }
 
   it('routes GET /health → 200 { status: "ok" }', async () => {
-    const { close } = startInferenceServer({ peerId: 'p', tier: 0, models: [], port: 0 }) as any;
+    const { close } = startInferenceServer({ peerId: 'p', hardwareClass: 0, models: [], port: 0 }) as any;
     try {
       // port: 0 was ignored — the server listens on 0 → use the address after listen
     } finally { close(); }
@@ -385,7 +385,7 @@ describe('startInferenceServer', () => {
   it('serves /health and /api/v1/state and 404 with real sockets', async () => {
     // Use a fixed high port to avoid picking something busy; test suite runs single-threaded here.
     const port = 34561;
-    const { close, server } = startInferenceServer({ peerId: 'pid', tier: 5, models: ['m'], port });
+    const { close, server } = startInferenceServer({ peerId: 'pid', hardwareClass: 5, models: ['m'], port });
     await new Promise((r) => server.once('listening', r));
     try {
       const health = await httpJson(port, { method: 'GET', path: '/health' });
@@ -394,7 +394,7 @@ describe('startInferenceServer', () => {
 
       const state = await httpJson(port, { method: 'GET', path: '/api/v1/state' });
       expect(state.status).toBe(200);
-      expect(state.json).toEqual(expect.objectContaining({ peerId: 'pid', tier: 5, models: ['m'] }));
+      expect(state.json).toEqual(expect.objectContaining({ peerId: 'pid', hardwareClass: 5, models: ['m'] }));
 
       const nf = await httpJson(port, { method: 'GET', path: '/does/not/exist' });
       expect(nf.status).toBe(404);
@@ -413,7 +413,7 @@ describe('startInferenceServer', () => {
 
   it('POST /inference/quote returns a numeric priceUsd', async () => {
     const port = 34562;
-    const { close, server } = startInferenceServer({ peerId: 'p', tier: 0, models: [], port });
+    const { close, server } = startInferenceServer({ peerId: 'p', hardwareClass: 0, models: [], port });
     await new Promise((r) => server.once('listening', r));
     try {
       const res = await httpJson(port, {

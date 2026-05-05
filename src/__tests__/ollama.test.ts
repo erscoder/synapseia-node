@@ -57,7 +57,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -79,7 +79,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 24,
-        tier: 3,
+        hardwareClass: 3,
         hasOllama: true,
       });
 
@@ -261,7 +261,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -300,7 +300,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -326,7 +326,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -368,7 +368,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -399,7 +399,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 
@@ -427,7 +427,7 @@ describe('Ollama Module', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: true,
       });
 

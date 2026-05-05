@@ -12,7 +12,7 @@ import { HardwareHelper, canInference, type Hardware } from '../modules/hardware
 
 function createHelperWithHardware(hw: Partial<Hardware> = {}): HardwareHelper {
   const helper = new HardwareHelper();
-  const defaults: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, tier: 0, hasOllama: false };
+  const defaults: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
   jest.spyOn(helper, 'detectHardware').mockReturnValue({ ...defaults, ...hw });
   return helper;
 }
@@ -79,7 +79,7 @@ describe('buildCapabilities() includes cpu_inference', () => {
     jest.spyOn(helper, 'canTrain').mockReturnValue(false);
     jest.spyOn(helper, 'canDiLoCo').mockReturnValue(false);
 
-    const hw: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, tier: 0, hasOllama: false };
+    const hw: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     const caps = helper.buildCapabilities(hw);
 
     expect(caps).toContain('cpu_inference');
@@ -91,7 +91,7 @@ describe('buildCapabilities() includes cpu_inference', () => {
     jest.spyOn(helper, 'canTrain').mockReturnValue(false);
     jest.spyOn(helper, 'canDiLoCo').mockReturnValue(false);
 
-    const hw: Hardware = { cpuCores: 1, ramGb: 2, gpuVramGb: 0, tier: 0, hasOllama: false };
+    const hw: Hardware = { cpuCores: 1, ramGb: 2, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     const caps = helper.buildCapabilities(hw);
 
     expect(caps).not.toContain('cpu_inference');
@@ -103,7 +103,7 @@ describe('buildCapabilities() includes cpu_inference', () => {
     jest.spyOn(helper, 'canTrain').mockReturnValue(true);
     jest.spyOn(helper, 'canDiLoCo').mockReturnValue(false);
 
-    const hw: Hardware = { cpuCores: 8, ramGb: 16, gpuVramGb: 0, tier: 0, hasOllama: false };
+    const hw: Hardware = { cpuCores: 8, ramGb: 16, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     const caps = helper.buildCapabilities(hw);
 
     expect(caps).toContain('training');
@@ -116,7 +116,7 @@ describe('buildCapabilities() includes cpu_inference', () => {
     jest.spyOn(helper, 'canTrain').mockReturnValue(false);
     jest.spyOn(helper, 'canDiLoCo').mockReturnValue(false);
 
-    const hw: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 16, tier: 3, hasOllama: false };
+    const hw: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 16, hardwareClass: 3, hasOllama: false };
     const caps = helper.buildCapabilities(hw);
 
     expect(caps).toContain('cpu');

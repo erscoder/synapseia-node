@@ -48,7 +48,7 @@ describe('HeartbeatHelper', () => {
         cpuCores: 4,
         ramGb: 8,
         gpuVramGb: 0,
-        tier: 0 as const,
+        hardwareClass: 0 as const,
         hasOllama: false,
         hasCloudLlm: false,
       };
@@ -67,7 +67,7 @@ describe('HeartbeatHelper', () => {
         cpuCores: 4,
         ramGb: 8,
         gpuVramGb: 0,
-        tier: 0 as const,
+        hardwareClass: 0 as const,
         hasOllama: true,
         hasCloudLlm: false,
       };
@@ -86,7 +86,7 @@ describe('HeartbeatHelper', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 0,
-        tier: 0 as const,
+        hardwareClass: 0 as const,
         hasOllama: true,
         hasCloudLlm: false,
       };
@@ -102,7 +102,7 @@ describe('HeartbeatHelper', () => {
         cpuCores: 8,
         ramGb: 16,
         gpuVramGb: 8,
-        tier: 1 as const,
+        hardwareClass: 1 as const,
         hasOllama: false,
         hasCloudLlm: false,
       };
@@ -118,7 +118,7 @@ describe('HeartbeatHelper', () => {
         cpuCores: 4,
         ramGb: 8,
         gpuVramGb: 0,
-        tier: 0 as const,
+        hardwareClass: 0 as const,
         hasOllama: false,
         hasCloudLlm: true,
       };
@@ -143,7 +143,7 @@ describe('HeartbeatHelper', () => {
       cpuCores: 10,
       ramGb: 16,
       gpuVramGb: 0,
-      tier: 0 as const,
+      hardwareClass: 0 as const,
       hasOllama: true,
       hasCloudLlm: false,
     };

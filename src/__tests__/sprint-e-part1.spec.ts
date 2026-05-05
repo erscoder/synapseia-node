@@ -160,8 +160,8 @@ describe('E2 — runDiLoCoInnerLoop', () => {
 // ======================================================================
 import { HardwareHelper, canDiLoCo, buildCapabilities, type Hardware } from '../modules/hardware/hardware';
 
-const gpuHw: Hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 16, tier: 3, hasOllama: false };
-const cpuHw: Hardware = { cpuCores: 4, ramGb: 16, gpuVramGb: 0, tier: 0, hasOllama: false };
+const gpuHw: Hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 16, hardwareClass: 3, hasOllama: false };
+const cpuHw: Hardware = { cpuCores: 4, ramGb: 16, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
 
 describe('E7 — canDiLoCo', () => {
   afterEach(() => { jest.restoreAllMocks(); });
@@ -171,7 +171,7 @@ describe('E7 — canDiLoCo', () => {
   });
 
   it('returns false for zero-VRAM hardware', () => {
-    const hw0: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, tier: 0, hasOllama: false };
+    const hw0: Hardware = { cpuCores: 4, ramGb: 8, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     expect(new HardwareHelper().canDiLoCo(hw0)).toBe(false);
   });
 

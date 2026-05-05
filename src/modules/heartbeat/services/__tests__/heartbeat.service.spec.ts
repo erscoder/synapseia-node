@@ -20,7 +20,7 @@ const mockHardware = {
   ramGb: 16,
   vramGb: 0,
   isOllamaRunning: false,
-  tier: 1,
+  hardwareClass: 1,
   tierName: 'standard',
 };
 

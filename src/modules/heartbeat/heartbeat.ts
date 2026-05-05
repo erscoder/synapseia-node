@@ -85,9 +85,16 @@ export interface HeartbeatPayload {
   /**
    * Hardware class (0-5). NOT the staking tier — the coord ignores this
    * value for WO acceptance gating and instead reads `nodes.tier`
-   * (Postgres, on-chain-synced). Kept named `tier` for backwards-compat
-   * with deployed coords; rename to `hardwareClass` is tracked in the
-   * Hardware interface and HeartbeatDto comments.
+   * (Postgres, on-chain-synced). The wire payload also carries `tier` as
+   * a deprecated alias for one deploy cycle so older coords keep parsing
+   * heartbeats from new nodes; once every coord ships this rename the
+   * alias drops.
+   */
+  hardwareClass: number;
+  /**
+   * @deprecated alias for `hardwareClass`. Sent in parallel for ONE
+   * deploy cycle so legacy coords still find the value at the old key.
+   * Drop after the cycle completes.
    */
   tier: number;
   capabilities: string[];
@@ -210,7 +217,10 @@ export class HeartbeatHelper {
       name: identity.name,
       publicKey: identity.publicKey,  // Full Ed25519 public key for node signature verification
       walletAddress: walletAddress ?? null, // Solana wallet address for reward payouts
-      tier: hardware.tier,
+      hardwareClass: hardware.hardwareClass,
+      // Deprecated alias kept for one deploy cycle so coords without the
+      // rename still find the value at the legacy key. Drop next release.
+      tier: hardware.hardwareClass,
       capabilities,
       uptime: Math.floor(process.uptime()), // Seconds since process start
       lat,
@@ -583,7 +593,9 @@ export class HeartbeatHelper {
               p2pPeerId: identity.peerId,
               name: identity.name,
               walletAddress: walletAddress ?? null,
-              tier: hardware.tier,
+              hardwareClass: hardware.hardwareClass,
+              // Deprecated alias for one deploy cycle (see HeartbeatPayload).
+              tier: hardware.hardwareClass,
               capabilities,
               uptime: uptimeSeconds,
               timestamp: Math.floor(Date.now() / 1000),
