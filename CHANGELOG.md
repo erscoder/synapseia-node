@@ -1,5 +1,33 @@
 # Changelog — @synapseia/node
 
+## [2026-05-05] fix: macOS cpu_training stripped — wrong namespace on availableMemory
+
+`applyMemoryPressureFilter` in `heartbeat.ts` was supposed to use the
+Node 22+ `availableMemory()` API (which excludes inactive cache the OS
+will reclaim under pressure) but the helper queried it on the wrong
+namespace — `os.availableMemory` does not exist; the API lives on
+`process`. The `typeof fn === 'function'` guard fell through silently
+and the helper always landed on `os.freemem()`.
+
+On macOS, `os.freemem()` reports inactive cache as "used", so free RAM
+reads in the 100–500 MB range even when the system is fine. Result:
+node-kike (macOS native) crossed the 900 MB `TRAINING_MEM_FLOOR_MB`
+floor on every heartbeat and lost `cpu_training` from its registered
+caps — coord never offered training WOs to it. node-alpha (linux
+container on the same Mac host) reads cgroup-aware free, stayed above
+the floor, and kept the cap. Asymmetric behavior between two nodes on
+the same hardware.
+
+Switched the helper to `process.availableMemory()`. On Node 22+ this
+returns vm_stat-based available bytes on macOS and MemAvailable on
+Linux — both excluding reclaimable cache. On Node <22 we fall through
+to `os.freemem()` (acceptable for linux containers, still buggy on
+mac dev hosts; documented).
+
+`TRAINING_MEM_FLOOR_MB` left at 900 MB. The existing
+heartbeat-memory-pressure spec exercises the helper via a deterministic
+`freeMBOverride` parameter, so no test mock changes were required.
+
 ### S13-D — Heartbeat DTO strict-only on hardwareClass
 
 Node binaries older than commit `14ddfca5` (sent legacy `tier:` field)

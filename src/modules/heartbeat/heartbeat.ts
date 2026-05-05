@@ -35,13 +35,17 @@ let lastAnnouncedCapabilities: string[] | null = null;
  * Mac in steady state can report ~89 MB free even when memory
  * pressure is green — that misreading was silently stripping
  * `cpu_training` / `gpu_training` from every heartbeat. Node 22+
- * exposes `os.availableMemory()`, which on Linux matches
- * `/proc/meminfo` `MemAvailable` and on macOS includes reclaimable
- * inactive pages, so the number reflects real headroom. Fall back to
- * `os.freemem()` only when the runtime predates the API.
+ * exposes `process.availableMemory()`, which on Linux matches
+ * `/proc/meminfo` `MemAvailable` and on macOS uses a vm_stat-based
+ * `available` calculation that excludes reclaimable inactive pages,
+ * so the number reflects real headroom. Fall back to `os.freemem()`
+ * only when the runtime predates the API (Node <22). Note: the API
+ * lives on `process`, NOT on `os` — an earlier version of this
+ * helper queried `os.availableMemory` which does not exist, so it
+ * silently always fell back to `os.freemem()` and the bug persisted.
  */
 function readAvailableMemMB(): number {
-  const fn = (os as unknown as { availableMemory?: () => number }).availableMemory;
+  const fn = (process as unknown as { availableMemory?: () => number }).availableMemory;
   if (typeof fn === 'function') {
     try { return Math.floor(fn() / (1024 * 1024)); } catch { /* fall through */ }
   }
