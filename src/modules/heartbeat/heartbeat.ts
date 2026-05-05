@@ -473,11 +473,11 @@ export class HeartbeatHelper {
           logger.warn(
             '[Heartbeat] No training LLM reachable (Ollama offline and LLM_CLOUD_MODEL unset) — removing cpu_training capability.',
           );
-        } else {
-          logger.log(
-            `[Heartbeat] Training LLM: ${trainingModel.provider}${trainingModel.providerId ? `:${trainingModel.providerId}` : ''}/${trainingModel.modelId}`,
-          );
         }
+        // No log on success — fired every 60s heartbeat per tick was log
+        // spam. The warn above still fires (and strips cpu_training) when
+        // resolution actually fails, which is the only state change worth
+        // surfacing.
       } catch (err) {
         logger.warn(`[Heartbeat] Training LLM detection failed: ${(err as Error).message}`);
       }
