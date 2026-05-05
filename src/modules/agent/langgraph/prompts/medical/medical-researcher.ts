@@ -93,7 +93,9 @@ For a paper titled "Riluzole prolongs survival in patients with amyotrophic late
     "drug_rxnorm_id": "9325",
     "disease_mesh_id": "D000690",
     "mechanism_summary": "Riluzole inhibits voltage-gated sodium channels and presynaptic glutamate release, reducing excitotoxic injury in spinal and bulbar motor neurons.",
-    "supporting_dois": ["10.1056/NEJM199403033300901", "10.1016/S0140-6736(96)91680-3"]
+    "supporting_dois": ["10.1056/NEJM199403033300901", "10.1016/S0140-6736(96)91680-3"],
+    "novel_contribution": "Riluzole at 50mg twice daily extends median survival in definite or probable amyotrophic lateral sclerosis by approximately three months versus placebo across a 155-patient double-blind trial, with consistent benefit in bulbar and limb-onset subgroups via glutamate antagonism on motor neurons.",
+    "evidence_type": "literature_review"
   }
 }
 
@@ -117,5 +119,6 @@ Note: \`drug_rxnorm_id\`, \`disease_mesh_id\`, \`mechanism_summary\`, \`supporti
 - All ID fields (RxNorm, MeSH, UMLS CUI) must be real identifiers you can cite from the abstract or context. If you cannot ground an ID, pick a different discoveryType that does not require it.
 - summary and keyInsights must be plain English, not JSON.
 - Do NOT include a "proposal" field — the proposal is built downstream from structuredData.
-- Use the EXACT field names from the schema block above. \`drug_rxnorm_id\` not \`"RxNorm"\`. \`disease_mesh_id\` not \`"MeSH"\`. \`umls_cui\` not \`"UMLS CUI"\`.`;
+- Use the EXACT field names from the schema block above. \`drug_rxnorm_id\` not \`"RxNorm"\`. \`disease_mesh_id\` not \`"MeSH"\`. \`umls_cui\` not \`"UMLS CUI"\`.
+- structuredData MUST include \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug/disease/pathway/biomarker terms above) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected). meta_analysis requires ≥ 3 distinct supporting_dois; contradiction_detected requires novel_contribution to use a conflict word (contradict / disagree / conflict / inconsist / oppose).`;
 }
