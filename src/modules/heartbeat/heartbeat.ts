@@ -82,6 +82,13 @@ export interface HeartbeatPayload {
   p2pPeerId: string;
   publicKey: string;  // Full Ed25519 public key (64 hex chars = 32 bytes)
   walletAddress: string | null;
+  /**
+   * Hardware class (0-5). NOT the staking tier — the coord ignores this
+   * value for WO acceptance gating and instead reads `nodes.tier`
+   * (Postgres, on-chain-synced). Kept named `tier` for backwards-compat
+   * with deployed coords; rename to `hardwareClass` is tracked in the
+   * Hardware interface and HeartbeatDto comments.
+   */
   tier: number;
   capabilities: string[];
   uptime: number;

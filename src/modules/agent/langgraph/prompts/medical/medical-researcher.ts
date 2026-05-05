@@ -120,5 +120,16 @@ Note: \`drug_rxnorm_id\`, \`disease_mesh_id\`, \`mechanism_summary\`, \`supporti
 - summary and keyInsights must be plain English, not JSON.
 - Do NOT include a "proposal" field — the proposal is built downstream from structuredData.
 - Use the EXACT field names from the schema block above. \`drug_rxnorm_id\` not \`"RxNorm"\`. \`disease_mesh_id\` not \`"MeSH"\`. \`umls_cui\` not \`"UMLS CUI"\`.
-- structuredData MUST include \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug/disease/pathway/biomarker terms above) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected). meta_analysis requires ≥ 3 distinct supporting_dois; contradiction_detected requires novel_contribution to use a conflict word (contradict / disagree / conflict / inconsist / oppose).`;
+- structuredData MUST include \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug/disease/pathway/biomarker terms above) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected). meta_analysis requires ≥ 3 distinct supporting_dois; contradiction_detected requires novel_contribution to use a conflict word (contradict / disagree / conflict / inconsist / oppose).
+
+❌ DO NOT confuse \`discoveryType\` (the structural class of the finding —
+one of drug_repurposing | combination_therapy | biomarker | mechanism_link |
+procedure_refinement) with \`evidence_type\` (the methodological class of the
+underlying study — one of literature_review | meta_analysis | gap_analysis |
+hypothesis_generation | contradiction_detected). They are TWO independent
+fields. \`gap_analysis\`, \`hypothesis_generation\`, \`literature_review\`,
+\`meta_analysis\`, and \`contradiction_detected\` are NEVER discoveryTypes —
+only valid \`evidence_type\` values inside \`structuredData\`. The coordinator
+rejects submissions like \`"discoveryType":"gap_analysis"\` with
+\`Unknown discoveryType: gap_analysis\`.`;
 }

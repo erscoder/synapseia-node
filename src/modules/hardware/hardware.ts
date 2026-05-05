@@ -43,6 +43,24 @@ export interface Hardware {
   gpuVramGb: number;
   /** Human-readable GPU/CPU model (e.g. "Apple M1 Pro", "NVIDIA RTX 4090"). */
   gpuModel?: string;
+  /**
+   * Hardware class (0-5), derived from VRAM bucket + CPU/GPU model.
+   *
+   * ⚠️ This is the HARDWARE class, NOT the staking tier. The coordinator's
+   * WO acceptance gate reads the staking tier from `nodes.tier` (Postgres,
+   * synced from on-chain stake by StakingTierSyncService) — never from
+   * this self-reported value. The 2026-05-05 false-403 was caused exactly
+   * by conflating the two on the coord side; the fix routes the WO gate
+   * through the staking tier, but the node-side field name stays `tier`
+   * for now because renaming cascades into ~15 call sites
+   * (HeartbeatPayload, identity, runtime, CLI banner, agent-card,
+   * peer-selector, rewards, inference-server, p2p heartbeat, etc.).
+   *
+   * TODO(part-2-rename): rename to `hardwareClass` once we coordinate a
+   * node↔coord wire-compat cycle. Until then this number reaches the
+   * coord as `dto.tier` (HeartbeatDto), is stored on the Redis Peer record
+   * as `peer.tier`, and MUST NOT be read as a stake-policy signal.
+   */
   tier: number;
   hasOllama: boolean;
   /** True when the node has a cloud LLM URL configured (--llm-url) */

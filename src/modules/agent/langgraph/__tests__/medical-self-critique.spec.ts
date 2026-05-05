@@ -58,15 +58,18 @@ describe('buildMedicalSelfCritiquePrompt', () => {
     expect(p).toContain('10.1056/NEJMoa2204705');
   });
 
-  it('documents the tiered pass rule (avg ≥ 7.0 AND tiered grounding floor)', () => {
+  it('documents the tiered pass rule (strict avg ≥ 7.0 + og ≥ 7; relaxed avg ≥ 5.5 + og ≥ 5)', () => {
     const p = buildMedicalSelfCritiquePrompt(base);
-    expect(p).toMatch(/average\s*is\s*≥\s*7\.0/i);
-    // ID-bearing tier
-    expect(p).toMatch(/og\s*≥\s*7/i);
-    // Relaxed tier for mechanism_link / review-type evidence
-    expect(p).toMatch(/og\s*≥\s*5/i);
+    // Strict tier — ID-bearing types on direct evidence
+    expect(p).toMatch(/average\s*≥\s*7\.0/i);
+    expect(p).toMatch(/ontologyGrounding\s*≥\s*7/i);
+    // Relaxed tier — mechanism_link / review-class evidence
+    expect(p).toMatch(/average\s*≥\s*5\.5/i);
+    expect(p).toMatch(/ontologyGrounding\s*≥\s*5/i);
     expect(p).toContain('mechanism_link');
     expect(p).toContain('literature_review');
+    expect(p).toContain('gap_analysis');
+    expect(p).toContain('hypothesis_generation');
   });
 
   it('forbids wrong schema keys (RxNorm, MeSH, UMLS CUI) explicitly', () => {
@@ -98,7 +101,7 @@ describe('parseMedicalSelfCritiqueResponse', () => {
     expect(calculateMedicalAverageScore(r)).toBeCloseTo(8.2, 1);
   });
 
-  it('fails when average is below 7.0 even if grounding is perfect', () => {
+  it('fails when average is below 7.0 on the strict (default) tier even if grounding is perfect', () => {
     const raw = JSON.stringify({
       accuracy: 4, completeness: 5, novelty: 5, actionability: 4, ontologyGrounding: 10,
       feedback: 'weak analysis', passed: true,
@@ -147,6 +150,33 @@ describe('parseMedicalSelfCritiqueResponse', () => {
       evidenceType: 'literature_review',
     });
     expect(r.passed).toBe(true);
+  });
+
+  it('passes relaxed tier with avg=5.6 (below strict 7.0 but above relaxed 5.5)', () => {
+    // 2026-05-05 Task C: relaxed tier drops avg floor from 7.0 → 5.5 so
+    // legitimate review/gap-analysis work scoring "4 fine + 1 weak" can
+    // still pass. (5+6+6+6+5)/5 = 5.6.
+    const raw = JSON.stringify({
+      accuracy: 5, completeness: 6, novelty: 6, actionability: 6, ontologyGrounding: 5,
+      feedback: 'survey paper, ID-sparse but coherent', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, {
+      discoveryType: 'drug_repurposing',
+      evidenceType: 'gap_analysis',
+    });
+    expect(r.passed).toBe(true);
+  });
+
+  it('relaxed tier still rejects mediocre-across-the-board (avg=5.0)', () => {
+    // Relaxed avg floor is 5.5, NOT 5.0 — exactly 5/10 across all dims is
+    // mediocre output, not just ID-sparse. The relaxed tier is for "4
+    // strong + 1 weak", not blanket-mid scores.
+    const raw = JSON.stringify({
+      accuracy: 5, completeness: 5, novelty: 5, actionability: 5, ontologyGrounding: 5,
+      feedback: 'mediocre across the board', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, { discoveryType: 'mechanism_link' });
+    expect(r.passed).toBe(false);
   });
 
   it('still fails relaxed tier when og < 5', () => {
