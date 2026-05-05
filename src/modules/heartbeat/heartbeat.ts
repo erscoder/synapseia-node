@@ -29,6 +29,26 @@ import { getNodeVersion } from '../../utils/version';
 let lastAnnouncedCapabilities: string[] | null = null;
 
 /**
+ * Read available memory in MB using the OS-aware metric when the
+ * runtime exposes it. `os.freemem()` only reports raw free pages and
+ * on macOS excludes inactive (file-cache) pages, so a healthy 16 GB
+ * Mac in steady state can report ~89 MB free even when memory
+ * pressure is green — that misreading was silently stripping
+ * `cpu_training` / `gpu_training` from every heartbeat. Node 22+
+ * exposes `os.availableMemory()`, which on Linux matches
+ * `/proc/meminfo` `MemAvailable` and on macOS includes reclaimable
+ * inactive pages, so the number reflects real headroom. Fall back to
+ * `os.freemem()` only when the runtime predates the API.
+ */
+function readAvailableMemMB(): number {
+  const fn = (os as unknown as { availableMemory?: () => number }).availableMemory;
+  if (typeof fn === 'function') {
+    try { return Math.floor(fn() / (1024 * 1024)); } catch { /* fall through */ }
+  }
+  return Math.floor(os.freemem() / (1024 * 1024));
+}
+
+/**
  * Capability tags that demand training-grade RAM headroom and must be
  * stripped from the announced set when free RAM is below
  * `TRAINING_MEM_FLOOR_MB`. Mirrors the four training-class tags
@@ -356,7 +376,7 @@ export class HeartbeatHelper {
    * ESM-mode jest because the imported namespace is frozen.
    */
   applyMemoryPressureFilter(capabilities: string[], freeMBOverride?: number): string[] {
-    const freeMB = freeMBOverride ?? Math.floor(os.freemem() / (1024 * 1024));
+    const freeMB = freeMBOverride ?? readAvailableMemMB();
     const underPressure = freeMB < TRAINING_MEM_FLOOR_MB;
     const filtered = underPressure
       ? capabilities.filter(cap => !TRAINING_CAPABILITIES.has(cap))
