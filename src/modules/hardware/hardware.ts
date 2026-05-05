@@ -1,5 +1,10 @@
 /**
- * Hardware detection and tier calculation
+ * Hardware detection and hardware-class calculation.
+ *
+ * `hardwareClass` (0-5, VRAM-bucket-derived) is distinct from the on-chain
+ * staking tier persisted in `nodes.tier` Postgres column on the coord side.
+ * Hardware class is a self-reported capability hint; staking tier gates
+ * WO acceptance and reward multipliers and is sourced from on-chain stake.
  */
 
 import * as os from 'os';
@@ -46,22 +51,12 @@ export interface Hardware {
   /**
    * Hardware class (0-5), derived from VRAM bucket + CPU/GPU model.
    *
-   * ⚠️ This is the HARDWARE class, NOT the staking tier. The coordinator's
-   * WO acceptance gate reads the staking tier from `nodes.tier` (Postgres,
-   * synced from on-chain stake by StakingTierSyncService) — never from
-   * this self-reported value. The 2026-05-05 false-403 was caused exactly
-   * by conflating the two on the coord side; the fix routes the WO gate
-   * through the staking tier, but the node-side field name stays `tier`
-   * for now because renaming cascades into ~15 call sites
-   * (HeartbeatPayload, identity, runtime, CLI banner, agent-card,
-   * peer-selector, rewards, inference-server, p2p heartbeat, etc.).
-   *
-   * TODO(part-2-rename): rename to `hardwareClass` once we coordinate a
-   * node↔coord wire-compat cycle. Until then this number reaches the
-   * coord as `dto.tier` (HeartbeatDto), is stored on the Redis Peer record
-   * as `peer.tier`, and MUST NOT be read as a stake-policy signal.
+   * Distinct from the staking tier — the coordinator gates WO acceptance
+   * and reward multipliers from `nodes.tier` (Postgres, synced from on-chain
+   * stake by StakingTierSyncService). This value is purely a self-reported
+   * capability hint and MUST NOT be read as a stake-policy signal.
    */
-  tier: number;
+  hardwareClass: number;
   hasOllama: boolean;
   /** True when the node has a cloud LLM URL configured (--llm-url) */
   hasCloudLlm?: boolean;
@@ -105,19 +100,19 @@ export class HardwareHelper {
    */
   /** @internal exported for testing */
   detectAppleSilicon(hardware: Hardware, model: string): void {
-    if (model.includes('M3 Ultra')) hardware.tier = 5;
-    else if (model.includes('M3 Max') || model.includes('M3 Pro')) hardware.tier = 4;
-    else if (model.includes('M2 Ultra')) hardware.tier = 3;
-    else if (model.includes('M2 Max')) hardware.tier = 3;
-    else if (model.includes('M2 Pro') || model.includes('M1 Ultra')) hardware.tier = 2;
-    else if (model.includes('M1 Max')) hardware.tier = 2;
-    else if (model.includes('M3') || model.includes('M2') || model.includes('M1')) hardware.tier = 1;
+    if (model.includes('M3 Ultra')) hardware.hardwareClass = 5;
+    else if (model.includes('M3 Max') || model.includes('M3 Pro')) hardware.hardwareClass = 4;
+    else if (model.includes('M2 Ultra')) hardware.hardwareClass = 3;
+    else if (model.includes('M2 Max')) hardware.hardwareClass = 3;
+    else if (model.includes('M2 Pro') || model.includes('M1 Ultra')) hardware.hardwareClass = 2;
+    else if (model.includes('M1 Max')) hardware.hardwareClass = 2;
+    else if (model.includes('M3') || model.includes('M2') || model.includes('M1')) hardware.hardwareClass = 1;
 
     // Apple Silicon GPU VRAM estimates
-    if (model.includes('Ultra')) hardware.gpuVramGb = hardware.tier === 5 ? 192 : 128;
+    if (model.includes('Ultra')) hardware.gpuVramGb = hardware.hardwareClass === 5 ? 192 : 128;
     else if (model.includes('Max')) hardware.gpuVramGb = 96; // Max models always set tier to 4 or 3 before this, so tier===5 never happens
-    else if (model.includes('Pro')) hardware.gpuVramGb = hardware.tier >= 3 ? 48 : 18;
-    else hardware.gpuVramGb = hardware.tier === 1 ? 10 : 7;
+    else if (model.includes('Pro')) hardware.gpuVramGb = hardware.hardwareClass >= 3 ? 48 : 18;
+    else hardware.gpuVramGb = hardware.hardwareClass === 1 ? 10 : 7;
   }
 
   /** @internal exported for testing */
@@ -135,12 +130,12 @@ export class HardwareHelper {
     }
 
     // Determine tier based on VRAM
-    if (hardware.gpuVramGb >= 80) hardware.tier = 5;
-    else if (hardware.gpuVramGb >= 64) hardware.tier = 5;
-    else if (hardware.tier < 5 && hardware.gpuVramGb >= 24) hardware.tier = 4;
-    else if (hardware.tier < 4 && hardware.gpuVramGb >= 14) hardware.tier = 3;
-    else if (hardware.tier < 3 && hardware.gpuVramGb >= 10) hardware.tier = 2;
-    else if (hardware.tier < 2 && hardware.gpuVramGb >= 6) hardware.tier = 1;
+    if (hardware.gpuVramGb >= 80) hardware.hardwareClass = 5;
+    else if (hardware.gpuVramGb >= 64) hardware.hardwareClass = 5;
+    else if (hardware.hardwareClass < 5 && hardware.gpuVramGb >= 24) hardware.hardwareClass = 4;
+    else if (hardware.hardwareClass < 4 && hardware.gpuVramGb >= 14) hardware.hardwareClass = 3;
+    else if (hardware.hardwareClass < 3 && hardware.gpuVramGb >= 10) hardware.hardwareClass = 2;
+    else if (hardware.hardwareClass < 2 && hardware.gpuVramGb >= 6) hardware.hardwareClass = 1;
   }
 
   detectHardware(cpuOnly = false, archOverride?: string): Hardware {
@@ -148,7 +143,7 @@ export class HardwareHelper {
       cpuCores: os.cpus().length || 2,
       ramGb: Math.round(os.totalmem() / (1024 ** 3)),
       gpuVramGb: 0,
-      tier: 0,
+      hardwareClass: 0,
       hasOllama: false,
     };
 

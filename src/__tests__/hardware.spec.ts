@@ -35,7 +35,7 @@ describe('Hardware Detection', () => {
 
     it('should return tier 0 for CPU-only detection', () => {
       const hardware = detectHardware(true);
-      expect(hardware.tier).toBe(0);
+      expect(hardware.hardwareClass).toBe(0);
       expect(hardware.gpuVramGb).toBe(0);
     });
 
@@ -54,7 +54,7 @@ describe('Hardware Detection', () => {
       expect(hardware).toHaveProperty('cpuCores');
       expect(hardware).toHaveProperty('ramGb');
       expect(hardware).toHaveProperty('gpuVramGb');
-      expect(hardware).toHaveProperty('tier');
+      expect(hardware).toHaveProperty('hardwareClass');
       expect(hardware).toHaveProperty('hasOllama');
     });
   });
@@ -223,27 +223,27 @@ describe('Hardware Detection', () => {
 
   describe('detectAppleSilicon (exported for testing)', () => {
     function makeHw(): Hardware {
-      return { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
+      return { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     }
 
     it('detects M3 Ultra as tier 5 with 192GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M3 Ultra');
-      expect(hw.tier).toBe(5);
+      expect(hw.hardwareClass).toBe(5);
       expect(hw.gpuVramGb).toBe(192);
     });
 
     it('detects M3 Max as tier 4 with 96GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M3 Max');
-      expect(hw.tier).toBe(4);
+      expect(hw.hardwareClass).toBe(4);
       expect(hw.gpuVramGb).toBe(96); // Max + tier<5 = 96
     });
 
     it('detects M3 Pro as tier 4', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M3 Pro');
-      expect(hw.tier).toBe(4);
+      expect(hw.hardwareClass).toBe(4);
       // Pro + tier>=3 = 48
       expect(hw.gpuVramGb).toBe(48);
     });
@@ -251,117 +251,117 @@ describe('Hardware Detection', () => {
     it('detects M2 Ultra as tier 3 with 128GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M2 Ultra');
-      expect(hw.tier).toBe(3);
+      expect(hw.hardwareClass).toBe(3);
       expect(hw.gpuVramGb).toBe(128);
     });
 
     it('detects M2 Max as tier 3 with 96GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M2 Max');
-      expect(hw.tier).toBe(3);
+      expect(hw.hardwareClass).toBe(3);
       expect(hw.gpuVramGb).toBe(96);
     });
 
     it('detects M2 Pro as tier 2 with 18GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M2 Pro');
-      expect(hw.tier).toBe(2);
+      expect(hw.hardwareClass).toBe(2);
       expect(hw.gpuVramGb).toBe(18);
     });
 
     it('detects M1 Ultra as tier 2 with 128GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M1 Ultra');
-      expect(hw.tier).toBe(2);
+      expect(hw.hardwareClass).toBe(2);
       expect(hw.gpuVramGb).toBe(128);
     });
 
     it('detects M1 Max as tier 2 with 96GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M1 Max');
-      expect(hw.tier).toBe(2);
+      expect(hw.hardwareClass).toBe(2);
       expect(hw.gpuVramGb).toBe(96);
     });
 
     it('detects M3 (base) as tier 1 with 10GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M3');
-      expect(hw.tier).toBe(1);
+      expect(hw.hardwareClass).toBe(1);
       expect(hw.gpuVramGb).toBe(10);
     });
 
     it('detects M2 (base) as tier 1 with 10GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M2');
-      expect(hw.tier).toBe(1);
+      expect(hw.hardwareClass).toBe(1);
       expect(hw.gpuVramGb).toBe(10);
     });
 
     it('detects M1 (base) as tier 1 with 10GB', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Apple M1');
-      expect(hw.tier).toBe(1);
+      expect(hw.hardwareClass).toBe(1);
       expect(hw.gpuVramGb).toBe(10);
     });
 
     it('unknown model stays tier 0 with fallback VRAM 7', () => {
       const hw = makeHw();
       detectAppleSilicon(hw, 'Unknown CPU');
-      expect(hw.tier).toBe(0);
+      expect(hw.hardwareClass).toBe(0);
       expect(hw.gpuVramGb).toBe(7);
     });
   });
 
   describe('detectNvidiaGPU (exported for testing)', () => {
     function makeHw(): Hardware {
-      return { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
+      return { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
     }
 
     it('parses GiB output', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '24 GiB');
       expect(hw.gpuVramGb).toBe(24);
-      expect(hw.tier).toBe(4);
+      expect(hw.hardwareClass).toBe(4);
     });
 
     it('parses MiB output', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '16384 MiB');
       expect(hw.gpuVramGb).toBe(16);
-      expect(hw.tier).toBe(3);
+      expect(hw.hardwareClass).toBe(3);
     });
 
     it('handles 80GB+ VRAM as tier 5', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '80 GiB');
-      expect(hw.tier).toBe(5);
+      expect(hw.hardwareClass).toBe(5);
     });
 
     it('handles 64GB VRAM as tier 5', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '64 GiB');
-      expect(hw.tier).toBe(5);
+      expect(hw.hardwareClass).toBe(5);
     });
 
     it('handles 10GB VRAM as tier 2', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '10240 MiB');
       expect(hw.gpuVramGb).toBe(10);
-      expect(hw.tier).toBe(2);
+      expect(hw.hardwareClass).toBe(2);
     });
 
     it('handles 6GB VRAM as tier 1', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, '6144 MiB');
       expect(hw.gpuVramGb).toBe(6);
-      expect(hw.tier).toBe(1);
+      expect(hw.hardwareClass).toBe(1);
     });
 
     it('handles unrecognized output format', () => {
       const hw = makeHw();
       detectNvidiaGPU(hw, 'N/A');
       expect(hw.gpuVramGb).toBe(0);
-      expect(hw.tier).toBe(0);
+      expect(hw.hardwareClass).toBe(0);
     });
   });
 

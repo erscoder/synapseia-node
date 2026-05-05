@@ -230,7 +230,7 @@ function getTierName(tier: number): string {
 
 interface StatusOutput {
   peerId: string | null;
-  tier: number;
+  hardwareClass: number;
   wallet: string;
   balance: number;
   staked: number;
@@ -365,11 +365,11 @@ async function bootstrap() {
             }
 
             const isOllamaModel = model?.startsWith('ollama/') || (!model && hardware.hasOllama);
-            if (isOllamaModel && hardware.tier < (selectedModel?.recommendedTier ?? 0)) {
+            if (isOllamaModel && hardware.hardwareClass < (selectedModel?.recommendedTier ?? 0)) {
               logger.error(
-                `Error: Model '${model}' requires Tier ${selectedModel?.recommendedTier} or higher.`
+                `Error: Model '${model}' requires hardware class ${selectedModel?.recommendedTier} or higher.`
               );
-              logger.error(`Your hardware is Tier ${hardware.tier}.`);
+              logger.error(`Your hardware class is ${hardware.hardwareClass}.`);
               process.exit(1);
             }
           }
@@ -531,7 +531,7 @@ async function bootstrap() {
         logger.log(`Hardware: `);
         logger.log(`  CPU cores: ${hardware.cpuCores}`);
         logger.log(`  RAM: ${hardware.ramGb}`);
-        logger.log(`  Tier: ${hardware.tier} (${getTierName(hardware.tier)})`);
+        logger.log(`  Hardware class: ${hardware.hardwareClass} (${getTierName(hardware.hardwareClass)})`);
         logger.log(`  Ollama: ${hardware.hasOllama ? 'yes' : 'no'}`);
         if (selectedModel) {
           logger.log(
@@ -597,7 +597,7 @@ async function bootstrap() {
             identity,
             name: config.name || identity.name || 'unnamed',
             walletAddress: wallet.publicKey,
-            tier: hardware.tier,
+            hardwareClass: hardware.hardwareClass,
             coordinatorUrl,
             capabilities,
             llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
@@ -654,7 +654,7 @@ async function bootstrap() {
 
       const status: StatusOutput = {
         peerId: identity?.peerId || null,
-        tier: hardware.tier,
+        hardwareClass: hardware.hardwareClass,
         wallet: walletAddress,
         balance,
         staked,
@@ -668,7 +668,7 @@ async function bootstrap() {
       logger.log('Node Status:');
       if (identity.name) logger.log(`Name:    ${identity.name}`);
       logger.log(`PeerID:  ${status.peerId || 'Not initialized'}`);
-      logger.log(`Tier:    ${status.tier} (${getTierName(status.tier)})`);
+      logger.log(`Hardware class: ${status.hardwareClass} (${getTierName(status.hardwareClass)})`);
       logger.log(`Wallet:  ${status.wallet}`);
       logger.log(`Balance: ${status.balance} SYN`);
       logger.log(`Staked:  ${status.staked} SYN`);
@@ -1153,7 +1153,7 @@ async function bootstrap() {
               name: `${m.name}  (${m.category}, ${m.minVram}GB VRAM)`,
               value: m.name,
               description: (m as ModelInfo).description,
-              disabled: m.recommendedTier > hardware.tier ? 'Requires higher tier' : false,
+              disabled: m.recommendedTier > hardware.hardwareClass ? 'Requires higher hardware class' : false,
             }));
           }
 

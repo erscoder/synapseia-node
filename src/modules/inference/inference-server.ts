@@ -2,7 +2,7 @@
  * OpenAI-compatible inference server
  * Routes:
  * - POST /v1/chat/completions → proxy to Ollama at localhost:11434/api/chat
- * - GET /api/v1/state → { peerId, tier, models: string[], uptime: number }
+ * - GET /api/v1/state → { peerId, hardwareClass, models: string[], uptime: number }
  * - GET /health → { status: 'ok', uptime: number }
  */
 
@@ -16,7 +16,7 @@ import { beginChatInference, endChatInference } from './chat-inference-state';
 export interface InferenceServerConfig {
   port?: number;
   peerId: string;
-  tier: number;
+  hardwareClass: number;
   models: string[];
   coordinatorUrl?: string;
 }
@@ -228,7 +228,7 @@ export async function handleState(
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     peerId: config.peerId,
-    tier: config.tier,
+    hardwareClass: config.hardwareClass,
     models: config.models,
     uptime: Math.floor(uptime),
   }));

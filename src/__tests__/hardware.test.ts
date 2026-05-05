@@ -49,7 +49,7 @@ describe('hardware (A13)', () => {
 
       // Apple M3 Max should have GPU
       expect(hardware.gpuVramGb).toBeGreaterThan(0);
-      expect(hardware.tier).toBeGreaterThan(0);
+      expect(hardware.hardwareClass).toBeGreaterThan(0);
     });
 
     it('should handle CPU-only mode', async () => {
@@ -74,7 +74,7 @@ describe('hardware (A13)', () => {
 
       const hardware = detectHardware(false, 'x86');
 
-      expect(hardware.tier).toBe(4); // 24GB V-RAM → tier 4
+      expect(hardware.hardwareClass).toBe(4); // 24GB V-RAM → tier 4
       expect(hardware.gpuVramGb).toBe(24);
     });
 
@@ -85,7 +85,7 @@ describe('hardware (A13)', () => {
 
       const hardware = detectHardware(false, 'arm64');
 
-      expect(hardware.tier).toBe(4);
+      expect(hardware.hardwareClass).toBe(4);
       expect(hardware.gpuVramGb).toBe(96);
     });
 
@@ -112,14 +112,14 @@ describe('hardware (A13)', () => {
         cpuCores: 16,
         ramGb: 64,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectNvidiaGPU(hardware, '24 GiB');
 
       expect(hardware.gpuVramGb).toBe(24);
-      expect(hardware.tier).toBe(4);
+      expect(hardware.hardwareClass).toBe(4);
     });
 
     it('should update hardware with NVIDIA metadata from MiB', async () => {
@@ -129,7 +129,7 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
@@ -146,7 +146,7 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
@@ -163,7 +163,7 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
@@ -247,14 +247,14 @@ describe('hardware (A13)', () => {
         cpuCores: 12,
         ramGb: 64,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M3 Max');
 
       expect(hardware.gpuVramGb).toBe(96); // M3 Max tier 4 → Max with tier != 5
-      expect(hardware.tier).toBe(4);
+      expect(hardware.hardwareClass).toBe(4);
     });
 
     it('should handle unknown models (default to M1)', async () => {
@@ -264,14 +264,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M1 Unknown'); // Matches 'M1' pattern
 
       expect(hardware.gpuVramGb).toBe(10); // M1 tier 1 → tier === 1 → 10
-      expect(hardware.tier).toBe(1);
+      expect(hardware.hardwareClass).toBe(1);
     });
 
     it('should handle M2 Ultra', async () => {
@@ -281,14 +281,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M2 Ultra');
 
       expect(hardware.gpuVramGb).toBe(128);
-      expect(hardware.tier).toBe(3);
+      expect(hardware.hardwareClass).toBe(3);
     });
 
     it('should handle M2 Max', async () => {
@@ -298,14 +298,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M2 Max');
 
       expect(hardware.gpuVramGb).toBe(96); // Max with tier 3
-      expect(hardware.tier).toBe(3);
+      expect(hardware.hardwareClass).toBe(3);
     });
 
     it('should handle M1 Ultra', async () => {
@@ -315,14 +315,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M1 Ultra');
 
       expect(hardware.gpuVramGb).toBe(128);
-      expect(hardware.tier).toBe(2);
+      expect(hardware.hardwareClass).toBe(2);
     });
 
     it('should handle M1 Max', async () => {
@@ -332,14 +332,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M1 Max');
 
       expect(hardware.gpuVramGb).toBe(96);
-      expect(hardware.tier).toBe(2);
+      expect(hardware.hardwareClass).toBe(2);
     });
 
     it('should handle M3 Ultra', async () => {
@@ -349,14 +349,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M3 Ultra');
 
       expect(hardware.gpuVramGb).toBe(192); // Ultra tier 5 → 192
-      expect(hardware.tier).toBe(5);
+      expect(hardware.hardwareClass).toBe(5);
     });
 
     it('should handle M3 Pro', async () => {
@@ -366,7 +366,7 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
@@ -382,14 +382,14 @@ describe('hardware (A13)', () => {
         cpuCores: 8,
         ramGb: 32,
         gpuVramGb: 0,
-        tier: 0,
+        hardwareClass: 0,
         hasOllama: false,
       };
 
       detectAppleSilicon(hardware, 'Apple M2');
 
       expect(hardware.gpuVramGb).toBe(10); // M2 tier=1 → else branch tier===1 → 10
-      expect(hardware.tier).toBe(1);
+      expect(hardware.hardwareClass).toBe(1);
     });
 
     // Note: Max models always get tier=4 or 3, so tier===5 in Max VRAM assignment was dead code
@@ -513,57 +513,57 @@ describe('hardware (A13)', () => {
   describe('detectAppleSilicon nested ternary coverage', () => {
     it('Ultra: tier===5 → 192', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 5, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Ultra');
       expect(hardware.gpuVramGb).toBe(192);
     });
 
     it('Ultra: tier!==5 → 128', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 3, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 3, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Ultra');
       expect(hardware.gpuVramGb).toBe(128);
     });
 
     it('Max: always 96 GB (tier===5 was dead code)', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 5, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Max');
       expect(hardware.gpuVramGb).toBe(96);
     });
 
     it('Pro: tier>=3 → 48', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 4, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 4, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M3 Pro');
       expect(hardware.gpuVramGb).toBe(48);
     });
 
     it('Pro: M2 Pro (tier=2) → 18 from tier<3 branch', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Pro'); // M2 Pro sets tier=2, then tier<3 gives 18
-      expect(hardware.tier).toBe(2);
+      expect(hardware.hardwareClass).toBe(2);
       expect(hardware.gpuVramGb).toBe(18);
     });
 
     it('Pro: tier<3 → 18', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 2, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M2 Pro');
       expect(hardware.gpuVramGb).toBe(18);
     });
 
     it('Else: tier===1 → 10', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 1, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 1, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple M1');
       expect(hardware.gpuVramGb).toBe(10);
     });
 
     it('Else: tier!==1 → 7', async () => {
       const { detectAppleSilicon } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 2, hasOllama: false };
       detectAppleSilicon(hardware, 'Apple UnknownModel'); // No matches → else with tier stays 2
       expect(hardware.gpuVramGb).toBe(7);
     });
@@ -572,51 +572,51 @@ describe('hardware (A13)', () => {
   describe('detectNvidiaGPU tier adjustments', () => {
     it('should set tier 5 for >=80GB VRAM', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
       detectNvidiaGPU(hardware, '81920 MiB'); // 80GB = 81920 MiB
-      expect(hardware.tier).toBe(5);
+      expect(hardware.hardwareClass).toBe(5);
     });
 
     it('should set tier 5 for >=64GB VRAM', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 0, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 0, hasOllama: false };
       detectNvidiaGPU(hardware, '65536 MiB');
-      expect(hardware.tier).toBe(5);
+      expect(hardware.hardwareClass).toBe(5);
     });
 
     it('should set tier 4 for >=24GB VRAM when tier<5', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 4, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 4, hasOllama: false };
       detectNvidiaGPU(hardware, '24576 MiB');
-      expect(hardware.tier).toBe(4);
+      expect(hardware.hardwareClass).toBe(4);
     });
 
     it('should keep existing tier 5 when >=24GB', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 5, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 5, hasOllama: false };
       detectNvidiaGPU(hardware, '24576 MiB');
-      expect(hardware.tier).toBe(5);
+      expect(hardware.hardwareClass).toBe(5);
     });
 
     it('should set tier 3 for >=14GB VRAM when tier<4', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 3, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 3, hasOllama: false };
       detectNvidiaGPU(hardware, '14336 MiB');
-      expect(hardware.tier).toBe(3);
+      expect(hardware.hardwareClass).toBe(3);
     });
 
     it('should set tier 2 for >=10GB VRAM when tier<3', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 2, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 2, hasOllama: false };
       detectNvidiaGPU(hardware, '10240 MiB');
-      expect(hardware.tier).toBe(2);
+      expect(hardware.hardwareClass).toBe(2);
     });
 
     it('should set tier 1 for >=6GB VRAM when tier<2', async () => {
       const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
-      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, tier: 1, hasOllama: false };
+      const hardware = { cpuCores: 8, ramGb: 32, gpuVramGb: 0, hardwareClass: 1, hasOllama: false };
       detectNvidiaGPU(hardware, '6144 MiB');
-      expect(hardware.tier).toBe(1);
+      expect(hardware.hardwareClass).toBe(1);
     });
   });
 
