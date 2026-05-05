@@ -89,35 +89,10 @@ describe('SelfCritiqueNode', () => {
       expect(result.retryCount).toBe(0); // Should not increment on pass
     });
 
-    it('should handle scores exactly at threshold (avg 7.0 + grounding 8)', async () => {
-      // Audit 2026-04-26: ontologyGrounding floor raised from 6 → 8.
-      // To pass at avg=7.0, grounding must be ≥ 8. The other dims compensate.
-      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
-        accuracy: 7,
-        completeness: 7,
-        novelty: 6,
-        actionability: 7,
-        ontologyGrounding: 8,
-        feedback: 'Acceptable but could be improved',
-        passed: true,
-      }));
-
-      const state = makeState({
-        selectedWorkOrder: { id: 'wo-1', title: 'Test Research', type: 'RESEARCH', abstract: 'Test abstract', reward: 100 } as any,
-        researchResult: { summary: 'Test', keyInsights: [], proposal: 'Test' } as ResearchResult,
-      });
-
-      const result = await node.execute(state);
-
-      expect(result.selfCritiqueScore).toBe(7.0);
-      expect(result.selfCritiquePassed).toBe(true);
-    });
-
-    it('rejects payloads at the previous threshold (grounding=7) — audit 2026-04-26', async () => {
-      // Regression guard: the exact scores that used to pass (avg 7.0, grounding 7)
-      // must now be rejected because audit found wrong-schema-key payloads slipping
-      // through at this score. selfCritiquePassed must be false even though the
-      // LLM responded with passed=true.
+    it('should handle scores exactly at threshold (avg 7.0 + grounding 7, default tier)', async () => {
+      // 2026-05-05: og floor relaxed from 8 → 7 for the default/ID-bearing
+      // tier. Wrong-schema-key risk that the 2026-04-26 raise guarded against
+      // is now caught upstream in synthesizer-node by validateDiscoverySchema.
       (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
         accuracy: 7,
         completeness: 7,
@@ -135,7 +110,38 @@ describe('SelfCritiqueNode', () => {
 
       const result = await node.execute(state);
 
-      expect(result.selfCritiquePassed).toBe(false);
+      expect(result.selfCritiqueScore).toBe(7.0);
+      expect(result.selfCritiquePassed).toBe(true);
+    });
+
+    it('passes mechanism_link literature_review with og=5 (relaxed tier)', async () => {
+      // 2026-05-05 tiered floor: when proposal carries mechanism_link OR
+      // evidence_type ∈ {literature_review, gap_analysis, hypothesis_generation},
+      // og floor drops to ≥ 5. This is the live "endogenous oxalate" research
+      // shape that was getting blocked at the old og=8 floor.
+      (mockLlmService.generateJSON as any).mockResolvedValueOnce(JSON.stringify({
+        accuracy: 8,
+        completeness: 8,
+        novelty: 8,
+        actionability: 7,
+        ontologyGrounding: 5,
+        feedback: 'pathway grounded, no drug ID',
+        passed: true,
+      }));
+
+      const proposal = JSON.stringify({
+        discoveryType: 'mechanism_link',
+        structuredData: { evidence_type: 'literature_review', pathway_name: 'glyoxylate', mechanism_summary: 'x' },
+      });
+
+      const state = makeState({
+        selectedWorkOrder: { id: 'wo-1', title: 'Test Research', type: 'RESEARCH', abstract: 'Test abstract', reward: 100 } as any,
+        researchResult: { summary: 'Test', keyInsights: [], proposal } as ResearchResult,
+      });
+
+      const result = await node.execute(state);
+
+      expect(result.selfCritiquePassed).toBe(true);
     });
   });
 

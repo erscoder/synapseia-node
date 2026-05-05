@@ -302,6 +302,7 @@ export class HeartbeatHelper {
    *  - cpu_training  → hyperparam search (train_micro.py / PyTorch CPU). Any node.
    *  - gpu_training  → DiLoCo federated fine-tuning (LoRA, requires VRAM). GPU nodes only.
    *  - cpu_inference → tokenize / embed / classify. Always enabled (no LLM needed).
+   *  - gpu_inference → GPU-accelerated LLM inference (requires VRAM + Ollama or cloud LLM).
    *  - inference     → full LLM inference (requires Ollama or cloud LLM).
    *  - llm           → alias for inference, kept for backwards compat.
    *  - embedding     → Ollama embedding models (requires Ollama + ≥8 GB RAM).
@@ -429,6 +430,17 @@ export class HeartbeatHelper {
     // gpu_training: DiLoCo LoRA fine-tuning — requires dedicated GPU VRAM
     if (hardware.gpuVramGb > 0) {
       capabilities.push('gpu_training');
+    }
+
+    // gpu_inference: GPU-accelerated LLM inference. Mirrors hardware.ts:404
+    // but kept local so the wire-payload caps array (consumed by coord
+    // bid-responder) matches what this hot-path advertises. Sister method
+    // `HardwareHelper.getCapabilities` is unused on the heartbeat path —
+    // without this push, GPU nodes never expose `gpu_inference` and the
+    // coord cannot route GPU_INFERENCE work orders to them. Same gate as
+    // `gpu_training` (vram > 0) plus an LLM endpoint to serve from.
+    if (hardware.gpuVramGb > 0 && (hardware.hasOllama || hardware.hasCloudLlm)) {
+      capabilities.push('gpu_inference');
     }
 
     return capabilities;

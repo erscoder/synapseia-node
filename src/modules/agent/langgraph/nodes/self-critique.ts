@@ -11,6 +11,7 @@ import {
   parseMedicalSelfCritiqueResponse,
   calculateMedicalAverageScore,
 } from '../prompts/medical/medical-self-critique';
+import { extractStructuredPayloadFromProposal } from '../validators/discovery-schema-validator';
 import logger from '../../../../utils/logger';
 
 const MAX_RETRIES = 2;
@@ -77,9 +78,24 @@ export class SelfCritiqueNode {
         config.llmConfig,
       );
 
-      const critique = parseMedicalSelfCritiqueResponse(llmResponse);
+      // 2026-05-05: pull discoveryType + evidence_type out of the proposal so
+      // the parser can apply the tiered og floor (mechanism_link and review-
+      // type evidence get og ≥ 5; ID-bearing discoveries keep og ≥ 7). Falls
+      // back to safe default when extraction fails.
+      const extraction = extractStructuredPayloadFromProposal(researchResult.proposal || '');
+      const critiqueContext = extraction.success
+        ? {
+            discoveryType: extraction.payload.discoveryType,
+            evidenceType:
+              typeof extraction.payload.structuredData['evidence_type'] === 'string'
+                ? (extraction.payload.structuredData['evidence_type'] as string)
+                : undefined,
+          }
+        : undefined;
+
+      const critique = parseMedicalSelfCritiqueResponse(llmResponse, critiqueContext);
       const averageScore = calculateMedicalAverageScore(critique);
-      // Pass requires 5-dim avg ≥ 7.0 AND ontologyGrounding ≥ 6 (enforced in the parser).
+      // Pass requires 5-dim avg ≥ 7.0 AND tiered ontologyGrounding floor (enforced in the parser).
       const passed = critique.passed && averageScore >= PASSING_THRESHOLD;
 
       // Increment retry count if failed

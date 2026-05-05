@@ -2,8 +2,10 @@
  * Tests for the medical self-critique prompt + parser (M3.3).
  *
  * Prompt-text assertions cover the ontologyGrounding dimension + harsh
- * grading rules. Parser tests cover the stricter pass rule (avg ≥ 7.0
- * AND grounding ≥ 8 — raised 2026-04-26 from ≥6 after audit).
+ * grading rules. Parser tests cover the tiered pass rule (2026-05-05):
+ *   - default / ID-bearing context → avg ≥ 7.0 AND og ≥ 7
+ *   - mechanism_link OR evidence_type ∈ {literature_review,
+ *     gap_analysis, hypothesis_generation} → avg ≥ 7.0 AND og ≥ 5
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -56,10 +58,15 @@ describe('buildMedicalSelfCritiquePrompt', () => {
     expect(p).toContain('10.1056/NEJMoa2204705');
   });
 
-  it('documents the pass rule (avg ≥ 7.0 AND grounding ≥ 8)', () => {
+  it('documents the tiered pass rule (avg ≥ 7.0 AND tiered grounding floor)', () => {
     const p = buildMedicalSelfCritiquePrompt(base);
-    expect(p).toMatch(/average.*≥\s*7\.0/i);
-    expect(p).toMatch(/ontologyGrounding\s*is\s*≥\s*8/i);
+    expect(p).toMatch(/average\s*is\s*≥\s*7\.0/i);
+    // ID-bearing tier
+    expect(p).toMatch(/og\s*≥\s*7/i);
+    // Relaxed tier for mechanism_link / review-type evidence
+    expect(p).toMatch(/og\s*≥\s*5/i);
+    expect(p).toContain('mechanism_link');
+    expect(p).toContain('literature_review');
   });
 
   it('forbids wrong schema keys (RxNorm, MeSH, UMLS CUI) explicitly', () => {
@@ -80,7 +87,7 @@ describe('buildMedicalSelfCritiquePrompt', () => {
 });
 
 describe('parseMedicalSelfCritiqueResponse', () => {
-  it('returns clamped scores + passed=true when all dimensions ≥ 7 and grounding ≥ 8', () => {
+  it('returns clamped scores + passed=true when all dimensions ≥ 7 and grounding ≥ 7 (default/ID-bearing tier)', () => {
     const raw = JSON.stringify({
       accuracy: 8, completeness: 9, novelty: 7, actionability: 8, ontologyGrounding: 9,
       feedback: 'solid', passed: true,
@@ -100,7 +107,7 @@ describe('parseMedicalSelfCritiqueResponse', () => {
     expect(r.passed).toBe(false);
   });
 
-  it('fails when grounding < 8 even if the rest is perfect', () => {
+  it('fails on default tier when grounding < 7 even if the rest is perfect', () => {
     const raw = JSON.stringify({
       accuracy: 10, completeness: 10, novelty: 10, actionability: 10, ontologyGrounding: 3,
       feedback: 'invented DOIs', passed: true,
@@ -109,14 +116,58 @@ describe('parseMedicalSelfCritiqueResponse', () => {
     expect(r.passed).toBe(false);
   });
 
-  it('fails when grounding=7 (the previous threshold that audit found too lax)', () => {
-    // 2026-04-26 regression guard: avg here is 7.6 but grounding=7, which used
-    // to pass. After the audit raise to ≥8, this MUST fail.
+  it('passes on default tier with grounding=7 (relaxed from old og ≥ 8 floor)', () => {
+    // 2026-05-05: og floor dropped from 8 → 7 for the default tier because
+    // upstream universal-field validator now catches wrong-schema-key
+    // payloads that the 2026-04-26 raise was guarding against.
     const raw = JSON.stringify({
       accuracy: 8, completeness: 8, novelty: 7, actionability: 8, ontologyGrounding: 7,
-      feedback: 'borderline grounding', passed: true,
+      feedback: 'tight grounding', passed: true,
     });
     const r = parseMedicalSelfCritiqueResponse(raw);
+    expect(r.passed).toBe(true);
+  });
+
+  it('passes mechanism_link with og=5 (relaxed tier — pathway-only, no drug ID required)', () => {
+    const raw = JSON.stringify({
+      accuracy: 8, completeness: 8, novelty: 8, actionability: 7, ontologyGrounding: 5,
+      feedback: 'pathway grounded, no drug', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, { discoveryType: 'mechanism_link' });
+    expect(r.passed).toBe(true);
+  });
+
+  it('passes literature_review evidence_type with og=5 (relaxed tier)', () => {
+    const raw = JSON.stringify({
+      accuracy: 8, completeness: 8, novelty: 7, actionability: 7, ontologyGrounding: 5,
+      feedback: 'survey paper, IDs sparse', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, {
+      discoveryType: 'drug_repurposing',
+      evidenceType: 'literature_review',
+    });
+    expect(r.passed).toBe(true);
+  });
+
+  it('still fails relaxed tier when og < 5', () => {
+    const raw = JSON.stringify({
+      accuracy: 9, completeness: 9, novelty: 9, actionability: 9, ontologyGrounding: 4,
+      feedback: 'no grounding at all', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, { discoveryType: 'mechanism_link' });
+    expect(r.passed).toBe(false);
+  });
+
+  it('does NOT relax for ID-bearing discoveryType + non-review evidence', () => {
+    // drug_repurposing + meta_analysis stays on the strict tier (og ≥ 7).
+    const raw = JSON.stringify({
+      accuracy: 9, completeness: 9, novelty: 9, actionability: 9, ontologyGrounding: 6,
+      feedback: 'ID-bearing, og=6 not enough', passed: true,
+    });
+    const r = parseMedicalSelfCritiqueResponse(raw, {
+      discoveryType: 'drug_repurposing',
+      evidenceType: 'meta_analysis',
+    });
     expect(r.passed).toBe(false);
   });
 
