@@ -554,10 +554,13 @@ async function bootstrap() {
           logger.warn(`Warning: Invalid model format '${model}' — node will run without LLM capabilities`);
         }
 
-        // Use HeartbeatHelper as single source of truth for capabilities
+        // Use HeartbeatHelper as single source of truth for capabilities.
+        // CONSERVATIVE PRE-CHECK: this is the static (sync) set; the actual
+        // wire payload is recomputed via determineCapabilitiesAsync() each
+        // heartbeat and may strip caps when runtimes (PyTorch / Ollama) are
+        // unreachable. Banner reports the static set so logs don't lie.
+        // Tier is a separate column (`nodes.tier`), NOT a capabilities entry.
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
-        capabilities.push(`tier-${hardware.tier}`);
-        if (inferenceEnabled) capabilities.push('inference');
 
         // ── SYN token account activation ─────────────────────────────────────
         logger.log('\nChecking SYN token account activation...');
