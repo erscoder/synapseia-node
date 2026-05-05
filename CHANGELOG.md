@@ -1,5 +1,40 @@
 # Changelog — @synapseia/node
 
+## [2026-05-05] fix: re-queue unprocessed pushed WOs after capacity-break
+
+`pushQueue.drain()` returns every pending entry and clears the Map.
+The work-order loop then ran filter → `selectByTypeRotation` → for-loop
+accept. When the for-loop exited early on a backpressure `canAccept()`
+break (slots saturated) or completed the first WO and returned, every
+remaining item in `orderedByType` was DISCARDED — drain had already
+removed them from the Map and they had no owner.
+
+Live impact on Mac-native node-kike: the gossip queue accumulated
+9+ CPU_INFERENCE WOs that never got accepted while GPU_INFERENCE
+drained successfully (it's first-picked by type rotation,
+`selectByTypeRotation` keys on least-executed-first). Self-reinforcing
+starvation across iterations.
+
+Fix:
+- Loop now keeps a `pushedById: Map<string, PushedWorkOrder>` of the
+  original drain payloads.
+- A try/finally around the for-loop tracks `attemptedIndex` and
+  `unprocessedStart`. On natural exit `unprocessedStart` stays at
+  array length (no re-queue). On capacity break `unprocessedStart =
+  attemptedIndex` (current WO included). On successful-accept return
+  `unprocessedStart = attemptedIndex + 1` (accepted WO excluded).
+- The `finally` re-queues `orderedByType.slice(unprocessedStart)`
+  via a NEW `WorkOrderPushQueue.requeue(entry)` method that writes
+  the original `PushedWorkOrder` back without resetting `receivedAt`
+  and WITHOUT firing `wakeCb`. The 60s TTL safety contract on stale
+  WOs is preserved across re-queue.
+- Cap-mismatch drops in the drain filter now emit a `logger.warn`
+  with the missing capability list (was silent — patrón P22).
+
+Tests: existing 5 push-queue specs still green; one new spec asserts
+`requeue()` preserves `receivedAt`, leaves the WO drainable, and does
+not wake sleepers.
+
 ## [2026-05-05] fix: macOS cpu_training stripped — wrong namespace on availableMemory
 
 `applyMemoryPressureFilter` in `heartbeat.ts` was supposed to use the

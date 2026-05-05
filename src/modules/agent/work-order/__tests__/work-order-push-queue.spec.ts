@@ -65,4 +65,31 @@ describe('WorkOrderPushQueue', () => {
     expect(q.size()).toBe(0);
     expect(q.drain()).toEqual([]);
   });
+
+  describe('requeue()', () => {
+    it('preserves original receivedAt (no TTL refresh) and is drainable, without firing wakeCb', () => {
+      const q = new WorkOrderPushQueue(10_000);
+      let wakes = 0;
+      q.setWakeCallback(() => {
+        wakes++;
+      });
+
+      // Seed via push() to capture a real receivedAt assigned by the queue.
+      q.push(mkPush('a'));
+      const drainedFirst = q.drain();
+      expect(drainedFirst).toHaveLength(1);
+      const original: PushedWorkOrder = drainedFirst[0];
+      const wakesAfterPush = wakes;
+
+      // Re-insert via requeue(): receivedAt MUST be preserved, wakeCb MUST NOT fire.
+      q.requeue(original);
+      expect(wakes).toBe(wakesAfterPush); // requeue does not wake
+      expect(q.size()).toBe(1);
+
+      const drainedAgain = q.drain();
+      expect(drainedAgain).toHaveLength(1);
+      expect(drainedAgain[0].id).toBe('a');
+      expect(drainedAgain[0].receivedAt).toBe(original.receivedAt); // ORIGINAL ts preserved
+    });
+  });
 });

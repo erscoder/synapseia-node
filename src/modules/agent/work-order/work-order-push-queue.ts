@@ -67,6 +67,22 @@ export class WorkOrderPushQueue {
     }
   }
 
+  /**
+   * Re-insert an entry preserving its ORIGINAL `receivedAt` so the TTL
+   * window is not refreshed. Used by the loop to put back work orders
+   * that were drained but not yet attempted (e.g. capacity hit mid-batch).
+   *
+   * Refreshing the timestamp via `push()` would let a WO that loses the
+   * capacity race repeatedly live forever in the queue — bypassing the
+   * 60s safety net documented at the top of this file.
+   *
+   * Does NOT fire `wakeCb`: the caller is mid-iteration and the loop is
+   * already awake; waking it again would just spin the timer wheel.
+   */
+  requeue(entry: PushedWorkOrder): void {
+    this.entries.set(entry.id, entry);
+  }
+
   /** Returns all unexpired entries and clears the queue. */
   drain(): PushedWorkOrder[] {
     const now = Date.now();
