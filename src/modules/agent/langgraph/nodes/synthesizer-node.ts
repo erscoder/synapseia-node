@@ -36,12 +36,17 @@ const SCHEMA_VALIDATION_MAX_ATTEMPTS = 2;
  * chars so the retry feedback doesn't blow the prompt budget on small
  * models.
  */
+// 2026-05-05 truthfulness fix (P10): evidence_type list is the EXACT
+// EVIDENCE_TYPES set from validators/discovery-schema-validator.ts. Prior
+// values (`randomized_trial`, `case_series`, `mechanism_study`) were
+// hallucinations the validator rejects on contact, locking small models
+// into a guaranteed-fail retry loop.
 const SCHEMA_RETRY_FIELD_EXAMPLES =
   'CONCRETE EXAMPLES of the three most common failures:\n' +
   '- novel_contribution: WRONG: "" or "This study explores ALS." CORRECT: ' +
   '"Riluzole at 50mg twice daily extends median ALS survival ~3 months versus placebo across replications, with consistent benefit in bulbar and limb-onset subgroups." (≥80 chars, references the discovery).\n' +
-  '- evidence_type: WRONG: "" or "study" or "Trial". CORRECT: one of ' +
-  '"randomized_trial" | "meta_analysis" | "literature_review" | "case_series" | "mechanism_study" | "contradiction_detected".\n' +
+  '- evidence_type: WRONG: "" or "study" or "randomized_trial" or "case_series". CORRECT: one of ' +
+  '"literature_review" | "meta_analysis" | "gap_analysis" | "hypothesis_generation" | "contradiction_detected".\n' +
   '- supporting_dois: WRONG: ["10.x", "10.x"] (duplicates) or [] or fabricated. CORRECT: ' +
   '["10.1056/NEJM199403033300901","10.1016/S0140-6736(96)91680-3"] (≥2 distinct, real DOIs from the abstract or critique).';
 

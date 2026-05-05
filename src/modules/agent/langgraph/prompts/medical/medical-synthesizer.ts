@@ -70,13 +70,14 @@ Output ONLY a JSON object with exactly this shape (no markdown, no prose outside
     "Median survival gain ~3 months at 18 months follow-up",
     "Effect is consistent across bulbar and limb-onset subgroups"
   ],
-  "proposal": "This work supports repurposing riluzole, a benzothiazole sodium-channel blocker originally evaluated for anticonvulsant use, as a disease-modifying therapy for amyotrophic lateral sclerosis. The drug reduces presynaptic glutamate release and lowers excitotoxic injury to motor neurons, yielding modest but reproducible survival gains. {\\"discoveryType\\":\\"drug_repurposing\\",\\"structuredData\\":{\\"drug_rxnorm_id\\":\\"9325\\",\\"disease_mesh_id\\":\\"D000690\\",\\"mechanism_summary\\":\\"Riluzole inhibits voltage-gated sodium channels and presynaptic glutamate release, reducing excitotoxic injury to motor neurons.\\",\\"supporting_dois\\":[\\"10.1056/NEJM199403033300901\\",\\"10.1016/S0140-6736(96)91680-3\\"]}}"
+  "proposal": "This work supports repurposing riluzole, a benzothiazole sodium-channel blocker originally evaluated for anticonvulsant use, as a disease-modifying therapy for amyotrophic lateral sclerosis. The drug reduces presynaptic glutamate release and lowers excitotoxic injury to motor neurons, yielding modest but reproducible survival gains. {\\"discoveryType\\":\\"drug_repurposing\\",\\"structuredData\\":{\\"drug_rxnorm_id\\":\\"9325\\",\\"disease_mesh_id\\":\\"D000690\\",\\"mechanism_summary\\":\\"Riluzole inhibits voltage-gated sodium channels and presynaptic glutamate release, reducing excitotoxic injury to motor neurons.\\",\\"supporting_dois\\":[\\"10.1056/NEJM199403033300901\\",\\"10.1016/S0140-6736(96)91680-3\\"],\\"novel_contribution\\":\\"Riluzole at 50mg twice daily extends median survival in definite or probable amyotrophic lateral sclerosis by approximately three months versus placebo across a 155-patient double-blind trial, with consistent benefit in bulbar and limb-onset subgroups via glutamate antagonism on motor neurons.\\",\\"evidence_type\\":\\"literature_review\\"}}"
 }
 
-Note three things in the proposal field:
+Note four things in the proposal field:
 1. Prose first, then ONE embedded JSON block, then nothing.
 2. Field names match the schema EXACTLY (\`drug_rxnorm_id\`, not \`"RxNorm"\`).
 3. RXCUI \`9325\` is a real RxNorm identifier; MeSH \`D000690\` is real; the DOIs are real.
+4. \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug+disease) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected) are REQUIRED on every discoveryType — not optional.
 
 ═══ ANTI-PATTERNS — these will fail the coordinator's parser ═══
 
