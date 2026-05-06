@@ -1,5 +1,34 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: macOS cpu_training stripped (v2) — RSS-based headroom signal
+
+Yesterday's fix (commit c04f811) swapped `os.freemem()` for
+`process.availableMemory()` expecting the latter to be cache-aware on
+macOS. Runtime probe today on Apple Silicon Node 24 disproved that:
+both APIs return ~92 MB on a 16 GB Mac. vm_stat / Mach kernel does
+not expose purgeable cache as available to the Node runtime, so
+either signal triggers `applyMemoryPressureFilter` constantly on
+mac-native dev hosts. node-kike was still missing `cpu_training`
+and `gpu_training` from its coordinator-registered caps after
+c04f811.
+
+Replaced the helper with `os.totalmem() - process.memoryUsage().rss`:
+the headroom available IF this process is the dominant tenant. RSS
+reflects what THIS process holds; the difference against totalmem is
+"how much room is left for spawning a training model". Probe on the
+same Mac now reports 16340 MB headroom (vs 92 MB old signal), so the
+900 MB floor never falsely trips. cgroup-limited containers still work
+because `os.totalmem()` returns the container limit on Node 18+ and
+RSS is process-scoped.
+
+Caveats documented in JSDoc: other tenants on the host (IDE, browser,
+sidecar) are NOT subtracted. Acceptable for production node hosts
+(single-tenant) and dev hosts (owner-tunable).
+
+`TRAINING_MEM_FLOOR_MB` left at 900. Tests use `freeMBOverride` for
+deterministic injection — signal swap is transparent to the spec.
+4/4 still green.
+
 ## [2026-05-05] fix: re-queue unprocessed pushed WOs after capacity-break
 
 `pushQueue.drain()` returns every pending entry and clears the Map.
