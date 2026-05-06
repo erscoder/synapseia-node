@@ -228,6 +228,11 @@ export async function resolveTrainingChain(
 
   const capable = ollamaInstalled.filter(isCapableTrainingModel);
   capable.sort((a, b) => rankModel(b) - rankModel(a));
+  // TODO: filter chain to chat-capable models only — `others` currently
+  // includes embedding models (e.g. all-minilm-l6-v2) which fail with
+  // "does not support chat" when the mutation engine prompts them.
+  // Track chat vs embedding capability per Ollama model and exclude
+  // non-chat models from the fallback chain entirely.
   const others = ollamaInstalled.filter(m => !isCapableTrainingModel(m));
 
   const cloud = buildCloudModel(env.LLM_CLOUD_MODEL, env.LLM_CLOUD_PROVIDER);

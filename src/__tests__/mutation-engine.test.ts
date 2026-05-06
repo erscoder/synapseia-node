@@ -2,6 +2,30 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { MutationEngineHelper } from '../modules/model/mutation-engine';
 import type { Experiment } from '../types';
 
+// State-bag for the OllamaHelper mock — factory cannot close over
+// mutable outer refs, so the prototype reads from this object that
+// individual tests mutate before invoking proposeMutation. Default is
+// "ollama unreachable" so pre-existing tests behave exactly as before
+// the mock was added (production fallback returns the original chain).
+const ollamaState: { available: boolean; models: string[] } = {
+  available: false,
+  models: [],
+};
+
+jest.mock('../modules/llm/ollama.js', () => {
+  class MockOllamaHelper {
+    async checkOllama(): Promise<{ available: boolean; url: string; models: string[]; recommendedModel: string }> {
+      return {
+        available: ollamaState.available,
+        url: 'http://localhost:11434',
+        models: ollamaState.models,
+        recommendedModel: 'qwen2.5:0.5b',
+      };
+    }
+  }
+  return { OllamaHelper: MockOllamaHelper };
+});
+
 const baseHyperparams = {
   learningRate: 0.001,
   batchSize: 32,
@@ -29,6 +53,10 @@ describe('MutationEngineHelper', () => {
 
   beforeEach(() => {
     helper = new MutationEngineHelper();
+    // Default: ollama unreachable → filterByInstalledModels returns
+    // candidates unchanged (pre-mock production behavior under no-ollama).
+    ollamaState.available = false;
+    ollamaState.models = [];
   });
 
   describe('proposeMutation — no experiments (no LLM call)', () => {
@@ -254,6 +282,119 @@ describe('MutationEngineHelper', () => {
       // CPU default is 16 to keep Docker nodes (sharing cores with Ollama)
       // trainable within the timeout. GPU nodes still default to 32.
       expect(proposal.hyperparams.batchSize).toBe(16);
+    });
+  });
+
+  describe('filterByInstalledModels — order preservation (regression)', () => {
+    // Locks the fix where a [cloud-primary, ollama-fallback, ollama-fallback]
+    // chain was being rewritten to put installed Ollama models FIRST,
+    // demoting the cloud primary to last. The filter must preserve caller
+    // order: cloud passes through, only uninstalled Ollama entries are
+    // dropped. We assert via the externally observable order in which
+    // generateLLM is invoked, since filterByInstalledModels is private.
+
+    const cloud = { provider: 'cloud' as const, providerId: 'openai-compat', modelId: 'minimax/MiniMax-M2.7' };
+    const ollamaSmall = { provider: 'ollama' as const, providerId: '' as const, modelId: 'qwen2.5:0.5b' };
+    const ollamaBig = { provider: 'ollama' as const, providerId: '' as const, modelId: 'qwen2.5:1.5b' };
+
+    it('keeps cloud primary first when only one ollama fallback is installed', async () => {
+      ollamaState.available = true;
+      ollamaState.models = ['qwen2.5:0.5b'];
+
+      const exps = [mockExp('exp1')];
+      const validResponse = JSON.stringify({
+        type: 'explore', baseExperimentId: null,
+        hyperparams: { ...baseHyperparams },
+        reasoning: 'Cloud primary served the proposal',
+      });
+      // Cloud responds successfully on the very first attempt — no fallback walk.
+      const mockGenerate = jest.fn<(model: { provider: string; modelId: string }) => Promise<string>>()
+        .mockResolvedValue(validResponse);
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
+      const proposal = await helper.proposeMutation(
+        exps,
+        3.5,
+        ['cpu'],
+        cloud,
+        [ollamaSmall, ollamaBig],
+      );
+
+      expect(proposal.reasoning).toBe('Cloud primary served the proposal');
+      expect(proposal.model.provider).toBe('cloud');
+      expect(proposal.model.modelId).toBe('minimax/MiniMax-M2.7');
+
+      // First invocation must be the cloud model — proves it was NOT demoted
+      // behind the installed Ollama entry. qwen2.5:1.5b must never be tried
+      // because it is not installed and was filtered out.
+      expect(mockGenerate).toHaveBeenCalledTimes(1);
+      const firstCallModel = mockGenerate.mock.calls[0][0] as { provider: string; modelId: string };
+      expect(firstCallModel.provider).toBe('cloud');
+      expect(firstCallModel.modelId).toBe('minimax/MiniMax-M2.7');
+      const calledModelIds = mockGenerate.mock.calls.map(c => (c[0] as { modelId: string }).modelId);
+      expect(calledModelIds).not.toContain('qwen2.5:1.5b');
+    });
+
+    it('walks fallback chain in caller order: cloud → installed ollama, skipping uninstalled', async () => {
+      ollamaState.available = true;
+      ollamaState.models = ['qwen2.5:0.5b'];
+
+      const exps = [mockExp('exp1')];
+      const fallbackResponse = JSON.stringify({
+        type: 'explore', baseExperimentId: null,
+        hyperparams: { ...baseHyperparams },
+        reasoning: 'Ollama fallback served after cloud failed',
+      });
+      // Cloud: 2 bad (base + strict). Ollama qwen2.5:0.5b: base prompt wins.
+      const mockGenerate = jest.fn<(model: { provider: string; modelId: string }) => Promise<string>>()
+        .mockResolvedValueOnce('not json')
+        .mockResolvedValueOnce('still bad')
+        .mockResolvedValueOnce(fallbackResponse);
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
+      const proposal = await helper.proposeMutation(
+        exps,
+        3.5,
+        ['cpu'],
+        cloud,
+        [ollamaSmall, ollamaBig],
+      );
+
+      expect(proposal.reasoning).toBe('Ollama fallback served after cloud failed');
+      expect(proposal.model.provider).toBe('ollama');
+      expect(proposal.model.modelId).toBe('qwen2.5:0.5b');
+      // Exactly 3 attempts: cloud×2 then ollamaSmall×1. ollamaBig never tried.
+      expect(mockGenerate).toHaveBeenCalledTimes(3);
+      const calledIds = mockGenerate.mock.calls.map(c => (c[0] as { modelId: string }).modelId);
+      expect(calledIds).toEqual(['minimax/MiniMax-M2.7', 'minimax/MiniMax-M2.7', 'qwen2.5:0.5b']);
+      expect(calledIds).not.toContain('qwen2.5:1.5b');
+    });
+
+    it('returns chain unchanged when ollama is unavailable (local.length=0 early-return analog: no installed models)', async () => {
+      // No ollama installed at all — preflight returns available:true but
+      // models:[]. Chain is cloud-only, so cloud must still be tried first
+      // and unchanged (covers the path where remote-only candidates pass
+      // through without any local-install gating side effects).
+      ollamaState.available = true;
+      ollamaState.models = [];
+
+      const exps = [mockExp('exp1')];
+      const validResponse = JSON.stringify({
+        type: 'explore', baseExperimentId: null,
+        hyperparams: { ...baseHyperparams },
+        reasoning: 'Cloud-only chain unchanged',
+      });
+      const mockGenerate = jest.fn<(model: { provider: string; modelId: string }) => Promise<string>>()
+        .mockResolvedValue(validResponse);
+      (helper as any).llmProvider = { generateLLM: mockGenerate };
+
+      const proposal = await helper.proposeMutation(exps, 3.5, ['cpu'], cloud, []);
+
+      expect(proposal.model.provider).toBe('cloud');
+      expect(proposal.model.modelId).toBe('minimax/MiniMax-M2.7');
+      expect(mockGenerate).toHaveBeenCalledTimes(1);
+      const firstCallModel = mockGenerate.mock.calls[0][0] as { provider: string; modelId: string };
+      expect(firstCallModel.provider).toBe('cloud');
     });
   });
 });

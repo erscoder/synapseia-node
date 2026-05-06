@@ -143,7 +143,6 @@ export class MutationEngineHelper {
   ): Promise<LLMModel[]> {
     // Only Ollama-backed candidates are subject to local-install gating;
     // remote providers always pass through.
-    const remote = candidates.filter(m => m.provider !== 'ollama');
     const local = candidates.filter(m => m.provider === 'ollama');
     if (local.length === 0) return candidates;
 
@@ -164,6 +163,7 @@ export class MutationEngineHelper {
 
     // Match by exact name OR base name (qwen2.5:0.5b vs qwen2.5:0.5b-instruct).
     const installedSet = new Set(installed.map(m => m.toLowerCase()));
+    const remote = candidates.filter(m => m.provider !== 'ollama');
     const matches = local.filter(m => installedSet.has(m.modelId.toLowerCase()));
 
     if (matches.length === 0 && remote.length === 0) {
@@ -173,7 +173,14 @@ export class MutationEngineHelper {
       );
     }
 
-    return [...matches, ...remote];
+    // Preserve caller-provided order: drop only Ollama models that are not
+    // installed locally; cloud/remote providers and matching local models
+    // pass through in their original positions. Fixes a regression where
+    // a `[cloud-primary, ollama-fallbacks]` chain was rewritten to put
+    // installed Ollama models FIRST, demoting the cloud primary to last.
+    return candidates.filter(c =>
+      c.provider !== 'ollama' || installedSet.has(c.modelId.toLowerCase()),
+    );
   }
 
   private buildStrictPrompt(topExperiments: Experiment[], bestLoss: number, capabilities: string[]): string {
