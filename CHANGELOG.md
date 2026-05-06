@@ -1,5 +1,38 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: training eval deadline starvation (0 batches before deadline)
+
+Training WOs were tripping `final eval consumed 0 batches before
+deadline` on both node-1 (linux container) and node-kike
+(Mac native) with val_dataset_size=4871 and batch_size 32 or 64.
+Training was consuming the full budget; eval only got the
+best-effort `max(now + 10s, deadline)` reprieve which on shared CPU
+wasn't enough for even a single batch.
+
+Reserved an eval budget UPFRONT in `train_micro.py`:
+- `MIN_EVAL_BUDGET_SEC = 30.0`
+- `eval_budget_sec = max(30.0, max_train_seconds * 0.10)`
+- `training_budget_sec = max(max_train_seconds - eval_budget_sec,
+   max_train_seconds * 0.5)`
+- `deadline = start_time + training_budget_sec` (training stops here)
+- `final_deadline = start_time + max_train_seconds` (eval claims
+   the rest)
+
+Moved the `if time.time() >= deadline: break` check from the TOP of
+the eval batch loop to the BOTTOM, gated by `count > 0`, so the
+first batch always runs even under tight budgets — sentinel only
+fires for genuinely empty val_loaders, not for slow batch loaders.
+
+Added stderr trace events `stage: "eval-start"` and
+`stage: "eval-done"` (Node already captures stderr) so future
+debugging can see exactly when eval started, how much budget it
+had, how many batches ran, and how long they took.
+
+JSON output schema unchanged (`valLoss`, `valLossEvalFailed`,
+`valLossEvalFailureReason` semantics preserved).
+
+Tests: trainer.test.ts 24/0, full node suite 1542/0/43.
+
 ## [2026-05-06] fix: node honors COORDINATOR_WS_URL split (HTTP vs WS process)
 
 Coord is split into 3 processes per T5.4 — `coordinator-http`
