@@ -307,8 +307,6 @@ def evaluate(model: nn.Module, dataloader: DataLoader, device: str, deadline: Op
 
     with torch.no_grad():
         for batch in dataloader:
-            if deadline is not None and time.time() >= deadline:
-                break
             x, y = batch
             x, y = x.to(device), y.to(device)
 
@@ -318,6 +316,14 @@ def evaluate(model: nn.Module, dataloader: DataLoader, device: str, deadline: Op
 
             total_loss += loss.item()
             count += 1
+
+            # Deadline check AFTER processing the batch + guarded by `count > 0`
+            # so at least one batch always completes even when the deadline is
+            # already past at entry (slow batch loader, tight reserve, etc).
+            # Top-of-loop break was the root cause of "0 batches before
+            # deadline" sentinels under shared-CPU contention.
+            if deadline is not None and time.time() > deadline and count > 0:
+                break
 
     if count == 0:
         return EVAL_FAILED_SENTINEL
@@ -448,9 +454,29 @@ def main():
     # Setup optimizer with weight decay
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     
-    # Training loop with time limit
+    # Training loop with time limit.
+    #
+    # Reserve a minimum eval budget upfront so training can't starve the final
+    # evaluation pass. Without the reserve, training consumes the entire
+    # max_train_seconds and `evaluate()` only gets a best-effort 10s reprieve
+    # — under shared-CPU contention (Docker + Ollama + coordinator on the same
+    # host) that's not enough to load even one val batch and the run reports
+    # `valLossEvalFailed=true` despite training fine. Live-repro on node-1
+    # (linux container) and node-kike (Mac native) before this fix.
+    #
+    # Floor of 30s OR 10% of total budget, whichever is larger:
+    #   - 60s budget  → 30s eval / 30s train
+    #   - 600s budget → 60s eval / 540s train
+    #   - 1800s budget → 180s eval / 1620s train
+    # Training also gets a hard floor of 50% of budget so a tiny budget still
+    # gets reasonable training. `final_deadline` is `start + max_train_seconds`
+    # so we don't compound clock drift via `now + 10`.
+    MIN_EVAL_BUDGET_SEC = 30.0
+    eval_budget_sec = max(MIN_EVAL_BUDGET_SEC, max_train_seconds * 0.10)
+    training_budget_sec = max(max_train_seconds - eval_budget_sec, max_train_seconds * 0.5)
     start_time = time.time()
-    deadline = start_time + max_train_seconds
+    deadline = start_time + training_budget_sec
+    final_deadline = start_time + max_train_seconds
     step = 0
     best_val_loss = float('inf')
 
@@ -493,11 +519,35 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    # Final evaluation — also time-capped. If the deadline has already passed
-    # we still want *some* metric, so enforce a small minimum budget.
-    final_deadline = max(time.time() + 10.0, deadline)
+    # Final evaluation — time-capped against `final_deadline` (set above as
+    # `start_time + max_train_seconds`). The reserved eval budget guarantees
+    # we have at least max(30s, 10% of total) here, and the `count > 0` guard
+    # in `evaluate()` ensures at least one batch always processes even under
+    # tight margins.
+    eval_start = time.time()
+    print(
+        json.dumps({
+            "stage": "eval-start",
+            "deadline_in_s": round(final_deadline - eval_start, 2),
+            "val_batches": len(val_loader),
+            "train_batches": len(train_loader),
+        }),
+        file=sys.stderr,
+        flush=True,
+    )
     final_train_loss = evaluate(model, train_loader, device, deadline=final_deadline)
     final_val_loss = evaluate(model, val_loader, device, deadline=final_deadline)
+    eval_elapsed = time.time() - eval_start
+    print(
+        json.dumps({
+            "stage": "eval-done",
+            "elapsed_s": round(eval_elapsed, 2),
+            "final_train_loss": round(final_train_loss, 4),
+            "final_val_loss": round(final_val_loss, 4),
+        }),
+        file=sys.stderr,
+        flush=True,
+    )
     duration_ms = int((time.time() - start_time) * 1000)
 
     # Detect "no batches consumed" — either val_dataset was empty (set above)
