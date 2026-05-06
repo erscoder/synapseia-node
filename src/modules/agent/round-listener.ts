@@ -149,7 +149,20 @@ export class RoundListenerHelper {
     this.socket.on('round.closed', (event: RoundClosedEvent) => {
       logger.log(`[RoundListener] Round closed: ${event.roundId} (workOrder: ${event.workOrderId})`);
       const myResult = event.winners.find(w => w.nodeId === peerId);
-      const lamportsToSyn = (lamports: string) => (Number(lamports) / 1e9).toFixed(9);
+      // Coordinator now serializes reward fields as SYN-decimal strings
+      // (e.g. `"33900.000000000"`). Older coords sent raw lamports
+      // (`"33900000000000"`). Detect the format by the presence of `.`:
+      // SYN-decimal → already SYN, parse directly; lamports → divide by
+      // 1e9. Mirror of the parser pattern in
+      // `work-order/work-order.state.ts#parseSynToLamports` so the
+      // detection rule stays consistent across the agent.
+      const parseRewardSyn = (raw: string | undefined | null): number => {
+        if (!raw) return 0;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return 0;
+        return raw.includes('.') ? n : n / 1e9;
+      };
+      const formatRewardSyn = (raw: string): string => parseRewardSyn(raw).toFixed(9);
 
       // Bucket C3: persist per-round outcome for the rolling performance
       // window. recordRoundOutcome rolls up a summary every 5 rounds.
@@ -157,7 +170,7 @@ export class RoundListenerHelper {
         roundId: event.roundId,
         recordedAtMs: Date.now(),
         myRank: myResult?.rank ?? null,
-        myRewardSyn: myResult ? Number(myResult.rewardAmount) / 1e9 : null,
+        myRewardSyn: myResult ? parseRewardSyn(myResult.rewardAmount) : null,
         totalWinners: event.winners.length,
       });
 
@@ -165,7 +178,7 @@ export class RoundListenerHelper {
         const rankEmoji = myResult.rank === 1 ? '🥇' : myResult.rank === 2 ? '🥈' : '🥉';
         logger.log(
           `[RoundListener] ${rankEmoji} YOU WON rank #${myResult.rank}! ` +
-          `Reward: ${lamportsToSyn(myResult.rewardAmount)} SYN ` +
+          `Reward: ${formatRewardSyn(myResult.rewardAmount)} SYN ` +
           `(submission: ${myResult.submissionId})`
         );
       } else if (event.winners.length > 0) {
