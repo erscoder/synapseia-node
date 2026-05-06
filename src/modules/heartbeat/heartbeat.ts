@@ -29,27 +29,35 @@ import { getNodeVersion } from '../../utils/version';
 let lastAnnouncedCapabilities: string[] | null = null;
 
 /**
- * Read available memory in MB using the OS-aware metric when the
- * runtime exposes it. `os.freemem()` only reports raw free pages and
- * on macOS excludes inactive (file-cache) pages, so a healthy 16 GB
- * Mac in steady state can report ~89 MB free even when memory
- * pressure is green — that misreading was silently stripping
- * `cpu_training` / `gpu_training` from every heartbeat. Node 22+
- * exposes `process.availableMemory()`, which on Linux matches
- * `/proc/meminfo` `MemAvailable` and on macOS uses a vm_stat-based
- * `available` calculation that excludes reclaimable inactive pages,
- * so the number reflects real headroom. Fall back to `os.freemem()`
- * only when the runtime predates the API (Node <22). Note: the API
- * lives on `process`, NOT on `os` — an earlier version of this
- * helper queried `os.availableMemory` which does not exist, so it
- * silently always fell back to `os.freemem()` and the bug persisted.
+ * Estimate memory headroom in MB.
+ *
+ * `os.freemem()` and `process.availableMemory()` both report ~92MB on
+ * a 16GB Apple Silicon Mac because vm_stat / Mach kernel does not expose
+ * "purgeable cache" as available to the Node runtime. Using either as a
+ * pressure signal triggers false-positives constantly on mac-native dev
+ * hosts. Linux containers report cgroup-aware values and would work,
+ * but the asymmetry produces inconsistent capability advertising
+ * across nodes on the same hardware.
+ *
+ * Instead, treat headroom as `totalmem - rss`: the slack available IF
+ * this Node process is the dominant tenant. RSS reflects what THIS
+ * process holds; the difference against totalmem is "how much room is
+ * left for spawning a training model".
+ *
+ * Caveats:
+ *   - Other processes on the host (IDE, browser) are NOT subtracted.
+ *     Acceptable: production node hosts run only this process; dev
+ *     hosts are owner-tunable.
+ *   - cgroup-limited containers: `os.totalmem()` returns container
+ *     limit on Node 18+; RSS is process-scoped. Still works.
+ *
+ * @param freeMBOverride deterministic test-injection override.
  */
-function readAvailableMemMB(): number {
-  const fn = (process as unknown as { availableMemory?: () => number }).availableMemory;
-  if (typeof fn === 'function') {
-    try { return Math.floor(fn() / (1024 * 1024)); } catch { /* fall through */ }
-  }
-  return Math.floor(os.freemem() / (1024 * 1024));
+function readAvailableMemMB(freeMBOverride?: number): number {
+  if (typeof freeMBOverride === 'number') return freeMBOverride;
+  const totalMb = os.totalmem() / (1024 * 1024);
+  const rssMb = process.memoryUsage().rss / (1024 * 1024);
+  return Math.max(0, Math.floor(totalMb - rssMb));
 }
 
 /**
@@ -372,9 +380,17 @@ export class HeartbeatHelper {
   /**
    * Bug G1: cycle-local capability gating on memory pressure.
    *
-   * When `os.freemem()` is below `TRAINING_MEM_FLOOR_MB`, drop every
-   * training-class capability from the announced set so the coordinator
-   * stops handing this node training work it would refuse at runtime.
+   * Headroom signal = `os.totalmem() - process.memoryUsage().rss`. When
+   * total RAM minus our own resident-set is below `TRAINING_MEM_FLOOR_MB`
+   * (i.e. spawning a training model would push the host into swap/OOM
+   * territory), drop every training-class capability from the announced
+   * set so the coordinator stops handing this node training work it
+   * would refuse at runtime.
+   *
+   * Why not `os.freemem()` / `process.availableMemory()`: both return
+   * ~92MB on a 16GB Apple Silicon Mac (vm_stat / Mach kernel hides
+   * reclaimable cache from the Node runtime). They produce constant
+   * false-positives on mac-native dev hosts. See `readAvailableMemMB`.
    *
    * The filter is per-cycle — no state is persisted, so capability
    * automatically returns once memory recovers. The `info` log fires only
@@ -383,8 +399,8 @@ export class HeartbeatHelper {
    *
    * @internal Exposed for unit testing. The optional `freeMBOverride`
    * lets tests inject a deterministic memory reading without having to
-   * spy on the `os` module — `jest.spyOn(os, 'freemem')` fails under
-   * ESM-mode jest because the imported namespace is frozen.
+   * spy on the `os` / `process` modules — `jest.spyOn` fails under
+   * ESM-mode jest because the imported namespaces are frozen.
    */
   applyMemoryPressureFilter(capabilities: string[], freeMBOverride?: number): string[] {
     const freeMB = freeMBOverride ?? readAvailableMemMB();
