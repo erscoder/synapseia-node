@@ -15,6 +15,15 @@ const mockStartReviewLoop = jest.fn();
 const mockStopReviewLoop = jest.fn();
 const mockIsReviewLoopRunning = jest.fn(() => false);
 
+const mockIo = jest.fn(() => ({
+  on: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
+jest.mock('socket.io-client', () => ({
+  io: (...args: unknown[]) => mockIo(...args),
+}));
+
 jest.mock('../review-agent.js', () => ({
   ReviewAgentHelper: jest.fn().mockImplementation(() => ({
     startReviewLoop: mockStartReviewLoop,
@@ -63,5 +72,18 @@ describe('RoundListenerHelper', () => {
     const mod = await import('../round-listener.js');
     expect(mod.RoundListenerHelper).toBeDefined();
     expect(typeof mod.RoundListenerHelper).toBe('function');
+  });
+
+  it('falls back to coordinatorUrl when coordinatorWsUrl is undefined', () => {
+    helper.startRoundListener(COORDINATOR_URL, PEER_ID, LLM_CONFIG, undefined);
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo.mock.calls[0][0]).toBe(COORDINATOR_URL);
+  });
+
+  it('uses coordinatorWsUrl when provided (takes precedence over coordinatorUrl)', () => {
+    const WS_URL = 'http://localhost:3702';
+    helper.startRoundListener(COORDINATOR_URL, PEER_ID, LLM_CONFIG, WS_URL);
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo.mock.calls[0][0]).toBe(WS_URL);
   });
 });

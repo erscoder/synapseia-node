@@ -53,6 +53,7 @@ export class LangGraphWorkOrderAgentService {
         llmModel: config.llmModel,
         llmConfig: config.llmConfig,
       },
+      config.coordinatorWsUrl,
     );
     return this.runLoop(config, intervalMs ?? 30_000, maxIterations);
   }

@@ -269,7 +269,8 @@ async function bootstrap() {
       '--llm-url <url>',
       '[DEPRECATED, ignored] LLM endpoints are hardcoded per provider; flag kept so existing docker-compose / systemd configs that still pass it boot cleanly instead of crashing on commander.js validation.',
     )
-    .option('--coordinator <url>', 'Coordinator URL (default: http://localhost:3701)')
+    .option('--coordinator <url>', 'Coordinator HTTP URL (default: http://localhost:3701)')
+    .option('--coordinator-ws <url>', 'Coordinator WebSocket URL (default: same as --coordinator). Set to http://host:3702 when coord runs as split http/ws/worker processes.')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
     .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
     .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')
@@ -282,6 +283,7 @@ async function bootstrap() {
         llmKey?: string;
         llmUrl?: string;
         coordinator?: string;
+        coordinatorWs?: string;
         maxIterations?: number;
         inference?: boolean;
         inferenceModels?: string;
@@ -341,6 +343,15 @@ async function bootstrap() {
           walletService.displayCreationWarning(wallet);
         }
         const coordinatorUrl = options.coordinator || config.coordinatorUrl;
+        // WS endpoint is optional; falls back to the HTTP URL so single-
+        // process dev setups keep working. When the coord runs split
+        // (T5.4: http=3701, ws=3702, worker), point this at the WS port
+        // so Socket.IO survives an http-process restart.
+        const coordinatorWsUrl =
+          options.coordinatorWs ||
+          config.coordinatorWsUrl ||
+          process.env.COORDINATOR_WS_URL ||
+          coordinatorUrl;
         // Priority: --model flag > LLM_MODEL env > config.defaultModel
         const model = options.model || process.env.LLM_MODEL || config.defaultModel;
         const inferenceEnabled = options.inference ?? config.inferenceEnabled ?? false;
@@ -599,6 +610,7 @@ async function bootstrap() {
             walletAddress: wallet.publicKey,
             hardwareClass: hardware.hardwareClass,
             coordinatorUrl,
+            coordinatorWsUrl,
             capabilities,
             llmModel: llmModel ?? { provider: 'ollama', modelId: 'all-minilm-l6-v2', providerId: '' },
             llmConfig: { apiKey: llmKey },

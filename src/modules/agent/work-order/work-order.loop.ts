@@ -84,10 +84,15 @@ export class WorkOrderLoopHelper {
     const { intervalMs, maxIterations } = config;
     const peerId = config.peerId ?? 'unknown';
 
-    this.roundListener.startRoundListener(config.coordinatorUrl, peerId, {
-      llmModel: config.llmModel,
-      llmConfig: config.llmConfig,
-    });
+    this.roundListener.startRoundListener(
+      config.coordinatorUrl,
+      peerId,
+      {
+        llmModel: config.llmModel,
+        llmConfig: config.llmConfig,
+      },
+      config.coordinatorWsUrl,
+    );
 
     try {
       let iteration = 1;
