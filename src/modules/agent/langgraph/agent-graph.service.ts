@@ -4,6 +4,7 @@ import type { AgentState, WorkOrder, WorkOrderEvaluation, ResearchResult, AgentB
 import type { WorkOrderAgentConfig } from '../work-order/work-order.types';
 import { AgentBrainHelper } from '../agent-brain';
 import { CheckpointService } from './checkpoint.service';
+import { langfuseCallbacks } from './langfuse-handler';
 import { BackpressureService } from '../work-order/backpressure.service';
 import { FetchWorkOrdersNode } from './nodes/fetch-work-orders';
 import { SelectWorkOrderNode } from './nodes/select-wo';
@@ -239,8 +240,29 @@ export class AgentGraphService {
     };
 
     try {
+      // Langfuse tracing — no-op array when LANGFUSE_SECRET_KEY is unset, so
+      // production runs incur zero overhead. The handler emits one span per
+      // LangGraph node (planning, retrieve, generate, critique, submit, ...)
+      // plus child spans for LLM calls and tool invocations, all grouped
+      // under one trace per graph.invoke() with userId=peerId and
+      // sessionId=workOrderId for filtering in the Langfuse UI.
+      const callbacks = langfuseCallbacks({
+        userId: config.peerId,
+        sessionId: effectiveWoId,
+        metadata: {
+          workOrderId: effectiveWoId,
+          workOrderType: workOrderId ? undefined : 'iteration_scan',
+          iteration,
+          coordinatorUrl: config.coordinatorUrl,
+          capabilities: config.capabilities,
+          threadId,
+        },
+        tags: ['langgraph', 'work-order-agent'],
+      });
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (graph.invoke as any)(initialState, {
+        callbacks,
         configurable: { thread_id: threadId },
       });
 
