@@ -1,5 +1,44 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: detectHardware respects OLLAMA_URL + populates hasCloudLlm
+
+`detectHardware()` was pinging hardcoded `http://localhost:11434`
+for `hasOllama` instead of honoring the `OLLAMA_URL` env. node-1
+(docker container, Ollama at `http://ollama:11434` in a sibling
+container) failed the ping → `hasOllama=false`. And `hasCloudLlm`
+was declared on the `Hardware` interface but never populated, so
+the `.env` `LLM_CLOUD_MODEL=minimax/MiniMax-M2.7` /
+`LLM_PROVIDER=cloud` settings were silently dropped.
+
+Result: `heartbeat.ts:446` cap-derivation gate
+`hasOllama || hasCloudLlm` evaluated false → no `llm` / `inference`
+caps registered → coordinator's research-WO requiredCapabilities
+filter (`['llm']`) excluded node-1 → only `cpu_training` /
+`cpu_inference` WOs reached it.
+
+Fix:
+- Ping `OLLAMA_URL || 'http://localhost:11434'` instead of hardcoded
+  localhost.
+- Replaced `execSync(\`curl -s ${ollamaUrl}/api/tags\`)` shell
+  template with `URL` parsing + `spawnSync('curl', ['-s',
+  '--max-time', '2', probeUrl])` array form to close a shell
+  injection vector (operator env not user-input, but defense-in-depth
+  worth it). Malformed `OLLAMA_URL` → `hasOllama=false`, no throw.
+- `hardware.hasCloudLlm = !!(LLM_CLOUD_MODEL?.trim() ||
+  LLM_PROVIDER?.trim().toLowerCase() === 'cloud')`.
+- Boot log line `[hardware] hasOllama=... hasCloudLlm=... ...`
+  guarded by module-level `hardwareLoggedOnce` so it fires once
+  per process (`canInference()` / `canDiLoCo()` re-invoke
+  `detectHardware()` per heartbeat tick).
+
+Outstanding TODO (separate slice): `embedding.ts:26`,
+`model-catalog.ts:293`, `inference-server.ts:111` also have
+hardcoded `localhost:11434` and don't honor `OLLAMA_URL`. Out of
+scope.
+
+Tests: hardware 146/8/0 (4 new tests for OLLAMA_URL + cloud env
+paths). Heartbeat 19/19. Full suite 1548/0/43 (was 1544).
+
 ## [2026-05-06] fix: trainer stderr per-line classifier (info / warn / error)
 
 The Python subprocess `stderr` handler used to dump the entire
