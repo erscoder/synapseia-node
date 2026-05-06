@@ -59,8 +59,30 @@ export class RoundListenerHelper {
     @Optional() private readonly identityHelper?: IdentityHelper,
   ) {}
 
-  startRoundListener(coordinatorUrl: string, peerId: string, llmConfig?: LLMReviewConfig): void {
+  /**
+   * @param coordinatorUrl  HTTP URL of the coordinator. Used for fetch()
+   *                        calls (e.g. /research-rounds/:id/submissions)
+   *                        and forwarded to the review loop.
+   * @param peerId          this node's peer id, used for handshake auth.
+   * @param llmConfig       optional review-loop config.
+   * @param coordinatorWsUrl optional WS URL. When the coord splits HTTP
+   *                        and WS into separate processes, point this at
+   *                        the WS endpoint (default :3702) so Socket.IO
+   *                        connects there instead of the HTTP port. When
+   *                        undefined, falls back to `coordinatorUrl` —
+   *                        single-process dev setups keep working.
+   */
+  startRoundListener(
+    coordinatorUrl: string,
+    peerId: string,
+    llmConfig?: LLMReviewConfig,
+    coordinatorWsUrl?: string,
+  ): void {
     if (this.socket) return;
+    // Defensive: `??` only catches null/undefined. An empty/whitespace
+    // string slips through and would invoke `io('')`. Trim + truthy
+    // check covers '', '   ', undefined, and null.
+    const wsUrl = coordinatorWsUrl?.trim() || coordinatorUrl;
 
     // Build the signed Ed25519 handshake the coordinator's WS auth guard
     // expects (presentation/websocket/ws-auth.guard.ts). The `auth`
@@ -88,7 +110,7 @@ export class RoundListenerHelper {
         }
       : undefined;
 
-    this.socket = io(coordinatorUrl, {
+    this.socket = io(wsUrl, {
       transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 5000,
@@ -98,7 +120,7 @@ export class RoundListenerHelper {
     });
 
     this.socket.on('connect', () => {
-      logger.log(`[RoundListener] Connected to coordinator WS (${coordinatorUrl})`);
+      logger.log(`[RoundListener] Connected to coordinator WS (${wsUrl})`);
     });
 
     this.socket.on('disconnect', (reason: string) => {

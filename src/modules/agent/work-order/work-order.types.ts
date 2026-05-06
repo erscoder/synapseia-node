@@ -7,6 +7,14 @@ import type { LLMConfig, LLMModel } from '../../llm/llm-provider';
 
 export interface WorkOrderAgentConfig {
   coordinatorUrl: string;
+  /**
+   * Optional dedicated WebSocket URL for the coordinator. When the coord
+   * is split across HTTP (port 3701) and WS (port 3702) processes, set
+   * this to the WS endpoint so Socket.IO connects to the right side and
+   * survives an HTTP-process restart. Falls back to `coordinatorUrl` so
+   * single-process dev setups keep working unchanged.
+   */
+  coordinatorWsUrl?: string;
   peerId: string;
   /**
    * Solana wallet base58 address (the node's reward / signing wallet).

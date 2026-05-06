@@ -20,6 +20,13 @@ export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 export interface Config {
   coordinatorUrl: string;
+  /**
+   * Optional dedicated coordinator WebSocket URL. When the coord splits
+   * HTTP and WS into separate processes (T5.4 — http=3701, ws=3702),
+   * set this to the WS endpoint so Socket.IO connects to the right
+   * port. When unset, the node falls back to `coordinatorUrl`.
+   */
+  coordinatorWsUrl?: string;
   defaultModel: string;
   name?: string;
   lat?: number;
