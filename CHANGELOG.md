@@ -1,5 +1,42 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: trainer valLoss=0 silent eval-failed → improved=true reward
+
+`train_micro.py:evaluate()` returned `total_loss / max(count, 1) =
+0/1 = 0.0` when val_loader had 0 batches. Live: 50K-char corpus split
+90/10 + the LLM-mutated `effective_batch_size` (often 32+) produced
+an empty val_loader. Node-side `improved = valLoss < bestLoss` ran
+`0 < Infinity = true` → reward 3000 SYN claimed for a no-op
+evaluation.
+
+Fix:
+
+- Python `evaluate()` returns `EVAL_FAILED_SENTINEL = 1e30` (chosen
+  to stay JSON-safe; Python `float('inf')` serializes as `Infinity`
+  which Node's `JSON.parse` rejects). `json.dumps(..., allow_nan=
+  False)` for fail-loud on any future Inf/NaN slip.
+- New JSON fields `valLossEvalFailed: bool` + `valLossEvalFailureReason:
+  str` are the authoritative signal for the Node side.
+- Pre-eval guard short-circuits when `len(val_dataset) == 0` with
+  stderr context (`corpus_chars`, `seq_length`, `effective_batch_size`).
+- Node-side 4-layer guard at `work-order.execution.ts`: `!evalFailed
+  && valLoss > 0 && valLoss < SENTINEL && valLoss < currentBestLoss`.
+- `submitTrainingResult` no longer recomputes `improved` (P6
+  parallel-path violation flagged by reviewer); now accepts
+  `improved` + `valLossEvalFailed` as params from the executor's
+  guarded computation. Single source of truth.
+- Shared sentinel constant exported as `TRAINER_EVAL_FAILED_SENTINEL`
+  from `trainer.ts`; imported by the executor; cross-ref comment in
+  the Python side names the TS export so future grep finds both.
+- 4 new unit tests in `work-order.execution.improved-guard.spec.ts`
+  cover: evalFailed=true, valLoss=0 legacy, valLoss=SENTINEL,
+  happy-path.
+
+Also includes a small pre-existing bit-rot fix in
+`work-order.coordinator-stale.spec.ts` (added missing `wallet-1`
+positional arg required since commit `979e91d7`). Test count
+1538 → 1542 with 0 failures.
+
 ## [2026-05-06] fix: mutation-engine no longer demotes cloud LLM primary
 
 `filterByInstalledModels` returned `[...matches, ...remote]` — Ollama

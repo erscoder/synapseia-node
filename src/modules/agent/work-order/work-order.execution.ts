@@ -8,7 +8,7 @@ import * as os from 'os';
 import logger from '../../../utils/logger';
 import { LlmProviderHelper, type LLMConfig, type LLMModel } from '../../llm/llm-provider';
 import { EmbeddingHelper } from '../../../shared/embedding';
-import { trainMicroModel } from '../../model/trainer';
+import { trainMicroModel, TRAINER_EVAL_FAILED_SENTINEL } from '../../model/trainer';
 import { runDocking, DockingError } from '../../docking';
 import type { DockingWorkOrderPayload } from '../../docking/types';
 import { runLora, LoraError } from '../../lora/lora_trainer';
@@ -327,13 +327,48 @@ Abstract: ${payload.abstract}`;
     // error).
     const valLoss = safeLoss(trainingResult.valLoss);
     const finalLoss = safeLoss(trainingResult.finalLoss);
-    const improved = valLoss < payload.currentBestLoss;
+    // Defensive guard against the "valLoss=0 vs Infinity baseline always wins"
+    // regression family. Three layers, all required:
+    //   1. trainerEvalFailed — authoritative flag from Python; covers the
+    //      empty-val-set and deadline-beat-first-batch cases.
+    //   2. valLoss > 0 — historical guard for any legacy code path that
+    //      might still emit a literal 0.0 (e.g. a future Python edit that
+    //      re-introduces `total_loss / max(count, 1)`).
+    //   3. valLoss < SENTINEL — refuses the 1e30 sentinel even if (1) is
+    //      missing for some reason (older Python release, mismatched
+    //      script). Belt + suspenders + a second belt; this comparison is
+    //      load-bearing for reward payout so we err toward NOT marking
+    //      improvement on ambiguous data.
+    const trainerEvalFailed = trainingResult.valLossEvalFailed === true;
+    const improved =
+      !trainerEvalFailed &&
+      valLoss > 0 &&
+      valLoss < TRAINER_EVAL_FAILED_SENTINEL &&
+      valLoss < payload.currentBestLoss;
+    if (trainerEvalFailed) {
+      logger.warn(
+        ` Trainer reported eval failure (${trainingResult.valLossEvalFailureReason ?? 'no reason given'}); marking improved=false to skip reward payout.`,
+      );
+    }
     const effectiveDatasetId = usedRealCorpus ? `${payload.domain}-corpus` : 'synthetic://built-in';
     await this.coordinator.submitTrainingExperiment(coordinatorUrl, peerId, mutation.hyperparams, valLoss, trainingResult.durationMs);
-    await this.coordinator.submitTrainingResult(coordinatorUrl, peerId, { ...payload, datasetId: effectiveDatasetId }, valLoss, finalLoss, trainingResult.durationMs);
+    // Pass the executor-computed `improved` and `trainerEvalFailed` so the
+    // submission helper does NOT recompute (P6 in reviewer-lessons.md). Single
+    // source of truth: the 4-layer guard above is the only place these are
+    // derived from raw trainer output.
+    await this.coordinator.submitTrainingResult(
+      coordinatorUrl,
+      peerId,
+      { ...payload, datasetId: effectiveDatasetId },
+      valLoss,
+      finalLoss,
+      trainingResult.durationMs,
+      improved,
+      trainerEvalFailed,
+    );
 
-    logger.log(` Training complete — valLoss=${valLoss.toFixed(4)}, improved=${improved}`);
-    return { result: JSON.stringify({ valLoss, finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: valLoss }), success: true };
+    logger.log(` Training complete — valLoss=${valLoss.toFixed(4)}, improved=${improved}, evalFailed=${trainerEvalFailed}`);
+    return { result: JSON.stringify({ valLoss, finalLoss, config: trainingResult.config, durationMs: trainingResult.durationMs, lossCurve: trainingResult.lossCurve, hardwareUsed: trainingResult.hardwareUsed, improved, metricType: 'val_loss', metricValue: valLoss, valLossEvalFailed: trainerEvalFailed }), success: true };
   }
 
   // ── DiLoCo ────────────────────────────────────────────────────────────────

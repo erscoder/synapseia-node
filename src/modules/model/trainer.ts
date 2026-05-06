@@ -38,6 +38,19 @@ function moduleDir(): string {
 export const TRAINING_MEM_FLOOR_MB = 900;
 
 /**
+ * Sentinel emitted by train_micro.py when val_loader has 0 batches
+ * (empty val set, or deadline expired before the first val batch).
+ *
+ * Mirrors `EVAL_FAILED_SENTINEL` in `scripts/train_micro.py` — keep
+ * both sides in sync if either changes. The boolean
+ * `valLossEvalFailed` on TrainingResult is the authoritative signal;
+ * this constant exists for legacy parsers / belt-and-suspenders code
+ * paths that only inspect the numeric `valLoss` and need to refuse
+ * the sentinel as a "real" loss.
+ */
+export const TRAINER_EVAL_FAILED_SENTINEL = 1e30;
+
+/**
  * Headroom signal for training pre-flight gating.
  *
  * `os.freemem()` and `process.availableMemory()` both report ~62MB on
@@ -66,6 +79,17 @@ export interface TrainingResult {
   config: MutationProposal['hyperparams'];
   lossCurve: number[];
   hardwareUsed: 'cpu' | 'gpu';
+  /**
+   * True when the Python trainer could not produce a real validation loss
+   * (val set empty / deadline beat the first val batch). Callers that gate
+   * rewards on `improved = valLoss < bestLoss` MUST short-circuit on this
+   * flag — the trainer emits a 1e30 sentinel in `valLoss` so the comparison
+   * stays mathematically correct, but treating the sentinel as a real loss
+   * elsewhere (e.g. logging it as the new bestLoss) would be misleading.
+   */
+  valLossEvalFailed?: boolean;
+  /** Human-readable reason captured by the trainer. Surfaced in Node logs. */
+  valLossEvalFailureReason?: string;
 }
 
 export interface TrainingOptions {
@@ -351,7 +375,18 @@ export class TrainerHelper {
             const parsed = JSON.parse(line);
             if (parsed.step !== undefined && parsed.loss !== undefined) lossCurve.push(parsed.loss);
             if (parsed.result) {
-              finalResult = { finalLoss: parsed.result.finalLoss, valLoss: parsed.result.valLoss };
+              finalResult = {
+                finalLoss: parsed.result.finalLoss,
+                valLoss: parsed.result.valLoss,
+                // New 2026-05-05: trainer emits these when val set was empty
+                // or deadline beat the first batch. Propagated to executor so
+                // `improved` gating and reward payout can short-circuit on
+                // failed eval rather than trusting the 1e30 sentinel.
+                valLossEvalFailed: parsed.result.valLossEvalFailed === true,
+                valLossEvalFailureReason: typeof parsed.result.valLossEvalFailureReason === 'string'
+                  ? parsed.result.valLossEvalFailureReason
+                  : undefined,
+              };
             }
           } catch { /* ignore non-JSON */ }
         }
@@ -392,6 +427,8 @@ export class TrainerHelper {
         settle(undefined, {
           runNumber, finalLoss: finalResult.finalLoss ?? 0, valLoss: finalResult.valLoss ?? 0,
           improvementPercent: 0, durationMs, config: proposal.hyperparams, lossCurve, hardwareUsed: hardware,
+          valLossEvalFailed: finalResult.valLossEvalFailed === true,
+          valLossEvalFailureReason: finalResult.valLossEvalFailureReason,
         });
       });
     });
