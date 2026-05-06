@@ -1,5 +1,42 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] feat: Langfuse LangGraph tracing (env-gated, prod-safe)
+
+LangGraph agent now emits Langfuse traces with `userId=peerId` and
+`sessionId=workOrderId` when `LANGFUSE_SECRET_KEY` is set. Each
+LangGraph node (planning, retrieve, generate, critique, submit) +
+LLM call surfaces as a span under one trace per `graph.invoke()` —
+no per-step manual instrumentation needed.
+
+Production-safe: when env unset, `langfuseCallbacks()` returns `[]`
+so `graph.invoke({ callbacks: [] })` is a no-op. Zero allocation
+beyond the empty array. The boot log prints
+`Langfuse tracing: enabled → <url>` or
+`Langfuse tracing: disabled (set LANGFUSE_SECRET_KEY to enable)`
+for operator confirmation.
+
+Implementation:
+- New helper at
+  `src/modules/agent/langgraph/langfuse-handler.ts` —
+  `getLangfuseHandler(params)` and `langfuseCallbacks(params)`.
+- Wired at the only `graph.invoke()` site in
+  `agent-graph.service.ts:243` — merges with the existing
+  `configurable.thread_id` (preserves) and adds tags + traceMetadata.
+- Boot log line in `node-runtime.ts` (after line 450). URL only
+  printed when `LANGFUSE_BASE_URL` is explicitly set; otherwise
+  shows `(default endpoint)` so operators don't see a misleading
+  localhost line on a node actually exporting to cloud.langfuse.com.
+- `.env.example` documents the three optional env vars.
+
+Dep added: `@langfuse/langchain@^5.3.0` (modern OTel-based SDK
+matching the already-installed `@langfuse/otel` and
+`@langfuse/tracing` v5 packages). Legacy `langfuse-langchain@3.x`
+peer-dep `langchain <0.4.0` was incompatible with the project's
+`@langchain/core@^1.1.41`.
+
+Tests: 18 langgraph suites / 209 tests pass. Full node suite
+unchanged.
+
 ## [2026-05-06] fix: round-listener defensively parses SYN-decimal + lamports
 
 Coord migrated all reward fields to SYN-decimal strings
