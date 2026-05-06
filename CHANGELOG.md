@@ -1,5 +1,31 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: node honors COORDINATOR_WS_URL split (HTTP vs WS process)
+
+Coord is split into 3 processes per T5.4 — `coordinator-http`
+(`:3701`), `coordinator-ws` (`:3702`), `coordinator-worker`
+(workers, no port). Restarting `coordinator-http` was dropping every
+node's Socket.IO connection because the node CLI used a single
+`COORDINATOR_URL` for ALL coord interactions and `RoundListener`
+called `io(coordinatorUrl)` against `:3701`.
+
+Added optional `COORDINATOR_WS_URL` env + `--coordinator-ws` CLI
+flag with resolution chain
+`options.coordinatorWs || config.coordinatorWsUrl ||
+process.env.COORDINATOR_WS_URL || coordinatorUrl`. RoundListener
+uses `coordinatorWsUrl?.trim() || coordinatorUrl` so empty-string
+env values fall through cleanly. HTTP fetch sites untouched.
+
+Boot log prints both URLs + warns when they match (single-URL dev
+setup supported, but operator is told that restarting coord-http
+will drop WS clients in that mode).
+
+Added `.env.example` documenting both vars; un-ignored via
+`!.env.example` in `.gitignore`.
+
+Tests: round-listener 4 → 6 (added fallback + override cases).
+Full node suite 1542/0/43.
+
 ## [2026-05-06] fix: trainer valLoss=0 silent eval-failed → improved=true reward
 
 `train_micro.py:evaluate()` returned `total_loss / max(count, 1) =
