@@ -1,5 +1,32 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: mutation-engine no longer demotes cloud LLM primary
+
+`filterByInstalledModels` returned `[...matches, ...remote]` — Ollama
+matches FIRST, cloud LAST. The training pipeline correctly resolved
+the chain `[cloud-primary, ollama-fallbacks]` via
+`resolveTrainingChain()` and passed it through, but mutation-engine
+re-sorted right before the retry loop so the primary cloud model
+ended up at the bottom of the candidate list. Result: every Ollama
+fallback was tried in sequence (qwen2.5:1.5b OOM, qwen2.5:0.5b JSON
+parse, all-minilm-l6-v2 not chat-capable) and cloud was never
+attempted. Trainer fell through to hardcoded hyperparam defaults and
+ran without LLM-driven mutation guidance.
+
+Replaced the final concatenation with an order-preserving
+`candidates.filter()` that keeps cloud/remote unconditionally and
+drops only Ollama models that aren't installed locally. The existing
+`MutationEngineError` no-compatible-LLM guard is preserved; the
+`local`/`matches`/`remote` arrays still feed it.
+
+Added 3 regression tests asserting the cloud primary stays at index
+0 with both an installed Ollama present and with no Ollama at all.
+Test count 15 → 18.
+
+Also added a TODO comment in `training-llm.ts` flagging that the
+chain auto-includes embedding models (e.g. `all-minilm-l6-v2`)
+without checking chat capability — separate slice.
+
 ## [2026-05-06] fix: trainer pre-flight memory check + observability for training LLM
 
 Two related symptoms after the heartbeat fix unlocked `cpu_training`
