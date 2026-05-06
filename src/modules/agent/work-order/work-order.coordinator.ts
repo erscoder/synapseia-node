@@ -364,8 +364,16 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     valLossBefore: number,
     valLossAfter: number,
     durationMs: number,
+    improved: boolean,
+    valLossEvalFailed: boolean,
   ): Promise<void> {
     try {
+      // Single source of truth: `improved` and `valLossEvalFailed` are computed
+      // in work-order.execution.ts behind the 4-layer guard
+      // (`!evalFailed && valLoss > 0 && valLoss < SENTINEL && valLoss < currentBestLoss`).
+      // We MUST NOT recompute here — a parallel codepath would diverge from the
+      // executor's truth on legacy `valLoss=0` or sentinel inputs. See P6 in
+      // reviewer-lessons.md.
       const body = {
         peerId,
         domain: payload.domain,
@@ -374,7 +382,8 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
         valLossAfter,
         qualityScore: Math.max(0, Math.min(10, 10 * Math.exp(-valLossAfter))),
         durationMs,
-        improved: valLossAfter < payload.currentBestLoss,
+        improved,
+        valLossEvalFailed,
         timestamp: Date.now(),
       };
       const { url: fetchUrl, init } = await this.signedFetch(`${coordinatorUrl}/micro-training/results`, 'POST', body);

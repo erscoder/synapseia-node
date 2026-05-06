@@ -273,8 +273,34 @@ def train_step(model: nn.Module, batch: Tuple[torch.Tensor, torch.Tensor], optim
     return loss.item()
 
 
+# Sentinel value emitted in `valLoss` when the validation loader yields zero
+# batches (empty val set, or batch_size larger than val_dataset). 1e30 is
+# JSON-safe (json.dumps emits a literal `1e+30`, not the non-standard
+# `Infinity` token that Node's JSON.parse rejects) and, for any practical
+# baseline `currentBestLoss`, compares as "definitely worse" so the Node-side
+# `improved = valLoss < currentBestLoss` check stays correct. The Node
+# parser ALSO inspects the `valLossEvalFailed` boolean and short-circuits
+# the `improved` comparison there — the sentinel is the belt, the boolean
+# is the suspenders.
+#
+# TS counterpart: TRAINER_EVAL_FAILED_SENTINEL in
+# packages/node/src/modules/model/trainer.ts — both must stay numerically
+# identical. Grep both names if you change the value.
+EVAL_FAILED_SENTINEL = 1e30
+
+
 def evaluate(model: nn.Module, dataloader: DataLoader, device: str, deadline: Optional[float] = None) -> float:
-    """Evaluate model on validation set. Honours ``deadline`` (monotonic time)."""
+    """Evaluate model on validation set. Honours ``deadline`` (monotonic time).
+
+    Returns ``EVAL_FAILED_SENTINEL`` (1e30) when no batches were consumed —
+    either because the dataloader is empty (val set smaller than batch_size)
+    or the deadline expired before the first batch. Returning 0.0 here was
+    a silent quality bug: the Node side initialises ``bestLoss=Infinity``
+    and computes ``improved = valLoss < bestLoss`` — a 0.0 always wins,
+    which had nodes claiming improvement on no-eval runs and getting paid
+    rewards for them. Sentinel preserves the comparison invariant without
+    breaking the JSON contract (see EVAL_FAILED_SENTINEL docstring above).
+    """
     model.eval()
     total_loss = 0
     count = 0
@@ -293,7 +319,9 @@ def evaluate(model: nn.Module, dataloader: DataLoader, device: str, deadline: Op
             total_loss += loss.item()
             count += 1
 
-    return total_loss / max(count, 1)
+    if count == 0:
+        return EVAL_FAILED_SENTINEL
+    return total_loss / count
 
 
 def main():
@@ -380,7 +408,29 @@ def main():
         print(json.dumps({"warning": f"batch_size clamped from {batch_size} to {effective_batch_size} (only {len(train_dataset)} training samples)"}), flush=True)
 
     train_loader = DataLoader(train_dataset, batch_size=effective_batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=max(1, min(effective_batch_size, len(val_dataset))), shuffle=False)
+
+    # Val set must produce at least one batch. With the previous
+    # `batch_size=max(1, min(effective_batch_size, len(val_dataset)))`,
+    # a val_dataset of length 0 silently produced an empty DataLoader and
+    # `evaluate()` returned 0.0 — Node treated the run as "improved" against
+    # its Infinity baseline and paid out rewards for a no-eval submission.
+    # Cap val batch size at len(val_dataset) so even a tiny val set yields
+    # one batch; if val_dataset is empty, log to stderr and the eval call
+    # below will return EVAL_FAILED_SENTINEL via the empty-loader branch.
+    val_eval_failed = False
+    val_eval_failure_reason: Optional[str] = None
+    if len(val_dataset) == 0:
+        val_eval_failed = True
+        val_eval_failure_reason = (
+            f"val set empty: 0 samples (corpus_chars={len(text)}, train_ratio=0.9, "
+            f"seq_length={seq_length}, effective_batch_size={effective_batch_size}). "
+            "Domain corpus is too small to carve out a usable validation split."
+        )
+        print(f"[train_micro] WARNING: {val_eval_failure_reason}", file=sys.stderr, flush=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    else:
+        val_batch_size = max(1, min(effective_batch_size, len(val_dataset)))
+        val_loader = DataLoader(val_dataset, batch_size=val_batch_size, shuffle=False)
     
     # Create model
     model = MicroTransformer(
@@ -449,9 +499,25 @@ def main():
     final_train_loss = evaluate(model, train_loader, device, deadline=final_deadline)
     final_val_loss = evaluate(model, val_loader, device, deadline=final_deadline)
     duration_ms = int((time.time() - start_time) * 1000)
-    
-    # Output final result
-    result = {
+
+    # Detect "no batches consumed" — either val_dataset was empty (set above)
+    # or the deadline expired before the first val batch on a non-empty set.
+    # In both cases `evaluate()` returned EVAL_FAILED_SENTINEL. Propagate
+    # `valLossEvalFailed=true` so the Node parser can short-circuit the
+    # `improved` comparison instead of trusting the sentinel directly.
+    if final_val_loss >= EVAL_FAILED_SENTINEL:
+        val_eval_failed = True
+        if val_eval_failure_reason is None:
+            val_eval_failure_reason = (
+                f"final eval consumed 0 batches before deadline "
+                f"(val_dataset_size={len(val_dataset)}, effective_batch_size={effective_batch_size})"
+            )
+            print(f"[train_micro] WARNING: {val_eval_failure_reason}", file=sys.stderr, flush=True)
+
+    # Use json.dumps with allow_nan=False to fail loudly if any future code
+    # path lets a NaN/Inf reach this point — Node JSON.parse can't handle
+    # `NaN`/`Infinity` tokens and we'd lose the result silently otherwise.
+    result_payload = {
         "result": {
             "finalLoss": round(final_train_loss, 4),
             "valLoss": round(final_val_loss, 4),
@@ -459,9 +525,11 @@ def main():
             "durationMs": duration_ms,
             "params": param_count,
             "vocabSize": vocab_size,
+            "valLossEvalFailed": val_eval_failed,
+            "valLossEvalFailureReason": val_eval_failure_reason,
         }
     }
-    print(json.dumps(result), flush=True)
+    print(json.dumps(result_payload, allow_nan=False), flush=True)
 
 
 if __name__ == '__main__':
