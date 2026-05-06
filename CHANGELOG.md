@@ -1,5 +1,29 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: round-listener defensively parses SYN-decimal + lamports
+
+Coord migrated all reward fields to SYN-decimal strings
+(`"33900.000000000"`). `round-listener.ts:152, 160` previously did
+`(Number(lamports) / 1e9).toFixed(9)` which on the new format
+produced `"0.000033900"` — wrong log AND wrong telemetry persisted
+to the rolling-window state.
+
+Replaced with a `parseRewardSyn()` helper that detects the format
+by `.` presence:
+- contains `.` → already SYN-decimal → `Number(s)`
+- no `.` → lamports → `Number(s) / 1e9`
+
+Mirrors `parseSynToLamports` shape in
+`work-order/work-order.state.ts`. Both the `formatRewardSyn` log
+line and the `myRewardSyn` telemetry now render the right SYN value
+regardless of coord version (defensive across any deploy ordering).
+
+Other node-side reward parsers (`work-order.evaluation.ts:148`,
+`work-order.coordinator.ts:230`) already use `parseSynToLamports`
+which is format-aware — no change needed.
+
+Tests: 1548/0/43.
+
 ## [2026-05-06] fix: detectHardware respects OLLAMA_URL + populates hasCloudLlm
 
 `detectHardware()` was pinging hardcoded `http://localhost:11434`
