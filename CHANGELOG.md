@@ -1,5 +1,36 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: trainer pre-flight memory check + observability for training LLM
+
+Two related symptoms after the heartbeat fix unlocked `cpu_training`
+on Mac-native node-kike: training WOs reached the trainer but aborted
+at pre-flight with `Insufficient memory: free=62MB, estimated
+need=925MB (... total=16384MB)`.
+
+`trainer.ts` had its own memory gate that still used `os.freemem()`
+— the same broken signal we fixed in heartbeat at commit `9007a62`.
+Replaced both call sites (gate + spawn-time snapshot) with a new
+`readTrainingHeadroomMB()` helper that uses `os.totalmem() -
+process.memoryUsage().rss`. Probe on this Mac: `os.freemem()` reports
+92 MB → would falsely abort; new signal returns 16339 MB → passes the
+900 MB floor with 18× margin.
+
+Separately, the user reported the training pipeline was using local
+Ollama (`qwen2.5:1.5b`) despite `LLM_PROVIDER=cloud` in node config.
+Investigation: `resolveTrainingChain()` in
+`modules/llm/training-llm.ts` already honors `LLM_PROVIDER=cloud`
+when both `LLM_PROVIDER` and `LLM_CLOUD_MODEL` env vars reach the
+process — and both training entry points (`work-order.loop.ts:294`
+and `langgraph/nodes/execute-training.ts:27`) already call the
+resolver. The Ollama selection is a deploy-time env-misconfig, not a
+code bug. Added an observability log at execution time
+`Training LLM: primary=<provider>/<model> (fallbacks: ...)` so the
+misconfig is diagnosable from one line on next run.
+
+Tests: trainer.test.ts + heartbeat-memory-pressure 4/4 still green.
+Two pre-existing failures in work-order.coordinator-stale.spec.ts
+(Set-mock typing issue from `a1dd9095`) — out of scope.
+
 ## [2026-05-06] fix: macOS cpu_training stripped (v2) — RSS-based headroom signal
 
 Yesterday's fix (commit c04f811) swapped `os.freemem()` for

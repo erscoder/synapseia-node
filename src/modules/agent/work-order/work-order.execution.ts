@@ -250,6 +250,22 @@ Abstract: ${payload.abstract}`;
     fallbackModels: LLMModel[] = [],
   ): Promise<{ result: string; success: boolean }> {
     logger.log(` Executing TRAINING: ${workOrder.title}`);
+    // Document which LLM (and fallback chain) was selected so config-env
+    // misconfiguration is diagnosable from the live log on next run. The
+    // resolver runs upstream in work-order.loop.ts / execute-training.ts
+    // (langgraph). When LLM_PROVIDER=cloud is intended but the log shows
+    // an Ollama primary, the env vars (LLM_PROVIDER + LLM_CLOUD_MODEL +
+    // LLM_CLOUD_PROVIDER) aren't reaching the node process.
+    if (llmModel) {
+      const fallbackSummary = fallbackModels.length > 0
+        ? ` (fallbacks: ${fallbackModels.map(m => `${m.provider}/${m.modelId}`).join(', ')})`
+        : ' (no fallbacks)';
+      logger.log(
+        ` Training LLM: primary=${llmModel.provider}/${llmModel.modelId}${fallbackSummary}`,
+      );
+    } else {
+      logger.warn(' Training LLM: no model resolved — mutation engine will use built-in default (qwen2.5:0.5b)');
+    }
     let payload: TrainingWorkOrderPayload;
     try { payload = JSON.parse(workOrder.description) as TrainingWorkOrderPayload; } catch { return { result: 'Invalid training payload', success: false }; }
 

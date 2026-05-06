@@ -6,7 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
-import { freemem, totalmem } from 'os';
+import { totalmem } from 'os';
 import logger from '../../utils/logger';
 import type { MutationProposal } from './mutation-engine';
 
@@ -36,6 +36,26 @@ function moduleDir(): string {
  * node that the trainer pre-flight will refuse.
  */
 export const TRAINING_MEM_FLOOR_MB = 900;
+
+/**
+ * Headroom signal for training pre-flight gating.
+ *
+ * `os.freemem()` and `process.availableMemory()` both report ~62MB on
+ * 16GB Apple Silicon Macs because the Mach kernel reports purgeable
+ * cache as "used" — making either signal a false-positive trigger that
+ * aborts every training WO on macOS dev hosts. Same root cause as the
+ * heartbeat capability-stripping bug fixed in commit 9007a622.
+ *
+ * Instead: `totalmem - process.memoryUsage().rss` — slack available IF
+ * this Node process is the dominant tenant. RSS is process-scoped and
+ * reliable across macOS, Linux, and cgroup-limited containers (Node 18+
+ * returns container limit for totalmem under cgroups).
+ */
+function readTrainingHeadroomMB(): number {
+  const totalMB = totalmem() / (1024 * 1024);
+  const rssMB = process.memoryUsage().rss / (1024 * 1024);
+  return Math.max(0, Math.floor(totalMB - rssMB));
+}
 
 export interface TrainingResult {
   runNumber: number;
@@ -197,7 +217,7 @@ export class TrainerHelper {
     const estimatedMB = Math.round(
       TRAINING_MEM_FLOOR_MB + (paramsBytes + adamBytes + activationsBytes) / (1024 * 1024),
     );
-    const freeMB = Math.round(freemem() / (1024 * 1024));
+    const freeMB = readTrainingHeadroomMB();
     const totalMB = Math.round(totalmem() / (1024 * 1024));
 
     // 50% safety headroom on top of the estimate (previously 30%; raised
@@ -264,8 +284,10 @@ export class TrainerHelper {
     const settledHolder = { current: false };
 
     // Snapshot RAM at spawn time so the OOM error message can attribute
-    // the kill to the actual memory pressure the system was under.
-    const freememAtSpawnMB = Math.round(freemem() / (1024 * 1024));
+    // the kill to the actual memory pressure the system was under. Same
+    // RSS-based signal as `checkMemoryHeadroom` — see `readTrainingHeadroomMB`
+    // for why os.freemem() is unreliable on macOS.
+    const freememAtSpawnMB = readTrainingHeadroomMB();
     const totalMemMB = Math.round(totalmem() / (1024 * 1024));
 
     const trainingPromise = new Promise<TrainingResult>((res, reject) => {
