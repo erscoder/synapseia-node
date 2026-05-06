@@ -1,5 +1,33 @@
 # Changelog — @synapseia/node
 
+## [2026-05-06] fix: trainer stderr per-line classifier (info / warn / error)
+
+The Python subprocess `stderr` handler used to dump the entire
+buffer with `logger.warn` on close. After the eval-deadline fix
+added JSON observability traces (`{"stage":"eval-start", ...}`,
+`{"stage":"eval-done", ...}`) to stderr, those informational events
+appeared as WARN noise in the log even though training was running
+correctly.
+
+Replaced the close-time blob with a per-line classifier that
+streams chunks, buffers split lines via `stderrLineBuf` (handles
+mid-line chunk boundaries under load), and routes each complete
+line:
+
+- `{"stage": ...}` JSON traces → `logger.info` (observability)
+- `Error:` / `Traceback` matches → `logger.error` (checked BEFORE
+  `WARNING:` so `Error: WARNING:` is not mis-classified)
+- `WARNING:` matches → `logger.warn` (genuine Python warnings)
+- everything else → `logger.warn` (default safety — unknown
+  stderr is suspicious)
+
+The full stderr accumulator is preserved for the failure-path
+`Error(...)` message emitted on non-zero exit, so OOM/SIGKILL
+diagnostics still capture the complete trail.
+
+Tests: trainer 24 passed / 10 skipped. Full node suite 1544/0/43
+(2 above prior baseline, no regressions).
+
 ## [2026-05-06] fix: training eval deadline starvation (0 batches before deadline)
 
 Training WOs were tripping `final eval consumed 0 batches before

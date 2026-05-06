@@ -393,11 +393,55 @@ export class TrainerHelper {
         stdout += data.toString();
       });
 
-      pythonProcess.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+      // Per-line classified stderr handler. Python flushes stderr per line, but
+      // chunks may still split mid-line under load — buffer the tail until we
+      // see a `\n`, then classify each complete line:
+      //   - JSON traces with `stage` field  → info  (observability events)
+      //   - lines with `Error:` / `Traceback`→ error (Python exceptions —
+      //                                              checked BEFORE WARNING:
+      //                                              so `Error: WARNING:` is
+      //                                              not mis-classified)
+      //   - lines containing `WARNING:`     → warn  (genuine Python warnings)
+      //   - everything else                  → warn  (default safety; unknown
+      //                                              stderr is suspicious)
+      // The full stderr is still accumulated for the failure-path message
+      // emitted on non-zero exit.
+      let stderrLineBuf = '';
+      const classifyAndLog = (line: string): void => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        if (trimmed.startsWith('{"stage"') || /^\{.*"stage"\s*:/.test(trimmed)) {
+          logger.info(`[trainer] python3 trace: ${trimmed}`);
+          return;
+        }
+        if (/Error:|Traceback/.test(trimmed)) {
+          logger.error(`[trainer] python3 stderr: ${trimmed}`);
+          return;
+        }
+        if (/WARNING:/.test(trimmed)) {
+          logger.warn(`[trainer] python3 stderr: ${trimmed}`);
+          return;
+        }
+        logger.warn(`[trainer] python3 stderr: ${trimmed}`);
+      };
+      pythonProcess.stderr.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        stderr += chunk;
+        stderrLineBuf += chunk;
+        const nl = stderrLineBuf.lastIndexOf('\n');
+        if (nl < 0) return;
+        const complete = stderrLineBuf.slice(0, nl);
+        stderrLineBuf = stderrLineBuf.slice(nl + 1);
+        for (const line of complete.split('\n')) classifyAndLog(line);
+      });
 
       pythonProcess.on('close', (code, signal) => {
         const durationMs = Date.now() - startTime;
-        if (stderr.trim()) logger.warn(`[trainer] python3 stderr:\n${stderr.trim().slice(0, 2000)}`);
+        // Flush any tail line that wasn't terminated by '\n' before close.
+        if (stderrLineBuf.trim()) {
+          classifyAndLog(stderrLineBuf);
+          stderrLineBuf = '';
+        }
 
         if (code === null || code !== 0) {
           // code === null + SIGKILL almost always means the container's cgroup
