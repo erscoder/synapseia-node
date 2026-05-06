@@ -9,9 +9,19 @@
 
 import * as os from 'os';
 import { execSync, spawnSync } from 'child_process';
+import { URL } from 'url';
 import { Injectable } from '@nestjs/common';
 
 import type { ModelCategory } from '../model/model-catalog';
+import logger from '../../utils/logger';
+
+/**
+ * Module-level flag to ensure the boot diagnostic only fires once per
+ * process. `detectHardware()` is invoked repeatedly by `canInference()` /
+ * `canDiLoCo()` during cap-build per heartbeat — without this flag, the
+ * `[hardware]` line would spam logs at info level forever.
+ */
+let hardwareLoggedOnce = false;
 
 /**
  * Model compatibility info
@@ -171,12 +181,51 @@ export class HardwareHelper {
         // nvidia-smi not available or no GPU
       }
 
-      // Check for Ollama
+      // Check for Ollama. Honor OLLAMA_URL so containerized nodes that talk
+      // to a sibling Ollama container (e.g. http://ollama:11434) can detect
+      // the daemon. Fallback to localhost for dev-on-host setups.
+      //
+      // SECURITY: parse via WHATWG URL + invoke curl via spawnSync (array
+      // form) so OLLAMA_URL is never interpolated into a shell. Defense in
+      // depth against malformed values like `http://x;rm -rf /tmp/foo`,
+      // backticks, `&`, `?`, `$`, etc.
+      const ollamaUrl = process.env.OLLAMA_URL?.trim() || 'http://localhost:11434';
+      let probeUrl: string | null = null;
       try {
-        execSync('curl -s http://localhost:11434/api/tags', { stdio: 'pipe', timeout: 1000 });
-        hardware.hasOllama = true;
+        const parsed = new URL(ollamaUrl);
+        probeUrl = `${parsed.origin}/api/tags`;
       } catch {
+        // Malformed OLLAMA_URL — treat as no Ollama reachable.
+        probeUrl = null;
+      }
+
+      if (probeUrl !== null) {
+        const result = spawnSync(
+          'curl',
+          ['-s', '--max-time', '2', probeUrl],
+          { stdio: 'pipe', timeout: 2000 },
+        );
+        hardware.hasOllama = result.status === 0 && !result.error;
+      } else {
         hardware.hasOllama = false;
+      }
+
+      // Cloud LLM is configured purely via env (LLM_CLOUD_MODEL or
+      // LLM_PROVIDER=cloud). Without this, capability derivation in
+      // heartbeat omits 'inference'/'llm' caps and the coordinator filters
+      // research work-orders out of this node's pool.
+      hardware.hasCloudLlm = !!(
+        process.env.LLM_CLOUD_MODEL?.trim() ||
+        process.env.LLM_PROVIDER?.trim().toLowerCase() === 'cloud'
+      );
+
+      if (!hardwareLoggedOnce) {
+        logger.info(
+          `[hardware] hasOllama=${hardware.hasOllama} (url=${ollamaUrl}) ` +
+          `hasCloudLlm=${hardware.hasCloudLlm} ` +
+          `gpuVramGb=${hardware.gpuVramGb} hardwareClass=${hardware.hardwareClass}`,
+        );
+        hardwareLoggedOnce = true;
       }
     }
 

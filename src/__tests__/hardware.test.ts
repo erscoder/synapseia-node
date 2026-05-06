@@ -6,8 +6,10 @@ import { beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals
 
 // Mock execSync to avoid real hardware calls
 const mockExecSync = jest.fn();
+const mockSpawnSync = jest.fn();
 jest.mock('child_process', () => ({
   execSync: mockExecSync,
+  spawnSync: mockSpawnSync,
 }));
 
 // Mock os
@@ -23,6 +25,9 @@ jest.mock('os', () => ({
 describe('hardware (A13)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default spawnSync mock — individual tests override as needed.
+    // Returns a valid SpawnSyncReturns shape so destructuring never fails.
+    mockSpawnSync.mockReturnValue({ status: 1, error: undefined });
   });
 
   describe('detectHardware', () => {
@@ -101,6 +106,110 @@ describe('hardware (A13)', () => {
       const hardware = detectHardware();
 
       expect(hardware.hasOllama).toBe(false);
+    });
+
+    describe('OLLAMA_URL + cloud LLM env handling', () => {
+      const savedEnv = {
+        OLLAMA_URL: process.env.OLLAMA_URL,
+        LLM_CLOUD_MODEL: process.env.LLM_CLOUD_MODEL,
+        LLM_PROVIDER: process.env.LLM_PROVIDER,
+      };
+
+      afterEach(() => {
+        process.env.OLLAMA_URL = savedEnv.OLLAMA_URL;
+        process.env.LLM_CLOUD_MODEL = savedEnv.LLM_CLOUD_MODEL;
+        process.env.LLM_PROVIDER = savedEnv.LLM_PROVIDER;
+      });
+
+      it('honors OLLAMA_URL env when probing the daemon (e.g. docker sibling http://ollama:11434)', async () => {
+        const { detectHardware } = await import('../modules/hardware/hardware.js');
+        process.env.OLLAMA_URL = 'http://ollama:11434';
+        delete process.env.LLM_CLOUD_MODEL;
+        delete process.env.LLM_PROVIDER;
+
+        let spawnCmd: string | undefined;
+        let spawnArgs: string[] | undefined;
+        mockExecSync.mockImplementation((cmd: any) => {
+          if (typeof cmd === 'string' && cmd.includes('sysctl')) return 'Apple M3 Max';
+          return '';
+        });
+        mockSpawnSync.mockImplementation((cmd: any, args: any) => {
+          if (cmd === 'curl') {
+            spawnCmd = cmd;
+            spawnArgs = args;
+            return { status: 0, error: undefined }; // success — mimics 200 OK
+          }
+          return { status: 1, error: undefined };
+        });
+
+        const hardware = detectHardware();
+
+        expect(spawnCmd).toBe('curl');
+        expect(spawnArgs).toContain('http://ollama:11434/api/tags');
+        expect(spawnArgs?.some((a) => a.includes('localhost'))).toBe(false);
+        expect(hardware.hasOllama).toBe(true);
+      });
+
+      it('sets hasCloudLlm=true when LLM_CLOUD_MODEL env is set', async () => {
+        const { detectHardware } = await import('../modules/hardware/hardware.js');
+        process.env.LLM_CLOUD_MODEL = 'minimax/MiniMax-M2.7';
+        delete process.env.LLM_PROVIDER;
+        delete process.env.OLLAMA_URL;
+
+        mockExecSync.mockImplementation((cmd: any) => {
+          if (typeof cmd === 'string' && cmd.includes('sysctl')) return 'Apple M3 Max';
+          return '';
+        });
+        mockSpawnSync.mockImplementation((cmd: any) => {
+          if (cmd === 'curl') return { status: 1, error: new Error('ECONNREFUSED') };
+          return { status: 1, error: undefined };
+        });
+
+        const hardware = detectHardware();
+
+        expect(hardware.hasCloudLlm).toBe(true);
+        expect(hardware.hasOllama).toBe(false);
+      });
+
+      it('sets hasCloudLlm=true when LLM_PROVIDER=cloud', async () => {
+        const { detectHardware } = await import('../modules/hardware/hardware.js');
+        delete process.env.LLM_CLOUD_MODEL;
+        process.env.LLM_PROVIDER = 'cloud';
+        delete process.env.OLLAMA_URL;
+
+        mockExecSync.mockImplementation((cmd: any) => {
+          if (typeof cmd === 'string' && cmd.includes('sysctl')) return 'Apple M3 Max';
+          return '';
+        });
+        mockSpawnSync.mockImplementation((cmd: any) => {
+          if (cmd === 'curl') return { status: 1, error: new Error('ECONNREFUSED') };
+          return { status: 1, error: undefined };
+        });
+
+        const hardware = detectHardware();
+
+        expect(hardware.hasCloudLlm).toBe(true);
+      });
+
+      it('sets hasCloudLlm=false when neither env var is set', async () => {
+        const { detectHardware } = await import('../modules/hardware/hardware.js');
+        delete process.env.LLM_CLOUD_MODEL;
+        delete process.env.LLM_PROVIDER;
+        delete process.env.OLLAMA_URL;
+
+        mockExecSync.mockImplementation((cmd: any) => {
+          if (typeof cmd === 'string' && cmd.includes('sysctl')) return 'Apple M3 Max';
+          return '';
+        });
+        mockSpawnSync.mockImplementation((cmd: any) => {
+          if (cmd === 'curl') return { status: 1, error: new Error('ECONNREFUSED') };
+          return { status: 1, error: undefined };
+        });
+
+        const hardware = detectHardware();
+
+        expect(hardware.hasCloudLlm).toBe(false);
+      });
     });
   });
 
