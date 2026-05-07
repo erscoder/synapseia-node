@@ -1,5 +1,17 @@
 # Changelog — @synapseia/node
 
+## [2026-05-07] docs: README rewrite for beta tester onboarding
+
+Rewrote README from internal-dev-focused content to a step-by-step
+onboarding guide for beta testers running on Solana devnet. Covers
+install via `npm i -g @synapseia/node`, wallet generation, devnet SOL
+faucet, dashboard SYN faucet, node start, dashboard verification,
+troubleshooting (incl. BETA_LIMIT_REACHED), CLI reference, and FSL
+license summary. Placeholder URLs marked `<DASHBOARD_URL_TBD>` /
+`<COORD_URL_TBD>` for sed-replacement before public launch.
+
+Beta-launch slice S4.
+
 ## [2026-05-07] feat(heartbeat): handle BETA_LIMIT_REACHED 403 from coord
 
 Coord (>= 8c05a78) rejects new node registration with HTTP 403 +
