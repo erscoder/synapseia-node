@@ -1,5 +1,31 @@
 # Changelog — @synapseia/node
 
+## [2026-05-07] chore(release): npm publish prep — FSL-1.1-ALv2 license + 0.8.1
+
+Beta-launch slice S5 — package readiness for `npm publish` and public
+GitHub repo:
+
+- Removed `"private": true` from `package.json`.
+- Bumped version `0.8.0` → `0.8.1` (additive feature: BETA_LIMIT_REACHED
+  handling, no breaking changes for already-registered nodes).
+- Added `LICENSE` file with **Functional Source License 1.1, ALv2 Future
+  License** (FSL-1.1-ALv2). Permits personal use, modification, and
+  redistribution for any non-Competing Use; auto-converts to Apache-2.0
+  on the second anniversary of release (2028-05-07). Chosen over MIT /
+  Apache-2.0 to prevent forks operating competing networks during the
+  beta-to-mainnet phase.
+- Added `repository`, `homepage`, `bugs`, `publishConfig: { access: "public" }`,
+  `engines.node: ">=20"` fields. License field set to
+  `"SEE LICENSE IN LICENSE"` because FSL is not in the SPDX official list.
+- Extended `files` array to include `LICENSE` and `README.md` explicitly
+  (npm bundles them by default; explicit entry documents intent).
+- Verified `npm pack --dry-run`: 40 files, 202.8 kB tarball, 935.7 kB
+  unpacked. No leaks (no `.env`, no wallets, no test fixtures).
+- Confirmed `dist/bootstrap.js` shebang `#!/usr/bin/env node` present.
+
+The actual `npm publish --access public` is operator-driven (requires
+2FA OTP) and runs after the public GitHub repo is live.
+
 ## [2026-05-07] docs: README rewrite for beta tester onboarding
 
 Rewrote README from internal-dev-focused content to a step-by-step
