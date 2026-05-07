@@ -256,5 +256,94 @@ describe('HeartbeatHelper', () => {
         })
       );
     });
+
+    /* ─────────── BETA_LIMIT_REACHED handling (S2) ─────────── */
+
+    describe('beta-limit cap (403 BETA_LIMIT_REACHED)', () => {
+      let exitSpy: jest.SpiedFunction<typeof process.exit>;
+      let stderrSpy: jest.SpiedFunction<typeof console.error>;
+
+      beforeEach(() => {
+        // Capture process.exit() so the test can assert the call without
+        // actually terminating Jest. We throw a sentinel so the surrounding
+        // retry loop unwinds (mirrors how the real CLI process would die).
+        exitSpy = jest
+          .spyOn(process, 'exit')
+          .mockImplementation((code?: number | string | null) => {
+            throw new Error(`__exit:${code}`);
+          }) as any;
+        stderrSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        exitSpy.mockRestore();
+        stderrSpy.mockRestore();
+      });
+
+      it('exits 0 with marker line when coord returns 403 BETA_LIMIT_REACHED', async () => {
+        const err: any = new Error('Request failed with status code 403');
+        err.response = {
+          status: 403,
+          data: {
+            statusCode: 403,
+            error: 'Forbidden',
+            code: 'BETA_LIMIT_REACHED',
+            message: 'Beta tester limit reached. Synapseia will be available on mainnet soon.',
+            limit: 5,
+            current: 5,
+          },
+        };
+        mockPost.mockRejectedValue(err);
+
+        await expect(
+          helper.sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware),
+        ).rejects.toThrow('__exit:0');
+
+        // Exit called exactly once with code 0 — expected state, not crash.
+        expect(exitSpy).toHaveBeenCalledWith(0);
+
+        // Marker line must appear verbatim on stderr (node-ui parses
+        // it with /^\[BETA_LIMIT_REACHED\]/m).
+        const stderrLines = stderrSpy.mock.calls.map(args => String(args[0] ?? ''));
+        expect(stderrLines).toContain('[BETA_LIMIT_REACHED]');
+        expect(stderrLines.some(l => l.includes('Beta tester limit reached'))).toBe(true);
+        expect(stderrLines.some(l => l.includes('Current: 5/5 nodes registered.'))).toBe(true);
+
+        // No retry — exit happens on the first attempt.
+        expect(mockPost).toHaveBeenCalledTimes(1);
+      });
+
+      it('does NOT trigger limit handler when 403 has different code', async () => {
+        // Generic 403 (e.g. deny-list, sig invalid) must fall through to the
+        // normal retry path, not silently exit. Coord returns 403 for several
+        // reasons; only `code === 'BETA_LIMIT_REACHED'` is the cap.
+        const err: any = new Error('Forbidden');
+        err.response = {
+          status: 403,
+          data: { statusCode: 403, error: 'Forbidden', code: 'OTHER' },
+        };
+        mockPost.mockRejectedValue(err);
+
+        await expect(
+          helper.sendHeartbeat('http://localhost:3701', mockIdentity, mockHardware),
+        ).rejects.toThrow('Failed to send heartbeat after 3 attempts');
+
+        expect(exitSpy).not.toHaveBeenCalled();
+        expect(mockPost).toHaveBeenCalledTimes(3);
+      });
+
+      it('does not invoke limit handler on a successful 200 response', async () => {
+        mockPost.mockResolvedValue({ data: { registered: true, peerId: 'test-peer-id' } });
+
+        const result = await helper.sendHeartbeat(
+          'http://localhost:3701',
+          mockIdentity,
+          mockHardware,
+        );
+
+        expect(result.registered).toBe(true);
+        expect(exitSpy).not.toHaveBeenCalled();
+      });
+    });
   });
 });

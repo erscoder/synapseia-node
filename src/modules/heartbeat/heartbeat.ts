@@ -285,10 +285,41 @@ export class HeartbeatHelper {
       } catch (error) {
         lastError = error as Error;
 
-        // 426 Upgrade Required: node version is too old. Don't retry.
         const status = (error as any)?.response?.status ?? (error as any)?.status;
+        const body = (error as any)?.response?.data;
+
+        // 403 BETA_LIMIT_REACHED: coord rejected new node registration because
+        // its MAX_NODOS cap is full. Coord guarantees structured body:
+        //   { statusCode: 403, error: 'Forbidden', code: 'BETA_LIMIT_REACHED',
+        //     message: '...', limit: number, current: number }
+        // We parse by `code` (stable contract); status 403 alone is overloaded
+        // (deny-list also returns 403). Hard exit 0 — expected state, not crash.
+        // The user can re-run after MAX_NODOS gets bumped or mainnet launch.
+        //
+        // Use console.error directly (not logger) so the `[BETA_LIMIT_REACHED]`
+        // marker line is emitted verbatim on stderr. The project logger wraps
+        // every line with timestamp + ANSI colors + ERROR level prefix, which
+        // would break node-ui's regex `/^\[BETA_LIMIT_REACHED\]/m` consumed
+        // from the spawned-process stderr stream as a fallback to its
+        // pre-flight /peer/capacity probe (S3).
+        if (status === 403 && body?.code === 'BETA_LIMIT_REACHED') {
+          console.error('');
+          console.error('══════════════════════════════════════════════════════');
+          console.error('[BETA_LIMIT_REACHED]');
+          console.error(
+            body.message ??
+              'Beta tester limit reached. Synapseia will be available on mainnet soon.',
+          );
+          if (typeof body.current === 'number' && typeof body.limit === 'number') {
+            console.error(`Current: ${body.current}/${body.limit} nodes registered.`);
+          }
+          console.error('══════════════════════════════════════════════════════');
+          console.error('');
+          process.exit(0);
+        }
+
+        // 426 Upgrade Required: node version is too old. Don't retry.
         if (status === 426) {
-          const body = (error as any)?.response?.data;
           const minVer = body?.minVersion ?? 'unknown';
           logger.error(
             `[Heartbeat] Coordinator rejected version ${getNodeVersion()} ` +
