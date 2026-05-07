@@ -1,16 +1,32 @@
 {
   "name": "@synapseia/node",
-  "version": "0.8.0",
-  "private": true,
-  "description": "Synapseia Node CLI Software",
+  "version": "0.8.1",
+  "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/synapseia-network/node#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/synapseia-network/node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/synapseia-network/node/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "synapseia": "./dist/bootstrap.js",
     "syn": "./dist/bootstrap.js"
   },
   "files": [
     "dist",
-    "scripts"
+    "scripts",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/bootstrap.js --help\"",
