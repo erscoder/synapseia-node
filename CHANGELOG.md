@@ -1,5 +1,38 @@
 # Changelog — @synapseia/node
 
+## [2026-05-07] feat(heartbeat): handle BETA_LIMIT_REACHED 403 from coord
+
+Coord (>= 8c05a78) rejects new node registration with HTTP 403 +
+structured body `{ statusCode: 403, error: 'Forbidden',
+code: 'BETA_LIMIT_REACHED', message, limit, current }` when its
+`MAX_NODOS` cap is reached. The CLI now detects this specific error
+code, prints a user-friendly framed message with a parseable
+`[BETA_LIMIT_REACHED]` marker line on stderr, and exits with code 0
+(expected state, not crash).
+
+The marker line is consumed by node-ui (Tauri shell) as a fallback
+to its pre-flight `/peer/capacity` probe in case the cap fills
+between probe and CLI start. `console.error` is used directly (not
+the project logger) so the marker line is emitted verbatim without
+ANSI color or timestamp wrapping that would break node-ui's regex
+`/^\[BETA_LIMIT_REACHED\]/m`.
+
+Detection happens on the FIRST heartbeat (the registration call);
+subsequent heartbeats from already-registered nodes never hit the
+gate. Wallet creation runs at `cli/index.ts:339` BEFORE any
+heartbeat, so users who hit the cap have already seen their wallet
+address printed by `walletService.displayCreationWarning`.
+
+Implementation:
+- `src/modules/heartbeat/heartbeat.ts` (catch block, before the 426
+  handler): early-exit on `status === 403 &&
+  body?.code === 'BETA_LIMIT_REACHED'`.
+- `src/__tests__/heartbeat.test.ts`: 3 new tests cover (a) cap-hit
+  → exit(0) + marker, (b) 403 with non-cap code → falls through to
+  retry, (c) 200 OK → no exit.
+
+Beta-launch slice S2.
+
 ## [2026-05-06] feat: Langfuse LangGraph tracing (env-gated, prod-safe)
 
 LangGraph agent now emits Langfuse traces with `userId=peerId` and
