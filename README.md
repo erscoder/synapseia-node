@@ -1,4 +1,4 @@
-<!-- TODO: Replace <DASHBOARD_URL_TBD>, <COORD_URL_TBD>, and Discord/Twitter links before public launch -->
+<!-- TODO: Replace https://dashboard.synapseia.network, https://coord.synapseia.network, and Discord/Twitter links before public launch -->
 
 # @synapseia/node
 
@@ -35,7 +35,7 @@ synapseia start            # creates a wallet, prints the address, then waits
 # In another terminal — fund the wallet on devnet:
 solana airdrop 1 <YOUR_ADDRESS> --url devnet
 # Re-run:
-synapseia start --coordinator <COORD_URL_TBD>
+synapseia start --coordinator https://coord.synapseia.network
 ```
 
 For the full walkthrough, keep reading.
@@ -100,7 +100,7 @@ You should see `1 SOL` within a few seconds.
 
 SYN is the network's reward token. You can run a node without staking, but staking unlocks higher reward tiers.
 
-1. Open `<DASHBOARD_URL_TBD>/faucet`.
+1. Open `https://dashboard.synapseia.network/faucet`.
 2. Paste your wallet address.
 3. Click **Request 10 SYN**.
 
@@ -111,13 +111,13 @@ SYN is the network's reward token. You can run a node without staking, but staki
 Point the node at the public coordinator:
 
 ```bash
-synapseia start --coordinator <COORD_URL_TBD>
+synapseia start --coordinator https://coord.synapseia.network
 ```
 
 Or set it once via environment variable:
 
 ```bash
-export COORDINATOR_URL=<COORD_URL_TBD>
+export COORDINATOR_URL=https://coord.synapseia.network
 synapseia start
 ```
 
@@ -136,7 +136,7 @@ You should see logs like:
 
 ### Step 6 — Verify on the dashboard
 
-Open `<DASHBOARD_URL_TBD>/nodes` and search for your wallet address. Your node should appear in the list within ~1 minute. If it doesn't, check the **Troubleshooting** table below.
+Open `https://dashboard.synapseia.network/nodes` and search for your wallet address. Your node should appear in the list within ~1 minute. If it doesn't, check the **Troubleshooting** table below.
 
 ---
 
@@ -219,7 +219,7 @@ Full text: see the [`LICENSE`](./LICENSE) file in this directory.
 
 ## Links
 
-- **Network dashboard:** `<DASHBOARD_URL_TBD>`
+- **Network dashboard:** `https://dashboard.synapseia.network`
 - **Solana devnet faucet:** [https://faucet.solana.com](https://faucet.solana.com)
 - **Solana CLI install:** [https://docs.solana.com/cli/install](https://docs.solana.com/cli/install)
 - **Ollama install:** [https://ollama.com](https://ollama.com)
