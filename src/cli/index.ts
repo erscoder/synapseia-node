@@ -68,6 +68,7 @@ import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositS
 import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE } from '../modules/config/config';
+import { getCoordinatorUrl, getCoordinatorWsUrl } from '../constants/coordinator';
 import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
 import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
 import {
@@ -269,8 +270,6 @@ async function bootstrap() {
       '--llm-url <url>',
       '[DEPRECATED, ignored] LLM endpoints are hardcoded per provider; flag kept so existing docker-compose / systemd configs that still pass it boot cleanly instead of crashing on commander.js validation.',
     )
-    .option('--coordinator <url>', 'Coordinator HTTP URL (default: http://localhost:3701)')
-    .option('--coordinator-ws <url>', 'Coordinator WebSocket URL (default: same as --coordinator). Set to http://host:3702 when coord runs as split http/ws/worker processes.')
     .option('--max-iterations <n>', 'Maximum work order iterations (default: infinite)', parseInt)
     .option('--inference', 'Enable inference mode (expose GPU as AI inference provider)')
     .option('--inference-models <models>', 'Comma-separated list of models to serve (e.g. ollama/qwen2.5:7b,ollama/llama3:8b)')
@@ -282,8 +281,6 @@ async function bootstrap() {
         model?: string;
         llmKey?: string;
         llmUrl?: string;
-        coordinator?: string;
-        coordinatorWs?: string;
         maxIterations?: number;
         inference?: boolean;
         inferenceModels?: string;
@@ -342,16 +339,12 @@ async function bootstrap() {
         if (isNew) {
           walletService.displayCreationWarning(wallet);
         }
-        const coordinatorUrl = options.coordinator || config.coordinatorUrl;
-        // WS endpoint is optional; falls back to the HTTP URL so single-
-        // process dev setups keep working. When the coord runs split
-        // (T5.4: http=3701, ws=3702, worker), point this at the WS port
-        // so Socket.IO survives an http-process restart.
-        const coordinatorWsUrl =
-          options.coordinatorWs ||
-          config.coordinatorWsUrl ||
-          process.env.COORDINATOR_WS_URL ||
-          coordinatorUrl;
+        // Coordinator URL is no longer user-configurable. Resolution chain:
+        //   1. process.env.COORDINATOR_URL / COORDINATOR_WS_URL
+        //   2. Hardcoded official constant (OFFICIAL_COORDINATOR_URL).
+        // Any legacy `config.coordinatorUrl` value on disk is ignored.
+        const coordinatorUrl = getCoordinatorUrl();
+        const coordinatorWsUrl = getCoordinatorWsUrl();
         // Priority: --model flag > LLM_MODEL env > config.defaultModel
         const model = options.model || process.env.LLM_MODEL || config.defaultModel;
         const inferenceEnabled = options.inference ?? config.inferenceEnabled ?? false;
@@ -660,7 +653,7 @@ async function bootstrap() {
       const [balance, staked] = walletAddress
         ? await Promise.all([
             getSynBalance(walletAddress),
-            getStakedAmount(walletAddress, config.coordinatorUrl),
+            getStakedAmount(walletAddress, getCoordinatorUrl()),
           ])
         : [0, 0];
 
@@ -1007,14 +1000,12 @@ async function bootstrap() {
     .description('Interactive configuration wizard')
     .option('--show', 'Show current configuration')
     .option('--set-name <name>', 'Set node name')
-    .option('--set-coordinator-url <url>', 'Set coordinator URL')
     .option('--set-model <model>', 'Set default model (provider/model format)')
     .option('--set-llm-key <key>', 'Set LLM API key')
     .option('--set-llm-url <url>', '[DEPRECATED, ignored] LLM endpoints are now hardcoded per provider')
     .action(async (options: {
       show?: boolean;
       setName?: string;
-      setCoordinatorUrl?: string;
       setModel?: string;
       setLlmUrl?: string;
       setLlmKey?: string;
@@ -1036,13 +1027,6 @@ async function bootstrap() {
         const identityDir = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
         identityService.update({ name: options.setName }, identityDir);
         logger.log(`✅ Node name set to: ${options.setName}`);
-        process.exit(0);
-      }
-
-      if (options.setCoordinatorUrl) {
-        config.coordinatorUrl = options.setCoordinatorUrl;
-        configService.save(config);
-        logger.log(`✅ Coordinator URL set to: ${options.setCoordinatorUrl}`);
         process.exit(0);
       }
 
@@ -1085,29 +1069,11 @@ async function bootstrap() {
 
       const BACK = '__BACK__';
 
-      type Step = 'coordinator' | 'modelMode' | 'modelPick' | 'llmConfig' | 'inference' | 'done';
-      let step: Step = 'coordinator';
+      type Step = 'modelMode' | 'modelPick' | 'llmConfig' | 'inference' | 'done';
+      let step: Step = 'modelMode';
       let modelMode: string | null = null;
 
       while (step !== 'done') {
-        if (step === 'coordinator') {
-          const ans = await safePrompt(() =>
-            input({
-              message: 'Coordinator URL:',
-              default: config.coordinatorUrl,
-              validate: (v) => {
-                if (!v) return 'Required';
-                if (!v.startsWith('http')) return 'Must start with http:// or https://';
-                return true;
-              },
-            })
-          );
-          if (ans === null) { logger.log('\nCancelled.'); return; }
-          config.coordinatorUrl = ans;
-          step = 'modelMode';
-          continue;
-        }
-
         if (step === 'modelMode') {
           const ans = await safePrompt(() =>
             select({
@@ -1327,13 +1293,11 @@ async function bootstrap() {
     .command('wallet-create')
     .description('Create a new encrypted wallet + base config (non-interactive)')
     .option('--name <name>', 'Node name')
-    .option('--coordinator-url <url>', 'Coordinator URL')
     .option('--model <model>', 'Default model (provider/model)')
     .option('--llm-key <key>', 'LLM API key')
     .option('--llm-url <url>', '[DEPRECATED, ignored] Endpoints are hardcoded per provider')
     .action(async (options: {
       name?: string;
-      coordinatorUrl?: string;
       model?: string;
       llmUrl?: string;
       llmKey?: string;
@@ -1361,7 +1325,6 @@ async function bootstrap() {
         const cfgService = app.get(NodeConfigService);
         const cfg = cfgService.load();
         if (options.name) cfg.name = options.name;
-        if (options.coordinatorUrl) cfg.coordinatorUrl = options.coordinatorUrl;
         if (options.model) cfg.defaultModel = options.model;
         if (options.llmUrl) {
           logger.warn('⚠️  --llm-url is deprecated and ignored (endpoints are hardcoded per provider)');

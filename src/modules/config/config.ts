@@ -9,6 +9,7 @@ import {
   topSlugFor,
   type CloudProviderId,
 } from '../llm/providers';
+import { getCoordinatorUrl, getCoordinatorWsUrl } from '../../constants/coordinator';
 import logger from '../../utils/logger';
 
 type AgentMode = 'langgraph' | 'legacy';
@@ -19,12 +20,19 @@ export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synaps
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 export interface Config {
-  coordinatorUrl: string;
   /**
-   * Optional dedicated coordinator WebSocket URL. When the coord splits
-   * HTTP and WS into separate processes (T5.4 — http=3701, ws=3702),
-   * set this to the WS endpoint so Socket.IO connects to the right
-   * port. When unset, the node falls back to `coordinatorUrl`.
+   * @deprecated Coordinator URL is no longer user-configurable. The CLI
+   * and desktop UI no longer expose flags / inputs to set this value.
+   * Existing on-disk values are tolerated by the schema for back-compat
+   * (so legacy config.json files still parse) but the value is ignored
+   * at runtime — `getCoordinatorUrl()` always resolves through
+   * `process.env.COORDINATOR_URL` → `OFFICIAL_COORDINATOR_URL`.
+   */
+  coordinatorUrl?: string;
+  /**
+   * @deprecated See `coordinatorUrl`. Use `process.env.COORDINATOR_WS_URL`
+   * to point a node at a non-default WebSocket endpoint; the on-disk value
+   * is ignored at runtime.
    */
   coordinatorWsUrl?: string;
   defaultModel: string;
@@ -105,7 +113,8 @@ export function migrateModelSlug(slug: string): { slug: string; reason: string }
 export class NodeConfigHelper {
   defaultConfig(): Config {
     return {
-      coordinatorUrl: 'http://localhost:3701',
+      coordinatorUrl: getCoordinatorUrl(),
+      coordinatorWsUrl: getCoordinatorWsUrl(),
       defaultModel: process.env.LLM_CLOUD_MODEL ?? 'ollama/qwen2.5:0.5b',
       llmKey: process.env.LLM_CLOUD_API_KEY,
     };
@@ -133,6 +142,12 @@ export class NodeConfigHelper {
         logger.warn(`[config] failed to persist migrated config: ${(err as Error).message}`);
       }
     }
+    // Force-resolve coordinator URLs through the env-var-or-constant
+    // chain. Any legacy on-disk value is ignored — downstream callers
+    // that still read `config.coordinatorUrl` / `config.coordinatorWsUrl`
+    // see the resolved value instead of an undefined / stale one.
+    migrated.config.coordinatorUrl = getCoordinatorUrl();
+    migrated.config.coordinatorWsUrl = getCoordinatorWsUrl();
     return migrated.config;
   }
 

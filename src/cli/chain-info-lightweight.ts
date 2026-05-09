@@ -18,6 +18,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { getCoordinatorUrl } from '../constants/coordinator';
 
 interface ChainInfoPayload {
   wallet: string | null;
@@ -68,20 +69,9 @@ function readPublicKey(): string | null {
 }
 
 function readCoordinatorUrl(): string {
-  // Config file wins over env var so the URL the user set in Settings
-  // always matches what we query here.
-  try {
-    const cfgPath = join(walletDir(), 'config.json');
-    if (existsSync(cfgPath)) {
-      const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'));
-      if (typeof cfg.coordinatorUrl === 'string' && cfg.coordinatorUrl) {
-        return cfg.coordinatorUrl;
-      }
-    }
-  } catch {
-    // fall through to env / default
-  }
-  return process.env.COORDINATOR_URL ?? 'http://localhost:3701';
+  // Coordinator URL is env-var-only with a hardcoded official fallback.
+  // Any legacy `coordinatorUrl` field in config.json is ignored.
+  return getCoordinatorUrl();
 }
 
 async function fetchSolBalance(rpcUrl: string, pubkey: string): Promise<number> {
