@@ -1,5 +1,53 @@
 # Changelog — @synapseia/node
 
+## [2026-05-09] chore(config): env-var-only coordinator URL — drop user-facing knobs (2f441dff)
+
+UX simplification: the coordinator URL is no longer something a user
+configures. Operators that need to point a node at a non-default
+coordinator set `COORDINATOR_URL` (and optionally `COORDINATOR_WS_URL`)
+in the environment before launch; otherwise the hardcoded official
+fallback wins.
+
+Removed:
+
+- `synapseia start --coordinator <url>` and `--coordinator-ws <url>` flags.
+- `synapseia config --set-coordinator-url <url>` flag.
+- The interactive "Coordinator URL" prompt at the top of the config
+  wizard. The wizard now starts at model selection.
+- `synapseia wallet-create --coordinator-url <url>` flag (the desktop
+  UI no longer passes it; see `@synapseia/node-ui` 0.8.4).
+
+Added:
+
+- `src/constants/coordinator.ts` — single source of truth exporting
+  `OFFICIAL_COORDINATOR_URL = 'https://api.synapseia.network'`,
+  `OFFICIAL_COORDINATOR_WS_URL = 'https://ws.synapseia.network'`, and
+  `getCoordinatorUrl()` / `getCoordinatorWsUrl()` resolvers
+  (`process.env.X || OFFICIAL_X`).
+
+Schema:
+
+- `Config.coordinatorUrl` and `Config.coordinatorWsUrl` are now marked
+  `@deprecated` and optional. Existing `~/.synapseia/config.json` files
+  carrying these values still parse without error, but the runtime
+  always resolves the URL through env-var-or-constant — the on-disk
+  value is ignored. New config files written by `wallet-create` /
+  `config` no longer include these fields.
+
+No on-disk migration is performed: the deprecated fields are just
+silently ignored on next read. Operators who relied on a custom
+coordinator URL must export `COORDINATOR_URL` before starting the node
+or the desktop UI.
+
+**BREAKING:** Pre-refactor, `COORDINATOR_WS_URL` fell back to
+`COORDINATOR_URL`'s value if not set. Post-refactor, it falls back to
+the constant `https://ws.synapseia.network` instead. Operators running
+a self-hosted coordinator who only export `COORDINATOR_URL` must now
+also export `COORDINATOR_WS_URL` explicitly. Standard deployments
+hitting the official coordinator are unaffected.
+
+Version: `0.8.1` → `0.8.2`.
+
 ## [2026-05-07] chore(release): npm publish prep — FSL-1.1-ALv2 license + 0.8.1
 
 Beta-launch slice S5 — package readiness for `npm publish` and public
