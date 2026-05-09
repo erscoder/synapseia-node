@@ -1,5 +1,11 @@
 # Changelog — @synapseia/node
 
+## [2026-05-09] chore(version): align to 0.8.5 with coord + node-ui (c2b5650b)
+
+Version-only bump 0.8.2 → 0.8.5 to satisfy the project's
+coord/node/node-ui version-sync invariant after the env-var-only
+coord URL refactor. No code change.
+
 ## [2026-05-09] chore(config): env-var-only coordinator URL — drop user-facing knobs (2f441dff)
 
 UX simplification: the coordinator URL is no longer something a user
