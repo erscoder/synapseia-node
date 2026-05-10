@@ -1,4 +1,16 @@
-# Changelog — @synapseia/node
+# Changelog — @synapseia-network/node
+
+## [2026-05-10] feat(npm): rename to @synapseia-network/node + publish to npm registry (3eaa248f)
+
+First public npm release. Package renamed from `@synapseia/node` to
+`@synapseia-network/node` (the `@synapseia` org wasn't registered on
+npm; the user's existing namespace is `synapseia-network`). Added
+`prepare: npm run build` script + GitHub Actions workflow
+`publish-npm.yml` triggered on `node-v*` tag. Updated all install
+hints in README, self-updater, round-listener, heartbeat, and the
+`@synapseia-network/node` path lookup in `detectInstallType()`.
+Manual first publish on 2026-05-10 (`@synapseia-network/node@0.8.5`).
+Future releases auto-publish via tag push.
 
 ## [2026-05-09] chore(version): align to 0.8.5 with coord + node-ui (c2b5650b)
 
