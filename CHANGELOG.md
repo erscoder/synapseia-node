@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-10] chore(security): pnpm overrides + version bump 0.8.5 → 0.8.6 (c7fdc41c)
+
+Closes 4 of 5 osv-scanner findings against the published npm
+artifact:
+
+- `fast-uri ^3.1.2` (was 3.1.0) — closes GHSA-q3j6-qgpj-74h6 and
+  GHSA-v39h-62p7-jpjc, both ReDoS, CVSS 7.5.
+- `uuid >=11.1.1 <12 || >=13.0.1` (was 11.1.0 / 13.0.0) — closes
+  GHSA-w5hq-g745-h8pq, CVSS 6.3.
+
+Sub-lockfile regenerated (large delta because pnpm re-pinned many
+transitives to current latest while resolving the new constraints).
+
+Remaining: `bigint-buffer 1.1.5` (CVSS 7.7 buffer overflow) — no
+upstream fix; pulled by `@solana/buffer-layout-utils`. Tracked,
+acceptable.
+
+Version bumped to 0.8.6 to keep coord/node/node-ui in sync.
+
 ## [2026-05-10] feat(npm): rename to @synapseia-network/node + publish to npm registry (3eaa248f)
 
 First public npm release. Package renamed from `@synapseia/node` to
