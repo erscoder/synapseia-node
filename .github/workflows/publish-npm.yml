@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'node-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. node-v0.8.6). Defaults to the current ref.'
+        required: false
+        default: ''
 
 jobs:
   publish:
@@ -34,6 +40,7 @@ jobs:
         run: pnpm run build
 
       - name: Verify version matches tag
+        if: github.event_name == 'push'
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           TAG_VERSION="${GITHUB_REF_NAME#node-v}"
@@ -42,7 +49,19 @@ jobs:
             exit 1
           fi
 
+      - name: Check if version already published
+        id: check
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "@synapseia-network/node@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version $PKG_VERSION already published — skipping npm publish step"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
+        if: steps.check.outputs.already != 'true'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
