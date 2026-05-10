@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-10] chore(version): align to 0.8.10 with coord + node-ui (9ed74a5a)
+
+Version-only bump 0.8.9 → 0.8.10 to satisfy the project's
+coord/node/node-ui version-sync invariant after node-ui shipped
+SHA256 + lock + macOS-quarantine hardening. No code change in
+this package.
+
 ## [2026-05-10] chore(version): align to 0.8.9 with coord + node-ui (b2a05c58)
 
 Version-only bump 0.8.8 → 0.8.9 to satisfy the project's
