@@ -130,7 +130,7 @@ export class RoundListenerHelper {
     this.socket.on('version_rejected', (data: { message: string; minVersion: string }) => {
       logger.error(
         `[RoundListener] Version rejected: ${data.message}. ` +
-          `Update your node: npm i -g @synapseia/node`,
+          `Update your node: npm i -g @synapseia-network/node`,
       );
       // Stop reconnecting - version won't change without a restart
       this.socket?.disconnect();

@@ -323,7 +323,7 @@ export class HeartbeatHelper {
           const minVer = body?.minVersion ?? 'unknown';
           logger.error(
             `[Heartbeat] Coordinator rejected version ${getNodeVersion()} ` +
-              `(minimum: ${minVer}). Update your node: npm i -g @synapseia/node`,
+              `(minimum: ${minVer}). Update your node: npm i -g @synapseia-network/node`,
           );
           throw error;
         }

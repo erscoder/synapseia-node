@@ -1,6 +1,6 @@
 <!-- TODO: Replace https://dashboard.synapseia.network, https://coord.synapseia.network, and Discord/Twitter links before public launch -->
 
-# @synapseia/node
+# @synapseia-network/node
 
 The Synapseia Network compute node — contribute CPU/GPU cycles to autonomous AI agents and earn SYN tokens on Solana.
 
@@ -30,7 +30,7 @@ This package is the operator-side runtime: a CLI you install globally and run as
 ## Quick start (TL;DR)
 
 ```bash
-npm i -g @synapseia/node
+npm i -g @synapseia-network/node
 synapseia start            # creates a wallet, prints the address, then waits
 # In another terminal — fund the wallet on devnet:
 solana airdrop 1 <YOUR_ADDRESS> --url devnet
@@ -47,7 +47,7 @@ For the full walkthrough, keep reading.
 ### Step 1 — Install
 
 ```bash
-npm i -g @synapseia/node
+npm i -g @synapseia-network/node
 synapseia --version
 ```
 
@@ -161,7 +161,7 @@ Run the installer, follow the prompts, and on first launch the app will create o
 | `[BETA_LIMIT_REACHED] Beta tester limit reached.` | Coordinator beta cap is full. CLI exits with code 0. | Wait for the next slot bump or for mainnet. Re-run `synapseia start` later. |
 | `Wallet not funded` / `insufficient SOL` | Wallet has 0 SOL on devnet. | Re-do Step 3 (devnet SOL faucet). |
 | `Coordinator unreachable` / `ECONNREFUSED` | Wrong coord URL or coordinator is down. | Check the `--coordinator` flag or `COORDINATOR_URL` env var. |
-| `Cannot find module 'X'` | Global npm install was incomplete. | `npm i -g --force @synapseia/node`. |
+| `Cannot find module 'X'` | Global npm install was incomplete. | `npm i -g --force @synapseia-network/node`. |
 | Modal **"Beta tester limit reached"** in node-ui | Same as the CLI message above. | Same fix — re-try later. |
 | Wallet password forgotten | The wallet is encrypted; there is no recovery path. | Delete `~/.synapseia/wallet.json` and re-run `synapseia start`. **You'll lose the old address — fund the new one.** |
 

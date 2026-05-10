@@ -21,7 +21,7 @@ export function detectInstallType(): InstallType {
   try {
     // npm global: `npm root -g` contains our package
     const npmGlobalRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
-    if (existsSync(join(npmGlobalRoot, '@synapseia', 'node', 'package.json'))) {
+    if (existsSync(join(npmGlobalRoot, '@synapseia-network', 'node', 'package.json'))) {
       return InstallType.NPM_GLOBAL;
     }
   } catch { /* not npm global */ }
@@ -59,7 +59,7 @@ export function attemptSelfUpdate(): SelfUpdateResult {
     case InstallType.NPM_GLOBAL: {
       try {
         logger.log('[SelfUpdate] Updating via npm...');
-        execSync('npm install -g @synapseia/node@latest', {
+        execSync('npm install -g @synapseia-network/node@latest', {
           encoding: 'utf-8',
           timeout: 120_000,
           stdio: 'pipe',
@@ -96,7 +96,7 @@ export function attemptSelfUpdate(): SelfUpdateResult {
       return {
         success: false,
         installType,
-        message: 'Unknown install type. Update manually: npm i -g @synapseia/node',
+        message: 'Unknown install type. Update manually: npm i -g @synapseia-network/node',
       };
   }
 }

@@ -21,7 +21,7 @@ describe('detectInstallType', () => {
   it('detects NPM_GLOBAL when package exists in npm root', () => {
     mockExecSync.mockReturnValue('/usr/local/lib/node_modules\n');
     mockExistsSync.mockImplementation((p: any) => {
-      return String(p).includes('@synapseia/node/package.json');
+      return String(p).includes('@synapseia-network/node/package.json');
     });
     expect(detectInstallType()).toBe(InstallType.NPM_GLOBAL);
   });
@@ -53,7 +53,7 @@ describe('attemptSelfUpdate', () => {
       return ''; // npm install -g succeeds
     });
     mockExistsSync.mockImplementation((p: any) =>
-      String(p).includes('@synapseia/node/package.json'),
+      String(p).includes('@synapseia-network/node/package.json'),
     );
 
     const result = attemptSelfUpdate();
@@ -89,7 +89,7 @@ describe('attemptSelfUpdate', () => {
       throw new Error('EACCES: permission denied');
     });
     mockExistsSync.mockImplementation((p: any) =>
-      String(p).includes('@synapseia/node/package.json'),
+      String(p).includes('@synapseia-network/node/package.json'),
     );
 
     const result = attemptSelfUpdate();

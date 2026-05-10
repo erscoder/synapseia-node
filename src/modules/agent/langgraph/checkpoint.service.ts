@@ -7,7 +7,7 @@
  * `@langchain/langgraph-checkpoint-sqlite` depends on `better-sqlite3` which
  * requires native compilation. The Synapseia node ships as an ESM bundle via
  * tsup and must run on arbitrary machines without a build toolchain. Adding a
- * native dependency would break `npx @synapseia/node` installs and complicate
+ * native dependency would break `npx @synapseia-network/node` installs and complicate
  * the Tauri desktop build. MemorySaver still gives us within-process recovery
  * (e.g. a transient LLM timeout mid-graph won't lose prior node outputs).
  * True cross-restart persistence will be added when we move to the Tauri

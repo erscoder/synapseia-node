@@ -1,5 +1,5 @@
 {
-  "name": "@synapseia/node",
+  "name": "@synapseia-network/node",
   "version": "0.8.5",
   "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
@@ -31,6 +31,7 @@
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/bootstrap.js --help\"",
     "build": "tsup",
+    "prepare": "npm run build",
     "start": "node dist/bootstrap.js",
     "test": "jest",
     "test:mutation": "NODE_OPTIONS=--experimental-vm-modules stryker run",
