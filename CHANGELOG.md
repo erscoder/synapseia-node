@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-10] chore(version): align to 0.8.9 with coord + node-ui (b2a05c58)
+
+Version-only bump 0.8.8 → 0.8.9 to satisfy the project's
+coord/node/node-ui version-sync invariant after node-ui shipped
+auto-download of Node.js v22 LTS. No code change in this package.
+
 ## [2026-05-10] chore(version): align to 0.8.8 with coord + node-ui (53372f16)
 
 Version-only bump 0.8.7 → 0.8.8 to satisfy the project's
