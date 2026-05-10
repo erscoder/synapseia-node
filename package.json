@@ -1,6 +1,6 @@
 {
   "name": "@synapseia-network/node",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -115,8 +115,10 @@
       "basic-ftp": "^5.3.0",
       "fast-xml-parser": "^5.7.0",
       "esbuild": "^0.25.0",
+      "fast-uri": "^3.1.2",
       "h3": "^1.15.9",
       "axios": "^1.15.0",
+      "uuid": ">=11.1.1 <12 || >=13.0.1 <14",
       "protobufjs": ">=7.5.5",
       "socket.io-parser": ">=4.2.6",
       "ajv": ">=8.18.0",
