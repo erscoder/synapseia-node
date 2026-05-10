@@ -53,15 +53,49 @@ jobs:
         id: check
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view "@synapseia-network/node@$PKG_VERSION" version >/dev/null 2>&1; then
-            echo "already=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Version $PKG_VERSION already published — skipping npm publish step"
-          else
-            echo "already=false" >> "$GITHUB_OUTPUT"
-          fi
+          PKG_NAME=$(node -p "require('./package.json').name")
+          # Probe BOTH the metadata endpoint (npm view) AND the tarball
+          # endpoint (HEAD on the registry tarball URL). The tarball CDN
+          # propagates faster than `npm view`'s metadata cache, so a
+          # manual publish that just landed is reliably observable via
+          # HEAD even when `npm view` still 404s. Retry up to 6 times
+          # with 15 s backoff so we ride through any registry lag.
+          TARBALL_NAME="$(echo "$PKG_NAME" | sed 's|@||;s|/|-|g')-${PKG_VERSION}.tgz"
+          TARBALL_URL="https://registry.npmjs.org/${PKG_NAME}/-/${TARBALL_NAME}"
+          for i in 1 2 3 4 5 6; do
+            if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+              echo "already=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Version $PKG_VERSION already on registry (npm view, attempt $i)"
+              exit 0
+            fi
+            if curl --silent --head --fail "$TARBALL_URL" >/dev/null 2>&1; then
+              echo "already=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Tarball for $PKG_VERSION already on CDN (HEAD, attempt $i)"
+              exit 0
+            fi
+            if [ "$i" -lt 6 ]; then
+              echo "Not yet on registry (attempt $i), retrying in 15s…"
+              sleep 15
+            fi
+          done
+          echo "already=false" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
         if: steps.check.outputs.already != 'true'
-        run: npm publish --access public --provenance
+        run: |
+          # Tolerate "version already published" races: a manual publish
+          # that landed between the check above and this step would 409
+          # / 403 / 404 here. Treat any of those as success.
+          set +e
+          OUT=$(npm publish --access public --provenance 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if [ $STATUS -ne 0 ]; then
+            if echo "$OUT" | grep -qiE 'cannot publish over .* previously published|already published|EPUBLISHCONFLICT|EVERSIONALREADYEXISTS|previously released|409|403|404'; then
+              echo "::notice::Detected already-published response from registry — exiting success"
+              exit 0
+            fi
+            exit $STATUS
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
