@@ -85,6 +85,9 @@ importers:
       '@libp2p/tcp':
         specifier: ^11.0.17
         version: 11.0.18
+      '@libp2p/utils':
+        specifier: 7.1.0
+        version: 7.1.0
       '@libp2p/yamux':
         specifier: ^8.0.1
         version: 8.0.1
