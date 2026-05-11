@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom, map } from 'rxjs';
 import { createHash } from 'crypto';
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -35,35 +36,65 @@ import { getNodeVersion } from '../../utils/version';
 let lastAnnouncedCapabilities: string[] | null = null;
 
 /**
- * Estimate memory headroom in MB.
+ * Estimate memory headroom in MB available to a NEW heavy allocation
+ * (e.g. spawning a training model). This signal MUST account for memory
+ * held by OTHER processes on the host — the previous `totalmem - rss`
+ * heuristic ignored them and let nodes happily accept `gpu_training`
+ * WOs on hosts whose real free RAM was 300 MB because some other app
+ * (browser, IDE, sidecar Ollama) had eaten the rest.
  *
- * `os.freemem()` and `process.availableMemory()` both report ~92MB on
- * a 16GB Apple Silicon Mac because vm_stat / Mach kernel does not expose
- * "purgeable cache" as available to the Node runtime. Using either as a
- * pressure signal triggers false-positives constantly on mac-native dev
- * hosts. Linux containers report cgroup-aware values and would work,
- * but the asymmetry produces inconsistent capability advertising
- * across nodes on the same hardware.
+ * Platform strategy:
  *
- * Instead, treat headroom as `totalmem - rss`: the slack available IF
- * this Node process is the dominant tenant. RSS reflects what THIS
- * process holds; the difference against totalmem is "how much room is
- * left for spawning a training model".
+ *   - Linux: `os.freemem()` is cgroup-aware in Node 18+ and maps to
+ *     `/proc/meminfo` `MemAvailable` semantics. Use it directly.
+ *   - macOS: `os.freemem()` matches `vm_stat` "Pages free" exactly
+ *     (verified 2026-05-11 on Apple Silicon Node 22 — the historical
+ *     "returns 92 MB" claim is no longer reproducible, libuv tracks
+ *     real free). But it EXCLUDES "Pages inactive" + "Pages purgeable"
+ *     + "Pages speculative", all of which the Mach kernel can reclaim
+ *     on demand without paging out. Without adding those back, the
+ *     filter strips training caps just because macOS aggressively
+ *     caches recently-used pages. Shell out to `vm_stat` once per
+ *     probe (~5 ms, NOT cached — heartbeat runs every 60s, the cost
+ *     is negligible and caching would mask fast pressure shifts).
+ *   - Windows / other: fall back to `os.freemem()` alone. No
+ *     platform-specific reclaim API readily available.
  *
- * Caveats:
- *   - Other processes on the host (IDE, browser) are NOT subtracted.
- *     Acceptable: production node hosts run only this process; dev
- *     hosts are owner-tunable.
- *   - cgroup-limited containers: `os.totalmem()` returns container
- *     limit on Node 18+; RSS is process-scoped. Still works.
+ * Fail-safe: if `vm_stat` is missing or hangs (1s timeout), we silently
+ * fall back to `os.freemem()` alone. This UNDER-reports available
+ * memory and may strip training caps unnecessarily — preferred over
+ * over-reporting (which causes OOM mid-training).
  *
  * @param freeMBOverride deterministic test-injection override.
  */
 function readAvailableMemMB(freeMBOverride?: number): number {
   if (typeof freeMBOverride === 'number') return freeMBOverride;
-  const totalMb = os.totalmem() / (1024 * 1024);
-  const rssMb = process.memoryUsage().rss / (1024 * 1024);
-  return Math.max(0, Math.floor(totalMb - rssMb));
+  const freeBytes = os.freemem();
+  let reclaimableBytes = 0;
+  if (process.platform === 'darwin') {
+    try {
+      const out = execSync('vm_stat', { encoding: 'utf-8', timeout: 1000 });
+      // `vm_stat` header on macOS: "Mach Virtual Memory Statistics:
+      // (page size of N bytes)" — N is 16384 on Apple Silicon, 4096
+      // on Intel. Each subsequent line reports a page count.
+      const pageMatch = out.match(/page size of (\d+)/);
+      const inactiveMatch = out.match(/Pages inactive:\s+(\d+)/);
+      const purgeableMatch = out.match(/Pages purgeable:\s+(\d+)/);
+      const speculativeMatch = out.match(/Pages speculative:\s+(\d+)/);
+      if (pageMatch && inactiveMatch) {
+        const pageSize = parseInt(pageMatch[1], 10);
+        const inactive = parseInt(inactiveMatch[1], 10) * pageSize;
+        const purgeable = purgeableMatch ? parseInt(purgeableMatch[1], 10) * pageSize : 0;
+        const speculative = speculativeMatch ? parseInt(speculativeMatch[1], 10) * pageSize : 0;
+        reclaimableBytes = inactive + purgeable + speculative;
+      }
+    } catch {
+      // vm_stat missing or hung — conservative fall-through to freemem
+      // alone (under-report, not over-report).
+    }
+  }
+  const totalMb = (freeBytes + reclaimableBytes) / (1024 * 1024);
+  return Math.max(0, Math.floor(totalMb));
 }
 
 /**
@@ -421,18 +452,17 @@ export class HeartbeatHelper {
   /**
    * Bug G1: cycle-local capability gating on memory pressure, per-cap.
    *
-   * Headroom signal = `os.totalmem() - process.memoryUsage().rss`. Each
-   * training cap has its OWN floor in `TRAINING_FLOORS_MB` — e.g.
-   * `cpu_training` at 900 MB but `gpu_training` at 4 GB and
-   * `diloco_training` at 6 GB. A cap is stripped from the announced set
-   * iff free RAM is below its individual floor, so a mid-tier host can
-   * keep serving cpu_training even while it can't safely accept the
-   * heavier tiers.
-   *
-   * Why not `os.freemem()` / `process.availableMemory()`: both return
-   * ~92MB on a 16GB Apple Silicon Mac (vm_stat / Mach kernel hides
-   * reclaimable cache from the Node runtime). They produce constant
-   * false-positives on mac-native dev hosts. See `readAvailableMemMB`.
+   * Headroom signal comes from `readAvailableMemMB()` — on macOS that
+   * is `os.freemem() + vm_stat reclaimable pages`, on Linux/Windows
+   * `os.freemem()` directly (cgroup-aware in Node 18+). The signal
+   * intentionally INCLUDES memory held by other processes — i.e. it
+   * answers "could we allocate this much right now without OOM", not
+   * "what's this process's share". Each training cap has its OWN
+   * floor in `TRAINING_FLOORS_MB` — e.g. `cpu_training` at 900 MB but
+   * `gpu_training` at 4 GB and `diloco_training` at 6 GB. A cap is
+   * stripped from the announced set iff free RAM is below its
+   * individual floor, so a mid-tier host can keep serving cpu_training
+   * while shedding the heavier tiers it could no longer fit.
    *
    * The filter is per-cycle — no state is persisted, so capability
    * automatically returns once memory recovers. The `info` log fires only
