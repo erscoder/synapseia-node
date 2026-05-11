@@ -1,5 +1,3 @@
-<!-- TODO: Replace https://dashboard.synapseia.network, https://coord.synapseia.network, and Discord/Twitter links before public launch -->
-
 # @synapseia-network/node
 
 The Synapseia Network compute node — contribute CPU/GPU cycles to autonomous AI agents and earn SYN tokens on Solana.
@@ -35,10 +33,10 @@ synapseia start            # creates a wallet, prints the address, then waits
 # In another terminal — fund the wallet on devnet:
 solana airdrop 1 <YOUR_ADDRESS> --url devnet
 # Re-run:
-synapseia start --coordinator https://coord.synapseia.network
+synapseia start
 ```
 
-For the full walkthrough, keep reading.
+The node talks to the official Synapseia coordinator automatically — no URL flags needed. For the full walkthrough, keep reading.
 
 ---
 
@@ -108,22 +106,14 @@ SYN is the network's reward token. You can run a node without staking, but staki
 
 ### Step 5 — Start your node
 
-Point the node at the public coordinator:
-
 ```bash
-synapseia start --coordinator https://coord.synapseia.network
-```
-
-Or set it once via environment variable:
-
-```bash
-export COORDINATOR_URL=https://coord.synapseia.network
 synapseia start
 ```
 
 The node will:
 
-- Register with the coordinator on the first heartbeat.
+- Connect to the official Synapseia coordinator.
+- Register on the first heartbeat.
 - Heartbeat every ~30 seconds.
 - Wait for incoming work orders (training, inference, research).
 
@@ -160,7 +150,7 @@ Run the installer, follow the prompts, and on first launch the app will create o
 |---|---|---|
 | `[BETA_LIMIT_REACHED] Beta tester limit reached.` | Coordinator beta cap is full. CLI exits with code 0. | Wait for the next slot bump or for mainnet. Re-run `synapseia start` later. |
 | `Wallet not funded` / `insufficient SOL` | Wallet has 0 SOL on devnet. | Re-do Step 3 (devnet SOL faucet). |
-| `Coordinator unreachable` / `ECONNREFUSED` | Wrong coord URL or coordinator is down. | Check the `--coordinator` flag or `COORDINATOR_URL` env var. |
+| `Coordinator unreachable` / `ECONNREFUSED` | Network problem reaching the official coordinator. | Check your internet connection. Status: [status.synapseia.network](https://status.synapseia.network). |
 | `Cannot find module 'X'` | Global npm install was incomplete. | `npm i -g --force @synapseia-network/node`. |
 | Modal **"Beta tester limit reached"** in node-ui | Same as the CLI message above. | Same fix — re-try later. |
 | Wallet password forgotten | The wallet is encrypted; there is no recovery path. | Delete `~/.synapseia/wallet.json` and re-run `synapseia start`. **You'll lose the old address — fund the new one.** |
@@ -175,19 +165,26 @@ Main loop — registers the node, heartbeats, executes work orders.
 
 | Flag | Description | Default |
 |---|---|---|
-| `--coordinator <url>` | Coordinator URL | `http://localhost:3701` |
-| `--model <name>` | Ollama model for inference workloads | — |
+| `--model <name>` | Ollama model for inference workloads | recommended for hardware |
 | `--llm-key <key>` | External LLM API key (optional) | — |
-| `--inference` | Enable inference workloads | off |
+| `--max-iterations <n>` | Maximum work order iterations | infinite |
+| `--inference` | Enable inference mode (expose GPU as AI inference provider) | off |
+| `--inference-models <models>` | Comma-separated list of models to serve (e.g. `ollama/qwen2.5:7b,ollama/llama3:8b`) | — |
 | `--lat <n> --lng <n>` | Geolocation override (else IP-based) | — |
 | `--set-name <name>` | Node display name | — |
 
 ### Other commands
 
 - `synapseia status` — current runtime status of your node.
-- `synapseia wallet` — wallet info, address, balance.
-- `synapseia config` — show / edit local config.
-- `synapseia staking` — stake / unstake SYN.
+- `synapseia balance` — wallet SOL + SYN balance.
+- `synapseia config --show` — print current config. `--set-name`, `--set-model`, `--set-llm-key` to edit.
+- `synapseia stake` / `unstake` / `stake-info` — stake / unstake SYN, view tier multiplier.
+- `synapseia claim-rewards` / `claim-wo-rewards` — claim accrued rewards.
+- `synapseia deposit-sol` / `deposit-syn` / `withdraw-sol` / `withdraw-syn` — wallet transfers.
+- `synapseia system-info` — hardware detection report.
+- `synapseia export-key` — export the wallet private key (prompts for password).
+- `synapseia wallet-create` / `wallet-verify` — wallet provisioning helpers.
+- `synapseia stop` — stop a running node.
 
 Run any command with `--help` for the full option list.
 
@@ -202,6 +199,18 @@ Run any command with `--help` for the full option list.
   synapseia start 2>&1 | tee node.log
   ```
 - **Override home dir:** set `SYNAPSEIA_HOME=/path/to/dir`.
+
+### Advanced: point at a non-default coordinator
+
+The official coordinator is hardcoded and used automatically. Operators running their own coordinator (self-hosted clusters, dev networks) can override via environment variables:
+
+```bash
+export COORDINATOR_URL=https://my-coord.example.com
+export COORDINATOR_WS_URL=https://my-coord.example.com
+synapseia start
+```
+
+The CLI has no `--coordinator` flag any more; env-var override is the only supported mechanism.
 
 ---
 
@@ -219,7 +228,7 @@ Full text: see the [`LICENSE`](./LICENSE) file in this directory.
 
 ## Links
 
-- **Network dashboard:** `https://dashboard.synapseia.network`
+- **Network dashboard:** [https://dashboard.synapseia.network](https://dashboard.synapseia.network)
 - **Solana devnet faucet:** [https://faucet.solana.com](https://faucet.solana.com)
 - **Solana CLI install:** [https://docs.solana.com/cli/install](https://docs.solana.com/cli/install)
 - **Ollama install:** [https://ollama.com](https://ollama.com)
@@ -229,4 +238,4 @@ Full text: see the [`LICENSE`](./LICENSE) file in this directory.
 
 ## Contributing & support
 
-Found a bug? Have a feature request? File an issue on GitHub. For real-time support and beta-tester discussion, join us on Discord (`<TBD>`) or follow updates on Twitter (`<TBD>`). PRs welcome — please open an issue first to discuss non-trivial changes.
+Found a bug? Have a feature request? File an issue on GitHub. PRs welcome — please open an issue first to discuss non-trivial changes.
