@@ -1,5 +1,38 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] fix: patch @libp2p/utils to break cyclic onProgress recursion (63173b74)
+
+Production crash observed after the research/critique pipeline
+completes:
+
+```
+RangeError: Maximum call stack size exceeded
+  at JobRecipient.onProgress (@libp2p/utils/dist/src/queue/job.js:60)
+```
+
+Root cause: `@libp2p/utils@7.1.0` (and 7.0.x) ship a `Job.run()`
+that builds an `onProgress` lambda which iterates `this.recipients`
+and forwards events to each `recipient.onProgress`. When two Jobs
+end up with each other's `run()` lambda registered as a
+`recipient.onProgress` (re-entrant `queue.add` with
+`options.onProgress` forwarded across queues), propagation
+ping-pongs A ↔ B until `RangeError`.
+
+Shipped a vendored patch (`patches/@libp2p+utils+7.1.0.patch`)
+adding a `_propagating` boolean guard: on re-entry the lambda
+no-ops and returns. The cycle becomes a single emission instead
+of a stack-overflow loop.
+
+Plumbing:
+- `patch-package` added as a runtime dependency
+- `postinstall` script runs `patch-package` on global install
+- `patches/` directory bundled via `files` so it ships in the
+  npm tarball
+- Version bumped 0.8.10 → 0.8.11
+
+Upstream fix tracked separately; we'll drop the patch once
+libp2p ships its own guard.
+
 ## [2026-05-10] chore(version): align to 0.8.10 with coord + node-ui (9ed74a5a)
 
 Version-only bump 0.8.9 → 0.8.10 to satisfy the project's
