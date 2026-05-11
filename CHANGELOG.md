@@ -1,5 +1,25 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] fix: README rewrite + CI Node 24 base + 0.8.13 (816e1779)
+
+README: removed all references to the now-deleted `--coordinator`
+CLI flag. The official coordinator URL is hardcoded; env-var
+override (`COORDINATOR_URL` / `COORDINATOR_WS_URL`) documented
+under an "Advanced" subsection for self-hosted operators. Rewrote
+the CLI command reference to match the actual commander surface
+(start flags, `wallet-create` / `wallet-verify`, `stake` group,
+`claim-rewards` / `claim-wo-rewards`, `deposit-*` / `withdraw-*`).
+Dropped Discord / Twitter TBD placeholders.
+
+CI: bumped runtime to Node 24 so the runner ships npm ≥11.5 out
+of the box. Trusted Publishing requires npm 11.5+ to send the
+OIDC token; npm 10 (Node 22) returned `404 'not in this registry'`
+on v0.8.12 publish attempts, and the in-place upgrade path
+(`npm i -g npm@latest`) broke on `promise-retry` mid-migration.
+Node 24 sidesteps both.
+
+Version bumped 0.8.12 → 0.8.13.
+
 ## [2026-05-11] fix: WeakMap-backed guard + accurate comment for onProgress patch (0260125a)
 
 Iteration on the 0.8.11 hotfix per reviewer feedback:
