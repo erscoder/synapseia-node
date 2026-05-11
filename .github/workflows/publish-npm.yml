@@ -33,6 +33,14 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Upgrade npm for Trusted Publishing
+        # npm Trusted Publishing requires npm >= 11.5.1 to send the
+        # GitHub Actions OIDC token to the registry. Node 22 ships
+        # npm 10.x which still uses the legacy token-auth flow and
+        # gets a 404 from the registry under TP-enforced packages
+        # (observed 2026-05-11 on v0.8.12).
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
