@@ -1,5 +1,15 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] chore(version): align node to 0.8.15 with coord + node-ui (73ead7fe)
+
+Lockstep bump. Node code changes in this version cycle:
+- Orphan AgentLoopHelper removal (6d3ff380)
+
+This is the version that node-ui-v0.8.15 will bundle inside the
+.dmg/.msi/.AppImage. The release.yml workflow waits for
+`@synapseia-network/node@0.8.15` on the npm registry before building
+node-ui DMGs (max 10 min retry).
+
 ## [2026-05-11] chore(agent-loop): remove orphan AgentLoopHelper (6d3ff380)
 
 `AgentLoopHelper` was a registered-but-unused provider. The active
