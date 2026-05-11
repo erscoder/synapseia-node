@@ -1,5 +1,27 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] fix(deps): pin @libp2p/utils 7.1.0 + 0.8.16 lockstep (2e31d5bc)
+
+`@libp2p/utils@7.2.0` was published upstream after 0.8.15 shipped and
+broke every fresh `npm install -g @synapseia-network/node@0.8.15`
+because the postinstall `patch-package` step can no longer apply
+`patches/@libp2p+utils+7.1.0.patch` cleanly against 7.2.0 (Job
+onProgress diff conflict). Symptom:
+
+```
+ERROR Failed to apply patch for package @libp2p/utils
+Patch was made for version: 7.1.0
+Installed version: 7.2.0
+```
+
+The patch (WeakMap-backed re-entrance guard for the per-Job
+onProgress lambda) is required for correctness — can't drop. Fix:
+pin `@libp2p/utils` to the exact version the patch targets. A
+direct-dep entry in `package.json` overrides whatever transitive
+resolution the `libp2p` meta package would otherwise pull.
+
+Lockstep bump 0.8.15 → 0.8.16 (coord + node + node-ui).
+
 ## [2026-05-11] chore(version): align node to 0.8.15 with coord + node-ui (73ead7fe)
 
 Lockstep bump. Node code changes in this version cycle:
