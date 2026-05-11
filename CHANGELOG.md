@@ -1,5 +1,23 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] fix: WeakMap-backed guard + accurate comment for onProgress patch (0260125a)
+
+Iteration on the 0.8.11 hotfix per reviewer feedback:
+
+- Switched the re-entrance flag from `this._propagating` (an
+  enumerable instance property) to a module-scoped
+  `WeakMap<Job, boolean>`. The guard is now invisible to
+  `Object.keys` / `JSON.stringify` on `Job` instances and is
+  automatically released when a `Job` is GC'd.
+- Rewrote the patch comment so it accurately describes the scope:
+  the guard suppresses ALL synchronous re-entry on the same Job,
+  not only the A↔B cross-Job cycle. libp2p does not re-enter its
+  own Job synchronously today, so swallowing legitimate nested
+  emissions is acceptable. Documented the trade-off (P10).
+
+Version bumped 0.8.11 → 0.8.12 across the monorepo to keep node /
+coord / node-ui aligned.
+
 ## [2026-05-11] fix: patch @libp2p/utils to break cyclic onProgress recursion (63173b74)
 
 Production crash observed after the research/critique pipeline
