@@ -47,7 +47,11 @@ jobs:
         # the installed file. Update or drop once libp2p ships its
         # own fix (tracked in libp2p/js-libp2p#3496).
         run: |
-          JOB_FILE=$(node -e "console.log(require.resolve('@libp2p/utils/dist/src/queue/job.js'))")
+          JOB_FILE="node_modules/@libp2p/utils/dist/src/queue/job.js"
+          if [ ! -f "$JOB_FILE" ]; then
+            echo "::error::$JOB_FILE missing - check pnpm hoist of @libp2p/utils in .npmrc"
+            exit 1
+          fi
           if ! grep -q 'PROPAGATING' "$JOB_FILE"; then
             echo "::error::patch-package guard missing from $JOB_FILE - check patches/@libp2p+utils+*.patch against the installed version"
             exit 1
