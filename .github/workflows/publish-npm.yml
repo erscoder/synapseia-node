@@ -104,16 +104,21 @@ jobs:
       - name: Publish to npm
         if: steps.check.outputs.already != 'true'
         run: |
-          # Tolerate "version already published" races: a manual publish
-          # that landed between the check above and this step would 409
-          # / 403 / 404 here. Treat any of those as success.
+          # Tolerate "version already published" races on retry: a publish
+          # that landed between the check above and this step returns
+          # EPUBLISHCONFLICT / EVERSIONALREADYEXISTS / "previously
+          # published". DO NOT match on bare 403 / 404 - npm returns
+          # those for real permission / Trusted-Publishing failures,
+          # and matching them silently turned a token-rotation outage
+          # into a "successful" no-op release (observed 2026-05-11
+          # with v0.8.12).
           set +e
           OUT=$(npm publish --access public --provenance 2>&1)
           STATUS=$?
           echo "$OUT"
           if [ $STATUS -ne 0 ]; then
-            if echo "$OUT" | grep -qiE 'cannot publish over .* previously published|already published|EPUBLISHCONFLICT|EVERSIONALREADYEXISTS|previously released|409|403|404'; then
-              echo "::notice::Detected already-published response from registry — exiting success"
+            if echo "$OUT" | grep -qiE 'cannot publish over .* previously published|already published|EPUBLISHCONFLICT|EVERSIONALREADYEXISTS|previously released'; then
+              echo "::notice::Detected already-published response from registry - exiting success"
               exit 0
             fi
             exit $STATUS
