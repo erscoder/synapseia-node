@@ -123,5 +123,7 @@ jobs:
             fi
             exit $STATUS
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Auth via npm Trusted Publishing (OIDC). `id-token: write` at
+        # the job level lets the runner mint an identity token; npm
+        # exchanges it server-side. No NODE_AUTH_TOKEN / NPM_TOKEN
+        # secret required.
