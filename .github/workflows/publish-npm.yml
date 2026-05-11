@@ -36,6 +36,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify @libp2p/utils onProgress guard patch applied
+        # Sentry check: our vendored patch under patches/ inserts a
+        # PROPAGATING WeakMap guard around Job.run()'s onProgress
+        # lambda to break a cross-Job recursion that produces
+        # RangeError: Maximum call stack size exceeded. If a future
+        # @libp2p/utils version bump silently invalidates the patch,
+        # patch-package warns and continues (exit 0) and we'd ship
+        # the bug. This step grep-asserts the marker is present in
+        # the installed file. Update or drop once libp2p ships its
+        # own fix (tracked in libp2p/js-libp2p#3496).
+        run: |
+          JOB_FILE=$(node -e "console.log(require.resolve('@libp2p/utils/dist/src/queue/job.js'))")
+          if ! grep -q 'PROPAGATING' "$JOB_FILE"; then
+            echo "::error::patch-package guard missing from $JOB_FILE - check patches/@libp2p+utils+*.patch against the installed version"
+            exit 1
+          fi
+
       - name: Build
         run: pnpm run build
 
