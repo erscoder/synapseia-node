@@ -1,6 +1,6 @@
 {
   "name": "@synapseia-network/node",
-  "version": "0.8.15",
+  "version": "0.8.16",
   "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -47,6 +47,7 @@
     "@langfuse/otel": "^5.2.0",
     "@langfuse/tracing": "^5.2.0",
     "@libp2p/bootstrap": "^12.0.18",
+    "@libp2p/utils": "7.1.0",
     "@libp2p/crypto": "^5.1.17",
     "@libp2p/gossipsub": "^15.0.19",
     "@libp2p/identify": "^4.1.2",
