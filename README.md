@@ -200,18 +200,6 @@ Run any command with `--help` for the full option list.
   ```
 - **Override home dir:** set `SYNAPSEIA_HOME=/path/to/dir`.
 
-### Advanced: point at a non-default coordinator
-
-The official coordinator is hardcoded and used automatically. Operators running their own coordinator (self-hosted clusters, dev networks) can override via environment variables:
-
-```bash
-export COORDINATOR_URL=https://my-coord.example.com
-export COORDINATOR_WS_URL=https://my-coord.example.com
-synapseia start
-```
-
-The CLI has no `--coordinator` flag any more; env-var override is the only supported mechanism.
-
 ---
 
 ## License
