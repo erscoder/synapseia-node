@@ -220,8 +220,17 @@ class MicroTransformer(nn.Module):
 
 def load_data(data_path: str) -> str:
     """Load text data from file"""
-    path = Path(data_path)
-    if not path.exists():
+    # Treat empty string as "no path" — `Path('')` resolves to the current
+    # working directory which `.exists()` returns True for, so the original
+    # `not path.exists()` guard misses it and the code falls through to
+    # `read_text` on a directory → IsADirectoryError. Use `is_file()` so we
+    # only attempt to read regular files; otherwise fall back to the
+    # built-in synthetic corpus.
+    if not data_path:
+        path = None
+    else:
+        path = Path(data_path)
+    if path is None or not path.is_file():
         # Create sample data if file doesn't exist
         sample_text = """Astrophysics is the branch of astronomy that employs the principles of physics and chemistry to explain the nature of celestial objects. Stars, galaxies, planets, and other objects in the universe emit radiation across the electromagnetic spectrum. Astronomers use telescopes to detect and analyze this radiation, learning about the composition, structure, and evolution of cosmic objects.
 
