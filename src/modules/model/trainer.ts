@@ -38,6 +38,41 @@ function moduleDir(): string {
 export const TRAINING_MEM_FLOOR_MB = 900;
 
 /**
+ * Per-capability training memory floors (MB). The original single
+ * `TRAINING_MEM_FLOOR_MB = 900` gated ALL training-class caps with the
+ * same threshold, which let a 2 GB-free M1 advertise `gpu_training` and
+ * crash mid-forward-pass on a real WO. Each tier below is empirically
+ * tuned for its workload — see `applyMemoryPressureFilter` in the
+ * heartbeat module for the per-cap stripping logic.
+ *
+ * Adjusting any of these MUST be paired with a runtime trainer
+ * pre-flight check at the same value; otherwise the coordinator
+ * still routes WOs the trainer would reject.
+ */
+
+/**
+ * Minimum free RAM (MB) to advertise `gpu_training`. DiLoCo-style LoRA
+ * fine-tuning on a small base model needs a few GB even on Apple
+ * Silicon / consumer NVIDIA. Empirically anything below ~4 GB OOMs
+ * before the first forward pass completes.
+ */
+export const GPU_TRAINING_MEM_FLOOR_MB = 4096;
+
+/**
+ * Minimum free RAM (MB) for `lora_training`. Same magnitude as
+ * gpu_training; kept separate so we can tune one without the other
+ * when the LoRA path matures and its real-world footprint diverges.
+ */
+export const LORA_TRAINING_MEM_FLOOR_MB = 4096;
+
+/**
+ * Minimum free RAM (MB) for `diloco_training`. Distributed gradient
+ * aggregation needs a 7B-class base loaded in RAM plus the gradient
+ * buffers; 6 GB is the floor empirically.
+ */
+export const DILOCO_TRAINING_MEM_FLOOR_MB = 6144;
+
+/**
  * Sentinel emitted by train_micro.py when val_loader has 0 batches
  * (empty val set, or deadline expired before the first val batch).
  *

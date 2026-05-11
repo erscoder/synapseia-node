@@ -1,11 +1,15 @@
 /**
- * Bug G1 — Memory-pressure capability gating in HeartbeatHelper.
+ * Bug G1 — Per-capability memory-pressure gating in HeartbeatHelper.
  *
- * Verifies that when free RAM is below TRAINING_MEM_FLOOR_MB, the
- * announced capability list strips training-class entries for that
- * cycle, then restores them automatically once memory recovers.
+ * Each training cap is gated by its OWN floor (`TRAINING_FLOORS_MB`):
+ *   cpu_training      → 900 MB
+ *   gpu_training      → 4096 MB
+ *   lora_training     → 4096 MB
+ *   diloco_training   → 6144 MB
  *
- * The `info` log fires only on transitions, never per-cycle.
+ * Verifies that the announced capability list strips ONLY the caps
+ * whose floor exceeds current free RAM, and that per-cap transition
+ * logs fire only on flips (not per cycle).
  *
  * Memory readings are injected via the `freeMBOverride` parameter on
  * `applyMemoryPressureFilter`. We don't spy on `os.freemem` because the
@@ -14,15 +18,21 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import logger from '../../../utils/logger';
-import { TRAINING_MEM_FLOOR_MB } from '../../model/trainer';
+import {
+  TRAINING_MEM_FLOOR_MB,
+  GPU_TRAINING_MEM_FLOOR_MB,
+  LORA_TRAINING_MEM_FLOOR_MB,
+  DILOCO_TRAINING_MEM_FLOOR_MB,
+} from '../../model/trainer';
 import { HeartbeatHelper, __resetCapabilitySnapshotForTests } from '../heartbeat';
 
-describe('HeartbeatHelper — memory-pressure capability gating (Bug G1)', () => {
+describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', () => {
   let helper: HeartbeatHelper;
   let infoSpy: jest.SpiedFunction<typeof logger.info>;
 
-  const HEALTHY = TRAINING_MEM_FLOOR_MB + 500;
-  const PRESSURE = 80;
+  const ALL_TRAINING_CAPS = ['cpu_training', 'gpu_training', 'lora_training', 'diloco_training'];
+  const BASE_CAPS = ['cpu_inference', 'inference'];
+  const HEALTHY = DILOCO_TRAINING_MEM_FLOOR_MB + 1000; // 7144 — clears every floor
 
   beforeEach(() => {
     __resetCapabilitySnapshotForTests();
@@ -35,57 +45,119 @@ describe('HeartbeatHelper — memory-pressure capability gating (Bug G1)', () =>
     __resetCapabilitySnapshotForTests();
   });
 
-  it('strips training-class capabilities when free RAM is below the floor', () => {
-    // Cycle 1 — primer with healthy memory so the snapshot is populated.
-    helper.applyMemoryPressureFilter(['cpu_inference', 'inference', 'cpu_training', 'gpu_training'], HEALTHY);
-
-    // Cycle 2 — drop below floor.
-    const out = helper.applyMemoryPressureFilter(['cpu_inference', 'inference', 'cpu_training', 'gpu_training'], PRESSURE);
-
-    expect(out).toEqual(['cpu_inference', 'inference']);
-    expect(out).not.toContain('cpu_training');
-    expect(out).not.toContain('gpu_training');
+  it('keeps every cap when freeMB clears the highest floor', () => {
+    const offered = [...BASE_CAPS, ...ALL_TRAINING_CAPS];
+    const out = helper.applyMemoryPressureFilter(offered, HEALTHY);
+    expect(out).toEqual(offered);
   });
 
-  it('restores training-class capabilities when memory recovers', () => {
-    // Cycle 1 — under pressure.
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training', 'gpu_training'], PRESSURE);
+  it('keeps cpu_training but strips gpu/lora/diloco at ~2 GB free (the M1 crash scenario)', () => {
+    // Cycle 1 — primer at healthy memory.
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
 
-    // Cycle 2 — memory recovers.
+    // Cycle 2 — drop to ~2 GB free. cpu_training (900) clears; the rest don't.
     const out = helper.applyMemoryPressureFilter(
-      ['cpu_inference', 'cpu_training', 'gpu_training'],
-      TRAINING_MEM_FLOOR_MB + 1500,
+      [...BASE_CAPS, ...ALL_TRAINING_CAPS],
+      2048,
     );
 
-    expect(out).toEqual(['cpu_inference', 'cpu_training', 'gpu_training']);
+    expect(out).toContain('cpu_training');
+    expect(out).not.toContain('gpu_training');
+    expect(out).not.toContain('lora_training');
+    expect(out).not.toContain('diloco_training');
+    // Non-training caps survive.
+    expect(out).toContain('cpu_inference');
+    expect(out).toContain('inference');
   });
 
-  it('logs info only on transition, not on every cycle', () => {
-    // Cycle 1 — primer with healthy memory; no log expected (no previous snapshot).
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training'], HEALTHY);
+  it('keeps cpu/gpu/lora but strips diloco at 5 GB free', () => {
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
+    const out = helper.applyMemoryPressureFilter(
+      [...BASE_CAPS, ...ALL_TRAINING_CAPS],
+      5000,
+    );
+    expect(out).toContain('cpu_training');
+    expect(out).toContain('gpu_training');
+    expect(out).toContain('lora_training');
+    expect(out).not.toContain('diloco_training');
+  });
+
+  it('strips every training cap at 500 MB free', () => {
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
+    const out = helper.applyMemoryPressureFilter(
+      [...BASE_CAPS, ...ALL_TRAINING_CAPS],
+      500,
+    );
+    expect(out).toEqual(BASE_CAPS);
+  });
+
+  it('restores caps individually as memory recovers past each floor', () => {
+    // Start under heavy pressure → only base caps survive.
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 500);
+
+    // Recover to 2 GB → cpu_training comes back.
+    let out = helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 2048);
+    expect(out).toContain('cpu_training');
+    expect(out).not.toContain('gpu_training');
+
+    // Recover to 5 GB → gpu/lora come back, diloco still stripped.
+    out = helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 5000);
+    expect(out).toContain('gpu_training');
+    expect(out).toContain('lora_training');
+    expect(out).not.toContain('diloco_training');
+
+    // Recover above the diloco floor → everything back.
+    out = helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
+    expect(out).toContain('diloco_training');
+  });
+
+  it('logs per-cap transition only on flip, not every cycle', () => {
+    // Cycle 1 — primer at healthy memory; no log (no previous snapshot).
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
     expect(infoSpy).not.toHaveBeenCalled();
 
-    // Cycle 2 — drop below floor → info fires (transition into pressure).
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training'], PRESSURE);
-    expect(infoSpy).toHaveBeenCalledTimes(1);
-    expect(infoSpy.mock.calls[0]?.[0]).toMatch(/training capability suppressed/);
+    // Cycle 2 — drop to 2 GB → gpu/lora/diloco SUPPRESSED, cpu_training stays.
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 2048);
+    const suppressedLogs = infoSpy.mock.calls.filter(c => /suppressed/.test(String(c[0])));
+    expect(suppressedLogs).toHaveLength(3);
+    expect(suppressedLogs.some(c => /gpu_training/.test(String(c[0])))).toBe(true);
+    expect(suppressedLogs.some(c => /lora_training/.test(String(c[0])))).toBe(true);
+    expect(suppressedLogs.some(c => /diloco_training/.test(String(c[0])))).toBe(true);
+    // cpu_training never suppressed at 2 GB.
+    expect(suppressedLogs.some(c => /cpu_training/.test(String(c[0])))).toBe(false);
 
-    // Cycle 3 — still under pressure, same announced set → no log.
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training'], 70);
-    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const beforeCycle3 = infoSpy.mock.calls.length;
 
-    // Cycle 4 — memory recovers → info fires (transition out of pressure).
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training'], TRAINING_MEM_FLOOR_MB + 2000);
-    expect(infoSpy).toHaveBeenCalledTimes(2);
-    expect(infoSpy.mock.calls[1]?.[0]).toMatch(/training capability restored/);
+    // Cycle 3 — same announced set, still 2 GB → no new logs.
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 2048);
+    expect(infoSpy.mock.calls.length).toBe(beforeCycle3);
 
-    // Cycle 5 — still healthy, same announced set → no log.
-    helper.applyMemoryPressureFilter(['cpu_inference', 'cpu_training'], TRAINING_MEM_FLOOR_MB + 2000);
-    expect(infoSpy).toHaveBeenCalledTimes(2);
+    // Cycle 4 — recover to HEALTHY → gpu/lora/diloco RESTORED.
+    helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
+    const restoredLogs = infoSpy.mock.calls.filter(c => /restored/.test(String(c[0])));
+    expect(restoredLogs).toHaveLength(3);
   });
 
-  it('does not strip when there are no training-class capabilities to begin with', () => {
+  it('does not strip non-training capabilities', () => {
     const out = helper.applyMemoryPressureFilter(['cpu_inference', 'inference', 'embedding'], 50);
     expect(out).toEqual(['cpu_inference', 'inference', 'embedding']);
+  });
+
+  it('does not log suppression for caps not offered this cycle', () => {
+    // Cycle 1 — primer with ONLY cpu_inference (no training caps).
+    helper.applyMemoryPressureFilter(['cpu_inference'], HEALTHY);
+    expect(infoSpy).not.toHaveBeenCalled();
+
+    // Cycle 2 — still only cpu_inference, but at low memory. No
+    // training cap was offered or announced — nothing to log.
+    helper.applyMemoryPressureFilter(['cpu_inference'], 500);
+    expect(infoSpy).not.toHaveBeenCalled();
+  });
+
+  // Sanity: floor constants are exported and have the expected ordering.
+  it('floor constants are ordered cpu < gpu == lora < diloco', () => {
+    expect(TRAINING_MEM_FLOOR_MB).toBeLessThan(GPU_TRAINING_MEM_FLOOR_MB);
+    expect(GPU_TRAINING_MEM_FLOOR_MB).toBe(LORA_TRAINING_MEM_FLOOR_MB);
+    expect(LORA_TRAINING_MEM_FLOOR_MB).toBeLessThan(DILOCO_TRAINING_MEM_FLOOR_MB);
   });
 });

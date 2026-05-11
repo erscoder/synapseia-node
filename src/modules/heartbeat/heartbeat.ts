@@ -10,7 +10,13 @@ import logger from '../../utils/logger';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
-import { isPyTorchAvailable, TRAINING_MEM_FLOOR_MB } from '../model/trainer';
+import {
+  isPyTorchAvailable,
+  TRAINING_MEM_FLOOR_MB,
+  GPU_TRAINING_MEM_FLOOR_MB,
+  LORA_TRAINING_MEM_FLOOR_MB,
+  DILOCO_TRAINING_MEM_FLOOR_MB,
+} from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
@@ -61,22 +67,23 @@ function readAvailableMemMB(freeMBOverride?: number): number {
 }
 
 /**
- * Capability tags that demand training-grade RAM headroom and must be
- * stripped from the announced set when free RAM is below
- * `TRAINING_MEM_FLOOR_MB`. Mirrors the four training-class tags
- * `determineCapabilities` may emit: `cpu_training` (PyTorch CPU
- * micro-transformer), `gpu_training` (CUDA / Metal), `lora_training`
- * (LoRA fine-tune), `diloco_training` (DiLoCo distributed). The
- * generic `training` tag is included as a defensive backstop in case
- * any downstream code starts emitting it; today no caller does.
+ * Per-capability RAM floors (MB). A cap is stripped from the announced
+ * set when free RAM is below ITS floor — not a single global threshold.
+ * This is what makes a 2 GB-free node correctly keep `cpu_training`
+ * (light) while shedding `gpu_training` / `lora_training` /
+ * `diloco_training` (heavy). Caps not present in the map are never
+ * touched by the filter (e.g. `cpu_inference`, `inference`, `embedding`).
+ *
+ * Source of truth for floor VALUES lives in `model/trainer.ts`; this
+ * map only routes cap names to those exported constants.
  */
-const TRAINING_CAPABILITIES = new Set([
-  'training',
-  'cpu_training',
-  'gpu_training',
-  'lora_training',
-  'diloco_training',
-]);
+const TRAINING_FLOORS_MB: Record<string, number> = {
+  training: TRAINING_MEM_FLOOR_MB,
+  cpu_training: TRAINING_MEM_FLOOR_MB,
+  gpu_training: GPU_TRAINING_MEM_FLOOR_MB,
+  lora_training: LORA_TRAINING_MEM_FLOOR_MB,
+  diloco_training: DILOCO_TRAINING_MEM_FLOOR_MB,
+};
 
 /**
  * Test-only hook. Resets the module-private "previous" capability snapshot
@@ -188,10 +195,13 @@ export class HeartbeatHelper {
   ): Promise<HeartbeatResponse> {
     const startTime = Date.now();
     const rawCapabilities = await this.determineCapabilitiesAsync(hardware);
-    // Bug G1: strip training-class capabilities for THIS cycle when free RAM
-    // sits below the trainer's pre-flight floor. Coordinator stops routing
-    // training WOs to a node that the trainer would reject anyway. Capability
-    // returns automatically next cycle once memory recovers.
+    // Bug G1: strip training-class capabilities per-cap based on individual
+    // RAM floors (see TRAINING_FLOORS_MB). A 2 GB-free node keeps
+    // `cpu_training` (floor 900 MB) but sheds `gpu_training` /
+    // `lora_training` (floor 4 GB) and `diloco_training` (floor 6 GB), so the
+    // coordinator stops routing heavy WOs to a node that would OOM mid-run.
+    // Caps return automatically next cycle once memory recovers above their
+    // respective floor.
     const capabilities = this.applyMemoryPressureFilter(rawCapabilities);
 
     // Resolve public IP for geo-lookup (cached 30 min)
@@ -409,14 +419,15 @@ export class HeartbeatHelper {
   }
 
   /**
-   * Bug G1: cycle-local capability gating on memory pressure.
+   * Bug G1: cycle-local capability gating on memory pressure, per-cap.
    *
-   * Headroom signal = `os.totalmem() - process.memoryUsage().rss`. When
-   * total RAM minus our own resident-set is below `TRAINING_MEM_FLOOR_MB`
-   * (i.e. spawning a training model would push the host into swap/OOM
-   * territory), drop every training-class capability from the announced
-   * set so the coordinator stops handing this node training work it
-   * would refuse at runtime.
+   * Headroom signal = `os.totalmem() - process.memoryUsage().rss`. Each
+   * training cap has its OWN floor in `TRAINING_FLOORS_MB` — e.g.
+   * `cpu_training` at 900 MB but `gpu_training` at 4 GB and
+   * `diloco_training` at 6 GB. A cap is stripped from the announced set
+   * iff free RAM is below its individual floor, so a mid-tier host can
+   * keep serving cpu_training even while it can't safely accept the
+   * heavier tiers.
    *
    * Why not `os.freemem()` / `process.availableMemory()`: both return
    * ~92MB on a 16GB Apple Silicon Mac (vm_stat / Mach kernel hides
@@ -435,27 +446,40 @@ export class HeartbeatHelper {
    */
   applyMemoryPressureFilter(capabilities: string[], freeMBOverride?: number): string[] {
     const freeMB = freeMBOverride ?? readAvailableMemMB();
-    const underPressure = freeMB < TRAINING_MEM_FLOOR_MB;
-    const filtered = underPressure
-      ? capabilities.filter(cap => !TRAINING_CAPABILITIES.has(cap))
-      : capabilities;
+
+    // Per-cap stripping: each training cap is gated by its own floor.
+    // Non-training caps (no entry in TRAINING_FLOORS_MB) pass untouched.
+    const filtered = capabilities.filter(cap => {
+      const floor = TRAINING_FLOORS_MB[cap];
+      if (floor === undefined) return true;
+      return freeMB >= floor;
+    });
+
     const previous = lastAnnouncedCapabilities;
-    const sameAsPrevious = !!previous
-      && previous.length === filtered.length
-      && previous.every((cap, idx) => cap === filtered[idx]);
-    if (!sameAsPrevious && previous) {
-      const previousHadTraining = previous.some(cap => TRAINING_CAPABILITIES.has(cap));
-      const filteredHasTraining = filtered.some(cap => TRAINING_CAPABILITIES.has(cap));
-      if (underPressure && !filteredHasTraining && (previousHadTraining || filtered.length < capabilities.length)) {
-        logger.info(
-          `[Heartbeat] training capability suppressed this cycle (free=${freeMB}MB < floor=${TRAINING_MEM_FLOOR_MB}MB)`,
-        );
-      } else if (!underPressure && !previousHadTraining && filteredHasTraining) {
-        logger.info(
-          `[Heartbeat] training capability restored this cycle (free=${freeMB}MB >= floor=${TRAINING_MEM_FLOOR_MB}MB)`,
-        );
+    if (previous) {
+      // Detect per-cap transitions vs the previous cycle. Logs fire only
+      // when a specific training cap's state flips (suppressed/restored)
+      // — keeps the heartbeat quiet under sustained pressure while still
+      // surfacing which cap was dropped or recovered.
+      const previousSet = new Set(previous);
+      const filteredSet = new Set(filtered);
+      for (const cap of Object.keys(TRAINING_FLOORS_MB)) {
+        const floor = TRAINING_FLOORS_MB[cap]!;
+        const wasAnnounced = previousSet.has(cap);
+        const nowAnnounced = filteredSet.has(cap);
+        const offeredThisCycle = capabilities.includes(cap);
+        if (wasAnnounced && !nowAnnounced && offeredThisCycle) {
+          logger.info(
+            `[Heartbeat] ${cap} suppressed (free=${freeMB}MB < floor=${floor}MB)`,
+          );
+        } else if (!wasAnnounced && nowAnnounced) {
+          logger.info(
+            `[Heartbeat] ${cap} restored (free=${freeMB}MB >= floor=${floor}MB)`,
+          );
+        }
       }
     }
+
     lastAnnouncedCapabilities = filtered;
     return filtered;
   }
