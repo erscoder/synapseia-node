@@ -1,30 +1,48 @@
 diff --git a/node_modules/@libp2p/utils/dist/src/queue/job.js b/node_modules/@libp2p/utils/dist/src/queue/job.js
-index 0000001..0000002 100644
+index 8aef8c4..13e49d3 100644
 --- a/node_modules/@libp2p/utils/dist/src/queue/job.js
 +++ b/node_modules/@libp2p/utils/dist/src/queue/job.js
-@@ -56,11 +56,20 @@ export class Job {
-             const result = await raceSignal(this.fn({
+@@ -2,6 +2,11 @@ import { AbortError } from '@libp2p/interface';
+ import { setMaxListeners } from 'main-event';
+ import { raceSignal } from 'race-signal';
+ import { JobRecipient } from "./recipient.js";
++// synapseia-network patch: WeakMap-backed re-entrance guard for the
++// per-Job onProgress lambda. See the lambda body for the full
++// rationale; the map is module-scoped so the flag never appears as
++// an enumerable property on Job instances and is GC'd with them.
++const PROPAGATING = new WeakMap();
+ /**
+  * Returns a random string
+  */
+@@ -57,9 +62,28 @@ export class Job {
                  ...(this.options ?? {}),
                  signal: this.controller.signal,
--                onProgress: (evt) => {
+                 onProgress: (evt) => {
 -                    this.recipients.forEach(recipient => {
 -                        recipient.onProgress?.(evt);
 -                    });
--                }
-+                onProgress: (evt) => {
-+                    // synapseia patch: guard against cyclic onProgress
-+                    // recursion. When two Jobs end up with each other's
-+                    // run() onProgress lambda as a recipient.onProgress,
-+                    // propagation ping-pongs until RangeError. The
-+                    // guard turns the cycle into a no-op on re-entry.
-+                    if (this._propagating) { return; }
-+                    this._propagating = true;
++                    // synapseia-network patch: any synchronous re-entry
++                    // of this lambda on the same Job no-ops. Primary
++                    // motivation is the A<->B cross-Job cycle (each
++                    // Job's run() lambda registered as the other's
++                    // recipient.onProgress -> propagation ping-pongs
++                    // until RangeError). Side effect: legitimate
++                    // synchronous nested onProgress emissions on the
++                    // same Job are also swallowed. libp2p does not
++                    // re-enter its own Job synchronously today, so
++                    // acceptable. WeakMap keeps the flag off the Job
++                    // instance (no Object.keys / JSON noise; auto GC).
++                    if (PROPAGATING.get(this) === true) {
++                        return;
++                    }
++                    PROPAGATING.set(this, true);
 +                    try {
 +                        this.recipients.forEach(recipient => {
 +                            recipient.onProgress?.(evt);
 +                        });
-+                    } finally { this._propagating = false; }
-+                }
++                    } finally {
++                        PROPAGATING.set(this, false);
++                    }
+                 }
              }), this.controller.signal);
              this.recipients.forEach(recipient => {
-                 recipient.deferred.resolve(result);
