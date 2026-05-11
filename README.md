@@ -134,7 +134,7 @@ Open `https://dashboard.synapseia.network/nodes` and search for your wallet addr
 
 Prefer a desktop app over the CLI? `node-ui` is a cross-platform Tauri app that wraps the same runtime, uses the same wallet (`~/.synapseia/wallet.json`), and points at the same coordinator.
 
-Download from [https://github.com/synapseia-network/node/releases](https://github.com/synapseia-network/node/releases):
+Download from [https://github.com/erscoder/synapseia-node-ui/releases](https://github.com/erscoder/synapseia-node-ui/releases):
 
 - **macOS:** `synapseia-node-ui_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel).
 - **Windows:** `synapseia-node-ui_<version>_x64.msi`.
@@ -232,7 +232,7 @@ Full text: see the [`LICENSE`](./LICENSE) file in this directory.
 - **Solana devnet faucet:** [https://faucet.solana.com](https://faucet.solana.com)
 - **Solana CLI install:** [https://docs.solana.com/cli/install](https://docs.solana.com/cli/install)
 - **Ollama install:** [https://ollama.com](https://ollama.com)
-- **Issues:** [https://github.com/synapseia-network/node/issues](https://github.com/synapseia-network/node/issues)
+- **Issues:** [https://github.com/erscoder/synapseia-node/issues](https://github.com/erscoder/synapseia-node/issues)
 
 ---
 
