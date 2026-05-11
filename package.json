@@ -1,6 +1,6 @@
 {
   "name": "@synapseia-network/node",
-  "version": "0.8.10",
+  "version": "0.8.11",
   "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "patches",
     "scripts",
     "LICENSE",
     "README.md"
@@ -32,6 +33,7 @@
     "dev": "tsup index.ts --watch --onSuccess \"node dist/bootstrap.js --help\"",
     "build": "tsup",
     "prepare": "npm run build",
+    "postinstall": "patch-package",
     "start": "node dist/bootstrap.js",
     "test": "jest",
     "test:mutation": "NODE_OPTIONS=--experimental-vm-modules stryker run",
@@ -70,6 +72,7 @@
     "dotenv": "^17.3.1",
     "libp2p": "^3.2.2",
     "ollama": "^0.5.0",
+    "patch-package": "^8.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "semver": "^7.7.2",

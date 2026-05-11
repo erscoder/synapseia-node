@@ -1,0 +1,30 @@
+diff --git a/node_modules/@libp2p/utils/dist/src/queue/job.js b/node_modules/@libp2p/utils/dist/src/queue/job.js
+index 0000001..0000002 100644
+--- a/node_modules/@libp2p/utils/dist/src/queue/job.js
++++ b/node_modules/@libp2p/utils/dist/src/queue/job.js
+@@ -56,11 +56,20 @@ export class Job {
+             const result = await raceSignal(this.fn({
+                 ...(this.options ?? {}),
+                 signal: this.controller.signal,
+-                onProgress: (evt) => {
+-                    this.recipients.forEach(recipient => {
+-                        recipient.onProgress?.(evt);
+-                    });
+-                }
++                onProgress: (evt) => {
++                    // synapseia patch: guard against cyclic onProgress
++                    // recursion. When two Jobs end up with each other's
++                    // run() onProgress lambda as a recipient.onProgress,
++                    // propagation ping-pongs until RangeError. The
++                    // guard turns the cycle into a no-op on re-entry.
++                    if (this._propagating) { return; }
++                    this._propagating = true;
++                    try {
++                        this.recipients.forEach(recipient => {
++                            recipient.onProgress?.(evt);
++                        });
++                    } finally { this._propagating = false; }
++                }
+             }), this.controller.signal);
+             this.recipients.forEach(recipient => {
+                 recipient.deferred.resolve(result);
