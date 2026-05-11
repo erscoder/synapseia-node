@@ -19,8 +19,33 @@ export enum InstallType {
  * Detect how the node CLI was installed.
  */
 export function detectInstallType(): InstallType {
+  // Prefer a path-based check against THIS module's location: if we're
+  // running from any known npm-install layout (user-prefix from a
+  // previous self-update, bundled-runtime prefix from install_synapseia_node,
+  // or a system prefix), classify as NPM_GLOBAL. `npm root -g` only ever
+  // reports the SYSTEM prefix, so the user-prefix install used by the
+  // sudo-free self-update path was silently classified as UNKNOWN and
+  // the update never ran. Same goes for the bundled-runtime prefix.
   try {
-    // npm global: `npm root -g` contains our package
+    const myDir = dirname(__filename);
+    const NPM_PREFIXES = [
+      join(homedir(), '.synapseia', 'npm-global'),
+      join(homedir(), '.synapseia', 'node'),
+      '/opt/homebrew/lib/node_modules',
+      '/usr/local/lib/node_modules',
+      '/usr/lib/node_modules',
+    ];
+    for (const prefix of NPM_PREFIXES) {
+      // path-prefix match — accept both flat (npm) and nested (workspace) layouts.
+      if (myDir.startsWith(prefix + '/') || myDir === prefix) {
+        return InstallType.NPM_GLOBAL;
+      }
+    }
+  } catch { /* fall through */ }
+
+  try {
+    // Fallback: `npm root -g` system check covers nvm/volta/fnm layouts
+    // we don't hard-code above.
     const npmGlobalRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
     if (existsSync(join(npmGlobalRoot, '@synapseia-network', 'node', 'package.json'))) {
       return InstallType.NPM_GLOBAL;
