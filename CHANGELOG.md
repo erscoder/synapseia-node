@@ -1,5 +1,25 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] chore(agent-loop): remove orphan AgentLoopHelper (6d3ff380)
+
+`AgentLoopHelper` was a registered-but-unused provider. The active
+autonomous flow is `LangGraphWorkOrderAgentService`; the helper was
+never wired into runtime. It hit three coord endpoints that have just
+been removed (GET/POST/PATCH `/experiments`), so any future caller
+would have 404ed. Deleted cleanly.
+
+Removed:
+- `src/modules/agent/agent-loop.ts`
+- `src/__tests__/agent-loop.test.ts`
+- `src/modules/agent/__tests__/agent-loop.spec.ts`
+- `AgentLoopHelper` provider + export from `agent.module.ts`.
+
+Untouched: `/hyperparams/experiments` calls in
+`work-order.coordinator.ts` and `work-order.execution.ts` — that's
+hyperparam-search, a different active feature.
+
+Pairs with coord `9a2e418b` and dashboard `18900cb`.
+
 ## [2026-05-11] fix: README rewrite + CI Node 24 base + 0.8.13 (816e1779)
 
 README: removed all references to the now-deleted `--coordinator`
