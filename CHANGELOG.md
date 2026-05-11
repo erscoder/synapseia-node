@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-11] chore(version): align node to 0.8.17 with coord + node-ui (c70bbd46)
+
+Lockstep bump. Node code unchanged from 0.8.16 (`@libp2p/utils@7.1.0`
+pin still in place). Cycle reason: node-ui-v0.8.17 adds `libfuse2`
+to the Linux CI deps so the AppImage bundling step succeeds (0.8.16
+ubuntu build failed at `linuxdeploy`).
+
 ## [2026-05-11] fix(deps): pin @libp2p/utils 7.1.0 + 0.8.16 lockstep (2e31d5bc)
 
 `@libp2p/utils@7.2.0` was published upstream after 0.8.15 shipped and
