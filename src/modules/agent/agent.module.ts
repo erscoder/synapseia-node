@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LlmModule } from '../llm/llm.module';
 import { AgentBrainHelper } from './agent-brain';
-import { AgentLoopHelper } from './agent-loop';
 import { ReviewAgentHelper } from './review-agent';
 import { RoundListenerHelper } from './round-listener';
 import { WorkOrderModule } from './work-order/work-order.module';
@@ -15,14 +14,12 @@ import { IdentityModule } from '../identity/identity.module';
     AgentBrainHelper,
     ReviewAgentHelper,
     RoundListenerHelper,
-    AgentLoopHelper,
     LangGraphWorkOrderAgentService,
   ],
   exports: [
     AgentBrainHelper,
     ReviewAgentHelper,
     RoundListenerHelper,
-    AgentLoopHelper,
     LangGraphWorkOrderAgentService,
     WorkOrderModule,
   ],
