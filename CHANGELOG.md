@@ -1,5 +1,55 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-12] fix(langgraph): route MOLECULAR_DOCKING + LORA_TRAINING + LORA_VALIDATION; fail-loud unknown types (f0b9cc9d)
+
+Production BLOCKER hotfix. LangGraph router switch in
+`AgentGraphService` covered only RESEARCH/TRAINING/CPU_INFERENCE/
+GPU_INFERENCE/DILOCO_TRAINING and silently fell through `default →
+executeTraining` for every other `WorkOrderType`. MOLECULAR_DOCKING,
+LORA_TRAINING and LORA_VALIDATION are actively produced by coord
+crons; they crashed inside `ExecuteTrainingNode` →
+`mutation-engine.ts:192/210` with
+`TypeError: Cannot read properties of undefined (reading 'toFixed')`
+on `payload.currentBestLoss` (undefined for non-training payloads).
+QualityGate returned `shouldSubmit=false` so `completeWorkOrder` was
+never called — zero docking/lora rewards were ever paid through the
+langgraph path on any node.
+
+Fix:
+- 3 new langgraph executor nodes (`ExecuteDockingNode`,
+  `ExecuteLoraNode`, `ExecuteLoraValidationNode`) wrapping the
+  existing `WorkOrderExecutionHelper` methods at
+  `work-order.execution.ts:554, 595, 635`.
+- New `UnknownTypeNode` that logs WARN + returns `success: false` so
+  qualityGate skips submission and the WO is left in `ACCEPTED` for
+  coord re-assignment (no silent misrouting).
+- `default` branch replaced with a compile-time
+  `const _exhaustive: never = t` guard — future `WorkOrderType`
+  additions will fail `tsc` instead of getting silently misrouted.
+- `ExecuteLoraValidationNode` honours the `LORA_VALIDATOR_ENABLED`
+  opt-in flag at the node layer (defense-in-depth on top of the
+  existing executor-level gate at `work-order.execution.ts:639`).
+- New router-exhaustiveness `it.each` test asserts routing for all 8
+  active `WorkOrderType` values — runtime backstop to the
+  compile-time `never` guard.
+- 13 new tests; full suite green (1614 pass, 43 skipped).
+
+`QualityGateNode` is already shape-agnostic (reads only
+`executionResult.success` at `quality-gate.ts:24-41`) so it needed no
+changes to consume docking (`bestAffinity` kcal/mol) or LoRA
+(val metrics) payloads.
+
+Tech-debt follow-ups (separate tickets, out of scope):
+- Coord `DOCKING_CAPABILITY='docking'` vs WO
+  `requiredCapabilities=['cpu_inference']` mismatch
+  (`DockingDispatchCron:130-141` skip-gates dispatch when zero nodes
+  advertise the `docking` cap; node heartbeat never pushes it).
+- Remove dead-code `packages/node/src/modules/agent/work-order/work-order.loop.ts`
+  (no longer wired post-`516c8772e` — only `LangGraphWorkOrderAgentService`
+  is bootstrapped in `cli/index.ts:253` and `node-runtime.ts:889`).
+
+Plan: `~/.claude/plans/ok-purrfect-biscuit.md`.
+
 ## [2026-05-12] fix(heartbeat): floor all Ollama-routed inference caps to prevent silent OOM (5b4bb55a)
 
 Production hotfix — node-kike accepted CPU_INFERENCE WorkOrders that
