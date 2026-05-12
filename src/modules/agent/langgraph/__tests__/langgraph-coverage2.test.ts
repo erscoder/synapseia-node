@@ -10,6 +10,9 @@ const mockExecuteTrainingWorkOrder = jest.fn<() => Promise<any>>();
 const mockExecuteCpuInferenceWorkOrder = jest.fn<() => Promise<any>>();
 const mockExecuteDiLoCoWorkOrder = jest.fn<() => Promise<any>>();
 const mockExecuteResearchWorkOrder = jest.fn<() => Promise<any>>();
+const mockExecuteDockingWorkOrder = jest.fn<() => Promise<any>>();
+const mockExecuteLoraWorkOrder = jest.fn<() => Promise<any>>();
+const mockExecuteLoraValidationWorkOrder = jest.fn<() => Promise<any>>();
 const mockFetchAvailableWorkOrders = jest.fn<() => Promise<WorkOrder[]>>();
 const mockScoreResearchResult = jest.fn<() => any>().mockReturnValue(0.85);
 const mockIsResearchWorkOrder = jest.fn((wo: any) => wo?.type === 'RESEARCH');
@@ -41,6 +44,9 @@ jest.mock('../../work-order/work-order.execution', () => ({
     executeCpuInferenceWorkOrder: mockExecuteCpuInferenceWorkOrder,
     executeDiLoCoWorkOrder: mockExecuteDiLoCoWorkOrder,
     executeResearchWorkOrder: mockExecuteResearchWorkOrder,
+    executeDockingWorkOrder: mockExecuteDockingWorkOrder,
+    executeLoraWorkOrder: mockExecuteLoraWorkOrder,
+    executeLoraValidationWorkOrder: mockExecuteLoraValidationWorkOrder,
     isResearchWorkOrder: mockIsResearchWorkOrder,
     isTrainingWorkOrder: jest.fn().mockReturnValue(false),
     isDiLoCoWorkOrder: jest.fn().mockReturnValue(false),
@@ -114,6 +120,10 @@ import { ExecuteTrainingNode } from '../nodes/execute-training';
 import { ExecuteInferenceNode } from '../nodes/execute-inference';
 import { ExecuteDilocoNode } from '../nodes/execute-diloco';
 import { ExecuteResearchNode } from '../nodes/execute-research';
+import { ExecuteDockingNode } from '../nodes/execute-docking';
+import { ExecuteLoraNode } from '../nodes/execute-lora';
+import { ExecuteLoraValidationNode } from '../nodes/execute-lora-validation';
+import { UnknownTypeNode } from '../nodes/unknown-type';
 import { FetchWorkOrdersNode } from '../nodes/fetch-work-orders';
 import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
 import { AgentBrainHelper } from '../../agent-brain';
@@ -423,4 +433,199 @@ describe('ExecuteResearchNode', () => {
   });
 
 
+});
+
+// ─── ExecuteDockingNode ──────────────────────────────────────────────────────
+
+describe('ExecuteDockingNode', () => {
+  let node: ExecuteDockingNode;
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteDockingNode(execution); });
+
+  it('returns failure when no work order selected', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('No work order selected');
+  });
+
+  it('wraps successful docking result', async () => {
+    const wo = makeWO('MOLECULAR_DOCKING');
+    mockExecuteDockingWorkOrder.mockResolvedValueOnce({
+      result: JSON.stringify({ bestAffinity: -8.4, poses: [] }),
+      success: true,
+    });
+    const result = await node.execute(makeState({ selectedWorkOrder: wo, peerId: 'peer123' }));
+    expect(result.executionResult?.success).toBe(true);
+    expect(mockExecuteDockingWorkOrder).toHaveBeenCalledWith(wo, 'peer123');
+  });
+
+  it('propagates failure from executeDockingWorkOrder', async () => {
+    mockExecuteDockingWorkOrder.mockResolvedValueOnce({ result: 'Docking failed [VINA]', success: false });
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('MOLECULAR_DOCKING') }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('Docking failed');
+  });
+
+  it('catches thrown errors', async () => {
+    mockExecuteDockingWorkOrder.mockRejectedValueOnce(new Error('Vina crashed'));
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('MOLECULAR_DOCKING') }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('Vina crashed');
+  });
+});
+
+// ─── ExecuteLoraNode ─────────────────────────────────────────────────────────
+
+describe('ExecuteLoraNode', () => {
+  let node: ExecuteLoraNode;
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteLoraNode(execution); });
+
+  it('returns failure when no work order selected', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.executionResult?.success).toBe(false);
+  });
+
+  it('wraps successful LoRA training result', async () => {
+    const wo = makeWO('LORA_TRAINING');
+    mockExecuteLoraWorkOrder.mockResolvedValueOnce({
+      result: JSON.stringify({ adapterId: 'a1', reportedValMetrics: { f1: 0.87 } }),
+      success: true,
+    });
+    const result = await node.execute(makeState({ selectedWorkOrder: wo, peerId: 'peer123' }));
+    expect(result.executionResult?.success).toBe(true);
+    expect(mockExecuteLoraWorkOrder).toHaveBeenCalledWith(wo, 'peer123');
+  });
+
+  it('propagates failure from executeLoraWorkOrder', async () => {
+    mockExecuteLoraWorkOrder.mockResolvedValueOnce({ result: 'LoRA training failed [UPLOAD]', success: false });
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('LORA_TRAINING') }));
+    expect(result.executionResult?.success).toBe(false);
+  });
+
+  it('catches thrown errors', async () => {
+    mockExecuteLoraWorkOrder.mockRejectedValueOnce(new Error('Python OOM'));
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('LORA_TRAINING') }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('Python OOM');
+  });
+});
+
+// ─── ExecuteLoraValidationNode ──────────────────────────────────────────────
+
+describe('ExecuteLoraValidationNode', () => {
+  let node: ExecuteLoraValidationNode;
+  const origFlag = process.env.LORA_VALIDATOR_ENABLED;
+  beforeEach(() => { jest.clearAllMocks(); node = new ExecuteLoraValidationNode(execution); });
+  afterEach(() => {
+    if (origFlag === undefined) delete process.env.LORA_VALIDATOR_ENABLED;
+    else process.env.LORA_VALIDATOR_ENABLED = origFlag;
+  });
+
+  it('returns failure when no work order selected', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.executionResult?.success).toBe(false);
+  });
+
+  it('refuses to execute when LORA_VALIDATOR_ENABLED is not true (default OFF)', async () => {
+    delete process.env.LORA_VALIDATOR_ENABLED;
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('LORA_VALIDATION') }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('lora validator disabled');
+    expect(mockExecuteLoraValidationWorkOrder).not.toHaveBeenCalled();
+  });
+
+  it('wraps successful LoRA validation result when opt-in flag is set', async () => {
+    process.env.LORA_VALIDATOR_ENABLED = 'true';
+    const wo = makeWO('LORA_VALIDATION');
+    mockExecuteLoraValidationWorkOrder.mockResolvedValueOnce({
+      result: JSON.stringify({ adapterId: 'a1', observed: { f1: 0.85 } }),
+      success: true,
+    });
+    const result = await node.execute(makeState({ selectedWorkOrder: wo, peerId: 'peer123' }));
+    expect(result.executionResult?.success).toBe(true);
+    expect(mockExecuteLoraValidationWorkOrder).toHaveBeenCalledWith(wo, 'peer123');
+  });
+
+  it('catches thrown errors when enabled', async () => {
+    process.env.LORA_VALIDATOR_ENABLED = 'true';
+    mockExecuteLoraValidationWorkOrder.mockRejectedValueOnce(new Error('Eval crashed'));
+    const result = await node.execute(makeState({ selectedWorkOrder: makeWO('LORA_VALIDATION') }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toContain('Eval crashed');
+  });
+});
+
+// ─── UnknownTypeNode ─────────────────────────────────────────────────────────
+
+describe('UnknownTypeNode', () => {
+  let node: UnknownTypeNode;
+  const logger = require('../../../../utils/logger').default;
+  beforeEach(() => { jest.clearAllMocks(); node = new UnknownTypeNode(); });
+
+  it('returns failure when no work order selected', async () => {
+    const result = await node.execute(makeState({ selectedWorkOrder: null }));
+    expect(result.executionResult?.success).toBe(false);
+  });
+
+  it('returns success=false and logs warn for unknown WO type', async () => {
+    const wo = { ...makeWO('TRAINING'), type: 'TOTALLY_NEW_TYPE' as any };
+    const result = await node.execute(makeState({ selectedWorkOrder: wo }));
+    expect(result.executionResult?.success).toBe(false);
+    expect(result.executionResult?.result).toBe('unknown WO type');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('unknown WO type=TOTALLY_NEW_TYPE'),
+    );
+  });
+});
+
+// ─── router exhaustiveness over all WorkOrderType ───────────────────────────
+
+describe('router — exhaustiveness over all WorkOrderType', () => {
+  // Inline routing function — mirrors the switch in
+  // `agent-graph.service.ts:buildGraph()`. If the production switch
+  // changes, this test must change too (compile-time `never` guard
+  // backs this up at build time).
+  function route(t: WorkOrder['type']): string {
+    switch (t) {
+      case 'RESEARCH':          return 'researcher';
+      case 'TRAINING':          return 'executeTraining';
+      case 'CPU_INFERENCE':     return 'executeInference';
+      case 'GPU_INFERENCE':     return 'executeInference';
+      case 'DILOCO_TRAINING':   return 'executeDiloco';
+      case 'MOLECULAR_DOCKING': return 'executeDocking';
+      case 'LORA_TRAINING':     return 'executeLora';
+      case 'LORA_VALIDATION':   return 'executeLoraValidation';
+      case 'INFERENCE':         return 'unknownType';
+      case 'COMPUTATION':       return 'unknownType';
+      case 'DATA_PROCESSING':   return 'unknownType';
+      case undefined:           return 'unknownType';
+      default: {
+        const _exhaustive: never = t;
+        void _exhaustive;
+        return 'unknownType';
+      }
+    }
+  }
+
+  it.each<[NonNullable<WorkOrder['type']>, string]>([
+    ['RESEARCH', 'researcher'],
+    ['TRAINING', 'executeTraining'],
+    ['CPU_INFERENCE', 'executeInference'],
+    ['GPU_INFERENCE', 'executeInference'],
+    ['DILOCO_TRAINING', 'executeDiloco'],
+    ['MOLECULAR_DOCKING', 'executeDocking'],
+    ['LORA_TRAINING', 'executeLora'],
+    ['LORA_VALIDATION', 'executeLoraValidation'],
+  ])('%s routes to %s', (type, expected) => {
+    expect(route(type)).toBe(expected);
+  });
+
+  it('unknown / undefined type routes to unknownType (fail-loud)', () => {
+    expect(route(undefined)).toBe('unknownType');
+  });
+
+  it('legacy non-langgraph types route to unknownType', () => {
+    expect(route('INFERENCE')).toBe('unknownType');
+    expect(route('COMPUTATION')).toBe('unknownType');
+    expect(route('DATA_PROCESSING')).toBe('unknownType');
+  });
 });

@@ -42,7 +42,7 @@ export interface WorkOrder {
   assigneeAddress?: string;
   createdAt: number;
   expiresAt?: number;
-  type?: 'TRAINING' | 'RESEARCH' | 'INFERENCE' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'COMPUTATION' | 'DATA_PROCESSING';
+  type?: 'TRAINING' | 'RESEARCH' | 'INFERENCE' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'MOLECULAR_DOCKING' | 'LORA_TRAINING' | 'LORA_VALIDATION' | 'COMPUTATION' | 'DATA_PROCESSING';
   metadata?: Record<string, string>;
 }
 

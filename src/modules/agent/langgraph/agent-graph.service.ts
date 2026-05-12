@@ -14,6 +14,10 @@ import { ExecuteResearchNode } from './nodes/execute-research';
 import { ExecuteTrainingNode } from './nodes/execute-training';
 import { ExecuteInferenceNode } from './nodes/execute-inference';
 import { ExecuteDilocoNode } from './nodes/execute-diloco';
+import { ExecuteDockingNode } from './nodes/execute-docking';
+import { ExecuteLoraNode } from './nodes/execute-lora';
+import { ExecuteLoraValidationNode } from './nodes/execute-lora-validation';
+import { UnknownTypeNode } from './nodes/unknown-type';
 import { QualityGateNode } from './nodes/quality-gate';
 import { SubmitResultNode } from './nodes/submit-result';
 import { UpdateMemoryNode } from './nodes/update-memory';
@@ -76,6 +80,10 @@ export class AgentGraphService {
     private readonly executeTrainingNode: ExecuteTrainingNode,
     private readonly executeInferenceNode: ExecuteInferenceNode,
     private readonly executeDilocoNode: ExecuteDilocoNode,
+    private readonly executeDockingNode: ExecuteDockingNode,
+    private readonly executeLoraNode: ExecuteLoraNode,
+    private readonly executeLoraValidationNode: ExecuteLoraValidationNode,
+    private readonly unknownTypeNode: UnknownTypeNode,
     private readonly qualityGateNode: QualityGateNode,
     private readonly submitResultNode: SubmitResultNode,
     private readonly updateMemoryNode: UpdateMemoryNode,
@@ -111,6 +119,10 @@ export class AgentGraphService {
     workflow.addNode('executeTraining', (s: AgentState) => this.executeTrainingNode.execute(s));
     workflow.addNode('executeInference', (s: AgentState) => this.executeInferenceNode.execute(s));
     workflow.addNode('executeDiloco', (s: AgentState) => this.executeDilocoNode.execute(s));
+    workflow.addNode('executeDocking', (s: AgentState) => this.executeDockingNode.execute(s));
+    workflow.addNode('executeLora', (s: AgentState) => this.executeLoraNode.execute(s));
+    workflow.addNode('executeLoraValidation', (s: AgentState) => this.executeLoraValidationNode.execute(s));
+    workflow.addNode('unknownType', (s: AgentState) => this.unknownTypeNode.execute(s));
     workflow.addNode('qualityGate', (s: AgentState) => this.qualityGateNode.execute(s));
     workflow.addNode('submitResult', (s: AgentState) => this.submitResultNode.execute(s));
     workflow.addNode('updateMemory', (s: AgentState) => this.updateMemoryNode.execute(s));
@@ -142,13 +154,31 @@ export class AgentGraphService {
     // After planning, route to appropriate executor based on WO type
     w.addConditionalEdges('planExecution',
       (s: AgentState) => {
-        switch (s.selectedWorkOrder?.type) {
-          case 'RESEARCH':       return 'researcher';
-          case 'TRAINING':       return 'executeTraining';
-          case 'CPU_INFERENCE':  return 'executeInference';
-          case 'GPU_INFERENCE':  return 'executeInference';
-          case 'DILOCO_TRAINING':return 'executeDiloco';
-          default:               return 'executeTraining';
+        const t = s.selectedWorkOrder?.type;
+        switch (t) {
+          case 'RESEARCH':          return 'researcher';
+          case 'TRAINING':          return 'executeTraining';
+          case 'CPU_INFERENCE':     return 'executeInference';
+          case 'GPU_INFERENCE':     return 'executeInference';
+          case 'DILOCO_TRAINING':   return 'executeDiloco';
+          case 'MOLECULAR_DOCKING': return 'executeDocking';
+          case 'LORA_TRAINING':     return 'executeLora';
+          case 'LORA_VALIDATION':   return 'executeLoraValidation';
+          // Legacy / non-langgraph types — coord never dispatches these to the
+          // langgraph path today but keep them mapped to the fail-loud sink so
+          // the runtime stays deterministic.
+          case 'INFERENCE':         return 'unknownType';
+          case 'COMPUTATION':       return 'unknownType';
+          case 'DATA_PROCESSING':   return 'unknownType';
+          case undefined:           return 'unknownType';
+          default: {
+            // Compile-time exhaustiveness: if `WorkOrder.type` gains a new
+            // variant and we forget to add a case, TSC fails the build here
+            // because `t` is no longer assignable to `never`.
+            const _exhaustive: never = t;
+            void _exhaustive;
+            return 'unknownType';
+          }
         }
       },
       {
@@ -156,6 +186,10 @@ export class AgentGraphService {
         executeTraining: 'executeTraining',
         executeInference: 'executeInference',
         executeDiloco: 'executeDiloco',
+        executeDocking: 'executeDocking',
+        executeLora: 'executeLora',
+        executeLoraValidation: 'executeLoraValidation',
+        unknownType: 'unknownType',
       },
     );
 
@@ -166,6 +200,10 @@ export class AgentGraphService {
     w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
     w.addEdge('executeDiloco', 'qualityGate');
+    w.addEdge('executeDocking', 'qualityGate');
+    w.addEdge('executeLora', 'qualityGate');
+    w.addEdge('executeLoraValidation', 'qualityGate');
+    w.addEdge('unknownType', 'qualityGate');
     w.addEdge('executeResearch', 'qualityGate');
 
     // After self-critique, decide whether to retry or proceed to quality gate

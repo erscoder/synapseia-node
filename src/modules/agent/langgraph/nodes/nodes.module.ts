@@ -8,6 +8,10 @@ import { ExecuteResearchNode } from './execute-research';
 import { ExecuteTrainingNode } from './execute-training';
 import { ExecuteInferenceNode } from './execute-inference';
 import { ExecuteDilocoNode } from './execute-diloco';
+import { ExecuteDockingNode } from './execute-docking';
+import { ExecuteLoraNode } from './execute-lora';
+import { ExecuteLoraValidationNode } from './execute-lora-validation';
+import { UnknownTypeNode } from './unknown-type';
 import { QualityGateNode } from './quality-gate';
 import { SubmitResultNode } from './submit-result';
 import { UpdateMemoryNode } from './update-memory';
@@ -36,6 +40,10 @@ import { AgentBrainHelper } from '../../agent-brain';
     ExecuteTrainingNode,
     ExecuteInferenceNode,
     ExecuteDilocoNode,
+    ExecuteDockingNode,
+    ExecuteLoraNode,
+    ExecuteLoraValidationNode,
+    UnknownTypeNode,
     QualityGateNode,
     SubmitResultNode,
     UpdateMemoryNode,
@@ -55,6 +63,10 @@ import { AgentBrainHelper } from '../../agent-brain';
     ExecuteTrainingNode,
     ExecuteInferenceNode,
     ExecuteDilocoNode,
+    ExecuteDockingNode,
+    ExecuteLoraNode,
+    ExecuteLoraValidationNode,
+    UnknownTypeNode,
     QualityGateNode,
     SubmitResultNode,
     UpdateMemoryNode,
