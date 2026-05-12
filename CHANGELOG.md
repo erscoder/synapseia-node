@@ -1,5 +1,45 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-12] fix(heartbeat): floor all Ollama-routed inference caps to prevent silent OOM (5b4bb55a)
+
+Production hotfix — node-kike accepted CPU_INFERENCE WorkOrders that
+crashed silently under memory pressure while GPU_INFERENCE drained
+cleanly. Root cause: per-cycle cap suppression filter only floored
+training caps; inference caps (which route to a colocated Ollama
+daemon holding the model resident in its own process) were announced
+regardless of host memory headroom.
+
+Adds memory-floor entries for all 5 inference caps that share the
+same Ollama-OOM family:
+- `cpu_inference`: 900 MB (mirrors cpu_training footprint)
+- `gpu_inference`: 2048 MB (GPU node system-RAM headroom for driver
+  + loaded model metadata + HTTP server)
+- `inference` / `llm` / `embedding`: 900 MB each, unconditional
+  (Ollama-routed when `hasOllama=true`; sub-1GB nodes are non-viable
+  for any workload, so over-conservatism on cloud-LLM-only nodes is
+  acceptable vs threading a flag through the filter)
+
+All 7 advertised caps in `determineCapabilities` are now floored
+(cpu_training, cpu_inference, inference, llm, embedding, gpu_training,
+gpu_inference). NOTE comment on `TRAINING_FLOORS_MB` rewritten to
+honestly describe both OOM families (PyTorch local spawn vs Ollama
+resident model); historical map name kept to avoid orthogonal rename
+churn.
+
+Test coverage: 9 new suppression cases (strip below floor, keep at
+or above, log fires on transition) × 3 new caps; existing tests that
+encoded the bug as expected behavior (e.g. "inference survives at
+50 MB") updated to assert the fix. Floor-ordering invariant extended
+to cover all 7 caps.
+
+Reviewer-clean across 3 rounds (P10 lying doc-blocks corrected, P6
+sibling-cap parallel gap closed for gpu_inference, sibling-family
+MEDIUM closed for inference/llm/embedding). New pre-existing LOW
+flagged at `heartbeat.ts:711` — GossipSub P2P heartbeat path bypasses
+`applyMemoryPressureFilter`; coordinator does not consume P2P caps
+for WO routing today, but future routing changes must wire the
+filter.
+
 ## [2026-05-12] feat(lora-validation): Plan 1 Phase 2 — node validator runtime (opt-in, disabled)
 
 Phase 2 of Plan 1 (peer-validated LoRA replay,
