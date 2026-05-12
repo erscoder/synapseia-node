@@ -1,8 +1,8 @@
 /**
  * WorkOrderPushQueue — local in-memory cache of work orders broadcast over
  * gossipsub on TOPICS.WORK_ORDER_AVAILABLE. Fed by node-runtime's pubsub
- * subscription, drained by WorkOrderLoopHelper at the start of every
- * iteration.
+ * subscription, drained by the LangGraph work-order agent service at the
+ * start of every iteration.
  *
  * Replaces the GET /work-orders/available poll for the common case. The
  * HTTP fetch stays as a safety-net fallback at a much longer interval (5

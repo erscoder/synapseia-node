@@ -3,7 +3,6 @@ import { WorkOrderStateHelper } from './work-order.state';
 import { WorkOrderCoordinatorModule } from './work-order-coordinator.module';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
 import { WorkOrderExecutionHelper } from './work-order.execution';
-import { WorkOrderLoopHelper } from './work-order.loop';
 import { BackpressureService } from './backpressure.service';
 import { WorkOrderPushQueue } from './work-order-push-queue';
 import { LlmModule } from '../../llm/llm.module';
@@ -24,12 +23,11 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderStateHelper,
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
-    WorkOrderLoopHelper,
     BackpressureService,
     {
       // Single shared queue. node-runtime registers the gossip subscription
-      // that pushes into it; WorkOrderLoopHelper drains it at iteration
-      // start. Phase 2A.
+      // that pushes into it; the LangGraph agent service drains it at
+      // iteration start. Phase 2A.
       provide: WorkOrderPushQueue,
       useFactory: () => new WorkOrderPushQueue(),
     },
@@ -42,7 +40,6 @@ import { IdentityModule } from '../../identity/identity.module';
     WorkOrderStateHelper,
     WorkOrderEvaluationHelper,
     WorkOrderExecutionHelper,
-    WorkOrderLoopHelper,
     BackpressureService,
     WorkOrderPushQueue,
   ],
