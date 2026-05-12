@@ -17,6 +17,11 @@ import {
   GPU_TRAINING_MEM_FLOOR_MB,
   LORA_TRAINING_MEM_FLOOR_MB,
   DILOCO_TRAINING_MEM_FLOOR_MB,
+  CPU_INFERENCE_MEM_FLOOR_MB,
+  GPU_INFERENCE_MEM_FLOOR_MB,
+  INFERENCE_MEM_FLOOR_MB,
+  LLM_MEM_FLOOR_MB,
+  EMBEDDING_MEM_FLOOR_MB,
 } from '../model/trainer';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
@@ -102,8 +107,30 @@ function readAvailableMemMB(freeMBOverride?: number): number {
  * set when free RAM is below ITS floor — not a single global threshold.
  * This is what makes a 2 GB-free node correctly keep `cpu_training`
  * (light) while shedding `gpu_training` / `lora_training` /
- * `diloco_training` (heavy). Caps not present in the map are never
- * touched by the filter (e.g. `cpu_inference`, `inference`, `embedding`).
+ * `diloco_training` (heavy).
+ *
+ * NOTE: the map name "TRAINING_FLOORS_MB" is historical. It now covers
+ * EVERY heavy-memory-routing cap, not just training. Two OOM families
+ * share the floor mechanism:
+ *   - training caps (cpu/gpu/lora/diloco_training) → local PyTorch
+ *     spawn that pulls torch + model into the node process.
+ *   - Ollama-routed caps (cpu_inference, gpu_inference, inference,
+ *     llm, embedding) → forward to a colocated Ollama daemon that
+ *     holds the model resident on system RAM. A pressured host
+ *     OOM-crashes Ollama silently.
+ *
+ * `inference`, `llm`, `embedding` are advertised under the
+ * `hasOllama || hasCloudLlm` gate (see `determineCapabilities`). When
+ * hasOllama=true those caps ride the same daemon as cpu/gpu_inference
+ * and share the OOM exposure. The floor is applied unconditionally —
+ * gating on hasOllama would require threading that flag through the
+ * filter and a sub-1 GB host is not viable for any operator workload
+ * regardless of routing.
+ *
+ * Caps not listed here are never touched by the filter — they must be
+ * genuinely memory-insensitive (no local spawn, no resident model). If
+ * a new cap is added to `determineCapabilities` that routes through
+ * Ollama or spawns a local process, it MUST get an entry here too.
  *
  * Source of truth for floor VALUES lives in `model/trainer.ts`; this
  * map only routes cap names to those exported constants.
@@ -114,6 +141,11 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
   gpu_training: GPU_TRAINING_MEM_FLOOR_MB,
   lora_training: LORA_TRAINING_MEM_FLOOR_MB,
   diloco_training: DILOCO_TRAINING_MEM_FLOOR_MB,
+  cpu_inference: CPU_INFERENCE_MEM_FLOOR_MB,
+  gpu_inference: GPU_INFERENCE_MEM_FLOOR_MB,
+  inference: INFERENCE_MEM_FLOOR_MB,
+  llm: LLM_MEM_FLOOR_MB,
+  embedding: EMBEDDING_MEM_FLOOR_MB,
 };
 
 /**

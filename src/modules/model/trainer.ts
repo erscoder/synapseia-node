@@ -73,6 +73,96 @@ export const LORA_TRAINING_MEM_FLOOR_MB = 4096;
 export const DILOCO_TRAINING_MEM_FLOOR_MB = 6144;
 
 /**
+ * Memory floor for advertising the `cpu_inference` capability.
+ *
+ * cpu_inference tasks (tokenize / embedding / classify) forward to a
+ * colocated Ollama daemon (or remote LLM provider). Ollama holds the
+ * loaded model resident in its OWN process; this floor protects against
+ * advertising the capability when the host can't keep Ollama warm AND
+ * serve a request without OOM-killing it.
+ *
+ * Empirically matched to `TRAINING_MEM_FLOOR_MB` — not because of an
+ * identical local allocation, but because operator nodes running
+ * cpu_inference also run cpu_training and have similar headroom needs.
+ *
+ * See production incident 2026-05-12 — node-kike accepted CPU_INFERENCE
+ * WOs and crashed Ollama silently under memory pressure.
+ */
+export const CPU_INFERENCE_MEM_FLOOR_MB = 900;
+
+/**
+ * Memory floor for advertising the `gpu_inference` capability.
+ *
+ * gpu_inference tasks (generate / summarize / embedding_large) forward
+ * to a colocated Ollama daemon backed by GPU acceleration. Same OOM
+ * pattern as `cpu_inference`: the model is resident in Ollama's process
+ * on SYSTEM RAM (not just VRAM — Ollama keeps a CPU copy plus driver
+ * overhead). Without this floor, a memory-pressured GPU node accepts
+ * GPU_INFERENCE WOs that crash Ollama silently.
+ *
+ * Picked at 2 GB because GPU nodes typically have more system RAM
+ * available than CPU-only nodes, and the larger models served on the
+ * GPU path (qwen 7B-class, embedding_large) need more headroom than
+ * the small models cpu_inference serves.
+ *
+ * Same Ollama-resident root cause as `CPU_INFERENCE_MEM_FLOOR_MB` —
+ * not a local torch spawn.
+ */
+export const GPU_INFERENCE_MEM_FLOOR_MB = 2048;
+
+/**
+ * Memory floor for advertising the `inference` capability.
+ *
+ * The `inference` cap is advertised when EITHER `hasOllama` OR
+ * `hasCloudLlm` is true (see `determineCapabilities`). When the node
+ * is hasOllama-backed, requests forward to the SAME local Ollama
+ * daemon as `cpu_inference` / `gpu_inference`, so the OOM exposure is
+ * identical — Ollama holds the loaded model resident in system RAM
+ * and a pressured host crashes it silently.
+ *
+ * For pure hasCloudLlm-only nodes the cap is a thin HTTP forwarder
+ * with no local model process, and a 900 MB floor is over-conservative
+ * in theory. Kept unconditional anyway because (a) a node with under
+ * 1 GB of free RAM is not viable for ANY operator workload, and (b)
+ * gating the floor on hasOllama would require threading that flag
+ * into the heartbeat filter, doubling the surface area for a code
+ * path that already runs every 60 s. Same logic that keeps
+ * `cpu_inference` floored unconditionally even though it can be
+ * advertised on cloud-only nodes.
+ *
+ * Production root cause documented in cpu_inference's doc block
+ * (2026-05-12 node-kike incident) — `inference` rides the same
+ * Ollama daemon under hasOllama and is exposed to the same crash.
+ */
+export const INFERENCE_MEM_FLOOR_MB = 900;
+
+/**
+ * Memory floor for advertising the `llm` capability.
+ *
+ * Parallel to `INFERENCE_MEM_FLOOR_MB` — the `llm` cap is advertised
+ * under the same `hasOllama || hasCloudLlm` gate and routes through
+ * the same local Ollama daemon when hasOllama=true. Floored
+ * unconditionally for the same reason: a sub-1 GB host cannot keep
+ * Ollama warm and serve a request without OOM, and gating on hasOllama
+ * is not worth the heartbeat-filter complexity.
+ */
+export const LLM_MEM_FLOOR_MB = 900;
+
+/**
+ * Memory floor for advertising the `embedding` capability.
+ *
+ * `embedding` is advertised only when `hasOllama && ramGb >= 8` (see
+ * `determineCapabilities`), so this floor is in practice always
+ * gating an Ollama-routed cap — no cloud-only branch exists for
+ * embedding today. Floored at 900 MB to match the rest of the
+ * Ollama-routed cap family; even though the embedding model is
+ * smaller than chat models, a pressured Ollama daemon still
+ * OOM-crashes serving embedding requests when free RAM dips below
+ * the headroom needed to hold the model resident.
+ */
+export const EMBEDDING_MEM_FLOOR_MB = 900;
+
+/**
  * Sentinel emitted by train_micro.py when val_loader has 0 batches
  * (empty val set, or deadline expired before the first val batch).
  *
