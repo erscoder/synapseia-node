@@ -42,6 +42,7 @@ import {
   INFERENCE_MEM_FLOOR_MB,
   LLM_MEM_FLOOR_MB,
   EMBEDDING_MEM_FLOOR_MB,
+  DOCKING_MEM_FLOOR_MB,
 } from '../../model/trainer';
 import { HeartbeatHelper, __resetCapabilitySnapshotForTests } from '../heartbeat';
 
@@ -335,15 +336,48 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
   });
 
   // Sanity: floor constants are exported and have the expected ordering.
-  it('floor constants are ordered: 900 tier (cpu_inference == inference == llm == embedding == cpu_training) < gpu_inference < gpu == lora < diloco', () => {
+  it('floor constants are ordered: 900 tier (cpu_inference == inference == llm == embedding == cpu_training == docking) < gpu_inference < gpu == lora < diloco', () => {
     expect(CPU_INFERENCE_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(INFERENCE_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(LLM_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(EMBEDDING_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
+    expect(DOCKING_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(TRAINING_MEM_FLOOR_MB).toBeLessThan(GPU_INFERENCE_MEM_FLOOR_MB);
     expect(GPU_INFERENCE_MEM_FLOOR_MB).toBeLessThan(GPU_TRAINING_MEM_FLOOR_MB);
     expect(GPU_TRAINING_MEM_FLOOR_MB).toBe(LORA_TRAINING_MEM_FLOOR_MB);
     expect(LORA_TRAINING_MEM_FLOOR_MB).toBeLessThan(DILOCO_TRAINING_MEM_FLOOR_MB);
+  });
+
+  // docking — AutoDock Vina subprocess (not Ollama-routed). Floored at
+  // 900 MB, same tier as cpu_training. Coordinator's DockingDispatchCron
+  // skip-gates new MOLECULAR_DOCKING pairs when no node advertises this
+  // cap, so the floor must allow it through on a healthy host.
+  it('strips docking when freemem < 900 MB (Vina local-spawn exposure)', () => {
+    helper.applyMemoryPressureFilter(['docking', 'cpu_training'], HEALTHY);
+    const out = helper.applyMemoryPressureFilter(
+      ['docking', 'cpu_training'],
+      DOCKING_MEM_FLOOR_MB - 1,
+    );
+    expect(out).not.toContain('docking');
+    expect(out).not.toContain('cpu_training');
+  });
+
+  it('keeps docking when freemem clears its 900 MB floor', () => {
+    helper.applyMemoryPressureFilter(['docking'], HEALTHY);
+    const out = helper.applyMemoryPressureFilter(
+      ['docking'],
+      DOCKING_MEM_FLOOR_MB + 1,
+    );
+    expect(out).toContain('docking');
+  });
+
+  it('logs docking suppression on flip', () => {
+    helper.applyMemoryPressureFilter(['docking'], HEALTHY);
+    expect(infoSpy).not.toHaveBeenCalled();
+
+    helper.applyMemoryPressureFilter(['docking'], 500);
+    const suppressedLogs = infoSpy.mock.calls.filter(c => /suppressed/.test(String(c[0])));
+    expect(suppressedLogs.some(c => /docking/.test(String(c[0])))).toBe(true);
   });
 
   // Sanity probe on darwin: real signal (no override) must be sane —

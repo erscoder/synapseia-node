@@ -163,6 +163,24 @@ export const LLM_MEM_FLOOR_MB = 900;
 export const EMBEDDING_MEM_FLOOR_MB = 900;
 
 /**
+ * Memory floor for advertising the `docking` capability.
+ *
+ * MOLECULAR_DOCKING work orders spawn AutoDock Vina locally. A 30 Å
+ * binding-site box with the coordinator's default
+ * `exhaustiveness/num_modes/energy_range` (Tier-1 settings) needs a few
+ * hundred MB resident — Vina holds the receptor + ligand grid in
+ * memory, plus an Open Babel preprocessor pass. Set conservatively to
+ * 900 MB to match the rest of the local-spawn family (cpu_training,
+ * cpu_inference) — operator nodes that pass those floors also have the
+ * headroom Vina needs. Tuning below this risks OOM mid-run on a
+ * pressured host; tuning above strips the cap unnecessarily.
+ *
+ * Same local-spawn root cause as `TRAINING_MEM_FLOOR_MB` — not an
+ * Ollama-routed cap.
+ */
+export const DOCKING_MEM_FLOOR_MB = 900;
+
+/**
  * Sentinel emitted by train_micro.py when val_loader has 0 batches
  * (empty val set, or deadline expired before the first val batch).
  *

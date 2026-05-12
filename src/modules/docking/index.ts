@@ -5,5 +5,11 @@ export type {
   DockingSubmissionPayload,
 } from './types';
 export { parseVinaPdbqt } from './vina-parser';
-export { runDocking, assertBinariesAvailable, DockingError } from './docker';
+export {
+  runDocking,
+  assertBinariesAvailable,
+  isVinaAvailable,
+  __resetVinaCacheForTests,
+  DockingError,
+} from './docker';
 export type { RunDockingInput, RunDockingOptions } from './docker';

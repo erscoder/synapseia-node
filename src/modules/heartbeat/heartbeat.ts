@@ -22,7 +22,9 @@ import {
   INFERENCE_MEM_FLOOR_MB,
   LLM_MEM_FLOOR_MB,
   EMBEDDING_MEM_FLOOR_MB,
+  DOCKING_MEM_FLOOR_MB,
 } from '../model/trainer';
+import { isVinaAvailable } from '../docking';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
@@ -146,6 +148,11 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
   inference: INFERENCE_MEM_FLOOR_MB,
   llm: LLM_MEM_FLOOR_MB,
   embedding: EMBEDDING_MEM_FLOOR_MB,
+  // docking: AutoDock Vina runs as a local subprocess (not Ollama-routed).
+  // Floor mirrors `cpu_training` / `cpu_inference` — operator nodes that
+  // pass those gates have the headroom Vina needs for a 30 Å box at
+  // Tier-1 exhaustiveness defaults.
+  docking: DOCKING_MEM_FLOOR_MB,
 };
 
 /**
@@ -624,6 +631,21 @@ export class HeartbeatHelper {
       } catch (err) {
         logger.warn(`[Heartbeat] Training LLM detection failed: ${(err as Error).message}`);
       }
+    }
+
+    // docking: probe AutoDock Vina + Open Babel. Coordinator's
+    // DockingDispatchCron skip-gates opening new MOLECULAR_DOCKING pairs
+    // when no online node advertises this cap — so a node with Vina
+    // installed MUST advertise it for the dispatcher to run. The probe
+    // is non-fatal (returns false on any error) so a missing binary
+    // never blocks the heartbeat. Detection is cached positive-only
+    // inside `isVinaAvailable` so this is a single PATH-lookup spawn
+    // per process lifetime once Vina is found.
+    try {
+      const hasVina = await isVinaAvailable();
+      if (hasVina) caps.push('docking');
+    } catch (err) {
+      logger.warn(`[Heartbeat] Vina detection failed: ${(err as Error).message}`);
     }
     return caps;
   }

@@ -75,6 +75,56 @@ export async function assertBinariesAvailable(opts?: RunDockingOptions): Promise
   });
 }
 
+/**
+ * Module-private cache for `isVinaAvailable`. Detection requires spawning
+ * `vina --version` and `obabel -V` — non-trivial cost when called per
+ * heartbeat tick (every 60 s). Same caching strategy as
+ * `TrainerHelper.pyTorchCache`: ONLY cache positive detections. A
+ * negative result (binary not yet on PATH, slow PATH lookup, transient
+ * spawn failure) retries on the next heartbeat so a freshly-installed
+ * Vina is picked up without a node restart.
+ */
+let vinaAvailableCache: boolean | null = null;
+
+/**
+ * Probe whether both Vina and Open Babel are available on this host.
+ *
+ * Used by the heartbeat capability builder to decide whether to advertise
+ * the `docking` capability to the coordinator. The coordinator's
+ * DockingDispatchCron skip-gates opening new MOLECULAR_DOCKING pairs
+ * when zero online nodes advertise this cap — so if no node here
+ * detects Vina, the coord will never open new pairs (the safe-by-default
+ * behavior).
+ *
+ * Mirrors the contract of `assertBinariesAvailable`: BOTH binaries must
+ * pass (`vina --version` + `obabel -V`) — Vina alone is useless without
+ * Open Babel for ligand/receptor prep. Returns `false` (not throws) on
+ * any failure: the heartbeat path must be non-fatal.
+ *
+ * @param opts Optional binary name overrides (tests inject stubs).
+ */
+export async function isVinaAvailable(opts?: RunDockingOptions): Promise<boolean> {
+  if (vinaAvailableCache === true) return true;
+  try {
+    await assertBinariesAvailable(opts);
+    vinaAvailableCache = true;
+    logger.log(`[docking] Vina + Open Babel detected — advertising 'docking' capability`);
+    return true;
+  } catch {
+    // Don't cache negatives — operator may install vina/obabel after node
+    // boot, and we want the next heartbeat to pick it up.
+    return false;
+  }
+}
+
+/**
+ * Test-only hook. Resets the module-private vinaAvailableCache so each
+ * unit test starts from a clean slate. Production code never calls this.
+ */
+export function __resetVinaCacheForTests(): void {
+  vinaAvailableCache = null;
+}
+
 // ── Receptor cache ──────────────────────────────────────────────────────────
 
 async function ensureReceptorCached(pdbId: string): Promise<string> {
