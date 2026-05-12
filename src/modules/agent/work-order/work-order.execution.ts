@@ -12,7 +12,8 @@ import { trainMicroModel, TRAINER_EVAL_FAILED_SENTINEL } from '../../model/train
 import { runDocking, DockingError } from '../../docking';
 import type { DockingWorkOrderPayload } from '../../docking/types';
 import { runLora, LoraError } from '../../lora/lora_trainer';
-import type { LoraWorkOrderPayload } from '../../lora/types';
+import { runLoraValidation, LoraValidationError } from '../../lora/lora_validator';
+import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { downloadAdapter } from '../../model/model-downloader';
@@ -87,6 +88,29 @@ export class WorkOrderExecutionHelper {
     try {
       const p = JSON.parse(workOrder.description) as Partial<LoraWorkOrderPayload>;
       return !!(p.adapterId && p.missionId && p.subtype && p.baseModel && p.uploadUrl && p.loraConfig);
+    } catch { return false; }
+  }
+
+  /**
+   * Detect a LORA_VALIDATION WO. Either the explicit type tag from the
+   * coord (Phase 3, not yet wired) OR the validation payload shape
+   * (adapterUri + validationSetUri + sha256 commitments). Disjoint from
+   * `isLoraWorkOrder` — the training payload has `uploadUrl` + `loraConfig`
+   * while the validation payload has `adapterUri` + `validationSetUri`.
+   */
+  isLoraValidationWorkOrder(workOrder: WorkOrder): boolean {
+    if ((workOrder.type as string) === 'LORA_VALIDATION') return true;
+    try {
+      const p = JSON.parse(workOrder.description) as Partial<LoraValidationWorkOrderPayload>;
+      return !!(
+        p.adapterId &&
+        p.adapterUri &&
+        p.adapterSha256 &&
+        p.validationSetUri &&
+        p.validationSetSha256 &&
+        p.baseModel &&
+        p.subtype
+      );
     } catch { return false; }
   }
 
@@ -592,6 +616,54 @@ Abstract: ${payload.abstract}`;
     }
   }
 
+  // ── LoRA peer validation (Plan 1 Phase 2) ─────────────────────────────────
+
+  /**
+   * Execute a LORA_VALIDATION work order. OPT-IN ONLY: gated on
+   * `LORA_VALIDATOR_ENABLED=true` (flipped by the CLI `--lora-validator`
+   * flag). Default OFF so node operators don't accidentally start serving
+   * validation jobs.
+   *
+   * On opt-in, this downloads the adapter + held-out validation set,
+   * sha256-verifies both, spawns the Python eval subprocess, and returns
+   * a signed `LoraValidationSubmissionPayload`. Coord-side ingest is wired
+   * in Phase 3.
+   *
+   * No producer emits LORA_VALIDATION WOs yet (Phase 3's job) — so even
+   * when enabled, this handler will only fire after Phase 3 ships.
+   */
+  async executeLoraValidationWorkOrder(
+    workOrder: WorkOrder,
+    peerId: string,
+  ): Promise<{ result: string; success: boolean }> {
+    if (process.env.LORA_VALIDATOR_ENABLED !== 'true') {
+      logger.warn(
+        ` LORA_VALIDATION WO ${workOrder.id} received but LORA_VALIDATOR_ENABLED is not true; ` +
+        `refusing to process. Pass --lora-validator on start to opt in.`,
+      );
+      return { result: 'validator-disabled', success: false };
+    }
+
+    logger.log(` Executing LORA_VALIDATION: ${workOrder.title}`);
+    let payload: LoraValidationWorkOrderPayload;
+    try { payload = JSON.parse(workOrder.description) as LoraValidationWorkOrderPayload; }
+    catch { return { result: 'Invalid LoRA validation payload', success: false }; }
+
+    try {
+      const submission = await runLoraValidation({ workOrderId: workOrder.id, peerId, payload });
+      logger.log(
+        ` LoRA validation complete — adapter=${submission.adapterId}, ` +
+        `metrics=${JSON.stringify(submission.observed)}`,
+      );
+      return { result: JSON.stringify(submission), success: true };
+    } catch (err) {
+      const stage = err instanceof LoraValidationError ? `[${err.stage}] ` : '';
+      const msg = (err as Error).message;
+      logger.error(` LoRA validation failed ${stage}${msg}`);
+      return { result: `LoRA validation failed ${stage}${msg}`, success: false };
+    }
+  }
+
   // ── Generic ───────────────────────────────────────────────────────────────
 
   private buildWorkOrderPrompt(workOrder: WorkOrder): string {
@@ -601,6 +673,18 @@ Abstract: ${payload.abstract}`;
   async executeWorkOrder(workOrder: WorkOrder, llmModel: LLMModel, llmConfig?: LLMConfig): Promise<{ result: string; success: boolean }> {
     logger.log(` Executing: ${workOrder.title}`);
     try {
+      // Fallback dispatch when callers reach this generic entry without
+      // the typed routing in work-order.loop.ts. Mirrors the primary
+      // dispatcher so a typed WO never silently falls through to the
+      // generic LLM prompt branch (which would produce useless results).
+      // Generation-detection methods are inexpensive; ordering matches
+      // work-order.loop.ts for parity.
+      if (this.isLoraValidationWorkOrder(workOrder)) {
+        // peerId is not in scope here — generic entry is rarely used for
+        // LORA_VALIDATION (loop dispatches first). Return disabled to
+        // match the opt-in semantics; the loop handles the real path.
+        return this.executeLoraValidationWorkOrder(workOrder, '');
+      }
       if (this.isResearchWorkOrder(workOrder)) {
         const { rawResponse, success } = await this.executeResearchWorkOrder(workOrder, llmModel, llmConfig);
         return { result: rawResponse, success };

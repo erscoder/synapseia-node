@@ -94,38 +94,39 @@ describe('attemptSelfUpdate', () => {
 
     const result = attemptSelfUpdate();
     expect(result.success).toBe(false);
-    expect(result.message).toContain('EACCES');
+    // The sudo-free refactor (0.8.21) rewrites permission-error messages
+    // into operator-friendly guidance instead of leaking the raw EACCES
+    // string. Assert against the user-visible copy that ships today.
+    expect(result.message).toMatch(/permission error|sudo prompts/i);
   });
 });
 
 describe('restartProcess', () => {
-  const originalArgv = process.argv;
+  // The 0.8.21 sudo-free refactor stopped exec-spawning a fresh
+  // child process. Restart now just exits 0 and lets the host
+  // orchestrator (Tauri shell, systemd, the user's terminal) relaunch
+  // the binary with the updated code. The tests assert that contract.
   const mockExit = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+  const mockStdoutLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.argv = ['/usr/local/bin/node', '/usr/local/bin/syn', 'start'];
   });
 
   afterAll(() => {
-    process.argv = originalArgv;
     mockExit.mockRestore();
+    mockStdoutLog.mockRestore();
   });
 
-  it('calls execFileSync with process.argv[0] and remaining args', () => {
-    mockExecFileSync.mockReturnValue(Buffer.from(''));
+  it('exits with code 0 so the host can relaunch', () => {
     restartProcess();
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      '/usr/local/bin/node',
-      ['/usr/local/bin/syn', 'start'],
-      expect.objectContaining({ stdio: 'inherit' }),
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('emits the SELF_UPDATE_RESTART cue to stdout', () => {
+    restartProcess();
+    expect(mockStdoutLog).toHaveBeenCalledWith(
+      expect.stringContaining('[SELF_UPDATE_RESTART]'),
     );
-    expect(mockExit).toHaveBeenCalledWith(0);
-  });
-
-  it('exits 0 even if the child process throws', () => {
-    mockExecFileSync.mockImplementation(() => { throw new Error('child exited'); });
-    restartProcess();
-    expect(mockExit).toHaveBeenCalledWith(0);
   });
 });

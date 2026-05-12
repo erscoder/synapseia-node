@@ -274,6 +274,14 @@ export class WorkOrderLoopHelper {
           if (this.execution.isDockingWorkOrder(workOrder)) {
             const docking = await this.execution.executeDockingWorkOrder(workOrder, peerId);
             result = docking.result; success = docking.success;
+          } else if (this.execution.isLoraValidationWorkOrder(workOrder)) {
+            // LoRA peer validation (Plan 1 Phase 2). Opt-in via
+            // LORA_VALIDATOR_ENABLED=true (CLI flag --lora-validator).
+            // Check BEFORE isLoraWorkOrder because LORA_VALIDATION and
+            // LORA_TRAINING payloads are disjoint — but explicit-type
+            // tags from coord Phase 3 may not be set yet.
+            const loraVal = await this.execution.executeLoraValidationWorkOrder(workOrder, peerId);
+            result = loraVal.result; success = loraVal.success;
           } else if (this.execution.isLoraWorkOrder(workOrder)) {
             const lora = await this.execution.executeLoraWorkOrder(workOrder, peerId);
             result = lora.result; success = lora.success;
@@ -343,7 +351,7 @@ export class WorkOrderLoopHelper {
           }
 
           // Quality gates
-          if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder) || this.execution.isDockingWorkOrder(workOrder) || this.execution.isLoraWorkOrder(workOrder)) && !success) {
+          if ((this.execution.isResearchWorkOrder(workOrder) || this.execution.isTrainingWorkOrder(workOrder) || this.execution.isDiLoCoWorkOrder(workOrder) || this.execution.isCpuInferenceWorkOrder(workOrder) || this.execution.isGpuInferenceWorkOrder(workOrder) || this.execution.isDockingWorkOrder(workOrder) || this.execution.isLoraWorkOrder(workOrder) || this.execution.isLoraValidationWorkOrder(workOrder)) && !success) {
             logger.warn(' Work order execution failed — skipping result submission');
             this.state.currentWorkOrder = undefined;
             continue;

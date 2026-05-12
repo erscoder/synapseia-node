@@ -276,6 +276,10 @@ async function bootstrap() {
     .option('--lat <lat>', 'Latitude for geo-location (optional)')
     .option('--lng <lng>', 'Longitude for geo-location (optional)')
     .option('--set-name', 'New node name (optional)')
+    .option(
+      '--lora-validator',
+      'Opt in to serving LORA_VALIDATION work orders (Plan 1 Phase 2). Disabled by default — operators must explicitly enable peer-validation participation. Sets LORA_VALIDATOR_ENABLED=true for the lifetime of the process.',
+    )
     .action(
       async (options: {
         model?: string;
@@ -286,7 +290,18 @@ async function bootstrap() {
         inferenceModels?: string;
         lat?: string;
         lng?: string;
+        loraValidator?: boolean;
       }) => {
+        // LoRA validator opt-in. Flipping this BEFORE the runtime
+        // initialises means downstream dispatch code (work-order.execution)
+        // sees the enabled flag from the first WO onwards.
+        if (options.loraValidator) {
+          process.env.LORA_VALIDATOR_ENABLED = 'true';
+          logger.log(
+            ' --lora-validator: this node will accept LORA_VALIDATION work orders ' +
+            '(downloads adapters + validation sets, runs eval subprocess, signs results).',
+          );
+        }
         if (options.llmUrl) {
           logger.warn(
             `⚠️  --llm-url is deprecated and ignored (endpoints are hardcoded per provider). Drop it from your start command.`,

@@ -1,5 +1,59 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-12] feat(lora-validation): Plan 1 Phase 2 — node validator runtime (opt-in, disabled)
+
+Phase 2 of Plan 1 (peer-validated LoRA replay,
+`~/.claude/plans/playful-watching-torvalds.md`). Adds the
+node-side runtime that runs LoRA validation jobs. Disabled by
+default — operators opt in via `--lora-validator` CLI flag (or
+`LORA_VALIDATOR_ENABLED=true` env var). Coord-side Phase 3 will
+wire the producer; until then no node ever receives the new WO
+type, so this release is a pure no-op for current operators.
+
+New `src/modules/lora/lora_validator.ts` implements the full
+pipeline: precheck (hardware + MPS-rejects-GENERATION mirror of
+trainer), sandbox under `<nodeHome>/lora-validation/<woId>/`,
+signed-URL adapter download with sha256 verify + Content-Length
+gate (200 MB cap), held-out-set download with same gates (50 MB
+cap), Python subprocess (`python3 -u scripts/eval_lora.py` with
+stdin JSON), `metrics.json` shape validation, canonical envelope
+Ed25519 signing via the existing `IdentityHelper`, structured-log
+metric `[lora-val-metric] outcome=accepted|rejected|timeout|error`
+(no new prom-client dep). Single attempt, no retry (P21 — coord
+re-assigns on its side).
+
+Anti-collusion + sandbox guards (P2 + P7): host allow-list
+(`amazonaws.com` default + `COORD_S3_ENDPOINTS` env override),
+identity-peerId cross-check before signing, `..` traversal +
+absolute path + `file://` rejection on every URL-derived
+filename.
+
+New `scripts/eval_lora.py` (348 lines, strict subset of
+`train_lora.py` imports — zero new pip deps). Determinism gates
+set before CUDA context: `CUBLAS_WORKSPACE_CONFIG`, seeded RNGs,
+`torch.use_deterministic_algorithms(True, warn_only=True)`.
+Refuses GENERATION on MPS, refuses validation sets with fewer
+than 4 examples. Stdout = `progress` JSON lines only.
+
+27 new tests at full branch coverage (adversarial: sha256
+mismatch, oversized content-length, mid-stream cap, host
+allow-list, file:// reject, traversal reject, subprocess
+non-zero exit, missing metrics.json, malformed metrics JSON,
+out-of-range metrics, identity peerId mismatch, SIGTERM on
+timeout, Ed25519 round-trip). Reviewer-agent ship-as-is after a
+single LOW one-line fix (deduplicated `error` metric emission
+on metrics-parse failure).
+
+Adjacent: two pre-existing `self-updater.spec.ts` assertions
+were updated to match the 0.8.21 sudo-free `restartProcess`
+refactor (assertion expected the pre-refactor `execFileSync`
++ raw `EACCES` strings; current code exits 0 + prints
+`[SELF_UPDATE_RESTART]`). Fix is in scope per
+`feedback_fix_all_tests.md`.
+
+Build clean. Full suite 1576 passing / 43 skipped / 0 failing
+(was 1574 / 43 / 2 before the fix).
+
 ## [2026-05-11] chore(version): align node to 0.8.17 with coord + node-ui (c70bbd46)
 
 Lockstep bump. Node code unchanged from 0.8.16 (`@libp2p/utils@7.1.0`
