@@ -38,7 +38,7 @@
  *  `COORDINATOR_PRIVKEY_BASE58` that lives in the coord container's
  *  `.env`. Public — safe to commit. */
 export const COORDINATOR_PUBKEY_BASE58 =
-  'FxN9BaT4ktzV79tvnQvnJZQiUharE9oWi8FXixDwV4V1';
+  'AzhtjmKerYgURY6sxSZBPu3GBD7nfzdP8n2mYiAqUs3u';
 
 const ED25519_RAW_PUBKEY_LEN = 32;
 
