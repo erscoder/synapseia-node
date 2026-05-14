@@ -1,5 +1,41 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-14] fix(cli): suppress bigint-buffer load warning on Windows pipe stderr (4a5aecb2)
+
+Bug: the existing `process.stderr.write` filter in `bootstrap.ts`
+worked on macOS / Linux but leaked the `bigint: Failed to load
+bindings, pure JS will be used (try npm run rebuild?)` warning
+into the node-ui SettingsPanel toast on Windows. Root cause:
+when stderr is a pipe rather than a TTY, Node may take an
+internal write path that bypasses the `process.stderr.write`
+override.
+
+Fix (defense in depth, two layers):
+
+- Extract the filter helpers to a new module
+  `src/cli/bigint-warning-filter.ts` (no side effects) so they
+  can be unit-tested without triggering the bootstrap dynamic
+  import.
+- Layer 1: `muteBigintBindingConsoleWarn()` wraps `console.warn`
+  at the API surface. `bigint-buffer` calls `console.warn`
+  directly when its native binding fails to load, so we catch
+  the warning at its source before any stream-write path runs.
+- Layer 2: `muteBigintBindingStderrWrite()` keeps the existing
+  `process.stderr.write` override as a backstop.
+- `bootstrap.ts` invokes both before dynamically importing
+  `./index.js`.
+- `tsup.config.ts`: add `bigint-warning-filter.ts` to the
+  Build #2 entry array so `dist/bigint-warning-filter.js` ships
+  alongside `dist/bootstrap.js` (~1.5 KB extra).
+
+Tests: 6 new jest specs in `bootstrap-console-warn.spec.ts`
+cover `console.warn` happy-path, bigint suppression, multi-arg
+passthrough, and `stderr.write` fallback. Full suite: 120
+suites / 1640 tests green.
+
+Version: 0.8.37 -> 0.8.38 (lockstep with coord + node-ui).
+
+
 ## [2026-05-14] fix(cli): accept multi-slash model slugs for NVIDIA NIM persistence (d5c804d1)
 
 Production bug: `config --set-model nvidia/meta/llama-3.3-70b-instruct`
