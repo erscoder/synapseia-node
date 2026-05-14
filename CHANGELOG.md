@@ -11,6 +11,21 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-14] fix(cli): plain-ASCII boot banner for Tauri webview parity (07a7d507)
+
+The previous heavy-block + box-drawing banner (`██╗`, `╔════╗`)
+rendered cleanly in a terminal but turned into mojibake squares
+in the node-ui log viewer. Tauri's webview monospace font fallback
+chain on macOS/Windows does not cover the heavy-block glyphs, and
+the operator-facing log surface is the one place we need character
+parity between terminal and desktop UI.
+
+Replaced with a 3-line plain-ASCII header (`===` ruler + name +
+tagline + ruler). No semantic loss; renders identically everywhere.
+
+Version: 0.8.41 -> 0.8.42 (lockstep with coord + node-ui).
+
+
 ## [2026-05-14] fix(p2p): rate-limit coord sig WARN + loud self-update banner (32941697)
 
 Two operator-experience gaps closed:
