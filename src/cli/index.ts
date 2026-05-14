@@ -230,19 +230,17 @@ async function readPassphraseFromFile(
   }
 }
 
+// ASCII-only banner. The previous box-drawing + heavy-block art rendered
+// fine in a terminal but turned into mojibake squares in the node-ui log
+// viewer (Tauri webview's monospace font fallback chain lacks the
+// block-element + box-drawing glyphs). Plain ASCII renders identically
+// everywhere, which is the contract the operator-facing log surface
+// needs to honour.
 const SYPNASEIA_HEADER = `
-╔════════════════════════════════════════════════════════════════════════════╗
-║                                                                            ║
-║  ███████╗██╗   ██╗██████╗ ███╗   ██╗ █████╗ ███████╗███████╗██╗ █████╗     ║
-║  ██╔════╝╚██╗ ██╔╝██╔══██╗████╗  ██║██╔══██╗██╔════╝██╔════╝██║██╔══██╗    ║
-║  ███████╗ ╚████╔╝ ██████╔╝██╔██╗ ██║███████║███████╗█████╗  ██║███████║    ║
-║  ╚════██║  ╚██╔╝  ██╔═══╝ ██║╚██╗██║██╔══██║╚════██║██╔══╝  ██║██╔══██║    ║
-║  ███████║   ██║   ██║     ██║ ╚████║██║  ██║███████║███████╗██║██║  ██║    ║
-║  ╚══════╝   ╚═╝   ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝╚═╝  ╚═╝    ║
-║                                                                            ║
-║                    Decentralized AI Compute Network                        ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+================================================================
+                          SYNAPSEIA NODE
+                Decentralized AI Compute Network
+================================================================
 `;
 
 function getPackageVersion(): string {
