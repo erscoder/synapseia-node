@@ -6,6 +6,7 @@ import { GoogleAdapter } from './google.adapter';
 import { MoonshotAdapter } from './moonshot.adapter';
 import { MinimaxAdapter } from './minimax.adapter';
 import { ZhipuAdapter } from './zhipu.adapter';
+import { NvidiaAdapter } from './nvidia.adapter';
 
 /**
  * Adapter registry keyed by provider id. The map is built at module
@@ -20,6 +21,7 @@ const ADAPTERS: ReadonlyMap<CloudProviderId, LLMResponseAdapter> = new Map<Cloud
   ['moonshot', new MoonshotAdapter()],
   ['minimax', new MinimaxAdapter()],
   ['zhipu', new ZhipuAdapter()],
+  ['nvidia', new NvidiaAdapter()],
 ]);
 
 export function getAdapter(providerId: CloudProviderId): LLMResponseAdapter {

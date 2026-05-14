@@ -20,7 +20,8 @@ export type CloudProviderId =
   | 'google'
   | 'moonshot'
   | 'minimax'
-  | 'zhipu';
+  | 'zhipu'
+  | 'nvidia';
 
 export type ModelTier = 'top' | 'mid' | 'budget';
 
@@ -116,6 +117,29 @@ export const CLOUD_PROVIDERS: readonly CloudProviderEntry[] = [
       top: { modelId: 'glm-4.6', latencyMs: 500, maxTokens: 200_000, costPerCall: 0.0015 },
       mid: { modelId: 'glm-4-plus', latencyMs: 400, maxTokens: 128_000, costPerCall: 0.0008 },
       budget: { modelId: 'glm-4-flash', latencyMs: 250, maxTokens: 128_000, costPerCall: 0.0001 },
+    },
+  },
+  {
+    id: 'nvidia',
+    label: 'NVIDIA NIM (free)',
+    endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
+    apiKeyEnvVar: 'NVIDIA_API_KEY',
+    // Free tier on build.nvidia.com (~5,000 credits/month for verified
+    // developers). Operators run Synapseia without paying a vendor or
+    // owning a local GPU — the only cost is registering at
+    // build.nvidia.com to obtain a personal `nvapi-...` API key.
+    //
+    // Top: NVIDIA's flagship Nemotron-3 Super 120B MoE (~12B active),
+    // tuned for instruction-following + scientific reasoning, best fit
+    // for Synapseia's biomedical KG extraction and peer-review work.
+    // Mid:  Meta's Llama 3.3 70B Instruct — production-stable, no
+    //       reasoning prefix to strip, strong on PubMedQA/MedMCQA.
+    // Budget: Meta's Llama 3.2 3B Instruct — low-latency for tier-0
+    //         inference and budget review work orders.
+    models: {
+      top:    { modelId: 'nvidia/nemotron-3-super-120b-a12b', latencyMs: 500, maxTokens: 128_000, costPerCall: 0 },
+      mid:    { modelId: 'meta/llama-3.3-70b-instruct',       latencyMs: 400, maxTokens: 128_000, costPerCall: 0 },
+      budget: { modelId: 'meta/llama-3.2-3b-instruct',        latencyMs: 200, maxTokens: 128_000, costPerCall: 0 },
     },
   },
 ] as const;

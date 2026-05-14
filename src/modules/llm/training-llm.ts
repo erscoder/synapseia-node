@@ -35,6 +35,13 @@ const CLOUD_PREFIXES: Array<{ prefix: string; providerId: CloudProviderId }> = [
   { prefix: 'kimi/',      providerId: 'moonshot' },
   { prefix: 'minimax/',   providerId: 'minimax' },
   { prefix: 'zhipu/',     providerId: 'zhipu' },
+  // NVIDIA NIM model ids carry a vendor namespace inside the model name
+  // itself (e.g. `nvidia/nemotron-3-super-120b-a12b`,
+  // `meta/llama-3.3-70b-instruct`). The slug we receive looks like
+  // `nvidia/<vendor>/<model>`. After stripping this outer `nvidia/`
+  // prefix the upstream NIM endpoint expects the bare `<vendor>/<model>`
+  // form, so the strip semantics line up with the other providers above.
+  { prefix: 'nvidia/',    providerId: 'nvidia' },
 ];
 
 /**
