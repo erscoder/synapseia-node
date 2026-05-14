@@ -43,6 +43,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Apply vendored patches
+        # `--ignore-scripts` above skips `postinstall` (our supply-chain
+        # hardening), which means `patch-package` does not run via the
+        # lifecycle hook. Invoke it explicitly so our trusted
+        # `patches/@libp2p+utils+*.patch` lands in node_modules. This
+        # call ONLY runs patch-package itself — third-party postinstall
+        # scripts stay skipped.
+        run: npx patch-package
+
       - name: Rebuild allowlisted native binaries
         run: pnpm rebuild esbuild @swc/core || true
 
