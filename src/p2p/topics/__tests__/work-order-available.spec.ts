@@ -6,6 +6,8 @@
  */
 import { generateKeyPairSync, sign } from 'crypto';
 
+import { resetStats } from '../../protocols/coord-sig-stats';
+
 interface KeyPair {
   rawPubKey: Uint8Array;
   privateKey: ReturnType<typeof generateKeyPairSync>['privateKey'];
@@ -41,6 +43,7 @@ describe('handleWorkOrderAvailable', () => {
   beforeEach(() => {
     kp = makeKeyPair();
     now = 1_700_000_000; // fixed wall-clock for deterministic freshness checks
+    resetStats();
   });
 
   it('passes verified WOs to the consumer', async () => {
@@ -81,6 +84,41 @@ describe('handleWorkOrderAvailable', () => {
     });
 
     expect(consumer).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/invalid signature/));
+    // New diagnostic format includes the sigPrefix so operators can map
+    // log lines back to a specific gossip source.
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/sigPrefix=/));
+  });
+
+  it('rate-limits repeated invalid-sig WARNs to one per fingerprint per window', async () => {
+    const { handleWorkOrderAvailable } = await import('../work-order-available');
+    const forger = makeKeyPair();
+    const wo = { id: 'wo-forged-burst' };
+    // Two consecutive forged messages with the SAME signature bytes
+    // (re-signing the same payload with the same key is deterministic
+    // for Ed25519, so both envelopes share the same `sig` prefix).
+    const msg = buildEnvelope({ wo, ts: now, privateKey: forger.privateKey });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAvailable({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+    await handleWorkOrderAvailable({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+
+    expect(consumer).not.toHaveBeenCalled();
+    // 2 invalid envelopes, but only ONE WARN should reach the sink.
+    expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/invalid signature/));
   });
 

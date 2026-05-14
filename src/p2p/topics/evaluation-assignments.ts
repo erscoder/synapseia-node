@@ -13,7 +13,38 @@
  * Plan: Tier-3 §3.C.1.
  */
 import logger from '../../utils/logger';
+import {
+  EXPECTED_COORD_PUBKEY_PREFIX,
+  WARN_THROTTLE_SECONDS,
+  checkMismatchCrisis,
+  recordVerify,
+  shouldEmitWarn,
+} from '../protocols/coord-sig-stats';
 import { verifyEd25519 } from '../protocols/verify-ed25519';
+
+const COORD_TOPIC = 'EVALUATION_ASSIGNMENTS';
+
+function emitInvalidSigWarn(
+  warn: (m: string) => void,
+  sig: unknown,
+): void {
+  const sigPrefix = typeof sig === 'string' && sig.length > 0
+    ? sig.slice(0, 8)
+    : 'no-sig';
+  recordVerify(COORD_TOPIC, sigPrefix, false);
+  const decision = shouldEmitWarn(COORD_TOPIC, sigPrefix);
+  if (decision.emit) {
+    const suffix = decision.suppressed > 0
+      ? ` (+${decision.suppressed} suppressed in last ${WARN_THROTTLE_SECONDS}s)`
+      : '';
+    warn(
+      `[Eval-Verify] invalid signature ` +
+        `(sigPrefix=${sigPrefix}, expectedPubkey=${EXPECTED_COORD_PUBKEY_PREFIX}…)${suffix}`,
+    );
+  }
+  const crisis = checkMismatchCrisis();
+  if (crisis) logger.error(crisis);
+}
 
 const ANSI_CTRL_RE = /[\r\n\x1b]/g;
 
@@ -86,11 +117,11 @@ export async function handleEvaluationAssignments(args: HandleEvalArgs): Promise
   try {
     signatureBytes = Buffer.from(sig, 'base64');
   } catch {
-    warn('[Eval-Verify] invalid signature');
+    emitInvalidSigWarn(warn, sig);
     return;
   }
   if (signatureBytes.length !== 64) {
-    warn('[Eval-Verify] invalid signature');
+    emitInvalidSigWarn(warn, sig);
     return;
   }
 
@@ -105,8 +136,16 @@ export async function handleEvaluationAssignments(args: HandleEvalArgs): Promise
     ok = false;
   }
   if (!ok) {
-    warn('[Eval-Verify] invalid signature');
+    emitInvalidSigWarn(warn, sig);
     return;
+  }
+
+  // Verify success — feed the rolling window (see WO handler for rationale).
+  {
+    const sigPrefix = typeof sig === 'string' && sig.length > 0
+      ? sig.slice(0, 8)
+      : 'no-sig';
+    recordVerify(COORD_TOPIC, sigPrefix, true);
   }
 
   const ageSec = Math.floor(now() / 1000) - ts;

@@ -186,6 +186,20 @@ function findGitRoot(start: string): string | null {
  * and the desktop UI's log tail picks it up.
  */
 export function restartProcess(): never {
+  // Operator-facing banner. The first line is the actionable instruction
+  // — keep it loud and unambiguous so a human reading the log tail in the
+  // desktop UI does not just see "exited" and assume the node crashed.
+  logger.log('');
+  logger.log('============================================================');
+  logger.log('  UPDATE INSTALLED — RESTART REQUIRED');
+  logger.log('  A new version of @synapseia-network/node was downloaded.');
+  logger.log('  This process is exiting now. To pick up the new code:');
+  logger.log('    - Desktop app: click Start again, or quit the app and');
+  logger.log('      reopen it so the new CLI is spawned fresh.');
+  logger.log('    - Shell users: re-run `synapseia start`.');
+  logger.log('  Wallet, identity, and persisted config are unchanged.');
+  logger.log('============================================================');
+  logger.log('');
   logger.log('[SelfUpdate] Update applied. Exiting so the host can relaunch with the new code.');
   // Mirror to stdout in case logger output is suppressed by a
   // log-level filter; the desktop UI's log tail watches stdout/stderr.

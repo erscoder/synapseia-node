@@ -6,6 +6,8 @@
  */
 import { generateKeyPairSync, sign } from 'crypto';
 
+import { resetStats } from '../../protocols/coord-sig-stats';
+
 interface KeyPair {
   rawPubKey: Uint8Array;
   privateKey: ReturnType<typeof generateKeyPairSync>['privateKey'];
@@ -43,6 +45,7 @@ describe('handleEvaluationAssignments', () => {
   beforeEach(() => {
     kp = makeKeyPair();
     now = 1_700_000_000;
+    resetStats();
   });
 
   it('forwards verified envelope to consumer with the nodeId payload', async () => {
@@ -88,6 +91,39 @@ describe('handleEvaluationAssignments', () => {
     });
 
     expect(consumer).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/invalid signature/));
+    // New diagnostic format includes the sigPrefix.
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/sigPrefix=/));
+  });
+
+  it('rate-limits repeated invalid-sig WARNs to one per fingerprint per window', async () => {
+    const { handleEvaluationAssignments } = await import('../evaluation-assignments');
+    const forger = makeKeyPair();
+    const msg = buildEnvelope({
+      payload: { nodeId: 'node-burst' },
+      ts: now,
+      privateKey: forger.privateKey,
+    });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleEvaluationAssignments({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+    await handleEvaluationAssignments({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+
+    expect(consumer).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/invalid signature/));
   });
 
