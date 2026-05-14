@@ -7,7 +7,7 @@ import { CLOUD_PROVIDERS_BY_ID } from '../providers';
  * Endpoint: https://integrate.api.nvidia.com/v1/chat/completions
  * (OpenAI-compatible).
  *
- * Free tier: ~5,000 credits/month for verified NGC developers — Synapseia
+ * Free tier: ~5,000 credits/month for verified NGC developers. Synapseia
  * operators get a personal `nvapi-...` key at build.nvidia.com and run
  * the node without paying a vendor or owning a local GPU.
  *

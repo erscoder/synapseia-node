@@ -4,13 +4,13 @@
 
 NVIDIA NIM (build.nvidia.com) is now selectable as an operator-side
 cloud LLM provider alongside openai / anthropic / google / moonshot /
-minimax / zhipu. The unlock is the free tier — verified NGC developers
+minimax / zhipu. The unlock is the free tier. Verified NGC developers
 get ~5,000 credits/month, which means operators can join Synapseia
 without paying any vendor or owning a local GPU. The node still runs
-training and docking work orders locally; NVIDIA NIM only covers the
+training and docking work orders locally. NVIDIA NIM only covers the
 research / review LLM call path.
 
-- New adapter `nvidia.adapter.ts` — thin subclass of `OpenAICompatAdapter`
+- New adapter `nvidia.adapter.ts`, a thin subclass of `OpenAICompatAdapter`
   hitting `https://integrate.api.nvidia.com/v1/chat/completions` with
   `Authorization: Bearer nvapi-...`. No NIM-specific quirks; reasoning
   output stays out of `choices[0].message.content` for the picked
@@ -23,7 +23,7 @@ research / review LLM call path.
 - `training-llm.ts` `CLOUD_PREFIXES` gains `{ prefix: 'nvidia/',
   providerId: 'nvidia' }` so the mutation engine routes nvidia slugs
   through `buildCloudModel()` instead of dropping them to the
-  env-fallback path. Important — NIM model ids carry their own vendor
+  env-fallback path. Important: NIM model ids carry their own vendor
   namespace, so the slug shape is `nvidia/<vendor>/<model>` and
   prefix-strip yields the bare `<vendor>/<model>` form NIM expects
   upstream.

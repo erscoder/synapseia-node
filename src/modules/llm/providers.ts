@@ -126,16 +126,16 @@ export const CLOUD_PROVIDERS: readonly CloudProviderEntry[] = [
     apiKeyEnvVar: 'NVIDIA_API_KEY',
     // Free tier on build.nvidia.com (~5,000 credits/month for verified
     // developers). Operators run Synapseia without paying a vendor or
-    // owning a local GPU — the only cost is registering at
+    // owning a local GPU. The only cost is registering at
     // build.nvidia.com to obtain a personal `nvapi-...` API key.
     //
     // Top: NVIDIA's flagship Nemotron-3 Super 120B MoE (~12B active),
     // tuned for instruction-following + scientific reasoning, best fit
     // for Synapseia's biomedical KG extraction and peer-review work.
-    // Mid:  Meta's Llama 3.3 70B Instruct — production-stable, no
-    //       reasoning prefix to strip, strong on PubMedQA/MedMCQA.
-    // Budget: Meta's Llama 3.2 3B Instruct — low-latency for tier-0
-    //         inference and budget review work orders.
+    // Mid:  Meta's Llama 3.3 70B Instruct (production-stable, no
+    //       reasoning prefix to strip, strong on PubMedQA/MedMCQA).
+    // Budget: Meta's Llama 3.2 3B Instruct (low-latency for tier-0
+    //         inference and budget review work orders).
     models: {
       top:    { modelId: 'nvidia/nemotron-3-super-120b-a12b', latencyMs: 500, maxTokens: 128_000, costPerCall: 0 },
       mid:    { modelId: 'meta/llama-3.3-70b-instruct',       latencyMs: 400, maxTokens: 128_000, costPerCall: 0 },
