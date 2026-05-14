@@ -1,5 +1,40 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-14] fix(hardware): Windows-no-nvidia-driver hang fix (969bf709)
+
+Production bug: Windows users without an NVIDIA driver saw the node
+process freeze (no logs, no heartbeats, no exit) after a Spanish
+cmd.exe "no se reconoce como comando interno o externo" line on
+STDERR. Root cause was an unbounded `execSync('nvidia-smi ...')`
+invoked per heartbeat with no timeout and no stdio silencer; on
+Windows cmd.exe can take arbitrarily long to fail under pathological
+conditions (PATH walk, antivirus, network drive scan) and blocked
+the Node event loop indefinitely.
+
+Three combined fixes:
+
+1. Module-level cache: detectHardware() runs the real probe ONCE
+   per process; subsequent calls (canInference, canDiLoCo, every
+   heartbeat) return the cached value. Public signature unchanged;
+   consumers benefit transparently. New resetHardwareCache() export
+   for tests and explicit refresh.
+
+2. Pre-flight isExecutableOnPath() helper walks process.env.PATH
+   with fs.existsSync to detect nvidia-smi before spawning. Hosts
+   without the binary never invoke cmd.exe at all.
+
+3. NVIDIA_SMI_TIMEOUT_MS = 3000 + stdio: ['ignore','pipe','ignore']
+   on every execSync that we still call (3 nvidia-smi sites plus
+   the Apple Silicon sysctl). No spawn can block more than 3 s,
+   and STDERR is muzzled so the cmd.exe Spanish error never reaches
+   the parent log.
+
+4 new tests added (cache identity, cache reset, pre-flight short-
+circuit, legacy `nvidia-smi not found` flow preserved). Full hardware
+suite green (5 suites, 150 passing).
+
+Version bump 0.8.34 -> 0.8.35 lockstep with coord + node-ui.
+
 ## [2026-05-14] feat(llm): add NVIDIA NIM as 7th cloud LLM provider (d33ca815)
 
 NVIDIA NIM (build.nvidia.com) is now selectable as an operator-side
