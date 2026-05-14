@@ -58,7 +58,7 @@ import { WalletService } from '../modules/wallet/services/wallet.service';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../infrastructure/keystore/EncryptedKeystore';
 import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
-import { CLOUD_PROVIDERS } from '../modules/llm/providers';
+import { CLOUD_PROVIDERS, resolveCloudApiKeyFromEnv } from '../modules/llm/providers';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { WorkOrderPushQueue } from '../modules/agent/work-order/work-order-push-queue';
 import { ReviewAgentHelper } from '../modules/agent/review-agent';
@@ -489,7 +489,7 @@ async function bootstrap() {
         const inferenceModels = options.inferenceModels
           ? options.inferenceModels.split(',')
           : (config.inferenceModels ?? []);
-        const llmKey = options.llmKey || config.llmKey;
+        const llmKey = options.llmKey || config.llmKey || resolveCloudApiKeyFromEnv(model);
 
         let selectedModel: ModelInfo | null = null;
         if (model) {

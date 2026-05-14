@@ -209,3 +209,35 @@ export function topSlugFor(provider: CloudProviderId): string {
   if (!entry) return FALLBACK_MODEL_SLUG;
   return `${entry.id}/${entry.models.top.modelId}`;
 }
+
+/**
+ * Resolve a cloud LLM API key from environment variables, mirroring the
+ * env var contract Tauri's `cloud_llm_env_for` uses when spawning the CLI
+ * from the desktop UI. Read priority:
+ *   1. `LLM_CLOUD_API_KEY` — generic catch-all set by the CLI's
+ *      `defaultConfig()` when `process.env.LLM_CLOUD_API_KEY` is present.
+ *   2. `<PROVIDER>_API_KEY` — the provider-specific variable declared in
+ *      each `CloudProviderEntry.apiKeyEnvVar`. Tauri injects this based on
+ *      the selection persisted in `ui-settings.json`.
+ *
+ * Returns `undefined` for Ollama / unknown providers / when no env var
+ * carries a non-empty value (caller falls back to the next source —
+ * typically the operator sees the explicit "requires --llm-key" error if
+ * nothing resolves).
+ *
+ * @param slug `provider/modelId` slug as accepted by `resolveSlug`. Empty
+ *   or non-string input falls through to the generic env var.
+ */
+export function resolveCloudApiKeyFromEnv(slug: string | undefined): string | undefined {
+  const generic = process.env.LLM_CLOUD_API_KEY?.trim();
+  if (generic) return generic;
+
+  if (!slug || typeof slug !== 'string') return undefined;
+  const slash = slug.indexOf('/');
+  if (slash <= 0) return undefined;
+  const providerId = slug.slice(0, slash);
+  const entry = CLOUD_PROVIDERS_BY_ID.get(providerId as CloudProviderId);
+  if (!entry) return undefined;
+  const fromProvider = process.env[entry.apiKeyEnvVar]?.trim();
+  return fromProvider || undefined;
+}
