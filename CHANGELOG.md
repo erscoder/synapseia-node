@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [Unreleased]
+
+### Added
+
+- Encrypted keystore for the operator wallet used by the `node start` command (scrypt N=2^16 r=8 p=1 + AES-256-GCM with 16-byte auth tag). New CLI boot path under `~/.synapseia/wallet.keystore.json` (mode 0600). One-shot interactive migration prompt on first boot when only the legacy `wallet.json` is present; the legacy file is never auto-deleted. **When the keystore exists, the legacy `wallet.json` plus `SYNAPSEIA_WALLET_PASSWORD` env var is no longer read at boot.** Non-interactive boot is supported via `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` (a path to a mode-0600 file owned by the current uid containing the passphrase). The old `SYNAPSEIA_KEYSTORE_PASSPHRASE` env var has been removed to avoid the same `process.env` exfil risk as the legacy variable. Zero new npm dependencies (uses Node's built-in `crypto.scrypt` and AES-GCM) to keep the supply-chain attack surface at zero. (Phase 0.3 premortem F9 remediation)
+
+### Known limitations
+
+- `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
+- Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
+
 ## [2026-05-14] fix(cli): suppress bigint-buffer load warning on Windows pipe stderr (4a5aecb2)
 
 Bug: the existing `process.stderr.write` filter in `bootstrap.ts`
