@@ -1,5 +1,15 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-14] chore(release): 0.8.36 lockstep bump for node-ui cloud config fix (0f0ccd38)
+
+Version-only bump. Node has no functional change in this cycle.
+Node-ui 0.8.36 fixes the Windows-side cloud LLM persistence bug
+on the desktop shell side (Settings now correctly forwards
+LLM_PROVIDER + LLM_CLOUD_PROVIDER + LLM_CLOUD_MODEL +
+<PROVIDER>_API_KEY env vars to every spawned synapseia CLI
+process). Lockstep keeps coord + node + node-ui versioned together.
+
+
 ## [2026-05-14] fix(hardware): Windows-no-nvidia-driver hang fix (969bf709)
 
 Production bug: Windows users without an NVIDIA driver saw the node
