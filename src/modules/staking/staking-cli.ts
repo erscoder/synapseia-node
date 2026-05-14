@@ -192,15 +192,22 @@ function decryptWallet(encryptedData: string, password: string): Uint8Array {
 }
 
 // Load and decrypt wallet
+// TODO(phase0.3-followup): migrate `node staking` subcommands to the
+// hardened EncryptedKeystore (see
+// packages/node/src/infrastructure/keystore/EncryptedKeystore.ts).
+// Until then, `loadWalletWithPassword` still reads
+// SYNAPSEIA_WALLET_PASSWORD from the environment and decrypts the
+// legacy wallet.json. This is the F9 attack surface that the
+// keystore on the `node start` boot path already closes.
 export async function loadWalletWithPassword(): Promise<Keypair> {
   const walletFile = WALLET_FILE();
-  
+
   if (!fs.existsSync(walletFile)) {
     throw new Error(`Wallet not found at ${walletFile}. Run 'synapseia-node setup' first.`);
   }
-  
+
   const walletData = JSON.parse(fs.readFileSync(walletFile, 'utf-8'));
-  
+
   // Check if encrypted
   if (!walletData.encryptedData) {
     // Unencrypted wallet - load directly

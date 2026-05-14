@@ -41,7 +41,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild allowlisted native binaries
+        run: pnpm rebuild esbuild @swc/core || true
 
       - name: Verify @libp2p/utils onProgress guard patch applied
         # Sentry check: our vendored patch under patches/ inserts a

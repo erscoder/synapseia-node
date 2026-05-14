@@ -45,7 +45,8 @@ import logger from '../utils/logger';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { promises as fsp } from 'fs';
 import { join } from 'path';
 import * as path from 'path';
 import * as os from 'os';
@@ -54,6 +55,7 @@ import { IdentityService } from '../modules/identity/services/identity.service';
 import { HardwareService } from '../modules/hardware/services/hardware.service';
 import { NodeConfigService } from '../modules/config/services/node-config.service';
 import { WalletService } from '../modules/wallet/services/wallet.service';
+import { EncryptedKeystore, EncryptedKeystoreError } from '../infrastructure/keystore/EncryptedKeystore';
 import { ModelCatalogHelper } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { CLOUD_PROVIDERS } from '../modules/llm/providers';
@@ -175,6 +177,56 @@ async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
   } catch (err) {
     if (isExitError(err)) return null;
     throw err;
+  }
+}
+
+/**
+ * Read the keystore passphrase from a file-mounted secret. This is the
+ * F9-hardened replacement for the old `SYNAPSEIA_KEYSTORE_PASSPHRASE`
+ * env var (which a malicious postinstall could grep out of
+ * `process.env`). The operator sets `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`
+ * to a path on disk; the file MUST be mode 0600 or stricter and owned
+ * by the current UID. Mirrors the Docker secrets / systemd
+ * LoadCredential / k8s mounted-secret pattern.
+ *
+ * Returns the trimmed passphrase on success, or `undefined` if:
+ *   - the env var is unset (interactive prompt will run),
+ *   - the file is missing / unreadable,
+ *   - permission checks fail (we log a warning and fall back to prompt).
+ */
+async function readPassphraseFromFile(
+  envVal: string | undefined,
+  log: { log: (m: string) => void; warn: (m: string) => void; error: (m: string) => void },
+): Promise<string | undefined> {
+  if (!envVal || envVal.trim().length === 0) return undefined;
+  const filePath = envVal.trim();
+  try {
+    if (!existsSync(filePath)) {
+      log.warn(`[Keystore] SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE points to a non-existent path (${filePath}); falling back to interactive prompt`);
+      return undefined;
+    }
+    if (process.platform !== 'win32') {
+      const st = statSync(filePath);
+      // World/group must have NO permissions (mode bits 0o077 must be zero).
+      if ((st.mode & 0o077) !== 0) {
+        log.warn(`[Keystore] passphrase file ${filePath} has insecure mode ${(st.mode & 0o777).toString(8)}; expected 0600 or stricter. Falling back to interactive prompt`);
+        return undefined;
+      }
+      if (typeof process.getuid === 'function' && st.uid !== process.getuid()) {
+        log.warn(`[Keystore] passphrase file ${filePath} is owned by uid ${st.uid}, not the current user (${process.getuid()}); falling back to interactive prompt`);
+        return undefined;
+      }
+    }
+    const raw = await fsp.readFile(filePath, 'utf8');
+    const trimmed = raw.replace(/\r?\n$/, '');
+    if (trimmed.length === 0) {
+      log.warn(`[Keystore] passphrase file ${filePath} is empty; falling back to interactive prompt`);
+      return undefined;
+    }
+    return trimmed;
+  } catch (err) {
+    log.warn(`[Keystore] could not read passphrase file ${filePath}: ${(err as Error).message}; falling back to interactive prompt`);
+    return undefined;
   }
 }
 
@@ -348,8 +400,79 @@ async function bootstrap() {
         }
 
         const identity = identityService.getOrCreate(nodeHome, nodeName);
-        const { wallet, isNew } = await walletService.getOrCreate(nodeHome);
         const hardware = hardwareService.detect();
+
+        // Phase 0.3 premortem F9 remediation: gate the legacy
+        // walletService.getOrCreate() (which decrypts wallet.json using
+        // SYNAPSEIA_WALLET_PASSWORD from .env) behind keystore-absence.
+        // When a hardened keystore exists, the legacy plaintext path
+        // must NEVER run at boot. We resolve the keystore branch below
+        // and only fall back to walletService.getOrCreate when no
+        // keystore file is present.
+        const keystore = new EncryptedKeystore();
+        // `wallet` mirrors the legacy `SolanaWallet` shape so downstream
+        // banner / activation code does not branch. createdAt is filled
+        // with the current ISO timestamp on the keystore path (we do not
+        // persist it back to disk; it is only used as a human label).
+        let wallet: { publicKey: string; secretKey: number[]; createdAt: string; mnemonic?: string };
+        let isNew = false;
+        let secretKeyBytes: Uint8Array;
+        const keystoreActive = keystore.exists();
+
+        if (keystoreActive) {
+          // Hardened branch: load passphrase from file-mounted secret
+          // (SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE) when present, else
+          // prompt interactively. The legacy SYNAPSEIA_WALLET_PASSWORD
+          // env var is NEVER read on this path.
+          const { password: passwordPrompt } = await import('@inquirer/prompts');
+          const filePass = await readPassphraseFromFile(
+            process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+            logger,
+          );
+          let envPass = filePass;
+          let attempts = 0;
+          const maxAttempts = 3;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const pass = envPass ?? await passwordPrompt({
+              message: `Unlock wallet keystore (${keystore.getPath()}):`,
+            });
+            envPass = undefined;
+            try {
+              secretKeyBytes = await keystore.decrypt(pass);
+              break;
+            } catch (err) {
+              if (err instanceof EncryptedKeystoreError && err.code === 'INVALID_PASSPHRASE') {
+                attempts++;
+                if (attempts >= maxAttempts) {
+                  logger.error('[Keystore] invalid passphrase after 3 attempts');
+                  process.exit(7);
+                }
+                logger.warn('[Keystore] invalid passphrase, try again');
+                continue;
+              }
+              logger.error(`[Keystore] failed to unlock: ${(err as Error).message}`);
+              process.exit(7);
+            }
+          }
+          // Reconstruct wallet for downstream banner / activation usage.
+          // We avoid touching walletService entirely to make sure no
+          // legacy SYNAPSEIA_WALLET_PASSWORD env read can happen.
+          const { Keypair: KeypairCtor } = await import('@solana/web3.js');
+          const kp = KeypairCtor.fromSecretKey(secretKeyBytes);
+          wallet = {
+            publicKey: kp.publicKey.toBase58(),
+            secretKey: Array.from(secretKeyBytes),
+            createdAt: new Date().toISOString(),
+          };
+        } else {
+          // Legacy fallback: existing behaviour. Will be removed once
+          // all operators have migrated to the keystore.
+          const legacy = await walletService.getOrCreate(nodeHome);
+          wallet = legacy.wallet;
+          isNew = legacy.isNew;
+          secretKeyBytes = new Uint8Array(wallet.secretKey);
+        }
 
         if (isNew) {
           walletService.displayCreationWarning(wallet);
@@ -584,7 +707,42 @@ async function bootstrap() {
         // ── SYN token account activation ─────────────────────────────────────
         logger.log('\nChecking SYN token account activation...');
         const { Keypair } = await import('@solana/web3.js');
-        const walletKeypair = Keypair.fromSecretKey(new Uint8Array(wallet.secretKey));
+
+        // Phase 0.3 premortem F9 remediation, continued:
+        // If we entered the legacy branch above (no keystore on disk),
+        // offer a one-shot migration to the hardened keystore. This is
+        // strictly opt-in: we never delete the legacy wallet.json.
+        if (!keystoreActive
+          && process.stdin.isTTY
+          && !process.env.SYNAPSEIA_SKIP_KEYSTORE_MIGRATION) {
+          try {
+            const { confirm, password: passwordPrompt } = await import('@inquirer/prompts');
+            logger.warn('[Keystore] legacy wallet detected. Migrating to the hardened keystore reduces exposure to malicious install scripts.');
+            const wantMigrate = await confirm({
+              message: 'Encrypt your wallet to the new keystore now?',
+              default: true,
+            });
+            if (wantMigrate) {
+              const pass1 = await passwordPrompt({
+                message: 'New keystore passphrase (min 12 chars):',
+                validate: (v: string) => v.length >= 12 || 'Passphrase must be at least 12 characters',
+              });
+              const pass2 = await passwordPrompt({ message: 'Confirm passphrase:' });
+              if (pass1 !== pass2) {
+                logger.warn('[Keystore] passphrases do not match, skipping migration');
+              } else {
+                await keystore.encrypt(secretKeyBytes, pass1);
+                logger.log(`[Keystore] wallet encrypted at ${keystore.getPath()} (mode 0600)`);
+                logger.warn('[Keystore] you can now remove SYNAPSEIA_WALLET_PASSWORD from your .env and delete legacy wallet.json once you have verified the new keystore unlocks correctly.');
+              }
+            }
+          } catch (err) {
+            // Migration is best-effort. Never block boot on a prompt
+            // failure (e.g. piped stdin); just log and continue.
+            logger.warn(`[Keystore] migration skipped: ${(err as Error).message}`);
+          }
+        }
+        const walletKeypair = Keypair.fromSecretKey(secretKeyBytes);
         const activation = await activateNode(wallet.publicKey, walletKeypair);
         if (!activation.activated) {
           logger.error('❌ Activation failed — cannot start node without SYN token account');
@@ -969,6 +1127,10 @@ async function bootstrap() {
       }
 
       try {
+        // TODO(phase0.3-followup): migrate `export-keypair` to the
+        // hardened EncryptedKeystore so it stops reading the legacy
+        // SYNAPSEIA_WALLET_PASSWORD env var and decrypting wallet.json.
+        // See CHANGELOG "Known limitations" under the keystore entry.
         const wallet = await walletService.load(nodeHome, pwd);
 
         const { default: bs58 } = await import('bs58');
@@ -1285,6 +1447,10 @@ async function bootstrap() {
         process.exit(3);
       }
       try {
+        // TODO(phase0.3-followup): migrate `wallet-verify` to validate
+        // against the hardened EncryptedKeystore so the desktop UI can
+        // stop passing SYNAPSEIA_WALLET_PASSWORD as an env var.
+        // See CHANGELOG "Known limitations" under the keystore entry.
         const wallet = await walletService.load(nodeHome, envPassword);
         logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
         process.exit(0);
