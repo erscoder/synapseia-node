@@ -11,6 +11,49 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-14] fix(p2p): rate-limit coord sig WARN + loud self-update banner (32941697)
+
+Two operator-experience gaps closed:
+
+1. Gossipsub coord verify WARN flood — every
+   `WORK_ORDER_AVAILABLE` / `EVALUATION_ASSIGNMENTS` envelope that
+   failed Ed25519 verification emitted a context-free
+   `[*-Verify] invalid signature` line. A single rogue peer or a
+   transient mesh re-broadcast surfaced as 5+ consecutive WARN
+   with no signal for triage.
+
+   New `p2p/protocols/coord-sig-stats.ts`:
+   - `recordVerify(topic, sigPrefix, ok)` — feeds a 20-message
+     rolling window for crisis detection.
+   - `shouldEmitWarn(topic, sigPrefix)` — emits at most one WARN
+     per (topic, sigPrefix) every 60 s; subsequent failures get
+     folded into a `(+N suppressed in last 60s)` counter.
+   - `checkMismatchCrisis()` — fires ONE `logger.error` when
+     more than 50% of the last 20 envelopes failed, pointing the
+     operator at `npm install -g @synapseia-network/node@latest`
+     and the expected coord pubkey prefix. Latched so a
+     sustained mismatch does not spam ERRORs.
+
+   Wired into both topic handlers. WARN now reads
+   `[WO-Verify] invalid signature (sigPrefix=…, expectedPubkey=Azhtjm…)`
+   so a future debug can distinguish "same rogue peer keeps
+   spamming" from "mesh-wide pubkey rotation". 10 new specs in
+   `coord-sig-stats.spec.ts`; existing topic specs updated to
+   reset stats between cases and cover the rate-limit path.
+
+2. Self-update restart banner — the previous
+   `[SelfUpdate] Update applied. Exiting…` line was buried in the
+   normal INFO stream and operators thought the node had
+   crashed. `restartProcess()` now prints a multi-line banner
+   that names the actionable step explicitly: click Start again,
+   or quit + reopen the desktop app; shell users re-run
+   `synapseia start`. The `[SELF_UPDATE_RESTART]` stdout cue and
+   `process.exit(0)` are unchanged so the host orchestration
+   keeps working.
+
+Version: 0.8.40 -> 0.8.41 (lockstep with coord + node-ui).
+
+
 ## [2026-05-14] chore(release): 0.8.40 lockstep bump for node-ui bootstrap-spawn fix (bc370392)
 
 Version-only bump. Node has no functional change in this cycle.
