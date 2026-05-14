@@ -1,5 +1,42 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-14] fix(cli): accept multi-slash model slugs for NVIDIA NIM persistence (d5c804d1)
+
+Production bug: `config --set-model nvidia/meta/llama-3.3-70b-instruct`
+(and every NVIDIA NIM slug) was rejected by the CLI regex
+`/^[a-zA-Z0-9_-]+\/[\w.:\-]+$/`, which disallowed `/` inside the
+modelId charset. NVIDIA's namespaced IDs (provider/vendor/model)
+are unique among the 7 cloud providers; the other six use
+single-slash slugs and were unaffected. Result: node-ui Settings
+threw "Failed to apply CLI config update --set-model",
+`set_ui_settings` never ran, LLM_CLOUD_* env vars never injected,
+node spawned with Ollama default and crashed when no local Ollama
+was present. 0.8.36 surfaced the error but did not fix the
+underlying validation — bug was OS-independent (reported on Mac
+and Windows alike).
+
+Root cause: `validateModelFormat` and the CLI `--set-model` regex
+both required exactly 2 slash-separated parts. The runtime slug
+parsers (`resolveSlug`, `parseSlug`, `migrateModelSlug`) already
+split on the first slash and tolerate multi-slash modelIds —
+only the two validators were out of sync.
+
+Fix:
+- Export `MODEL_SLUG_REGEX = /^[a-zA-Z0-9_-]+\/[\w.:\/\-]+$/` from
+  `src/modules/config/config.ts` as the single source of truth.
+- `validateModelFormat` delegates to the constant.
+- `cli/index.ts:1049` imports and uses the same constant.
+- 7 new tests in `config.spec.ts` cover NVIDIA happy-path
+  (`nvidia/meta/llama-3.3-70b-instruct`,
+  `nvidia/nvidia/nemotron-3-super-120b-a12b`), regression
+  (`openai/gpt-4o`), and fail-closed cases (empty, no-slash,
+  leading slash, whitespace).
+
+Tests: 21/21 green. Build: success.
+
+Version: 0.8.36 -> 0.8.37 (lockstep with coord + node-ui).
+
+
 ## [2026-05-14] chore(release): 0.8.36 lockstep bump for node-ui cloud config fix (0f0ccd38)
 
 Version-only bump. Node has no functional change in this cycle.
