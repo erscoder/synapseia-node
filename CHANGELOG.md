@@ -1,5 +1,35 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-14] feat(llm): add NVIDIA NIM as 7th cloud LLM provider (d33ca815)
+
+NVIDIA NIM (build.nvidia.com) is now selectable as an operator-side
+cloud LLM provider alongside openai / anthropic / google / moonshot /
+minimax / zhipu. The unlock is the free tier — verified NGC developers
+get ~5,000 credits/month, which means operators can join Synapseia
+without paying any vendor or owning a local GPU. The node still runs
+training and docking work orders locally; NVIDIA NIM only covers the
+research / review LLM call path.
+
+- New adapter `nvidia.adapter.ts` — thin subclass of `OpenAICompatAdapter`
+  hitting `https://integrate.api.nvidia.com/v1/chat/completions` with
+  `Authorization: Bearer nvapi-...`. No NIM-specific quirks; reasoning
+  output stays out of `choices[0].message.content` for the picked
+  flagship.
+- Registered in `adapters/index.ts` and `CLOUD_PROVIDERS` table.
+- Model tiers picked for Synapseia's biomedical KG + peer-review work:
+  - top:    `nvidia/nemotron-3-super-120b-a12b` (120B MoE, NVIDIA-tuned).
+  - mid:    `meta/llama-3.3-70b-instruct` (Meta 70B production stable).
+  - budget: `meta/llama-3.2-3b-instruct` (3B Meta, low-latency).
+- `training-llm.ts` `CLOUD_PREFIXES` gains `{ prefix: 'nvidia/',
+  providerId: 'nvidia' }` so the mutation engine routes nvidia slugs
+  through `buildCloudModel()` instead of dropping them to the
+  env-fallback path. Important — NIM model ids carry their own vendor
+  namespace, so the slug shape is `nvidia/<vendor>/<model>` and
+  prefix-strip yields the bare `<vendor>/<model>` form NIM expects
+  upstream.
+
+Version bump 0.8.33 -> 0.8.34 lockstep with coord + node-ui.
+
 ## [2026-05-12] fix(langgraph): route MOLECULAR_DOCKING + LORA_TRAINING + LORA_VALIDATION; fail-loud unknown types (f0b9cc9d)
 
 Production BLOCKER hotfix. LangGraph router switch in
