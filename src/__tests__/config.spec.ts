@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/glo
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
-import { NodeConfigHelper, CONFIG_FILE, CONFIG_DIR } from '../modules/config/config';
+import { NodeConfigHelper, CONFIG_FILE, CONFIG_DIR, MODEL_SLUG_REGEX } from '../modules/config/config';
 import { OFFICIAL_COORDINATOR_URL, OFFICIAL_COORDINATOR_WS_URL } from '../constants/coordinator';
 
 const testConfigDir = join(tmpdir(), 'synapseia-test-' + Date.now());
@@ -207,14 +207,48 @@ describe('Config Module', () => {
     it('should accept valid model formats', () => {
       expect(helper.validateModelFormat('ollama/llama2')).toBe(true);
       expect(helper.validateModelFormat('openai/gpt-4')).toBe(true);
+      expect(helper.validateModelFormat('openai/gpt-4o')).toBe(true);
       expect(helper.validateModelFormat('anthropic/claude-3')).toBe(true);
+    });
+
+    it('should accept NVIDIA NIM multi-slash model IDs', () => {
+      // NVIDIA NIM uses vendor-namespaced model IDs (provider/vendor/model).
+      // The slug parser splits on the first slash, so additional slashes
+      // belong to the modelId namespace, not the provider.
+      expect(helper.validateModelFormat('nvidia/meta/llama-3.3-70b-instruct')).toBe(true);
+      expect(helper.validateModelFormat('nvidia/nvidia/nemotron-3-super-120b-a12b')).toBe(true);
     });
 
     it('should reject invalid model formats', () => {
       expect(helper.validateModelFormat('invalid')).toBe(false);
       expect(helper.validateModelFormat('')).toBe(false);
       expect(helper.validateModelFormat('ollama/')).toBe(false);
+      expect(helper.validateModelFormat('nvidia/')).toBe(false);
       expect(helper.validateModelFormat('/llama2')).toBe(false);
+    });
+  });
+
+  describe('MODEL_SLUG_REGEX (CLI --set-model contract)', () => {
+    // This regex is the single source of truth for the CLI --set-model
+    // validation and ConfigService.validateModelFormat. Asserted directly
+    // so the CLI flag stays in lockstep with the service layer.
+    it('accepts canonical single-slash slugs', () => {
+      expect(MODEL_SLUG_REGEX.test('openai/gpt-4o')).toBe(true);
+      expect(MODEL_SLUG_REGEX.test('ollama/qwen2.5:0.5b')).toBe(true);
+      expect(MODEL_SLUG_REGEX.test('anthropic/claude-sonnet-4-6')).toBe(true);
+    });
+
+    it('accepts NVIDIA NIM multi-slash model IDs', () => {
+      expect(MODEL_SLUG_REGEX.test('nvidia/meta/llama-3.3-70b-instruct')).toBe(true);
+      expect(MODEL_SLUG_REGEX.test('nvidia/nvidia/nemotron-3-super-120b-a12b')).toBe(true);
+    });
+
+    it('rejects malformed slugs (fail-closed)', () => {
+      expect(MODEL_SLUG_REGEX.test('')).toBe(false);
+      expect(MODEL_SLUG_REGEX.test('invalid')).toBe(false);
+      expect(MODEL_SLUG_REGEX.test('nvidia/')).toBe(false);
+      expect(MODEL_SLUG_REGEX.test('/llama2')).toBe(false);
+      expect(MODEL_SLUG_REGEX.test('nvidia space/model')).toBe(false);
     });
   });
 

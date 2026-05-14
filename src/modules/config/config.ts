@@ -19,6 +19,23 @@ export type AgentModeConfig = { mode: AgentMode };
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
+/**
+ * Canonical regex for `provider/modelId` slugs accepted by the CLI
+ * `--set-model` flag and `ConfigService.validateModelFormat`.
+ *
+ * Provider charset is restricted to `[a-zA-Z0-9_-]`. The modelId part
+ * is intentionally permissive (`[\w.:/\-]+`) because some vendors
+ * (e.g. NVIDIA NIM) use multi-segment namespaced IDs like
+ * `meta/llama-3.3-70b-instruct` or `nvidia/nemotron-3-super-120b-a12b`.
+ * The runtime slug parser (`resolveSlug`, `parseSlug`, `migrateModelSlug`)
+ * already splits on the FIRST `/`, so additional slashes belong to the
+ * modelId namespace, not the provider.
+ *
+ * Still fail-closed for: empty input, missing slash, empty provider,
+ * empty modelId, characters outside the allowed charset.
+ */
+export const MODEL_SLUG_REGEX = /^[a-zA-Z0-9_-]+\/[\w.:/\-]+$/;
+
 export interface Config {
   /**
    * @deprecated Coordinator URL is no longer user-configurable. The CLI
@@ -203,12 +220,7 @@ export class NodeConfigHelper {
   }
 
   validateModelFormat(model: string): boolean {
-    const parts = model.split('/');
-    if (parts.length !== 2) return false;
-    const [provider, modelName] = parts;
-    if (!provider || !modelName) return false;
-    if (!/^[a-zA-Z0-9-]+$/.test(provider)) return false;
-    return true;
+    return MODEL_SLUG_REGEX.test(model);
   }
 
   isCloudModel(model: string): boolean {

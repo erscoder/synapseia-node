@@ -67,7 +67,7 @@ import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
 import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
-import { CONFIG_FILE } from '../modules/config/config';
+import { CONFIG_FILE, MODEL_SLUG_REGEX } from '../modules/config/config';
 import { getCoordinatorUrl, getCoordinatorWsUrl } from '../constants/coordinator';
 import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
 import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
@@ -1046,7 +1046,7 @@ async function bootstrap() {
       }
 
       if (options.setModel) {
-        if (!/^[a-zA-Z0-9_-]+\/[\w.:\-]+$/.test(options.setModel)) {
+        if (!MODEL_SLUG_REGEX.test(options.setModel)) {
           logger.error(`❌ Invalid model format. Expected provider/model (e.g. openai/gpt-4o). Got: ${options.setModel}`);
           process.exit(1);
         }
