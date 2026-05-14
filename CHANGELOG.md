@@ -11,6 +11,44 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-14] fix(cli): env var llmKey fallback + NVIDIA pricing entries (a679919b)
+
+Two gaps shipped together:
+
+1. CLI startup llmKey resolution (`cli/index.ts:492`) previously read
+   only `options.llmKey` or `config.llmKey`. When `node-ui` spawns
+   the CLI it sets `LLM_PROVIDER=cloud` + `LLM_CLOUD_PROVIDER` +
+   `LLM_CLOUD_MODEL` + `<PROVIDER>_API_KEY` env vars but never
+   passes `--llm-key`, so if `config.llmKey` was empty (e.g.
+   first-save flow on a stale CLI install where `--set-llm-key`
+   silently failed) startup failed with `Cloud model requires
+   --llm-key` even though the API key was already persisted in
+   `ui-settings.json` and forwarded as `NVIDIA_API_KEY` at spawn.
+
+   New `resolveCloudApiKeyFromEnv(slug)` helper in `providers.ts`
+   reads `LLM_CLOUD_API_KEY` generic env first, then falls back to
+   the provider-specific `apiKeyEnvVar` from the `CLOUD_PROVIDERS`
+   table (`NVIDIA_API_KEY`, `OPENAI_API_KEY`, etc.). Line 492 now:
+   `options.llmKey || config.llmKey || resolveCloudApiKeyFromEnv(model)`
+   — config still wins so explicit `--llm-key` persistence keeps
+   precedence.
+
+2. `work-order.evaluation.ts` `LLM_PRICE_TABLE` was missing NVIDIA
+   NIM slugs, so every research WO evaluation logged `Unknown
+   model … falling back to claude-haiku pricing` as cosmetic noise.
+   Added free-tier (0 cost) entries for the three NVIDIA tiers
+   (`nvidia/meta/llama-3.3-70b-instruct`,
+   `nvidia/meta/llama-3.2-3b-instruct`,
+   `nvidia/nvidia/nemotron-3-super-120b-a12b`).
+
+Tests: 13 new jest specs in `modules/llm/__tests__/providers.spec.ts`
+cover generic env priority, per-provider mapping, ollama/unknown
+returns `undefined`, empty/whitespace fail-closed. Existing
+`config.spec` (21/21) regression-clean. Full build green.
+
+Version: 0.8.38 -> 0.8.39 (lockstep with coord + node-ui).
+
+
 ## [2026-05-14] fix(cli): suppress bigint-buffer load warning on Windows pipe stderr (4a5aecb2)
 
 Bug: the existing `process.stderr.write` filter in `bootstrap.ts`
