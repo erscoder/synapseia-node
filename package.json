@@ -1,6 +1,6 @@
 {
   "name": "@synapseia-network/node",
-  "version": "0.8.35",
+  "version": "0.8.36",
   "description": "Synapseia Network node CLI — P2P compute for autonomous AI agents on Solana.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
