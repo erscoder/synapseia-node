@@ -10,12 +10,19 @@ import {
   buildOsString,
   estimateAppleSiliconVram,
   parseNvidiaSmiOutput,
+  resetHardwareCache,
   type Hardware,
 } from '../modules/hardware/hardware';
 import * as os from 'os';
 import * as childProcess from 'child_process';
 
 describe('Hardware Detection', () => {
+  beforeEach(() => {
+    // Process-lifetime cache must be reset per test so probe state from
+    // one case does not poison the next.
+    resetHardwareCache();
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });

@@ -8,6 +8,8 @@
  */
 
 import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import { execSync, spawnSync } from 'child_process';
 import { URL } from 'url';
 import { Injectable } from '@nestjs/common';
@@ -18,10 +20,70 @@ import logger from '../../utils/logger';
 /**
  * Module-level flag to ensure the boot diagnostic only fires once per
  * process. `detectHardware()` is invoked repeatedly by `canInference()` /
- * `canDiLoCo()` during cap-build per heartbeat — without this flag, the
+ * `canDiLoCo()` during cap-build per heartbeat. Without this flag, the
  * `[hardware]` line would spam logs at info level forever.
  */
 let hardwareLoggedOnce = false;
+
+/**
+ * Process-lifetime cache for `detectHardware()` results. GPU/CPU/RAM do
+ * not change between heartbeats, but `canInference()` and `canDiLoCo()`
+ * call `detectHardware()` every 60s on the hot path. On a Windows host
+ * without nvidia-smi, the synchronous `execSync` invocation can hang
+ * cmd.exe indefinitely (PATH lookup, antivirus interception, network
+ * drive scan) and block the main event loop, killing heartbeats. Caching
+ * the first probe result eliminates 99% of those spawns.
+ *
+ * Key is `${cpuOnly}|${archOverride ?? ''}` so distinct call sites with
+ * different args retain independent cached values. Tests reset via
+ * `resetHardwareCache()`.
+ */
+const hardwareCache: Map<string, Hardware> = new Map();
+
+/**
+ * Reset the hardware detection cache. Exposed for tests so each case
+ * can re-probe with fresh mocks. Not intended for production callers.
+ */
+export function resetHardwareCache(): void {
+  hardwareCache.clear();
+}
+
+/**
+ * Default per-spawn timeout for nvidia-smi invocations (ms). Defensive
+ * upper bound so a wedged cmd.exe / antivirus scan cannot block the
+ * main thread indefinitely on Windows hosts. Treat timeout as "no GPU".
+ */
+const NVIDIA_SMI_TIMEOUT_MS = 3000;
+
+/**
+ * Pre-flight check: does an executable named `name` exist anywhere on
+ * the current process PATH? Walks `process.env.PATH` synchronously
+ * using `fs.existsSync` so we never spawn a child for the check. On
+ * Windows, also tests `name.exe`. Returns true when found, false
+ * otherwise (no GPU / no driver / no binary).
+ *
+ * This is the primary defense against the Windows hang: when
+ * nvidia-smi is missing we never invoke cmd.exe at all.
+ */
+function isExecutableOnPath(name: string): boolean {
+  const pathEnv = process.env.PATH || process.env.Path || '';
+  if (!pathEnv) return false;
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const candidates = process.platform === 'win32'
+    ? [name, `${name}.exe`, `${name}.cmd`, `${name}.bat`]
+    : [name];
+  for (const dir of pathEnv.split(sep)) {
+    if (!dir) continue;
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(path.join(dir, candidate))) return true;
+      } catch {
+        // Permission denied on some PATH entry. Skip and continue.
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Model compatibility info
@@ -128,7 +190,21 @@ export class HardwareHelper {
   /** @internal exported for testing */
   detectNvidiaGPU(hardware: Hardware, smiOutput?: string): void {
     if (!smiOutput) {
-      smiOutput = execSync('nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits', { encoding: 'utf-8' });
+      // Pre-flight: if nvidia-smi is not on PATH we must NOT invoke a
+      // shell. On Windows, spawning a missing binary routes through
+      // cmd.exe which can hang on PATH walks / antivirus scans and
+      // block the main thread indefinitely (production bug 2026-05-13).
+      if (!isExecutableOnPath('nvidia-smi')) {
+        return;
+      }
+      smiOutput = execSync(
+        'nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits',
+        {
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: NVIDIA_SMI_TIMEOUT_MS,
+        },
+      );
     }
 
     if (smiOutput.includes('GiB')) {
@@ -149,6 +225,15 @@ export class HardwareHelper {
   }
 
   detectHardware(cpuOnly = false, archOverride?: string): Hardware {
+    // Process-lifetime cache lookup. GPU/CPU/RAM does not change between
+    // heartbeats, so we probe once per (cpuOnly, archOverride) pair and
+    // reuse. This is the single highest-impact protection against the
+    // Windows nvidia-smi hang: re-running execSync per heartbeat is the
+    // amplifier that converted a flaky probe into a frozen process.
+    const cacheKey = `${cpuOnly}|${archOverride ?? ''}`;
+    const cached = hardwareCache.get(cacheKey);
+    if (cached) return cached;
+
     const hardware: Hardware = {
       cpuCores: os.cpus().length || 2,
       ramGb: Math.round(os.totalmem() / (1024 ** 3)),
@@ -162,20 +247,30 @@ export class HardwareHelper {
       try {
         const arch = archOverride || os.arch();
         if (arch === 'arm64') {
-          const model = execSync('sysctl -n machdep.cpu.brand_string').toString().trim();
+          const model = execSync(
+            'sysctl -n machdep.cpu.brand_string',
+            { timeout: NVIDIA_SMI_TIMEOUT_MS },
+          ).toString().trim();
           this.detectAppleSilicon(hardware, model);
           hardware.gpuModel = model;
         } else if (arch === 'x64' || arch === 'x86') {
           // Node returns 'x64' on modern Intel/AMD; 'x86' kept for historic compat.
           this.detectNvidiaGPU(hardware);
-          // Best-effort GPU name for telemetry. Silent on failure (no NVIDIA).
-          try {
-            const name = execSync(
-              'nvidia-smi --query-gpu=name --format=csv,noheader',
-              { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] },
-            ).split('\n')[0]?.trim();
-            if (name) hardware.gpuModel = name;
-          } catch { /* no nvidia-smi */ }
+          // Best-effort GPU name for telemetry. Skip the spawn entirely
+          // if nvidia-smi is not on PATH. Silent on any failure.
+          if (isExecutableOnPath('nvidia-smi')) {
+            try {
+              const name = execSync(
+                'nvidia-smi --query-gpu=name --format=csv,noheader',
+                {
+                  encoding: 'utf-8',
+                  stdio: ['ignore', 'pipe', 'ignore'],
+                  timeout: NVIDIA_SMI_TIMEOUT_MS,
+                },
+              ).split('\n')[0]?.trim();
+              if (name) hardware.gpuModel = name;
+            } catch { /* no nvidia-smi or timeout */ }
+          }
         }
       } catch {
         // nvidia-smi not available or no GPU
@@ -229,6 +324,7 @@ export class HardwareHelper {
       }
     }
 
+    hardwareCache.set(cacheKey, hardware);
     return hardware;
   }
 
@@ -302,13 +398,25 @@ export class HardwareHelper {
         gpuType = model;
         gpuVram = this.estimateAppleSiliconVram(model);
       } else if (arch === 'x86_64' || arch === 'x64') {
-        try {
-          const smiOutput = execSync('nvidia-smi --query-gpu=name,memory.free --format=csv,noheader', { encoding: 'utf-8' });
-          const parsed = this.parseNvidiaSmiOutput(smiOutput);
-          gpuType = parsed.name;
-          gpuVram = parsed.vramGb;
-        } catch {
-          // No NVIDIA GPU
+        // Same Windows-hang defense as detectHardware: skip the spawn
+        // entirely when nvidia-smi is missing, and timeout-bound the
+        // call when we do invoke it.
+        if (isExecutableOnPath('nvidia-smi')) {
+          try {
+            const smiOutput = execSync(
+              'nvidia-smi --query-gpu=name,memory.free --format=csv,noheader',
+              {
+                encoding: 'utf-8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+                timeout: NVIDIA_SMI_TIMEOUT_MS,
+              },
+            );
+            const parsed = this.parseNvidiaSmiOutput(smiOutput);
+            gpuType = parsed.name;
+            gpuVram = parsed.vramGb;
+          } catch {
+            // No NVIDIA GPU or spawn timeout
+          }
         }
       }
     } catch (error) {

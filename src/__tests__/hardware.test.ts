@@ -23,11 +23,15 @@ jest.mock('os', () => ({
 }));
 
 describe('hardware (A13)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    // Default spawnSync mock — individual tests override as needed.
+    // Default spawnSync mock. Individual tests override as needed.
     // Returns a valid SpawnSyncReturns shape so destructuring never fails.
     mockSpawnSync.mockReturnValue({ status: 1, error: undefined });
+    // Process-lifetime cache must be reset per test or mocks from one
+    // case leak into the next via the cached Hardware object.
+    const { resetHardwareCache } = await import('../modules/hardware/hardware.js');
+    resetHardwareCache();
   });
 
   describe('detectHardware', () => {
@@ -785,6 +789,87 @@ describe('hardware (A13)', () => {
       expect(getRecommendedTier(1)).toBe(1);
       expect(getRecommendedTier(0)).toBe(0);
       expect(getRecommendedTier(0.5)).toBe(0);
+    });
+  });
+
+  describe('cache + pre-flight (Windows hang fix)', () => {
+    it('detectHardware caches the result across calls (same object reference)', async () => {
+      const { detectHardware } = await import('../modules/hardware/hardware.js');
+      mockExecSync.mockReturnValue('Apple M3 Max');
+
+      const first = detectHardware();
+      const second = detectHardware();
+
+      // Same reference proves the cache hit. A re-probe would build a
+      // fresh object via the object-literal at the top of detectHardware.
+      expect(second).toBe(first);
+    });
+
+    it('detectHardware re-probes after resetHardwareCache()', async () => {
+      const { detectHardware, resetHardwareCache } = await import(
+        '../modules/hardware/hardware.js'
+      );
+      mockExecSync.mockReturnValue('Apple M3 Max');
+
+      const first = detectHardware();
+      resetHardwareCache();
+      const second = detectHardware();
+
+      // Distinct object identity confirms the cache was bypassed.
+      expect(second).not.toBe(first);
+      // Value still matches because the mock is unchanged.
+      expect(second.gpuVramGb).toBe(first.gpuVramGb);
+    });
+
+    it('detectNvidiaGPU returns silently when nvidia-smi is not on PATH (no execSync spawn)', async () => {
+      const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
+      const savedPath = process.env.PATH;
+      const savedWinPath = process.env.Path;
+      // Force PATH to a directory that cannot contain nvidia-smi so the
+      // pre-flight check fails. /tmp is safe on POSIX runners; on Win
+      // hosts CI never exercises this test file (mocked arch=arm64) but
+      // we clear Path defensively too.
+      process.env.PATH = '/tmp';
+      delete process.env.Path;
+      try {
+        const hardware = {
+          cpuCores: 8,
+          ramGb: 32,
+          gpuVramGb: 0,
+          hardwareClass: 0,
+          hasOllama: false,
+        };
+
+        detectNvidiaGPU(hardware);
+
+        // No execSync invocation when the binary is missing.
+        expect(mockExecSync).not.toHaveBeenCalled();
+        // Hardware stays at the default no-GPU state.
+        expect(hardware.gpuVramGb).toBe(0);
+        expect(hardware.hardwareClass).toBe(0);
+      } finally {
+        process.env.PATH = savedPath;
+        if (savedWinPath !== undefined) process.env.Path = savedWinPath;
+      }
+    });
+
+    it('detectNvidiaGPU still parses gpuVramGb=0 cleanly from existing "nvidia-smi not found" mock flow', async () => {
+      // Preserves the historical test at hardware.test.ts:577 — when
+      // execSync throws "nvidia-smi not found" mid-detection, the
+      // outer try/catch in detectHardware swallows it and we get a
+      // clean Hardware object with gpuVramGb=0.
+      const { detectHardware } = await import('../modules/hardware/hardware.js');
+      mockExecSync.mockImplementation((cmd: any) => {
+        if (typeof cmd === 'string' && cmd.includes('sysctl')) {
+          throw new Error('nvidia-smi not found');
+        }
+        return '';
+      });
+
+      const hardware = detectHardware();
+
+      expect(hardware.gpuVramGb).toBe(0);
+      expect(hardware.hardwareClass).toBe(0);
     });
   });
 });
