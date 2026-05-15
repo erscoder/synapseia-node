@@ -454,16 +454,21 @@ async function bootstrap() {
           // (further down) does not fire on the same boot.
           keystoreActive = true;
         } else if (keystoreActive) {
-          // Hardened branch: load passphrase from file-mounted secret
-          // (SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE) when present, else
-          // prompt interactively. The legacy SYNAPSEIA_WALLET_PASSWORD
-          // env var is NEVER read on this path.
+          // Hardened branch — passphrase resolution chain:
+          //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE  (file-mounted secret)
+          //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD  (env var,
+          //      mirrors what node-ui Tauri's start_node passes when
+          //      spawning the CLI — operators don't get a TTY in that
+          //      flow and would otherwise hang on the prompt below)
+          //   3. interactive prompt (3-attempt retry)
           const { password: passwordPrompt } = await import('@inquirer/prompts');
           const filePass = await readPassphraseFromFile(
             process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
             logger,
           );
-          let envPass = filePass;
+          const envPassRaw = process.env.SYNAPSEIA_WALLET_PASSWORD?.trim()
+            || process.env.WALLET_PASSWORD?.trim();
+          let envPass = filePass ?? (envPassRaw && envPassRaw.length > 0 ? envPassRaw : null);
           let attempts = 0;
           const maxAttempts = 3;
           // eslint-disable-next-line no-constant-condition
