@@ -1,5 +1,20 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-15] chore(release): bump 0.8.53 lockstep (cb822133)
+
+Lockstep release bundling the C sub-fix from this cycle:
+
+- **docking auto-install on GPU boot** (`59961191`) — `installDockingDeps()`
+  auto-installs Vina + Open Babel on first GPU boot via OS-appropriate
+  package manager (brew/apt-get→dnf/win skip). Non-fatal on failure.
+  Honors `DISABLE_AUTO_INSTALL_DOCKING=true`. After install, heartbeat
+  picks up `docking` cap on next 60s tick and coord resumes pair
+  dispatch. Past docking rounds in prod ended in HUMAN_REVIEW because
+  no node ever submitted; this lands the missing primitive.
+
+Sync rule: coord + node + node-ui all share `0.8.53`. Tag pushed as
+`node-v0.8.53` to trigger `publish-npm.yml`.
+
 ## [2026-05-15] feat(docking): auto-install Vina + Open Babel on GPU node first boot (59961191)
 
 Past docking rounds in coord prod ended with all pairs in
