@@ -11,6 +11,18 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.52 lockstep — node-ui auto-update via npm registry (6fbb6931)
+
+Version-only bump for the node CLI. No functional changes here.
+
+Lockstep companion to `packages/node-ui` `4cfe1f7`, which moved the
+desktop UI's auto-update freshness check off the coordinator's
+`/version` endpoint and onto the npm registry's `latest` dist-tag.
+The CLI surface — `wallet-verify`, `wallet-create`, `start`,
+`claim-wo-rewards`, etc. — is unchanged. Operators do not need to
+update from 0.8.51 unless they want their node-ui to pull this
+release on next launch.
+
 ## [2026-05-15] chore(release): 0.8.51 lockstep — node-ui keystore unlock end-to-end (e47fe28e)
 
 Version-only commit. Hotfix for node-ui 0.8.50 where:
