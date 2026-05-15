@@ -11,6 +11,20 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.44 lockstep — Linux GPU pod hardware-detect hotfix (1fcc884f)
+
+Version-only commit. Carries the `1f2f8857` hardware fix that
+unblocks Linux pods with NVIDIA drivers (e.g. RTX A4500 20GB)
+where `detectNvidiaGPU` was hard-coded with
+`--format=csv,noheader,nounits` and the parser regex only
+matched `MiB`/`GiB` suffixes — pods resolved with
+`gpuVramGb=0 / hardwareClass=0` and refused every GPU work-order
+with `Model 'ollama/qwen2.5:0.5b' requires hardware class 1 or
+higher`. 0.8.43 ship was clean on macOS / Apple Silicon paths
+because they go through `detectAppleSilicon`, but every
+Linux+NVIDIA operator was silently locked out. Lockstep bump
+keeps coord + node + node-ui versioned together.
+
 ## [2026-05-15] fix(hardware): bare-number nvidia-smi parse fallback (1f2f8857)
 
 The `memory.free` probe was hard-coded with
