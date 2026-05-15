@@ -11,6 +11,56 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(config/llm): canonical Ollama tag migration + runtime auto-pull retry (cf0577b5)
+
+Live operator pod (Linux + RTX A4500) on 0.8.45 hit the
+follow-on bug: the wizard pre-0.8.45 saved `qwen2.5-coder-7b`
+(dash-form, no provider prefix). The 0.8.45 migration prefixed
+to `ollama/qwen2.5-coder-7b` but kept the dash. The runtime call
+to the Ollama daemon then failed with `model 'qwen2.5-coder-7b'
+not found` because real Ollama tags use colon-form
+(`qwen2.5-coder:7b`). WO accepted, generate crashed, 0 reward.
+
+Two layers landed in this release:
+
+1. **Migration tag canonicalisation** (`src/modules/config/config.ts`):
+   - New pre-emptive rewrite branch heals 0.8.45-migrated
+     `ollama/<dash-name>` configs to `ollama/<ollamaTag>` BEFORE
+     the `resolveSlug` early-return. Without this branch the slug
+     would persist on disk forever because `resolveSlug` accepts
+     any Ollama modelId.
+   - The existing "auto-prefix unprefixed slug" branch now also
+     resolves dash-form catalog names to the canonical tag when
+     wrapping bare slugs.
+   - Falls back to the literal slug when no `ollamaTag` override
+     exists or the slug is not in the catalog (custom-pulled
+     models stay untouched).
+
+2. **Runtime auto-pull retry** (`src/modules/llm/llm-provider.ts`):
+   - `generateOllamaLLM` now wraps the helper call with a one-shot
+     auto-pull. When Ollama emits `model 'X' not found` or
+     `not found, try pulling`, the node calls
+     `ollamaHelper.pullModel` once and retries the generate.
+   - If the pull itself fails, the original generate error
+     propagates (the caller sees the real runtime context, not
+     the network error from the pull).
+   - Transient errors (runner crash, EAI_AGAIN, etc.) skip the
+     pull entirely so the outer retry loop in `generateLLM`
+     handles them via its existing schedule.
+   - The `ensureModel` helper that existed since 0.6.x and was
+     never wired up is now obsolete — the new retry path
+     supersedes it.
+
+Reviewer (superpowers:code-reviewer) caught the missing
+`ollama/<dash-name>` rewrite branch on round 1 (MEDIUM-1) — the
+pre-emptive branch closes that gap and re-runs ship-as-is.
+
+10 new tests: migration covers bare dash, bare colon, prefixed
+dash, prefixed canonical (must not loop), catalog-absent
+fallback, ollamaTag-absent fallback. Auto-pull covers happy
+retry, pull-fail propagates original, transient skip, and
+retry-after-pull-also-fails. **1693/43 skipped tests pass.**
+
 ## [2026-05-15] chore(release): 0.8.45 lockstep — Ollama-pick wizard regression hotfix (e188483e)
 
 Version-only commit. Ships the `a0bb328d` wizard + migration +
