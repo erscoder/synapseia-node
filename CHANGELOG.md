@@ -11,6 +11,48 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(cli): fresh-install creates keystore directly with one passphrase (20f718f0)
+
+Operator on a fresh pod ran `syn start` for the first time and
+was prompted for TWO passwords back-to-back:
+
+1. Legacy `wallet.json` password (the existing
+   `walletService.getOrCreate` path generated a keypair and
+   encrypted it into `wallet.json`).
+2. New keystore passphrase, min 12 chars (the post-load
+   migration prompt immediately re-encrypted the same keypair
+   into `wallet.keystore.json`).
+
+The fresh pod then had BOTH a legacy plaintext-encrypted
+`wallet.json` AND the hardened keystore on disk — twice the
+exposure surface for zero functional benefit, plus the UX
+hostility of two prompts in a single boot.
+
+Added a fresh-install branch in `packages/node/src/cli/index.ts`
+that fires when neither the keystore nor the legacy wallet.json
+exists: generate the BIP39 mnemonic + keypair in-memory, encrypt
+directly into the keystore via `keystore.encrypt`, never touch
+`walletService`. **One passphrase prompt total.**
+
+Reviewer (`superpowers:code-reviewer`) round 1 also flagged:
+
+- `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` is now honoured on this
+  branch too (symmetric with the hardened-branch contract).
+  Docker / systemd / fly-machines fresh boots can bootstrap a
+  wallet without a TTY when the passphrase file is mounted.
+- The legacy `displayCreationWarning` references a backup file
+  (`wallet.json.backup`) that the keystore path never writes —
+  the inline banner now prints the actual `keystore.getPath()`
+  and reminds the operator that the mnemonic is the only
+  off-disk recovery vector.
+
+Legacy + already-keystore paths untouched. Operators with a
+preexisting `wallet.json` still see the legitimate one-shot
+migration prompt (two passwords is correct there because the
+legacy artefact already exists).
+
+1693/43-skipped tests pass.
+
 ## [2026-05-15] fix(staking-cli): default SOLANA_RPC_URL to mainnet when unset (44b43447)
 
 `syn stake N` on a fresh pod (no env vars) threw
