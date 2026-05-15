@@ -11,6 +11,32 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.50 lockstep — wallet-verify keystore + canonical program constants + README (87ac52d1)
+
+Version-only commit. Ships three node-side fixes:
+
+- node `f9544ba0` — `wallet-verify` now validates against the
+  keystore first (legacy fallback). Desktop `node-ui` finally
+  honours operators who migrated to the vault passphrase; the
+  unlock prompt no longer reuses the legacy `wallet.json`
+  password path.
+- node `188d0258` — staking-cli defaults `COORDINATOR_URL` to
+  the official synapseia coordinator (was `localhost:3701`) and
+  prepends a `createAssociatedTokenAccountInstruction` when the
+  user's SYN ATA is missing. Closes the AnchorError 3012
+  `AccountNotInitialized` path operators hit on first stake when
+  the faucet drop did not init the ATA.
+- node `d033a614` — every on-chain address consolidated in
+  `packages/node/src/constants/programs.ts` (staking +
+  rewards-vault + escrow + syn_token program + SYN mint).
+  Mainnet flip becomes a one-file change. README updated:
+  Step 2 describes the vault passphrase + BIP39 recovery phrase,
+  troubleshooting row points at the keystore restore path, the
+  data-location section names `wallet.keystore.json` as the
+  canonical path.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] chore(release): 0.8.49 lockstep — staking-cli keystore + self-updater prefix (4720c457)
 
 Version-only commit. Ships:
