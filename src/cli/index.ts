@@ -1522,30 +1522,81 @@ async function bootstrap() {
     });
 
   // ── wallet-verify ──────────────────────────────────────────────────────────
-  // Non-interactive: takes password from SYNAPSEIA_WALLET_PASSWORD, tries to
-  // decrypt the encrypted wallet.json, and exits 0 on success or 1 on failure.
-  // Used by the desktop UI to validate the password the user typed.
+  // Non-interactive: validate the operator passphrase against the hardened
+  // keystore (~/.synapseia/wallet.keystore.json) when present, otherwise fall
+  // back to the legacy wallet.json (so operators who haven't migrated yet
+  // still unlock from the desktop UI). Exits 0 on success, 1 on bad
+  // passphrase, 2 on missing passphrase, 3 when neither keystore nor legacy
+  // wallet are on disk, 4 on any other load error.
+  //
+  // Passphrase resolution order (matches the boot path semantics):
+  //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE (mounted secret, file-based)
+  //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD (env, back-compat with
+  //      the desktop UI `unlock_wallet` Tauri command which still passes the
+  //      typed password through SYNAPSEIA_WALLET_PASSWORD).
+  //
+  // Stdout/stderr markers (`__WALLET_OK__ <pubkey>` and `INVALID_PASSWORD`)
+  // are part of the contract with `packages/node-ui/src-tauri/src/commands.rs::unlock_wallet`
+  // and MUST NOT change without coordinating a Tauri side update.
   program
     .command('wallet-verify')
-    .description('Validate wallet password (reads SYNAPSEIA_WALLET_PASSWORD)')
+    .description('Validate wallet passphrase against keystore (or legacy wallet.json fallback)')
     .action(async () => {
-      const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-      if (!envPassword) {
-        logger.error('SYNAPSEIA_WALLET_PASSWORD env var is required for wallet-verify');
+      const filePassphrase = await readPassphraseFromFile(
+        process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+        logger,
+      );
+      const envPassphrase = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
+      const passphrase = filePassphrase ?? envPassphrase;
+      if (!passphrase) {
+        logger.error('SYNAPSEIA_WALLET_PASSWORD env var or SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE is required for wallet-verify');
         process.exit(2);
       }
+
       const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+      const keystorePath = path.join(nodeHome, 'wallet.keystore.json');
+      const keystore = new EncryptedKeystore(keystorePath);
       const walletPath = path.join(nodeHome, 'wallet.json');
-      if (!existsSync(walletPath)) {
+      const keystoreExists = keystore.exists();
+      const legacyExists = existsSync(walletPath);
+
+      if (!keystoreExists && !legacyExists) {
         logger.error('WALLET_NOT_FOUND');
         process.exit(3);
       }
+
+      // Keystore branch: try the hardened keystore first. On INVALID_PASSPHRASE
+      // AND a legacy wallet.json present, fall through to the legacy decrypt
+      // with the SAME passphrase — this covers operators mid-migration
+      // (keystore exists but the desktop UI still has the legacy password
+      // cached) without surfacing a confusing "wrong password" to a user
+      // whose password was actually fine for one of the two stores.
+      if (keystoreExists) {
+        try {
+          const secretKeyBytes = await keystore.decrypt(passphrase);
+          const { Keypair } = await import('@solana/web3.js');
+          const kp = Keypair.fromSecretKey(secretKeyBytes);
+          logger.log(`__WALLET_OK__ ${kp.publicKey.toBase58()}`);
+          process.exit(0);
+        } catch (err) {
+          if (err instanceof EncryptedKeystoreError && err.code === 'INVALID_PASSPHRASE') {
+            if (!legacyExists) {
+              logger.error('INVALID_PASSWORD');
+              process.exit(1);
+            }
+            // Fall through to legacy attempt below.
+          } else {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error(`WALLET_LOAD_ERROR: ${msg}`);
+            process.exit(4);
+          }
+        }
+      }
+
+      // Legacy fallback: either no keystore present, or keystore decrypt
+      // returned INVALID_PASSPHRASE and a legacy wallet.json is on disk.
       try {
-        // TODO(phase0.3-followup): migrate `wallet-verify` to validate
-        // against the hardened EncryptedKeystore so the desktop UI can
-        // stop passing SYNAPSEIA_WALLET_PASSWORD as an env var.
-        // See CHANGELOG "Known limitations" under the keystore entry.
-        const wallet = await walletService.load(nodeHome, envPassword);
+        const wallet = await walletService.load(nodeHome, passphrase);
         logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
         process.exit(0);
       } catch (err) {
