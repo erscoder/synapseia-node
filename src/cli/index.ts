@@ -1570,12 +1570,14 @@ async function bootstrap() {
         process.exit(3);
       }
 
-      // Keystore branch: try the hardened keystore first. On INVALID_PASSPHRASE
-      // AND a legacy wallet.json present, fall through to the legacy decrypt
-      // with the SAME passphrase — this covers operators mid-migration
-      // (keystore exists but the desktop UI still has the legacy password
-      // cached) without surfacing a confusing "wrong password" to a user
-      // whose password was actually fine for one of the two stores.
+      // Keystore branch: when the hardened keystore is on disk it is the
+      // ONLY accepted unlock path. The legacy wallet.json fallback would
+      // happily validate the old plaintext-encrypted password and the UI
+      // would store THAT — but the downstream `syn start` spawn only
+      // accepts the vault passphrase to decrypt the keystore, so the
+      // operator would unlock the UI and then immediately hang on the
+      // start-node prompt. Force vault discipline: keystore present →
+      // vault passphrase only.
       if (keystoreExists) {
         try {
           const secretKeyBytes = await keystore.decrypt(passphrase);
@@ -1585,21 +1587,18 @@ async function bootstrap() {
           process.exit(0);
         } catch (err) {
           if (err instanceof EncryptedKeystoreError && err.code === 'INVALID_PASSPHRASE') {
-            if (!legacyExists) {
-              logger.error('INVALID_PASSWORD');
-              process.exit(1);
-            }
-            // Fall through to legacy attempt below.
-          } else {
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.error(`WALLET_LOAD_ERROR: ${msg}`);
-            process.exit(4);
+            logger.error('INVALID_PASSWORD');
+            process.exit(1);
           }
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error(`WALLET_LOAD_ERROR: ${msg}`);
+          process.exit(4);
         }
       }
 
-      // Legacy fallback: either no keystore present, or keystore decrypt
-      // returned INVALID_PASSPHRASE and a legacy wallet.json is on disk.
+      // Legacy fallback: no keystore present. Operators that have not yet
+      // run `syn start` on this machine still unlock from the desktop UI
+      // via the legacy plaintext-encrypted wallet.json.
       try {
         const wallet = await walletService.load(nodeHome, passphrase);
         logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
