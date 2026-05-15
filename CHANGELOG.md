@@ -11,6 +11,17 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.45 lockstep — Ollama-pick wizard regression hotfix (e188483e)
+
+Version-only commit. Ships the `a0bb328d` wizard + migration +
+catalog fix that unblocks operators who pick a local Ollama
+model via `syn config`. Before this release the wizard wrote
+the catalog dash-name verbatim (e.g. `qwen2.5-coder-14b`) with
+no provider prefix; migration on next boot rewrote it to the
+cloud fallback `anthropic/claude-sonnet-4-6` and refused to
+start with `Cloud model … requires --llm-key`. Lockstep with
+coord + node-ui per the sync rule.
+
 ## [2026-05-15] fix(cli/config): Ollama-pick wizard + migration regression (a0bb328d)
 
 The 0.8.44 release fixed `gpuVramGb=0` on Linux NVIDIA pods, but
