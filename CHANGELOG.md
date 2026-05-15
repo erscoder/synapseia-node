@@ -11,6 +11,15 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.43 lockstep bump for node-ui auto-upgrade-on-boot (6a527b96)
+
+Version-only bump. Node has no functional change in this cycle.
+Node-ui 0.8.43 adds boot-time CLI freshness check + spinner
+overlay so stale node CLI installs auto-upgrade before the
+operator can touch Settings. Lockstep keeps coord + node +
+node-ui versioned together.
+
+
 ## [2026-05-14] fix(cli): plain-ASCII boot banner for Tauri webview parity (07a7d507)
 
 The previous heavy-block + box-drawing banner (`██╗`, `╔════╗`)
