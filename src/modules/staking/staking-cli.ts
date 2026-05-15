@@ -33,7 +33,11 @@ function requireEnv(key: string, fallback?: string): string {
 
 const getStakingProgramId = () => requireEnvPublicKey('STAKING_PROGRAM_ID');
 const getSynMint = () => requireEnvPublicKey('SYN_TOKEN_MINT');
-const getSolanaRpcUrl = () => requireEnv('SOLANA_RPC_URL');
+// Mainnet default keeps the staking CLI usable on a fresh pod without
+// pre-set env vars; ops that need devnet override via SOLANA_RPC_URL.
+// Staking lives on mainnet in production so the fallback here is
+// intentionally NOT the devnet RPC used by other modules.
+const getSolanaRpcUrl = () => requireEnv('SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com');
 const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
