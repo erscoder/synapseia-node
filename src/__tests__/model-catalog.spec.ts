@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { ModelCatalogHelper, MODEL_CATALOG, CLOUD_MODELS, FULL_CATALOG, type ModelInfo, type ModelCategory } from '../modules/model/model-catalog';
+import { ModelCatalogHelper, MODEL_CATALOG, CLOUD_MODELS, FULL_CATALOG, getOllamaTag, type ModelInfo, type ModelCategory } from '../modules/model/model-catalog';
 
 var mockExecSync: any = jest.fn();
 
@@ -32,6 +32,33 @@ describe('ModelCatalogHelper', () => {
       const categories = ['embedding', 'general', 'code', 'multilingual'] as const;
       FULL_CATALOG.forEach((model) => {
         expect(categories).toContain(model.category);
+      });
+    });
+  });
+
+  describe('getOllamaTag', () => {
+    // Regression: 0.8.44 wizard wrote catalog `name` straight into
+    // `config.defaultModel` and ollama daemon could not find the
+    // model because real tags use colon (`qwen2.5-coder:14b`), not
+    // dash (`qwen2.5-coder-14b`). Each curated entry must surface
+    // the right tag — falling back to `name` when no override is
+    // explicit. This test pins both behaviors.
+    it('returns ollamaTag override when present', () => {
+      const m = MODEL_CATALOG.find((x) => x.name === 'qwen2.5-coder-14b');
+      expect(m).toBeDefined();
+      expect(getOllamaTag(m!)).toBe('qwen2.5-coder:14b');
+    });
+
+    it('falls back to name when no ollamaTag override is set', () => {
+      const m: ModelInfo = { name: 'custom-pulled-model', minVram: 4, recommendedTier: 2 };
+      expect(getOllamaTag(m)).toBe('custom-pulled-model');
+    });
+
+    it('every curated qwen2.5-coder catalog entry exposes a colon tag', () => {
+      const coderEntries = MODEL_CATALOG.filter((m) => m.name.startsWith('qwen2.5-coder-'));
+      expect(coderEntries.length).toBeGreaterThan(0);
+      coderEntries.forEach((m) => {
+        expect(getOllamaTag(m)).toMatch(/^qwen2\.5-coder:/);
       });
     });
   });

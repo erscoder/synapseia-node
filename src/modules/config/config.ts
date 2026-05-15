@@ -123,6 +123,19 @@ export function migrateModelSlug(slug: string): { slug: string; reason: string }
     }
   }
 
+  // Unprefixed slug (no slash): assume the operator (or an older
+  // wizard) meant an Ollama model. Auto-prefix `ollama/` before the
+  // hard fallback to cloud — falling back to a cloud provider when the
+  // operator picked a local model is catastrophic UX: every boot would
+  // then refuse to start with "requires --llm-key". Defense against
+  // the 0.8.44 wizard regression that wrote bare catalog names.
+  if (slash < 0) {
+    const candidate = `ollama/${slug}`;
+    if (resolveSlug(candidate)) {
+      return { slug: candidate, reason: `unprefixed slug; assuming ollama provider` };
+    }
+  }
+
   return { slug: FALLBACK_MODEL_SLUG, reason: 'unknown provider; using default' };
 }
 

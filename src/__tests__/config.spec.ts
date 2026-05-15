@@ -132,6 +132,30 @@ describe('Config Module', () => {
       expect(cfg.defaultModel).toBe('anthropic/claude-sonnet-4-6');
     });
 
+    it('auto-prefixes unprefixed ollama-style slugs (0.8.44 wizard regression defense)', () => {
+      // 0.8.44 wizard wrote `qwen2.5-coder:14b` straight into config
+      // without the `ollama/` provider prefix. Migration must rescue
+      // these as ollama models, not fall back to the cloud default
+      // (which then refuses to boot without --llm-key).
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'qwen2.5-coder:14b' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:14b');
+    });
+
+    it('auto-prefixes unprefixed dash-form catalog names as ollama models', () => {
+      // Same regression but the wizard wrote the catalog dash name
+      // verbatim (e.g. `qwen2.5-coder-14b`). Still recover as ollama.
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'qwen2.5-coder-14b' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder-14b');
+    });
+
     it('tolerates off-list cloud model ids on whitelisted providers (no silent rewrite)', () => {
       // Vendors release new models faster than we update providers.ts.
       // If the operator deliberately pinned an off-list model id under

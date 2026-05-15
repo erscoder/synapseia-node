@@ -56,7 +56,7 @@ import { HardwareService } from '../modules/hardware/services/hardware.service';
 import { NodeConfigService } from '../modules/config/services/node-config.service';
 import { WalletService } from '../modules/wallet/services/wallet.service';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../infrastructure/keystore/EncryptedKeystore';
-import { ModelCatalogHelper } from '../modules/model/model-catalog';
+import { ModelCatalogHelper, getOllamaTag } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { CLOUD_PROVIDERS, resolveCloudApiKeyFromEnv } from '../modules/llm/providers';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
@@ -1266,7 +1266,7 @@ async function bootstrap() {
 
           if (modelMode === 'recommended') {
             if (compatibleModels.length > 0) {
-              config.defaultModel = compatibleModels[0].name;
+              config.defaultModel = `ollama/${getOllamaTag(compatibleModels[0])}`;
               logger.log(`  ✓ Recommended model: ${config.defaultModel}`);
               step = 'llmConfig';
             } else {
@@ -1295,7 +1295,7 @@ async function bootstrap() {
             } else {
               choices = compatibleModels.map((m) => ({
                 name: `${m.name}  (${m.minVram}GB VRAM, Tier ${m.recommendedTier})`,
-                value: m.name,
+                value: `ollama/${getOllamaTag(m)}`,
                 description: (m as ModelInfo).description,
               }));
             }
@@ -1304,7 +1304,7 @@ async function bootstrap() {
           if (modelMode === 'all') {
             choices = catalog.map((m) => ({
               name: `${m.name}  (${m.category}, ${m.minVram}GB VRAM)`,
-              value: m.name,
+              value: `ollama/${getOllamaTag(m)}`,
               description: (m as ModelInfo).description,
               disabled: m.recommendedTier > hardware.hardwareClass ? 'Requires higher hardware class' : false,
             }));

@@ -23,6 +23,26 @@ export interface ModelInfo {
   provider?: 'ollama' | 'cloud';
   description?: string;
   isCloud?: boolean; // Cloud-only models (0 VRAM)
+  /**
+   * Canonical Ollama tag (colon-separated). The `name` field uses
+   * dash-separated form because it doubles as the UI label and the
+   * normalization key (see `normalizeModelName`). When the operator
+   * picks this entry from the wizard, the runtime needs the real
+   * Ollama tag to call `/api/generate` — leaving this undefined makes
+   * the runtime use `name` verbatim, which silently fails for entries
+   * whose Ollama tag differs (e.g. `qwen2.5-coder-14b` → tag
+   * `qwen2.5-coder:14b`). Required for any entry whose UI label
+   * differs from the Ollama tag.
+   */
+  ollamaTag?: string;
+}
+
+/**
+ * Resolve the canonical Ollama tag for a catalog entry, falling back
+ * to `name` when no explicit override is present.
+ */
+export function getOllamaTag(model: ModelInfo): string {
+  return model.ollamaTag ?? model.name;
 }
 
 /**
@@ -54,6 +74,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // General models (small)
   {
     name: 'qwen2.5-0.5b',
+    ollamaTag: 'qwen2.5:0.5b',
     minVram: 1,
     recommendedTier: 1,
     category: 'general',
@@ -61,6 +82,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'gemma-3-1b-web',
+    ollamaTag: 'gemma3:1b',
     minVram: 2,
     recommendedTier: 1,
     category: 'general',
@@ -68,6 +90,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'phi-2',
+    ollamaTag: 'phi:latest',
     minVram: 2,
     recommendedTier: 1,
     category: 'general',
@@ -75,6 +98,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'tiny-vicuna-1b',
+    ollamaTag: 'tinyllama:latest',
     minVram: 1,
     recommendedTier: 1,
     category: 'general',
@@ -89,6 +113,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'qwen2-0.5b',
+    ollamaTag: 'qwen2:0.5b',
     minVram: 1,
     recommendedTier: 1,
     category: 'general',
@@ -96,6 +121,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'qwen2-0.5b-instruct',
+    ollamaTag: 'qwen2:0.5b-instruct',
     minVram: 1,
     recommendedTier: 1,
     category: 'general',
@@ -105,6 +131,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // Code models (small)
   {
     name: 'qwen2.5-coder-0.5b',
+    ollamaTag: 'qwen2.5-coder:0.5b',
     minVram: 1,
     recommendedTier: 1,
     category: 'code',
@@ -112,6 +139,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'qwen2.5-coder-1.5b',
+    ollamaTag: 'qwen2.5-coder:1.5b',
     minVram: 2,
     recommendedTier: 1,
    category: 'code',
@@ -121,6 +149,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // General models (medium)
   {
     name: 'qwen2.5-coder-3b',
+    ollamaTag: 'qwen2.5-coder:3b',
     minVram: 3,
     recommendedTier: 2,
     category: 'code',
@@ -128,6 +157,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'gemma-3-1b',
+    ollamaTag: 'gemma3:1b',
     minVram: 2,
     recommendedTier: 1,
     category: 'general',
@@ -135,6 +165,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'gemma-3-4b',
+    ollamaTag: 'gemma3:4b',
     minVram: 4,
     recommendedTier: 2,
     category: 'general',
@@ -144,6 +175,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // Code models (medium-large)
   {
     name: 'qwen2.5-coder-7b',
+    ollamaTag: 'qwen2.5-coder:7b',
     minVram: 6,
     recommendedTier: 2,
     category: 'code',
@@ -151,6 +183,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'glm-4-9b',
+    ollamaTag: 'glm4:9b',
     minVram: 8,
     recommendedTier: 2,
     category: 'general',
@@ -158,6 +191,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'mistral-7b-instruct',
+    ollamaTag: 'mistral:7b-instruct',
     minVram: 6,
     recommendedTier: 2,
     category: 'general',
@@ -167,6 +201,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // General models (large)
   {
     name: 'gemma-3-12b',
+    ollamaTag: 'gemma3:12b',
     minVram: 10,
     recommendedTier: 3,
     category: 'general',
@@ -174,6 +209,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'llama-3.1-8b-instruct',
+    ollamaTag: 'llama3.1:8b-instruct-q4_K_M',
     minVram: 10,
     recommendedTier: 3,
     category: 'general',
@@ -181,6 +217,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'llama-3.2-1b-instruct',
+    ollamaTag: 'llama3.2:1b-instruct-q4_K_M',
     minVram: 1,
     recommendedTier: 1,
     category: 'general',
@@ -190,6 +227,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // Code models (large)
   {
     name: 'qwen2.5-coder-14b',
+    ollamaTag: 'qwen2.5-coder:14b',
     minVram: 12,
     recommendedTier: 3,
     category: 'code',
@@ -199,6 +237,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // General models (very large)
   {
     name: 'gpt-oss-20b',
+    ollamaTag: 'gpt-oss:20b',
     minVram: 16,
     recommendedTier: 4,
     category: 'general',
@@ -206,6 +245,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'gemma-3-27b',
+    ollamaTag: 'gemma3:27b',
     minVram: 20,
     recommendedTier: 4,
     category: 'general',
@@ -215,6 +255,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   // Code models (very large)
   {
     name: 'qwen2.5-coder-32b',
+    ollamaTag: 'qwen2.5-coder:32b',
     minVram: 24,
     recommendedTier: 4,
     category: 'code',
@@ -231,6 +272,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'qwen3-coder-30b-a3b',
+    ollamaTag: 'qwen3-coder:30b-a3b',
     minVram: 24,
     recommendedTier: 4,
     category: 'code',
