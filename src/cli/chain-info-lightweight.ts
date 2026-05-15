@@ -19,6 +19,11 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { getCoordinatorUrl } from '../constants/coordinator';
+import {
+  getStakingProgramIdString,
+  getRewardsVaultProgramIdString,
+  getSynTokenMintString,
+} from '../constants/programs';
 
 interface ChainInfoPayload {
   wallet: string | null;
@@ -309,12 +314,9 @@ async function fetchNodeStats(coordinatorUrl: string, pubkey: string): Promise<N
 export async function runChainInfoLightweight(): Promise<void> {
   const wallet = readPublicKey();
   const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-  const synMint =
-    process.env.SYN_TOKEN_MINT ?? 'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8';
-  const stakingProgramId =
-    process.env.STAKING_PROGRAM_ID ?? 'CYW5Cprp5JuzaXtPyV8LPBgPzbze6QHnc3oFBAVaFkfw';
-  const rewardsVaultProgramId =
-    process.env.REWARDS_VAULT_PROGRAM_ID ?? 'D9pkzWv2Ak9J8vXDVcMM1P51hDmjRJEwbuYHxCuJKTEN';
+  const synMint = getSynTokenMintString();
+  const stakingProgramId = getStakingProgramIdString();
+  const rewardsVaultProgramId = getRewardsVaultProgramIdString();
 
   const emptyPayload: ChainInfoPayload = {
     wallet,

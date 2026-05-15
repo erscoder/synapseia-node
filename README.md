@@ -53,7 +53,7 @@ You can use `synapseia` or its short alias `syn` interchangeably.
 
 ### Step 2 — Initialize your node (creates a wallet)
 
-The first run prompts you for a node name and a wallet password. The password encrypts your wallet at rest — **there is no recovery if you forget it**.
+The first run prompts you for a node name and a **vault passphrase (min 12 characters)**. The passphrase encrypts your wallet at rest using the hardened `EncryptedKeystore` (scrypt + AES-256-GCM) — **there is no recovery if you forget it**, but the on-screen recovery phrase (BIP39 mnemonic) lets you restore the wallet on another machine.
 
 ```bash
 synapseia start
@@ -62,10 +62,20 @@ synapseia start
 Output looks like:
 
 ```text
-Wallet created at ~/.synapseia/wallet.json
-Wallet address: 3xK...nQ8
-⚠️  Save this address — you'll need it for funding.
+[Keystore] new wallet encrypted at ~/.synapseia/wallet.keystore.json (mode 0600)
+
+🔐  IMPORTANT — write down this recovery phrase NOW:
+     <12 BIP39 words>
+     Wallet address: 3xK...nQ8
+     Keystore file:  ~/.synapseia/wallet.keystore.json
+     The mnemonic is the ONLY way to recover this wallet if the keystore
+     file is lost or corrupted. Store it offline (paper or hardware) and
+     never share it.
 ```
+
+**Copy the wallet address AND the recovery phrase now.** The address gets pasted into the faucets below; the recovery phrase goes on paper / hardware backup.
+
+> **Non-interactive boot** (Docker, systemd, fly-machines): mount the passphrase at a mode-0600 file owned by the current uid and set `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE=/path/to/file`. `synapseia start` will skip the prompt.
 
 **Copy the wallet address now.** You'll paste it into two faucets in the next steps.
 
@@ -132,7 +142,7 @@ Open `https://dashboard.synapseia.network/nodes` and search for your wallet addr
 
 ## Optional — node-ui (desktop GUI)
 
-Prefer a desktop app over the CLI? `node-ui` is a cross-platform Tauri app that wraps the same runtime, uses the same wallet (`~/.synapseia/wallet.json`), and points at the same coordinator.
+Prefer a desktop app over the CLI? `node-ui` is a cross-platform Tauri app that wraps the same runtime, uses the same wallet (`~/.synapseia/wallet.keystore.json`), and points at the same coordinator.
 
 Download from [https://github.com/erscoder/synapseia-node-ui/releases](https://github.com/erscoder/synapseia-node-ui/releases):
 
@@ -140,7 +150,7 @@ Download from [https://github.com/erscoder/synapseia-node-ui/releases](https://g
 - **Windows:** `synapseia-node-ui_<version>_x64.msi`.
 - **Linux:** `synapseia-node-ui_<version>_amd64.AppImage`.
 
-Run the installer, follow the prompts, and on first launch the app will create or import the same `~/.synapseia/wallet.json` used by the CLI. Click **Start** to bring the node online — the GUI shows live logs and status.
+Run the installer, follow the prompts, and on first launch the app will create or import the same `~/.synapseia/wallet.keystore.json` used by the CLI. Click **Start** to bring the node online — the GUI shows live logs and status.
 
 ---
 
@@ -153,7 +163,7 @@ Run the installer, follow the prompts, and on first launch the app will create o
 | `Coordinator unreachable` / `ECONNREFUSED` | Network problem reaching the official coordinator. | Check your internet connection. Status: [status.synapseia.network](https://status.synapseia.network). |
 | `Cannot find module 'X'` | Global npm install was incomplete. | `npm i -g --force @synapseia-network/node`. |
 | Modal **"Beta tester limit reached"** in node-ui | Same as the CLI message above. | Same fix — re-try later. |
-| Wallet password forgotten | The wallet is encrypted; there is no recovery path. | Delete `~/.synapseia/wallet.json` and re-run `synapseia start`. **You'll lose the old address — fund the new one.** |
+| Vault passphrase forgotten | The keystore is encrypted; there is no passphrase recovery path. | Restore from the BIP39 recovery phrase you saved at Step 2: delete `~/.synapseia/wallet.keystore.json` (and the legacy `~/.synapseia/wallet.json` if present), then run `synapseia start` and pick **Restore from mnemonic** at the prompt. Without the mnemonic you must delete both files and fund a brand-new address. |
 
 ---
 
@@ -192,7 +202,7 @@ Run any command with `--help` for the full option list.
 
 ## Configuration & data location
 
-- **Wallet:** `~/.synapseia/wallet.json` (encrypted with your password).
+- **Wallet:** `~/.synapseia/wallet.keystore.json` (scrypt + AES-256-GCM, encrypted with your vault passphrase). A legacy `~/.synapseia/wallet.json` may also exist on operators that upgraded from pre-0.6.x; both contain the same keypair but the keystore is the only path the runtime reads on fresh installs.
 - **Config:** `~/.synapseia/config.json`.
 - **Logs:** stdout / stderr. Redirect to file with:
   ```bash

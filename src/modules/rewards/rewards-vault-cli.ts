@@ -17,22 +17,22 @@ import {
 } from '@solana/spl-token';
 import logger from '../../utils/logger';
 import { loadWalletWithPassword, sendAndConfirmFresh } from '../staking/staking-cli';
+import {
+  getRewardsVaultProgramId as resolveRewardsVaultProgramId,
+  getSynTokenMint as resolveSynTokenMint,
+} from '../../constants/programs';
 
 const DEFAULT_CU_LIMIT = 1_400_000;
 const DEFAULT_CU_PRICE_MICROLAMPORTS = 10_000;
 
-const REWARDS_VAULT_PROGRAM_ID_DEFAULT =
-  'D9pkzWv2Ak9J8vXDVcMM1P51hDmjRJEwbuYHxCuJKTEN';
-const SYN_TOKEN_MINT_DEFAULT = 'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8';
-
+// Program id + mint resolution is centralised in `constants/programs.ts`
+// so a future devnet→mainnet flip is a single-file change.
 function getRewardsVaultProgramId(): PublicKey {
-  return new PublicKey(
-    process.env.REWARDS_VAULT_PROGRAM_ID ?? REWARDS_VAULT_PROGRAM_ID_DEFAULT,
-  );
+  return resolveRewardsVaultProgramId();
 }
 
 function getSynMint(): PublicKey {
-  return new PublicKey(process.env.SYN_TOKEN_MINT ?? SYN_TOKEN_MINT_DEFAULT);
+  return resolveSynTokenMint();
 }
 
 function getSolanaRpcUrl(): string {

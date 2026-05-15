@@ -22,21 +22,16 @@ import { NodeConfigHelper, resolveSolanaRpcUrl } from '../config/config';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../../infrastructure/keystore/EncryptedKeystore';
 import { readPassphraseFromFile } from '../../infrastructure/keystore/passphrase-helpers';
 import { OFFICIAL_COORDINATOR_URL } from '../../constants/coordinator';
+import {
+  getStakingProgramId as resolveStakingProgramId,
+  getSynTokenMint as resolveSynTokenMint,
+} from '../../constants/programs';
 
-// IDs from .env — resolved lazily to avoid top-level throw when env is not set
-function requireEnvPublicKey(key: string): PublicKey {
-  const val = process.env[key];
-  if (!val) throw new Error(`${key} not informed`);
-  return new PublicKey(val);
-}
-function requireEnv(key: string, fallback?: string): string {
-  const val = process.env[key];
-  if (!val && fallback === undefined) throw new Error(`${key} not informed`);
-  return val ?? fallback!;
-}
-
-const getStakingProgramId = () => requireEnvPublicKey('STAKING_PROGRAM_ID');
-const getSynMint = () => requireEnvPublicKey('SYN_TOKEN_MINT');
+// Resolvers default to the official devnet program ids / mint; env vars
+// (`STAKING_PROGRAM_ID`, `SYN_TOKEN_MINT`) override for dev clusters or a
+// future mainnet flip. See `packages/node/src/constants/programs.ts`.
+const getStakingProgramId = (): PublicKey => resolveStakingProgramId();
+const getSynMint = (): PublicKey => resolveSynTokenMint();
 // Solana RPC URL resolution: env var > persisted config.rpcUrl > devnet default.
 // Synapseia runs on devnet today; operators that need a private RPC pin it via
 // `syn config --set-rpc-url <url>` and it persists in ~/.synapseia/config.json.
