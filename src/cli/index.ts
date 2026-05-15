@@ -743,6 +743,34 @@ async function bootstrap() {
         // Tier is a separate column (`nodes.tier`), NOT a capabilities entry.
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
 
+        // ── Docking deps auto-install (first GPU boot only) ─────────────────
+        // Auto-install Vina + Open Babel when the node has a GPU and the
+        // binaries are missing. Non-fatal: a failed install just leaves
+        // `docking` off the advertised cap list and the coord skips dispatch.
+        // Subsequent boots see isVinaAvailable === true and skip this path.
+        const hasGpu = capabilities.includes('gpu_training')
+          || capabilities.includes('gpu_inference');
+        if (hasGpu) {
+          try {
+            const { isVinaAvailable } = await import('../modules/docking');
+            const vinaPresent = await isVinaAvailable().catch(() => false);
+            if (!vinaPresent) {
+              const { installDockingDeps } = await import('../modules/docking/install');
+              logger.log('[bootstrap] GPU detected and Vina/Open Babel missing — attempting auto-install...');
+              const result = await installDockingDeps();
+              if (result.installed) {
+                logger.log(`[bootstrap] Vina + Open Babel installed in ${result.durationMs}ms — heartbeat will pick up docking cap on next tick`);
+              } else {
+                logger.warn(`[bootstrap] Docking auto-install skipped: ${result.reason}`);
+              }
+            }
+          } catch (err) {
+            // Defensive: any unexpected error in the bootstrap auto-install
+            // path must not break node boot. Log and continue.
+            logger.warn(`[bootstrap] Docking auto-install threw: ${(err as Error).message}`);
+          }
+        }
+
         // ── SYN token account activation ─────────────────────────────────────
         logger.log('\nChecking SYN token account activation...');
         const { Keypair } = await import('@solana/web3.js');
