@@ -11,6 +11,54 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(cli/config): Ollama-pick wizard + migration regression (a0bb328d)
+
+The 0.8.44 release fixed `gpuVramGb=0` on Linux NVIDIA pods, but
+operators that ran `syn config` to pick a local model hit a
+second, deeper bug: the wizard wrote `qwen2.5-coder-14b` (or
+similar catalog dash-form name) straight into
+`config.defaultModel` with no `ollama/` provider prefix. On the
+next boot, `migrateModelSlug` saw an unprefixed slug, classified
+it as `unknown provider`, rewrote it to
+`FALLBACK_MODEL_SLUG = 'anthropic/claude-sonnet-4-6'`, and
+refused to start with `Cloud model … requires --llm-key`. The
+operator-visible result: every local pick silently migrates to
+a cloud provider that demands a key the operator never supplied.
+
+Three-layer fix:
+
+1. **Wizard** (`src/cli/index.ts:1269, 1297-1307`) — now emits
+   `ollama/<ollamaTag>` for `recommended`/`compatible`/`all`
+   modes, mirroring the `<provider>/<modelId>` shape the cloud
+   path already produced.
+2. **Migration** (`src/modules/config/config.ts:118-128`) —
+   when the slug has no slash, try `ollama/<slug>` and rewrite
+   to that if `resolveSlug` accepts it. Falling back to cloud
+   when the operator picked a local model is a UX cliff;
+   defense-in-depth against future wizard regressions.
+3. **Catalog** (`src/modules/model/model-catalog.ts`) — new
+   optional `ollamaTag` per entry. The `name` field doubles as
+   UI label + normalization key (dash-form, kept for back-compat
+   with `normalizeModelName`), so the canonical Ollama tag
+   (colon-form, e.g. `qwen2.5-coder:14b`) needs its own slot.
+   Helper `getOllamaTag(model)` returns the override if present,
+   else `name` verbatim. Backfilled across qwen2.5 / qwen2.5-coder
+   / gemma-3 / llama-3.x / glm-4 / gpt-oss / mistral / phi
+   families.
+
+Regression coverage: 5 new tests pin (a) unprefixed colon-form
+slugs (`qwen2.5-coder:14b`) migrate to `ollama/qwen2.5-coder:14b`;
+(b) unprefixed dash-form catalog names migrate to
+`ollama/<name>`; (c) every curated `qwen2.5-coder*` entry exposes
+a colon Ollama tag via `getOllamaTag`. 1683/43 skipped tests
+pass on the full node suite.
+
+Operators with the bad config already on disk (`defaultModel ==
+"anthropic/claude-sonnet-4-6"` + empty `llmKey`) need to either
+re-run `syn config` or manually rewrite `~/.synapseia/config.json`
+to point at an Ollama tag — migration is one-way and cannot
+guess the original intent.
+
 ## [2026-05-15] chore(release): 0.8.44 lockstep — Linux GPU pod hardware-detect hotfix (1fcc884f)
 
 Version-only commit. Carries the `1f2f8857` hardware fix that
