@@ -34,19 +34,8 @@ function requireEnv(key: string, fallback?: string): string {
   return val ?? fallback!;
 }
 
-// Canonical devnet addresses — mirror packages/dashboard/.env.local and
-// packages/node/src/cli/chain-info-lightweight.ts so the node CLI works
-// out of the box on a fresh pod without env vars. Operators override via
-// STAKING_PROGRAM_ID / SYN_TOKEN_MINT env when running against a
-// different cluster.
-const DEVNET_STAKING_PROGRAM_ID = 'CYW5Cprp5JuzaXtPyV8LPBgPzbze6QHnc3oFBAVaFkfw';
-const DEVNET_SYN_TOKEN_MINT = '8iFr3ciQuNeU4vkzQTp7NcWNgRr7AVhwyizNCAszaEQq';
-const getStakingProgramId = () => new PublicKey(
-  process.env.STAKING_PROGRAM_ID || DEVNET_STAKING_PROGRAM_ID,
-);
-const getSynMint = () => new PublicKey(
-  process.env.SYN_TOKEN_MINT || DEVNET_SYN_TOKEN_MINT,
-);
+const getStakingProgramId = () => requireEnvPublicKey('STAKING_PROGRAM_ID');
+const getSynMint = () => requireEnvPublicKey('SYN_TOKEN_MINT');
 // Solana RPC URL resolution: env var > persisted config.rpcUrl > devnet default.
 // Synapseia runs on devnet today; operators that need a private RPC pin it via
 // `syn config --set-rpc-url <url>` and it persists in ~/.synapseia/config.json.
