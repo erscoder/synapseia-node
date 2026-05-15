@@ -45,8 +45,7 @@ import logger from '../utils/logger';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Command } from 'commander';
-import { readFileSync, existsSync, statSync } from 'fs';
-import { promises as fsp } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import * as path from 'path';
 import * as os from 'os';
@@ -180,55 +179,10 @@ async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
   }
 }
 
-/**
- * Read the keystore passphrase from a file-mounted secret. This is the
- * F9-hardened replacement for the old `SYNAPSEIA_KEYSTORE_PASSPHRASE`
- * env var (which a malicious postinstall could grep out of
- * `process.env`). The operator sets `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`
- * to a path on disk; the file MUST be mode 0600 or stricter and owned
- * by the current UID. Mirrors the Docker secrets / systemd
- * LoadCredential / k8s mounted-secret pattern.
- *
- * Returns the trimmed passphrase on success, or `undefined` if:
- *   - the env var is unset (interactive prompt will run),
- *   - the file is missing / unreadable,
- *   - permission checks fail (we log a warning and fall back to prompt).
- */
-async function readPassphraseFromFile(
-  envVal: string | undefined,
-  log: { log: (m: string) => void; warn: (m: string) => void; error: (m: string) => void },
-): Promise<string | undefined> {
-  if (!envVal || envVal.trim().length === 0) return undefined;
-  const filePath = envVal.trim();
-  try {
-    if (!existsSync(filePath)) {
-      log.warn(`[Keystore] SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE points to a non-existent path (${filePath}); falling back to interactive prompt`);
-      return undefined;
-    }
-    if (process.platform !== 'win32') {
-      const st = statSync(filePath);
-      // World/group must have NO permissions (mode bits 0o077 must be zero).
-      if ((st.mode & 0o077) !== 0) {
-        log.warn(`[Keystore] passphrase file ${filePath} has insecure mode ${(st.mode & 0o777).toString(8)}; expected 0600 or stricter. Falling back to interactive prompt`);
-        return undefined;
-      }
-      if (typeof process.getuid === 'function' && st.uid !== process.getuid()) {
-        log.warn(`[Keystore] passphrase file ${filePath} is owned by uid ${st.uid}, not the current user (${process.getuid()}); falling back to interactive prompt`);
-        return undefined;
-      }
-    }
-    const raw = await fsp.readFile(filePath, 'utf8');
-    const trimmed = raw.replace(/\r?\n$/, '');
-    if (trimmed.length === 0) {
-      log.warn(`[Keystore] passphrase file ${filePath} is empty; falling back to interactive prompt`);
-      return undefined;
-    }
-    return trimmed;
-  } catch (err) {
-    log.warn(`[Keystore] could not read passphrase file ${filePath}: ${(err as Error).message}; falling back to interactive prompt`);
-    return undefined;
-  }
-}
+// Passphrase resolution helper extracted to a shared module so subcommand
+// CLIs (modules/staking/staking-cli.ts) can reuse the same F9-hardened
+// file-mounted-secret rules without duplicating logic.
+import { readPassphraseFromFile } from '../infrastructure/keystore/passphrase-helpers';
 
 // ASCII-only banner. The previous box-drawing + heavy-block art rendered
 // fine in a terminal but turned into mojibake squares in the node-ui log

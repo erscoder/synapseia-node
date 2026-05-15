@@ -19,6 +19,8 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
 import { NodeConfigHelper, resolveSolanaRpcUrl } from '../config/config';
+import { EncryptedKeystore, EncryptedKeystoreError } from '../../infrastructure/keystore/EncryptedKeystore';
+import { readPassphraseFromFile } from '../../infrastructure/keystore/passphrase-helpers';
 
 // IDs from .env — resolved lazily to avoid top-level throw when env is not set
 function requireEnvPublicKey(key: string): PublicKey {
@@ -207,40 +209,82 @@ function decryptWallet(encryptedData: string, password: string): Uint8Array {
   return new Uint8Array(decrypted);
 }
 
-// Load and decrypt wallet
-// TODO(phase0.3-followup): migrate `node staking` subcommands to the
-// hardened EncryptedKeystore (see
-// packages/node/src/infrastructure/keystore/EncryptedKeystore.ts).
-// Until then, `loadWalletWithPassword` still reads
-// SYNAPSEIA_WALLET_PASSWORD from the environment and decrypts the
-// legacy wallet.json. This is the F9 attack surface that the
-// keystore on the `node start` boot path already closes.
+// Load and decrypt the wallet. Tries the hardened EncryptedKeystore
+// first (the path `node start` writes to as of 0.6.x). Falls back to
+// the legacy plaintext-encrypted `wallet.json` for operators that
+// have not run a keystore-aware boot yet.
+//
+// Passphrase resolution (high → low priority):
+//   1. `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` — file-mounted secret
+//      (Docker / systemd / fly-machines).
+//   2. `SYNAPSEIA_WALLET_PASSWORD` / `WALLET_PASSWORD` — back-compat
+//      with the legacy path. Honoured for BOTH branches so existing
+//      Tauri wrappers (which spawn `syn stake` with stdin piped to
+//      null) keep working without changes.
+//   3. Interactive prompt — `password({ message })`.
 export async function loadWalletWithPassword(): Promise<Keypair> {
-  const walletFile = WALLET_FILE();
+  const keystore = new EncryptedKeystore();
+  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD ?? null;
 
-  if (!fs.existsSync(walletFile)) {
-    throw new Error(`Wallet not found at ${walletFile}. Run 'synapseia-node setup' first.`);
+  if (keystore.exists()) {
+    // Hardened branch. File-mounted secret wins; env var honoured for
+    // back-compat with Tauri/non-TTY callers; interactive prompt last.
+    const filePass = await readPassphraseFromFile(
+      process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+      logger,
+    );
+    let initialPass: string | null = filePass ?? envPassword;
+    let attempts = 0;
+    const maxAttempts = 3;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const pass = initialPass ?? await password({
+        message: `Unlock wallet keystore (${keystore.getPath()}):`,
+        mask: '*',
+      });
+      // Only the first iteration may use the non-interactive value; if
+      // it fails the loop falls through to interactive retries.
+      initialPass = null;
+      try {
+        const secretKey = await keystore.decrypt(pass);
+        return Keypair.fromSecretKey(secretKey);
+      } catch (err) {
+        if (err instanceof EncryptedKeystoreError && err.code === 'INVALID_PASSPHRASE') {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new Error('Invalid keystore passphrase after 3 attempts');
+          }
+          logger.warn('[Keystore] invalid passphrase, try again');
+          continue;
+        }
+        throw new Error(`Failed to unlock keystore: ${(err as Error).message}`);
+      }
+    }
   }
 
+  // Legacy fallback — same behaviour as before the keystore migration.
+  // Operators that have not run `syn start` on a keystore-aware version
+  // still hit this path; we keep the env-var shortcut so existing
+  // Tauri/CI wrappers continue to work, but log a one-line warning so
+  // ops know to migrate.
+  const walletFile = WALLET_FILE();
+  if (!fs.existsSync(walletFile)) {
+    throw new Error(
+      `No wallet found. Expected ${keystore.getPath()} or ${walletFile}. Run 'syn start' to bootstrap a wallet.`,
+    );
+  }
+  logger.warn(
+    '[staking-cli] using legacy wallet.json — migrate to the hardened keystore via `syn start` to reduce attack surface',
+  );
   const walletData = JSON.parse(fs.readFileSync(walletFile, 'utf-8'));
-
-  // Check if encrypted
   if (!walletData.encryptedData) {
-    // Unencrypted wallet - load directly
+    // Unencrypted wallet — load directly.
     const secretKey = new Uint8Array(walletData.secretKey);
     return Keypair.fromSecretKey(secretKey);
   }
-  
-  // Encrypted wallet — honour the env var first so the desktop UI (and any
-  // other non-interactive caller) can pass the password without a TTY. This
-  // was the root cause of `balance`/`stake`/`withdraw` hanging when Tauri
-  // spawned the CLI: stdin is piped to null, so the @inquirer prompt blocked
-  // forever.
-  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
   const walletPassword = envPassword
     ? envPassword
-    : await password({ message: 'Enter wallet password:', mask: '*' });
-
+    : await password({ message: 'Enter legacy wallet password:', mask: '*' });
   try {
     const secretKey = decryptWallet(walletData.encryptedData, walletPassword);
     return Keypair.fromSecretKey(secretKey);
