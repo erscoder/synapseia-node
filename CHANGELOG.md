@@ -11,6 +11,27 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(hardware): bare-number nvidia-smi parse fallback (1f2f8857)
+
+The `memory.free` probe was hard-coded with
+`--format=csv,noheader,nounits` which strips the `MiB`/`GiB`
+suffix that the regex parser expects. Linux pods with a real
+NVIDIA driver (e.g. RTX A4500 20GB) emitted bare strings like
+`20470\n`, fell through both regex branches, and resolved with
+`gpuVramGb=0 / hardwareClass=0`. Node then refused every GPU
+work-order with `Model X requires hardware class 1 or higher`.
+
+Two-part fix:
+  1. Drop the `nounits` flag on the `detectNvidiaGPU` probe so
+     the suffix is preserved on real-hardware paths.
+  2. Add a bare-number fallback in the parser (treats the
+     match as `MiB`, the canonical unit nvidia-smi emits when
+     stripped). Future nvidia-smi builds, downstream callers,
+     and any pod-style mis-quoting will still resolve correctly.
+
+Regression test covers the pod payload `20470\n` → 20 GB,
+hardware class 3 (A4500 bucket).
+
 ## [2026-05-15] chore(release): 0.8.43 lockstep bump for node-ui auto-upgrade-on-boot (6a527b96)
 
 Version-only bump. Node has no functional change in this cycle.
