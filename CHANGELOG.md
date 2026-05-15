@@ -11,6 +11,22 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(staking-cli): default SOLANA_RPC_URL to mainnet when unset (44b43447)
+
+`syn stake N` on a fresh pod (no env vars) threw
+`SOLANA_RPC_URL not informed` and refused to send the staking
+transaction. The staking CLI's `getSolanaRpcUrl` was the only
+RPC helper in the node codebase without a fallback — every other
+module already defaults to a sensible RPC.
+
+Defaulting to mainnet specifically because staking lives on
+mainnet in production. Falling back to devnet here would
+silently route real stake/unstake/claim transactions to the
+wrong cluster. Operators that need devnet still override via
+`SOLANA_RPC_URL=...`.
+
+One-line patch in `packages/node/src/modules/staking/staking-cli.ts`.
+
 ## [2026-05-15] chore(release): 0.8.46 lockstep — Ollama tag canonicalisation + auto-pull retry + coord rotation revisitable (903b01e5)
 
 Version-only commit. Ships:
