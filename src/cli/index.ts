@@ -69,7 +69,7 @@ import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
 import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
-import { CONFIG_FILE, MODEL_SLUG_REGEX } from '../modules/config/config';
+import { CONFIG_FILE, MODEL_SLUG_REGEX, DEFAULT_SOLANA_RPC_URL } from '../modules/config/config';
 import { getCoordinatorUrl, getCoordinatorWsUrl } from '../constants/coordinator';
 import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
 import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
@@ -1260,12 +1260,14 @@ async function bootstrap() {
     .option('--set-model <model>', 'Set default model (provider/model format)')
     .option('--set-llm-key <key>', 'Set LLM API key')
     .option('--set-llm-url <url>', '[DEPRECATED, ignored] LLM endpoints are now hardcoded per provider')
+    .option('--set-rpc-url <url>', 'Set Solana RPC URL (pass "" to clear and use the default devnet RPC)')
     .action(async (options: {
       show?: boolean;
       setName?: string;
       setModel?: string;
       setLlmUrl?: string;
       setLlmKey?: string;
+      setRpcUrl?: string;
     }) => {
       const configService = app.get(NodeConfigService);
 
@@ -1317,6 +1319,30 @@ async function bootstrap() {
         process.exit(0);
       }
 
+      if (options.setRpcUrl !== undefined) {
+        const trimmed = options.setRpcUrl.trim();
+        if (trimmed === '') {
+          delete config.rpcUrl;
+          configService.save(config);
+          logger.log(`✅ RPC URL cleared (will use default ${DEFAULT_SOLANA_RPC_URL})`);
+          process.exit(0);
+        }
+        try {
+          const parsed = new URL(trimmed);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            logger.error(`❌ RPC URL must use http(s). Got: ${parsed.protocol}`);
+            process.exit(1);
+          }
+        } catch {
+          logger.error(`❌ Invalid URL: ${options.setRpcUrl}`);
+          process.exit(1);
+        }
+        config.rpcUrl = trimmed;
+        configService.save(config);
+        logger.log(`✅ RPC URL set to: ${trimmed}`);
+        process.exit(0);
+      }
+
       logger.log('\n🔧 Synapseia Configuration Wizard');
       logger.log('   Use ↑↓ to navigate, Enter to select, Ctrl+C to cancel.\n');
 
@@ -1326,7 +1352,7 @@ async function bootstrap() {
 
       const BACK = '__BACK__';
 
-      type Step = 'modelMode' | 'modelPick' | 'llmConfig' | 'inference' | 'done';
+      type Step = 'modelMode' | 'modelPick' | 'llmConfig' | 'inference' | 'rpcUrl' | 'done';
       let step: Step = 'modelMode';
       let modelMode: string | null = null;
 
@@ -1495,6 +1521,40 @@ async function bootstrap() {
             logger.log('    (or use --inference flag to override per-run)');
           } else {
             config.inferenceModels = [];
+          }
+          step = 'rpcUrl';
+          continue;
+        }
+
+        if (step === 'rpcUrl') {
+          const current = config.rpcUrl ?? '';
+          const ans = await safePrompt(() =>
+            input({
+              message: `Solana RPC URL (leave blank for default ${DEFAULT_SOLANA_RPC_URL}):`,
+              default: current || undefined,
+              validate: (v: string) => {
+                const t = v.trim();
+                if (!t) return true;
+                try {
+                  const parsed = new URL(t);
+                  if (!['http:', 'https:'].includes(parsed.protocol)) {
+                    return `URL must use http(s); got ${parsed.protocol}`;
+                  }
+                  return true;
+                } catch {
+                  return 'Must be a valid URL (e.g. https://api.devnet.solana.com)';
+                }
+              },
+            })
+          );
+          if (ans === null) { logger.log('\nCancelled.'); return; }
+          const trimmed = ans.trim();
+          if (trimmed) {
+            config.rpcUrl = trimmed;
+            logger.log(`  ✓ RPC URL: ${trimmed}`);
+          } else {
+            delete config.rpcUrl;
+            logger.log(`  ✓ RPC URL: default (${DEFAULT_SOLANA_RPC_URL})`);
           }
           step = 'done';
         }

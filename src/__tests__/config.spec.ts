@@ -7,7 +7,14 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/glo
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
-import { NodeConfigHelper, CONFIG_FILE, CONFIG_DIR, MODEL_SLUG_REGEX } from '../modules/config/config';
+import {
+  NodeConfigHelper,
+  CONFIG_FILE,
+  CONFIG_DIR,
+  MODEL_SLUG_REGEX,
+  DEFAULT_SOLANA_RPC_URL,
+  resolveSolanaRpcUrl,
+} from '../modules/config/config';
 import { OFFICIAL_COORDINATOR_URL, OFFICIAL_COORDINATOR_WS_URL } from '../constants/coordinator';
 
 const testConfigDir = join(tmpdir(), 'synapseia-test-' + Date.now());
@@ -34,6 +41,7 @@ describe('Config Module', () => {
     delete process.env.LLM_CLOUD_API_KEY;
     delete process.env.LLM_CLOUD_URL;
     delete process.env.LLM_CLOUD_BASE_URL;
+    delete process.env.SOLANA_RPC_URL;
     helper = new NodeConfigHelper();
   });
 
@@ -350,6 +358,107 @@ describe('Config Module', () => {
       expect(MODEL_SLUG_REGEX.test('nvidia/')).toBe(false);
       expect(MODEL_SLUG_REGEX.test('/llama2')).toBe(false);
       expect(MODEL_SLUG_REGEX.test('nvidia space/model')).toBe(false);
+    });
+  });
+
+  describe('resolveSolanaRpcUrl', () => {
+    it('returns env var when set, ignoring config and default', () => {
+      process.env.SOLANA_RPC_URL = 'https://helius.test/env';
+      const url = resolveSolanaRpcUrl({
+        defaultModel: 'ollama/x',
+        rpcUrl: 'https://quicknode.test/cfg',
+      });
+      expect(url).toBe('https://helius.test/env');
+    });
+
+    it('returns config.rpcUrl when env is unset', () => {
+      const url = resolveSolanaRpcUrl({
+        defaultModel: 'ollama/x',
+        rpcUrl: 'https://quicknode.test/cfg',
+      });
+      expect(url).toBe('https://quicknode.test/cfg');
+    });
+
+    it('returns the devnet default when both env and config are unset', () => {
+      const url = resolveSolanaRpcUrl({ defaultModel: 'ollama/x' });
+      expect(url).toBe(DEFAULT_SOLANA_RPC_URL);
+      expect(url).toBe('https://api.devnet.solana.com');
+    });
+
+    it('returns the devnet default when config is null', () => {
+      const url = resolveSolanaRpcUrl(null);
+      expect(url).toBe(DEFAULT_SOLANA_RPC_URL);
+    });
+
+    it('trims whitespace from env and config values', () => {
+      process.env.SOLANA_RPC_URL = '  https://helius.test/env  ';
+      expect(resolveSolanaRpcUrl(null)).toBe('https://helius.test/env');
+      delete process.env.SOLANA_RPC_URL;
+
+      const url = resolveSolanaRpcUrl({
+        defaultModel: 'ollama/x',
+        rpcUrl: '   https://quicknode.test/cfg   ',
+      });
+      expect(url).toBe('https://quicknode.test/cfg');
+    });
+
+    it('treats empty/whitespace env and config as unset (falls through to default)', () => {
+      process.env.SOLANA_RPC_URL = '   ';
+      const url = resolveSolanaRpcUrl({
+        defaultModel: 'ollama/x',
+        rpcUrl: '   ',
+      });
+      expect(url).toBe(DEFAULT_SOLANA_RPC_URL);
+    });
+  });
+
+  describe('rpcUrl persistence', () => {
+    it('loadConfig preserves rpcUrl from disk', () => {
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({
+          coordinatorUrl: 'http://x:1',
+          defaultModel: 'ollama/llama2',
+          rpcUrl: 'https://helius.example/rpc',
+        }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.rpcUrl).toBe('https://helius.example/rpc');
+    });
+
+    it('saveConfig persists rpcUrl when present', () => {
+      const cfg = helper.defaultConfig();
+      cfg.rpcUrl = 'https://quicknode.example/rpc';
+      helper.saveConfig(cfg);
+
+      const onDisk = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+      expect(onDisk.rpcUrl).toBe('https://quicknode.example/rpc');
+    });
+
+    it('saveConfig omits rpcUrl key when undefined (back-compat with existing configs)', () => {
+      const cfg = helper.defaultConfig();
+      expect(cfg.rpcUrl).toBeUndefined();
+      helper.saveConfig(cfg);
+
+      const onDisk = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+      expect(Object.prototype.hasOwnProperty.call(onDisk, 'rpcUrl')).toBe(false);
+    });
+
+    it('defaultConfig does not set rpcUrl (resolver decides at runtime)', () => {
+      const cfg = helper.defaultConfig();
+      expect(cfg.rpcUrl).toBeUndefined();
+    });
+
+    it('loadConfig tolerates legacy configs without rpcUrl (no error, undefined field)', () => {
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({
+          coordinatorUrl: 'http://x:1',
+          defaultModel: 'ollama/llama2',
+        }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.rpcUrl).toBeUndefined();
     });
   });
 

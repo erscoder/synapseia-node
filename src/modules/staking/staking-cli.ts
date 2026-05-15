@@ -18,6 +18,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
+import { NodeConfigHelper, resolveSolanaRpcUrl } from '../config/config';
 
 // IDs from .env — resolved lazily to avoid top-level throw when env is not set
 function requireEnvPublicKey(key: string): PublicKey {
@@ -33,11 +34,22 @@ function requireEnv(key: string, fallback?: string): string {
 
 const getStakingProgramId = () => requireEnvPublicKey('STAKING_PROGRAM_ID');
 const getSynMint = () => requireEnvPublicKey('SYN_TOKEN_MINT');
-// Mainnet default keeps the staking CLI usable on a fresh pod without
-// pre-set env vars; ops that need devnet override via SOLANA_RPC_URL.
-// Staking lives on mainnet in production so the fallback here is
-// intentionally NOT the devnet RPC used by other modules.
-const getSolanaRpcUrl = () => requireEnv('SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com');
+// Solana RPC URL resolution: env var > persisted config.rpcUrl > devnet default.
+// Synapseia runs on devnet today; operators that need a private RPC pin it via
+// `syn config --set-rpc-url <url>` and it persists in ~/.synapseia/config.json.
+// The CLI is invoked outside the Nest DI graph, so we instantiate the helper
+// directly here instead of injecting it.
+function getSolanaRpcUrl(): string {
+  try {
+    const helper = new NodeConfigHelper();
+    return resolveSolanaRpcUrl(helper.loadConfig());
+  } catch {
+    // loadConfig should never throw (it returns defaults on parse failures),
+    // but fall back to the resolver with a null config so the env-var-or-default
+    // chain still works if anything unexpected goes wrong.
+    return resolveSolanaRpcUrl(null);
+  }
+}
 const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 

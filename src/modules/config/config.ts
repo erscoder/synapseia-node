@@ -21,6 +21,39 @@ export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synaps
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 /**
+ * Default Solana RPC URL used by node-side on-chain modules when neither
+ * the `SOLANA_RPC_URL` env var nor `config.rpcUrl` are set.
+ *
+ * Synapseia is still operating on devnet, so the safe operator default
+ * has to point at the public devnet RPC. When the project migrates to
+ * mainnet the constant will flip and operators that pinned their own
+ * RPC via `syn config --set-rpc-url <url>` will be unaffected.
+ *
+ * TODO: migrate the other on-chain modules (`activation.ts`,
+ * `solana-balance.ts`, `staking.ts`, `rewards.ts`, `rewards-vault-cli.ts`,
+ * `chain-info-lightweight.ts`) to use `resolveSolanaRpcUrl` instead of
+ * their own hardcoded devnet URL — out of scope for this PR.
+ */
+export const DEFAULT_SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+
+/**
+ * Resolve the Solana RPC URL the node should talk to. Priority (high → low):
+ *   1. `process.env.SOLANA_RPC_URL`  — escape hatch for CI / ops
+ *   2. `config.rpcUrl`               — persisted operator preference (Helius, QuickNode, …)
+ *   3. `DEFAULT_SOLANA_RPC_URL`      — Synapseia devnet
+ *
+ * Whitespace is trimmed and empty strings are treated as "unset" so a
+ * blank value in either source falls through to the next.
+ */
+export function resolveSolanaRpcUrl(config: Config | null = null): string {
+  const envUrl = process.env.SOLANA_RPC_URL?.trim();
+  if (envUrl) return envUrl;
+  const cfgUrl = config?.rpcUrl?.trim();
+  if (cfgUrl) return cfgUrl;
+  return DEFAULT_SOLANA_RPC_URL;
+}
+
+/**
  * Canonical regex for `provider/modelId` slugs accepted by the CLI
  * `--set-model` flag and `ConfigService.validateModelFormat`.
  *
@@ -68,6 +101,13 @@ export interface Config {
   wallet?: string;
   inferenceEnabled?: boolean;
   inferenceModels?: string[];
+  /**
+   * Operator-pinned Solana RPC URL (Helius, QuickNode, private node, …).
+   * Resolved at runtime via `resolveSolanaRpcUrl` with the priority chain
+   * env > config > default. Optional and omitted on disk when unset so
+   * existing configs round-trip cleanly.
+   */
+  rpcUrl?: string;
 }
 
 /**
