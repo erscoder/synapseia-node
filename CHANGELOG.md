@@ -11,6 +11,46 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] feat(config): persistent Solana RPC URL with devnet default (782ee914)
+
+Operator wanted to pin a Helius / QuickNode / private RPC URL
+without setting `SOLANA_RPC_URL` on every shell. 0.8.48 adds a
+persistent `rpcUrl` field and corrects the 0.8.47 mainnet fallback
+to the right value for the current chain.
+
+- `DEFAULT_SOLANA_RPC_URL = 'https://api.devnet.solana.com'`.
+  Synapseia still runs on devnet today. The 0.8.47 mainnet fallback
+  was wrong direction — operators on devnet using the default
+  would have routed staking transactions to mainnet. Mainnet
+  flip will happen in a future release; operators that pin their
+  own RPC via `syn config --set-rpc-url <url>` are unaffected.
+- `resolveSolanaRpcUrl(config)` returns env > config > default with
+  whitespace trim and empty-string fallthrough.
+- `Config.rpcUrl?: string` optional; omitted on disk when unset
+  so existing configs round-trip cleanly.
+- `syn config` wizard has a new final `rpcUrl` step (input prompt,
+  http(s)-scheme validation, blank = default).
+- Non-interactive flag `syn config --set-rpc-url <url>` with same
+  validation. Empty string clears the field and reverts to default.
+- `staking-cli` now reads via `resolveSolanaRpcUrl` so the operator
+  setting propagates to `syn stake / unstake / claim` etc.
+
+Other on-chain modules (`activation`, `solana-balance`,
+`staking.ts`, `rewards`, `rewards-vault-cli`,
+`chain-info-lightweight`) still hardcode devnet; their migration
+is documented in the TODO comment on `DEFAULT_SOLANA_RPC_URL`
+and tracked for follow-up. Operator-visible: `syn stake` honours
+the config; `syn balance` etc. still rely on `SOLANA_RPC_URL`
+env until the migration ships.
+
+Reviewer (`superpowers:code-reviewer`) flagged the missing
+http(s) scheme guard (LOW) — folded into the same commit so
+non-http(s) schemes (`javascript:`, `file:`, `ftp:`) are rejected
+up-front instead of failing at connection time.
+
+11 new tests cover the resolver chain + disk round-trip.
+1704/43-skipped tests pass.
+
 ## [2026-05-15] chore(release): 0.8.47 lockstep — staking-cli RPC default + fresh-install single passphrase (6ea7757a)
 
 Version-only commit. Ships:
