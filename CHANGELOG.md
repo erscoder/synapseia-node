@@ -11,6 +11,21 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.50 lockstep — wallet-verify keystore + canonical program IDs (2f1e000b)
+
+Version-only commit. Ships:
+- node `f9544ba0` — `wallet-verify` CLI subcommand now validates
+  against the keystore first (legacy fallback). Desktop node-ui
+  `unlock_wallet` flow finally honours operators who migrated to
+  the keystore.
+- node `fe040702` — staking-cli defaults `STAKING_PROGRAM_ID` +
+  `SYN_TOKEN_MINT` to the canonical devnet addresses (same values
+  as dashboard `.env.local` + `chain-info-lightweight.ts`).
+  `syn stake / unstake / claim` now work on a fresh pod without
+  exporting the env vars manually.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] fix(staking-cli): default to canonical devnet program IDs (fe040702)
 
 Operator on Linux pod reported `syn stake` failing with empty
