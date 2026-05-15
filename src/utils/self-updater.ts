@@ -74,6 +74,29 @@ export interface SelfUpdateResult {
 }
 
 /**
+ * Resolve the npm prefix the CURRENT binary was installed into. Looks
+ * for `/lib/node_modules/@synapseia-network/node` in this module's
+ * dirname and returns the parent of `lib/`. Returns null when the
+ * layout is unrecognisable (compiled binary, raw dev tree, etc.).
+ *
+ * Pre-0.8.49 the self-update hard-coded `~/.synapseia/npm-global` as
+ * the upgrade target. Operators that installed via a regular
+ * `npm i -g` (system prefix `/usr/local` or homebrew-managed) had
+ * the update land in the user prefix while their PATH still pointed
+ * at the system binary — every boot detected an update and looped
+ * because the *running* binary never moved.
+ */
+function getRunningInstallPrefix(): string | null {
+  try {
+    const myDir = dirname(__filename);
+    const marker = '/lib/node_modules/';
+    const idx = myDir.indexOf(marker);
+    if (idx >= 0) return myDir.slice(0, idx);
+  } catch { /* fall through */ }
+  return null;
+}
+
+/**
  * Attempt to self-update the node CLI.
  * Only npm global installs can be updated automatically.
  * Git clone and binary installs require manual intervention.
@@ -85,14 +108,19 @@ export function attemptSelfUpdate(): SelfUpdateResult {
     case InstallType.NPM_GLOBAL: {
       try {
         logger.log('[SelfUpdate] Updating via npm...');
-        // Force the install into a user-owned prefix
-        // (`~/.synapseia/npm-global`) so `npm install -g` never needs
-        // sudo. Default global prefixes such as `/usr/local/lib/node_modules`
-        // require root on most machines; a Tauri-spawned CLI has no TTY,
-        // so a sudo prompt would hang forever. The Tauri Rust resolver
-        // (`find_synapseia_node`) has a sibling check for this path.
-        const userPrefix = join(homedir(), '.synapseia', 'npm-global');
-        mkdirSync(userPrefix, { recursive: true });
+        // Target the SAME prefix the running binary was loaded from
+        // — otherwise the update lands in a different prefix and the
+        // operator's PATH still resolves to the stale binary, kicking
+        // off an infinite "update available" loop on every boot.
+        //
+        // Fallback to the user-owned `~/.synapseia/npm-global` when
+        // the running prefix can't be detected (compiled bundle, dev
+        // tree, …). The user prefix avoids sudo prompts that would
+        // hang a Tauri-spawned CLI without a TTY.
+        const runningPrefix = getRunningInstallPrefix();
+        const targetPrefix = runningPrefix ?? join(homedir(), '.synapseia', 'npm-global');
+        mkdirSync(targetPrefix, { recursive: true });
+        logger.log(`[SelfUpdate] target prefix: ${targetPrefix}`);
 
         execSync('npm install -g @synapseia-network/node@latest', {
           encoding: 'utf-8',
@@ -100,7 +128,7 @@ export function attemptSelfUpdate(): SelfUpdateResult {
           stdio: 'pipe',
           env: {
             ...process.env,
-            NPM_CONFIG_PREFIX: userPrefix,
+            NPM_CONFIG_PREFIX: targetPrefix,
           },
         });
         return {
@@ -116,9 +144,11 @@ export function attemptSelfUpdate(): SelfUpdateResult {
             installType,
             message:
               'npm install -g failed with a permission error. ' +
-              'Run `npm install -g @synapseia-network/node` manually, ' +
-              'or migrate to a user-local Node manager (nvm/volta/fnm) ' +
-              'to avoid sudo prompts.',
+              'The running binary lives in a write-protected prefix (likely ' +
+              '/usr/local or /opt/homebrew). Run `sudo npm install -g ' +
+              '@synapseia-network/node@latest` manually, OR reinstall under ' +
+              'a user-local Node manager (nvm/volta/fnm) to enable ' +
+              'sudo-free auto-updates.',
           };
         }
         return {
