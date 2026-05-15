@@ -284,6 +284,26 @@ describe('hardware (A13)', () => {
 
       expect(hardware.gpuVramGb).toBe(0);
     });
+
+    it('parses bare-number output (nvidia-smi nounits / suffix-less builds) as MiB', async () => {
+      const { detectNvidiaGPU } = await import('../modules/hardware/hardware.js');
+
+      const hardware = {
+        cpuCores: 16,
+        ramGb: 64,
+        gpuVramGb: 0,
+        hardwareClass: 0,
+        hasOllama: false,
+      };
+
+      // Pod with RTX A4500 emitted "20470\n" when nounits was forced on
+      // the memory.free query. Without the bare-number fallback the
+      // parser returned gpuVramGb=0 and node refused all GPU work.
+      detectNvidiaGPU(hardware, '20470\n');
+
+      expect(hardware.gpuVramGb).toBe(20);
+      expect(hardware.hardwareClass).toBe(3);
+    });
   });
 
   describe('getRecommendedTier', () => {

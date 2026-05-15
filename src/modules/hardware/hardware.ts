@@ -198,7 +198,7 @@ export class HardwareHelper {
         return;
       }
       smiOutput = execSync(
-        'nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits',
+        'nvidia-smi --query-gpu=memory.free --format=csv,noheader',
         {
           encoding: 'utf-8',
           stdio: ['ignore', 'pipe', 'ignore'],
@@ -212,6 +212,11 @@ export class HardwareHelper {
       if (match) hardware.gpuVramGb = parseInt(match[1]);
     } else if (smiOutput.includes('MiB')) {
       const match = smiOutput.match(/(\d+)\s*MiB/);
+      if (match) hardware.gpuVramGb = Math.round(parseInt(match[1]) / 1024);
+    } else {
+      // Bare number fallback (in case --format omits suffix or nvidia-smi
+      // build emits raw MiB without unit). Treat as MiB.
+      const match = smiOutput.match(/^\s*(\d+)\s*$/m);
       if (match) hardware.gpuVramGb = Math.round(parseInt(match[1]) / 1024);
     }
 
