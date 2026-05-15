@@ -21,6 +21,7 @@ import { input, password } from '@inquirer/prompts';
 import { NodeConfigHelper, resolveSolanaRpcUrl } from '../config/config';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../../infrastructure/keystore/EncryptedKeystore';
 import { readPassphraseFromFile } from '../../infrastructure/keystore/passphrase-helpers';
+import { OFFICIAL_COORDINATOR_URL } from '../../constants/coordinator';
 
 // IDs from .env — resolved lazily to avoid top-level throw when env is not set
 function requireEnvPublicKey(key: string): PublicKey {
@@ -52,7 +53,13 @@ function getSolanaRpcUrl(): string {
     return resolveSolanaRpcUrl(null);
   }
 }
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3701';
+// Default to the official coordinator on a fresh pod / desktop install so
+// `syn stake / unstake / claim` work without exporting COORDINATOR_URL.
+// Pre-0.8.50 the fallback was `http://localhost:3701`, which only resolved
+// for in-cluster coord developers — every other operator saw `fetch failed`
+// on the coordinator-authority lookup in stakeTokens() and the tx never
+// got built. Env var still wins so devs override locally.
+const COORDINATOR_URL = process.env.COORDINATOR_URL || OFFICIAL_COORDINATOR_URL;
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // Lazy resolvers. Pre-S1.9 these were Proxy wrappers that returned
@@ -379,6 +386,28 @@ export async function stakeTokens(amount: number): Promise<string> {
 
   logger.log(`\n📤 Staking ${amount} SYN tokens...`);
 
+  // Make sure the user SYN ATA exists. Faucet flows that drop SYN onto a
+  // wallet don't always init the ATA first (depends on which transfer
+  // primitive the sender uses), so a first-time staker can hit
+  // AnchorError 3012 "AccountNotInitialized" on `user_token_account`.
+  // Prepend the createATA ix when missing — idempotent in practice.
+  const preIxs: TransactionInstruction[] = [];
+  const userAtaInfo = await connection.getAccountInfo(userTokenAccount);
+  if (!userAtaInfo) {
+    const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+    preIxs.push(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey,
+        userTokenAccount,
+        wallet.publicKey,
+        SYN_MINT(),
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    );
+    logger.log(`   User SYN ATA missing — creating it in the same tx`);
+  }
+
   // StakeAction context needs: stake_account, owner, user_token_account,
   // stake_vault, syn_mint, vault_authority, token_program, staking_pool.
   // The staking_pool PDA is REQUIRED (contract reads daily_pool_lamports +
@@ -398,7 +427,7 @@ export async function stakeTokens(amount: number): Promise<string> {
     ]
   });
 
-  const stakeTx = new Transaction().add(stakeIx);
+  const stakeTx = new Transaction().add(...preIxs, stakeIx);
   const tx = await sendAndConfirmFresh(connection, stakeTx, [wallet]);
 
   logger.log(`✅ Stake successful!`);
