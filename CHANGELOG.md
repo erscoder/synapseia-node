@@ -1,5 +1,39 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-15] feat(docking): auto-install Vina + Open Babel on GPU node first boot (59961191)
+
+Past docking rounds in coord prod ended with all pairs in
+`HUMAN_REVIEW` (empty delta affinity + RMSD) because zero nodes
+advertise the `docking` capability — Vina + Open Babel were never
+installed. Once the last docking-capable node left, the coord's
+`DockingDispatchCron` skip-gates new round creation too.
+
+Fix: `installDockingDeps()` auto-installs both binaries on first
+GPU boot. CLI bootstrap calls it AFTER capability detection
+when (a) caps include `gpu_training` or `gpu_inference` AND
+(b) `isVinaAvailable()` is false.
+
+OS matrix:
+
+- macOS:  `brew install autodock-vina open-babel`
+- Linux:  `sudo apt-get install -y autodock-vina openbabel`
+          (falls back to `sudo dnf install` if apt-get missing)
+- Win:    skip with warn (no standard package source)
+
+Non-fatal: a failed install leaves `docking` off the cap list,
+coord skips dispatch, boot proceeds. Honors
+`DISABLE_AUTO_INSTALL_DOCKING=true` env override.
+
+After install, the heartbeat probe at `isVinaAvailable()` picks
+up the binaries on the next 60s tick and advertises `docking`.
+The coord then resumes opening pairs, the node runs Vina,
+submits results, and pairs progress
+AWAITING_BOTH -> VERIFYING -> AGREED instead of expiring to
+HUMAN_REVIEW.
+
+Tests: 7 specs covering all OS branches + env override. Full
+docking suite 21/21 green; full node suite 1723/1723 green.
+
 ## [Unreleased]
 
 ### Added
