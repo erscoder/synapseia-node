@@ -22,6 +22,7 @@ import { LlmProviderHelper, type LLMModel } from '../modules/llm/llm-provider';
 
 let mockCheckOllama: jest.Mock;
 let mockGenerate: jest.Mock;
+let mockPullModel: jest.Mock;
 
 jest.mock('../modules/llm/ollama.js', () => {
   // Module factory cannot reference outer mutable state, so we wire the
@@ -29,6 +30,7 @@ jest.mock('../modules/llm/ollama.js', () => {
   class MockOllamaHelper {
     checkOllama = jest.fn();
     generate = jest.fn();
+    pullModel = jest.fn();
   }
   return { OllamaHelper: MockOllamaHelper };
 });
@@ -37,6 +39,7 @@ beforeEach(() => {
   global.fetch = jest.fn() as unknown as typeof fetch;
   mockCheckOllama = jest.fn();
   mockGenerate = jest.fn();
+  mockPullModel = jest.fn();
 });
 
 afterEach(() => {
@@ -45,9 +48,12 @@ afterEach(() => {
 
 function freshHelper(): LlmProviderHelper {
   const helper = new LlmProviderHelper();
-  (helper as unknown as { ollamaHelper: { checkOllama: jest.Mock; generate: jest.Mock } }).ollamaHelper = {
+  (helper as unknown as {
+    ollamaHelper: { checkOllama: jest.Mock; generate: jest.Mock; pullModel: jest.Mock };
+  }).ollamaHelper = {
     checkOllama: mockCheckOllama,
     generate: mockGenerate,
+    pullModel: mockPullModel,
   };
   return helper;
 }
@@ -265,5 +271,75 @@ describe('round-trip: Zhipu (GLM)', () => {
     const fetchMock = global.fetch as unknown as jest.Mock;
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions');
+  });
+});
+
+/**
+ * Auto-pull retry path: when Ollama returns "model not found", the
+ * helper should `pullModel(name)` once and retry generate. Anything
+ * else (transient errors, second-attempt failures, pull failures)
+ * must propagate without looping.
+ *
+ * Pulling on every transient outage would amplify pressure on the
+ * Ollama daemon and burn pod bandwidth; the auto-pull is strictly
+ * for "operator told us to use model X, but X isn't pulled yet".
+ */
+describe('Ollama auto-pull retry', () => {
+  const MISSING_ERROR_MSG = "Generation failed: model 'qwen2.5-coder:7b' not found";
+
+  it('pulls the model and retries generate when Ollama returns model-not-found', async () => {
+    mockGenerate
+      .mockRejectedValueOnce(new Error(MISSING_ERROR_MSG))
+      .mockResolvedValueOnce('plan: do the thing');
+    mockPullModel.mockResolvedValueOnce(undefined);
+
+    const helper = freshHelper();
+    const result = await helper.generateLLM(OLLAMA_MODEL, 'hi');
+
+    expect(result).toBe('plan: do the thing');
+    expect(mockPullModel).toHaveBeenCalledTimes(1);
+    expect(mockPullModel).toHaveBeenCalledWith('qwen2.5:0.5b');
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates the original error if auto-pull itself fails', async () => {
+    mockGenerate.mockRejectedValue(new Error(MISSING_ERROR_MSG));
+    mockPullModel.mockRejectedValueOnce(new Error('network unreachable'));
+
+    const helper = freshHelper();
+    await expect(helper.generateLLM(OLLAMA_MODEL, 'hi')).rejects.toThrow(
+      /model 'qwen2.5-coder:7b' not found/,
+    );
+    expect(mockPullModel).toHaveBeenCalledTimes(1);
+    // Generate is only invoked once when the auto-pull throws — we
+    // never reach the retry.
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT attempt auto-pull on transient errors (timeout, runner crash, etc.)', async () => {
+    // "runner process no longer running" is a known transient classified
+    // by isTransientLlmError; the outer retry loop will handle it. The
+    // inner generateOllamaLLM must not also try to pull, otherwise a
+    // crash-loop would yank the model file mid-cascade.
+    mockGenerate.mockRejectedValue(new Error('Generation failed: runner process no longer running'));
+
+    const helper = freshHelper();
+    await expect(helper.generateLLM(OLLAMA_MODEL, 'hi')).rejects.toThrow(/runner process/);
+    expect(mockPullModel).not.toHaveBeenCalled();
+  });
+
+  it('does NOT attempt auto-pull when retry after pull fails too (propagates second error)', async () => {
+    // Pull succeeded but the second generate still fails — propagate.
+    // We must NOT loop into a third pull. The error from the second
+    // attempt is the one operators need to debug.
+    mockGenerate
+      .mockRejectedValueOnce(new Error(MISSING_ERROR_MSG))
+      .mockRejectedValueOnce(new Error('Generation failed: out of memory'));
+    mockPullModel.mockResolvedValueOnce(undefined);
+
+    const helper = freshHelper();
+    await expect(helper.generateLLM(OLLAMA_MODEL, 'hi')).rejects.toThrow(/out of memory/);
+    expect(mockPullModel).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
   });
 });

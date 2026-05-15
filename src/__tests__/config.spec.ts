@@ -145,15 +145,92 @@ describe('Config Module', () => {
       expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:14b');
     });
 
-    it('auto-prefixes unprefixed dash-form catalog names as ollama models', () => {
-      // Same regression but the wizard wrote the catalog dash name
-      // verbatim (e.g. `qwen2.5-coder-14b`). Still recover as ollama.
+    it('rewrites unprefixed dash-form catalog names to the canonical ollama tag', () => {
+      // 0.8.44 wizard regression: catalog UI label uses dash-form
+      // (`qwen2.5-coder-14b`) but the Ollama daemon only resolves the
+      // colon-form tag (`qwen2.5-coder:14b`). Migration must look the
+      // entry up in MODEL_CATALOG and rewrite to `getOllamaTag(entry)`
+      // — otherwise runtime sends the dash-form to Ollama and gets
+      // "model 'qwen2.5-coder-14b' not found", which we observed live
+      // on operator pods running 0.8.45.
       writeFileSync(
         CONFIG_FILE,
         JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'qwen2.5-coder-14b' }),
       );
       const cfg = helper.loadConfig();
-      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder-14b');
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:14b');
+    });
+
+    it('rewrites unprefixed qwen2.5-coder-7b to canonical ollama tag', () => {
+      // Same path as above, asserted on the slug from the operator
+      // pod log that motivated this fix (`qwen2.5-coder-7b`).
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'qwen2.5-coder-7b' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:7b');
+    });
+
+    it('falls back to literal ollama/<slug> when catalog entry has no ollamaTag override', () => {
+      // `home-3b-v3` exists in MODEL_CATALOG with no `ollamaTag` field,
+      // so getOllamaTag(entry) === entry.name and we keep the literal
+      // ollama/home-3b-v3 (no colon rewrite). Same behaviour as pre-fix.
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'home-3b-v3' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/home-3b-v3');
+    });
+
+    it('falls back to literal ollama/<slug> when slug is not in the catalog', () => {
+      // Operator pulled a custom model not curated in MODEL_CATALOG.
+      // Migration must still rescue it as an ollama-prefixed slug
+      // (runtime parseModel accepts off-list ollama ids).
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'custom-pulled-model' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/custom-pulled-model');
+    });
+
+    it('reseats 0.8.45-migrated ollama/<dash-name> to canonical ollama tag', () => {
+      // Operators that ran 0.8.45 already have configs like
+      // `ollama/qwen2.5-coder-7b` (dash-form post-slash) on disk because the
+      // 0.8.45 migration prefixed the bare wizard slug verbatim. resolveSlug
+      // accepts any ollama modelId so the previous migration loop never
+      // rewrote it, and the runtime call to Ollama then failed with
+      // "model 'qwen2.5-coder-7b' not found". 0.8.46 catches this on boot.
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'ollama/qwen2.5-coder-7b' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:7b');
+    });
+
+    it('leaves ollama/<canonical-tag> untouched (already correct)', () => {
+      // Operator that re-ran the wizard on 0.8.45+ has the colon-form tag.
+      // Migration must NOT rewrite this — it would loop forever.
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'ollama/qwen2.5-coder:7b' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/qwen2.5-coder:7b');
+    });
+
+    it('leaves ollama/<unknown-pulled-model> untouched (custom pulls outside catalog)', () => {
+      // A custom model the operator pulled themselves — not in MODEL_CATALOG.
+      // No ollamaTag override exists, so migration must NOT touch it.
+      writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify({ coordinatorUrl: 'http://x:1', defaultModel: 'ollama/some-custom-pulled-thing' }),
+      );
+      const cfg = helper.loadConfig();
+      expect(cfg.defaultModel).toBe('ollama/some-custom-pulled-thing');
     });
 
     it('tolerates off-list cloud model ids on whitelisted providers (no silent rewrite)', () => {

@@ -313,7 +313,36 @@ export class LlmProviderHelper {
   }
 
   private async generateOllamaLLM(model: LLMModel, prompt: string, hyperparams?: GenerateOptions): Promise<string> {
-    return this.ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
+    try {
+      return await this.ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
+    } catch (err) {
+      // Auto-recover the most common operator misconfig: the model the
+      // node was told to use is not yet pulled into the local Ollama
+      // daemon. Detect via the message Ollama returns when the tag is
+      // missing — "model 'X' not found" / "try pulling it first" — and
+      // run a one-shot `pullModel` + retry. NEVER loop: if the pull or
+      // the second generate also fail, propagate the original error so
+      // the upstream retry / fallback layer sees the real runtime
+      // context. NEVER trigger on transient (`econn`, `timeout`,
+      // `runner process`, etc.) errors — pulling a model on every
+      // transient failure would amplify the outage.
+      const msg = (err as { message?: unknown })?.message ?? '';
+      const text = String(msg);
+      const isMissing = /model\s+['"`].*['"`]\s+not found|not found, try pulling/i.test(text);
+      if (!isMissing) throw err;
+      logger.warn(
+        `[LLM] ollama model '${model.modelId}' missing — auto-pulling once before retry`,
+      );
+      try {
+        await this.ollamaHelper.pullModel(model.modelId);
+      } catch (pullErr) {
+        logger.error(
+          `[LLM] auto-pull failed for '${model.modelId}': ${(pullErr as Error).message}`,
+        );
+        throw err; // propagate original generate error so caller sees the runtime context
+      }
+      return await this.ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
+    }
   }
 
   // ── Private: Cloud routing ────────────────────────────────────────────────

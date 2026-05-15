@@ -9,6 +9,7 @@ import {
   topSlugFor,
   type CloudProviderId,
 } from '../llm/providers';
+import { MODEL_CATALOG, getOllamaTag } from '../model/model-catalog';
 import { getCoordinatorUrl, getCoordinatorWsUrl } from '../../constants/coordinator';
 import logger from '../../utils/logger';
 
@@ -84,6 +85,26 @@ export interface Config {
 export function migrateModelSlug(slug: string): { slug: string; reason: string } | null {
   if (!slug) return { slug: FALLBACK_MODEL_SLUG, reason: 'empty model — using default' };
 
+  // Pre-emptive rewrite for the 0.8.45 dash-form leak.
+  //
+  // A config saved by the 0.8.45 migration looks like `ollama/qwen2.5-coder-7b`:
+  // already provider-prefixed but using the catalog dash-form `name` instead
+  // of the canonical Ollama tag. `resolveSlug` accepts any Ollama modelId so
+  // the early-return below would otherwise leave the slug untouched, and the
+  // runtime call to the Ollama daemon would surface as "model 'X' not found".
+  // Detect that exact shape and reseat to the canonical `ollamaTag` before
+  // the early-return so the slug heals on next boot.
+  if (slug.startsWith('ollama/')) {
+    const tail = slug.slice('ollama/'.length);
+    const catalogMatch = MODEL_CATALOG.find((m) => m.name === tail);
+    if (catalogMatch?.ollamaTag && catalogMatch.ollamaTag !== tail) {
+      return {
+        slug: `ollama/${catalogMatch.ollamaTag}`,
+        reason: 'rewriting 0.8.45-migrated dash-form to canonical ollama tag',
+      };
+    }
+  }
+
   // Already valid?
   if (resolveSlug(slug)) return null;
 
@@ -129,10 +150,24 @@ export function migrateModelSlug(slug: string): { slug: string; reason: string }
   // operator picked a local model is catastrophic UX: every boot would
   // then refuse to start with "requires --llm-key". Defense against
   // the 0.8.44 wizard regression that wrote bare catalog names.
+  //
+  // When the slug matches a MODEL_CATALOG entry whose UI-label (`name`,
+  // dash-form) differs from the canonical Ollama tag (`ollamaTag`,
+  // colon-form, e.g. `qwen2.5-coder-7b` → `qwen2.5-coder:7b`),
+  // rewrite to the canonical tag so the runtime call to Ollama hits a
+  // real model. The wizard wrote `name` verbatim and the 0.8.45 migration
+  // previously prefixed it as `ollama/<dash-name>`, which Ollama daemons
+  // do not recognise and surfaces as "model 'X' not found".
   if (slash < 0) {
-    const candidate = `ollama/${slug}`;
+    const catalogMatch = MODEL_CATALOG.find((m) => m.name === slug);
+    const ollamaSlug = catalogMatch ? getOllamaTag(catalogMatch) : slug;
+    const candidate = `ollama/${ollamaSlug}`;
     if (resolveSlug(candidate)) {
-      return { slug: candidate, reason: `unprefixed slug; assuming ollama provider` };
+      const reason =
+        catalogMatch && catalogMatch.ollamaTag
+          ? `unprefixed catalog name; rewriting to canonical ollama tag`
+          : `unprefixed slug; assuming ollama provider`;
+      return { slug: candidate, reason };
     }
   }
 
