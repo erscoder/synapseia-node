@@ -11,6 +11,20 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.46 lockstep — Ollama tag canonicalisation + auto-pull retry + coord rotation revisitable (903b01e5)
+
+Version-only commit. Ships:
+- node `cf0577b5` — canonical Ollama tag migration heals
+  `ollama/qwen2.5-coder-7b` → `ollama/qwen2.5-coder:7b` so the
+  runtime call hits a real Ollama tag, plus a one-shot auto-pull
+  retry in `generateOllamaLLM` as defense-in-depth.
+- coord `726c6a07` — `REVISITABLE_TYPES` (RESEARCH + TRAINING
+  family) bypass the per-peer submission filter so nodes keep
+  receiving work across the round window instead of going blind
+  for 6h after a single submission.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] fix(config/llm): canonical Ollama tag migration + runtime auto-pull retry (cf0577b5)
 
 Live operator pod (Linux + RTX A4500) on 0.8.45 hit the
