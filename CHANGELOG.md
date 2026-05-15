@@ -11,6 +11,58 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] fix(self-updater): target the running install prefix (85d71759)
+
+Pod operator reported an infinite `Update available v0.8.47 -> v0.8.48`
+loop on every `syn start`. Root cause: `attemptSelfUpdate` hard-coded
+`$HOME/.synapseia/npm-global` as `NPM_CONFIG_PREFIX`. Operators that
+installed via `sudo npm install -g` into `/usr/local/lib/node_modules`
+saw the update land in the user prefix while PATH still resolved to
+the system-prefix binary. Update succeeded; running binary never moved.
+
+`getRunningInstallPrefix` now derives the prefix from
+`dirname(__filename)` by walking back from the `/lib/node_modules/`
+marker. `attemptSelfUpdate` uses that prefix so the upgrade lands
+where the next process load finds it. Fallback to the user prefix
+when detection fails (compiled bundle, raw dev tree). EACCES
+message points at sudo / nvm explicitly.
+
+## [2026-05-15] fix(staking-cli): migrate loadWalletWithPassword to EncryptedKeystore (79a45084)
+
+Operator on Linux pod ran `syn stake 9900` and was prompted for the
+LEGACY `wallet.json` password instead of the keystore vault
+passphrase. Root cause: `loadWalletWithPassword` in staking-cli was
+a long-standing TODO that never migrated off the legacy plaintext-
+encrypted `wallet.json` even after `node start` moved to the
+hardened `EncryptedKeystore`. F9 attack surface stayed open and the
+UX was inconsistent between `syn start` (vault) and
+`syn stake / unstake / claim` (legacy).
+
+Migration:
+- Keystore-first path: when `EncryptedKeystore.exists()` is true,
+  unlock via the same chain as `syn start` — file-mounted passphrase
+  (`SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`) > env
+  (`SYNAPSEIA_WALLET_PASSWORD` / `WALLET_PASSWORD`, back-compat) >
+  interactive prompt with 3-attempt retry.
+- Legacy fallback: when no keystore exists, fall back to the prior
+  `wallet.json` decrypt with a deprecation WARN advising migration
+  via `syn start`.
+- `readPassphraseFromFile` extracted from inline `cli/index.ts` into
+  `packages/node/src/infrastructure/keystore/passphrase-helpers.ts`
+  so both call sites share one implementation.
+
+Reviewer (`superpowers:code-reviewer`) flagged the env-name
+overloading (`SYNAPSEIA_WALLET_PASSWORD` controls both keystore +
+legacy) as MEDIUM with the mitigation that the JSDoc explicitly
+documents the dual use. Proper fix (introduce
+`SYNAPSEIA_KEYSTORE_PASSPHRASE`) is tracked for a follow-up release.
+
+7 new tests for the shared helper. `rewards-vault-cli.ts` caller
+inherits the new contract — `syn claim` now prompts once for the
+vault passphrase.
+
+124 test suites, 1711 tests pass.
+
 ## [2026-05-15] chore(release): 0.8.48 lockstep — persistent rpcUrl config + devnet default (9ab64c97)
 
 Version-only commit. Ships `782ee914` — adds `rpcUrl` to the
