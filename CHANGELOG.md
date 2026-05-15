@@ -11,6 +11,20 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.49 lockstep — staking-cli keystore + self-updater prefix (4720c457)
+
+Version-only commit. Ships:
+- node `79a45084` — `loadWalletWithPassword` migrated to
+  `EncryptedKeystore` (was a long-standing TODO). `syn stake /
+  unstake / claim` now prompts for the vault passphrase, not the
+  legacy `wallet.json` password.
+- node `85d71759` — `attemptSelfUpdate` now targets the running
+  binary's install prefix instead of the hard-coded user prefix.
+  Fixes the infinite "update available" loop operators hit when
+  they installed via `sudo npm i -g` into `/usr/local`.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] fix(self-updater): target the running install prefix (85d71759)
 
 Pod operator reported an infinite `Update available v0.8.47 -> v0.8.48`
