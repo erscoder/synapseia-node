@@ -11,6 +11,16 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.48 lockstep — persistent rpcUrl config + devnet default (9ab64c97)
+
+Version-only commit. Ships `782ee914` — adds `rpcUrl` to the
+persisted config + wizard step + `--set-rpc-url` flag + resolver
+with priority env > config > devnet default. Corrects the 0.8.47
+mainnet fallback that was wrong direction for the current chain
+(Synapseia still on devnet).
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] feat(config): persistent Solana RPC URL with devnet default (782ee914)
 
 Operator wanted to pin a Helius / QuickNode / private RPC URL
