@@ -11,6 +11,19 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.47 lockstep — staking-cli RPC default + fresh-install single passphrase (6ea7757a)
+
+Version-only commit. Ships:
+- node `44b43447` — `getSolanaRpcUrl` defaults to mainnet so
+  `syn stake N` works on a fresh pod without
+  `SOLANA_RPC_URL=...` set.
+- node `20f718f0` — fresh-install path generates keypair
+  straight into the keystore (one passphrase prompt). Reviewer
+  follow-ups for `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` and the
+  inline backup banner landed in the same commit.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] fix(cli): fresh-install creates keystore directly with one passphrase (20f718f0)
 
 Operator on a fresh pod ran `syn start` for the first time and
