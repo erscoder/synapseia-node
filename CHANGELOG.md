@@ -11,6 +11,31 @@
 - `node staking`, `node wallet-verify`, and `node export-keypair` subcommands still use the legacy wallet loader and therefore still read `SYNAPSEIA_WALLET_PASSWORD` / decrypt `wallet.json`. Follow-up tickets: migrate these commands to the keystore (see TODOs at `src/modules/staking/staking-cli.ts` `loadWalletWithPassword`, `src/cli/index.ts` `export-keypair` and `wallet-verify` action handlers).
 - Long-term plan to upgrade the KDF from scrypt to argon2id once the jest mock workaround for `@noble/hashes` is implemented (see `EncryptedKeystore.ts` header comment).
 
+## [2026-05-15] chore(release): 0.8.51 lockstep — node-ui keystore unlock end-to-end (e47fe28e)
+
+Version-only commit. Hotfix for node-ui 0.8.50 where:
+- The unlock screen accepted the legacy `wallet.json` password
+  (cascade in `wallet-verify`), then the downstream `syn start`
+  spawn rejected the same password against the keystore and
+  hung on an interactive prompt with no TTY.
+- The unlock screen labelled the field "Wallet Password",
+  leaving operators unsure whether to type the legacy password
+  or the vault passphrase.
+
+Ships:
+- node `437775bf` — `syn start` keystore branch now honours
+  `SYNAPSEIA_WALLET_PASSWORD` / `WALLET_PASSWORD` env (matches
+  what Tauri's `start_node` passes). No more TTY hang.
+- node `ea561e75` — `wallet-verify` drops the legacy cascade
+  when a keystore is on disk. Operators that migrated MUST
+  type the vault passphrase. Same `INVALID_PASSWORD` marker
+  preserved so the Tauri Rust contract is unchanged.
+- node-ui `ae30c63` — unlock screen field is now "Vault
+  passphrase", placeholder hints at the 12+ char minimum, and
+  footer copy references the keystore + first-run setup.
+
+Lockstep with coord + node-ui per the sync rule.
+
 ## [2026-05-15] chore(release): 0.8.50 lockstep — wallet-verify keystore + canonical program constants + README (87ac52d1)
 
 Version-only commit. Ships three node-side fixes:
