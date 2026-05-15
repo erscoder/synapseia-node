@@ -415,9 +415,91 @@ async function bootstrap() {
         let wallet: { publicKey: string; secretKey: number[]; createdAt: string; mnemonic?: string };
         let isNew = false;
         let secretKeyBytes: Uint8Array;
-        const keystoreActive = keystore.exists();
+        let keystoreActive = keystore.exists();
 
-        if (keystoreActive) {
+        // Fresh-install detection: neither the hardened keystore NOR the
+        // legacy wallet.json exist on disk. Generate a fresh keypair
+        // straight into the keystore with a SINGLE passphrase prompt,
+        // skipping the legacy walletService.getOrCreate() path entirely.
+        // This avoids creating a legacy wallet.json on first boot just
+        // to migrate it seconds later (which used to ask the operator
+        // for TWO passwords back-to-back on first boot).
+        const legacyWalletPath = path.join(nodeHome, 'wallet.json');
+        const legacyWalletExists = existsSync(legacyWalletPath);
+
+        if (!keystoreActive && !legacyWalletExists) {
+          // Symmetric with the hardened-branch contract: a passphrase
+          // mounted via SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE unlocks the
+          // non-TTY container path. Without this fallback, supervisor /
+          // systemd / Docker fresh boots could not bootstrap a wallet.
+          const { password: passwordPrompt } = await import('@inquirer/prompts');
+          const solanaWeb3 = await import('@solana/web3.js');
+          const bip39 = await import('bip39');
+          const filePass = await readPassphraseFromFile(
+            process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+            logger,
+          );
+          if (!filePass && !process.stdin.isTTY) {
+            logger.error('[Keystore] no wallet found and stdin is not a TTY — cannot prompt for a new passphrase. Set SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or run on an interactive shell first.');
+            process.exit(7);
+          }
+          if (filePass !== null && filePass.length < 12) {
+            logger.error('[Keystore] SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE passphrase is shorter than 12 characters — aborting');
+            process.exit(7);
+          }
+          logger.log('First-time setup: creating a new wallet and encrypting it into the hardened keystore.');
+          let pass1: string;
+          if (filePass !== null) {
+            pass1 = filePass;
+            logger.log('[Keystore] passphrase loaded from SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE — skipping interactive prompt');
+          } else {
+            pass1 = await passwordPrompt({
+              message: 'New keystore passphrase (min 12 chars):',
+              validate: (v: string) => v.length >= 12 || 'Passphrase must be at least 12 characters',
+            });
+            const pass2 = await passwordPrompt({ message: 'Confirm passphrase:' });
+            if (pass1 !== pass2) {
+              logger.error('[Keystore] passphrases do not match — aborting');
+              process.exit(7);
+            }
+          }
+          // Generate via BIP39 so the operator gets a recovery phrase to
+          // back up (same convention as the legacy walletService path).
+          const mnemonic = bip39.generateMnemonic(128);
+          const seed = await bip39.mnemonicToSeed(mnemonic);
+          const seedBytes = new Uint8Array(seed).slice(0, 32);
+          const fresh = solanaWeb3.Keypair.fromSeed(seedBytes);
+          secretKeyBytes = fresh.secretKey;
+          await keystore.encrypt(secretKeyBytes, pass1);
+          logger.log(`[Keystore] new wallet encrypted at ${keystore.getPath()} (mode 0600)`);
+          // Inline backup banner — `walletService.displayCreationWarning`
+          // references the legacy wallet.json.backup file which the
+          // keystore path never writes (P10 / reviewer MEDIUM-7). Be
+          // explicit about WHERE the wallet lives and that the mnemonic
+          // is the operator's ONLY off-disk recovery path.
+          logger.warn('');
+          logger.warn('🔐  IMPORTANT — write down this recovery phrase NOW:');
+          logger.warn(`     ${mnemonic}`);
+          logger.warn('');
+          logger.warn(`     Wallet address: ${fresh.publicKey.toBase58()}`);
+          logger.warn(`     Keystore file:  ${keystore.getPath()}`);
+          logger.warn('     The mnemonic is the ONLY way to recover this wallet if the keystore file is lost or corrupted. Store it offline (paper or hardware) and never share it.');
+          logger.warn('');
+          wallet = {
+            publicKey: fresh.publicKey.toBase58(),
+            secretKey: Array.from(secretKeyBytes),
+            createdAt: new Date().toISOString(),
+            mnemonic,
+          };
+          // Suppress the legacy `walletService.displayCreationWarning`
+          // below — the inline banner above already covered backup.
+          // Leaving `isNew = false` skips that block while keeping the
+          // downstream wiring (activation, banner) untouched.
+          isNew = false;
+          // Mark keystore as active so the legacy migration prompt
+          // (further down) does not fire on the same boot.
+          keystoreActive = true;
+        } else if (keystoreActive) {
           // Hardened branch: load passphrase from file-mounted secret
           // (SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE) when present, else
           // prompt interactively. The legacy SYNAPSEIA_WALLET_PASSWORD
