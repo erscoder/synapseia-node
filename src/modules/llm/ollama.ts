@@ -94,14 +94,24 @@ export class OllamaHelper {
       const stream = await ollamaClient.pull({ model, stream: true });
 
       let lastDigest = '';
+      let lastLogMs = 0;
+      const LOG_INTERVAL_MS = 5_000;
       for await (const part of stream) {
-        if (part.digest && part.digest !== lastDigest) {
+        const now = Date.now();
+        const digestChanged = part.digest && part.digest !== lastDigest;
+        const intervalElapsed = now - lastLogMs >= LOG_INTERVAL_MS;
+        if (part.digest && (digestChanged || intervalElapsed)) {
           const percent =
             part.total !== undefined && part.completed !== undefined
               ? Math.round((part.completed / part.total) * 100)
               : 0;
-          this.logger.log(`📦 ${model}: ${percent}% complete`);
+          const mb =
+            part.total !== undefined && part.completed !== undefined
+              ? ` (${Math.round(part.completed / 1024 / 1024)}/${Math.round(part.total / 1024 / 1024)} MB)`
+              : '';
+          this.logger.log(`📦 ${model}: ${percent}%${mb}`);
           lastDigest = part.digest;
+          lastLogMs = now;
         }
         if (part.status === 'success') {
           this.logger.log(`✅ Model ${model} downloaded successfully`);

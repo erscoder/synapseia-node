@@ -154,7 +154,7 @@ export async function installPythonDeps(
     try {
       execSync(
         `"${venvPip()}" install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`,
-        { stdio: 'pipe' },
+        { stdio: 'inherit' },
       );
       result.installedTorch = true;
       emit({ phase: 'torch', status: 'done', message: `PyTorch ${TORCH_VERSION} installed` });
@@ -192,7 +192,7 @@ export async function installPythonDeps(
       try {
         execSync(
           `"${venvPip()}" install transformers peft datasets safetensors accelerate`,
-          { stdio: 'pipe' },
+          { stdio: 'inherit' },
         );
         result.installedLoraStack = true;
         emit({ phase: 'lora-stack', status: 'done', message: 'LoRA training stack installed' });
@@ -233,7 +233,7 @@ export async function installPythonDeps(
     } else {
       emit({ phase: 'bitsandbytes', status: 'running', message: 'Installing bitsandbytes for DiLoCo full mode...' });
       try {
-        execSync(`"${venvPip()}" install bitsandbytes`, { stdio: 'pipe' });
+        execSync(`"${venvPip()}" install bitsandbytes`, { stdio: 'inherit' });
         result.installedBitsAndBytes = true;
         emit({ phase: 'bitsandbytes', status: 'done', message: 'bitsandbytes installed' });
       } catch (err) {

@@ -584,7 +584,33 @@ async function bootstrap() {
         // loading screen so by the time the user clicks Start this is a
         // cheap no-op. Terminal users hit the same path on first boot.
         const { installPythonDeps } = await import('../utils/install-deps.js');
-        const installResult = await installPythonDeps({ hardware });
+
+        // Operator-facing banner so the terminal doesn't appear hung during
+        // the ~700 MB initial install (torch + LoRA stack + apt-get docking).
+        // Subsequent boots short-circuit on all-installed and emit only
+        // `skip` events, so the banner is cheap to keep unconditional.
+        logger.log('');
+        logger.log('============================================================');
+        logger.log('  Installing node dependencies (first boot only — ~2-5 min)');
+        logger.log('  - Python venv at ~/.synapseia/venv');
+        logger.log('  - PyTorch (~200 MB)');
+        logger.log('  - LoRA training stack: transformers, peft, datasets,');
+        logger.log('    safetensors, accelerate (~500 MB)');
+        logger.log('  - AutoDock Vina + Open Babel (docking, ~30 MB)');
+        logger.log('  Subsequent starts skip everything already installed.');
+        logger.log('============================================================');
+        logger.log('');
+
+        const installResult = await installPythonDeps({
+          hardware,
+          onProgress: (e) => {
+            const icon = e.status === 'done' ? '✓'
+              : e.status === 'error' ? '✗'
+              : e.status === 'skip' ? '↷'
+              : '⟳';
+            logger.log(`  [${icon}] ${e.phase}: ${e.message}`);
+          },
+        });
         if (!installResult.success && installResult.errors.length > 0) {
           installResult.errors.forEach((e) => logger.warn(`[Install] ${e}`));
         }
