@@ -424,10 +424,16 @@ async function bootstrap() {
           }
           // Generate via BIP39 so the operator gets a recovery phrase to
           // back up (same convention as the legacy walletService path).
+          // Derive the keypair via BIP44 path m/44'/501'/0'/0' so the
+          // mnemonic can be imported into Phantom / Solflare / Solana CLI
+          // — Keypair.fromSeed(seed.slice(0,32)) would produce a wallet
+          // unrecoverable in standard Solana wallets.
           const mnemonic = bip39.generateMnemonic(128);
+          const { derivePath } = await import('ed25519-hd-key');
           const seed = await bip39.mnemonicToSeed(mnemonic);
-          const seedBytes = new Uint8Array(seed).slice(0, 32);
-          const fresh = solanaWeb3.Keypair.fromSeed(seedBytes);
+          const derivationPath = "m/44'/501'/0'/0'";
+          const { key } = derivePath(derivationPath, seed.toString('hex'));
+          const fresh = solanaWeb3.Keypair.fromSeed(key);
           secretKeyBytes = fresh.secretKey;
           await keystore.encrypt(secretKeyBytes, pass1);
           logger.log(`[Keystore] new wallet encrypted at ${keystore.getPath()} (mode 0600)`);
@@ -442,6 +448,8 @@ async function bootstrap() {
           logger.warn('');
           logger.warn(`     Wallet address: ${fresh.publicKey.toBase58()}`);
           logger.warn(`     Keystore file:  ${keystore.getPath()}`);
+          logger.warn('     The mnemonic uses standard BIP44 Solana derivation (m/44/501/0/0)');
+          logger.warn('     and can be imported into Phantom, Solflare, or any Solana wallet.');
           logger.warn('     The mnemonic is the ONLY way to recover this wallet if the keystore file is lost or corrupted. Store it offline (paper or hardware) and never share it.');
           logger.warn('');
           wallet = {
@@ -1078,12 +1086,15 @@ async function bootstrap() {
   // ── export-key ─────────────────────────────────────────────────────────────
   program
     .command('export-key')
-    .description('Display the wallet private key (requires password)')
+    .description('Display the wallet private key (requires passphrase)')
     .action(async () => {
       const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
       const walletPath = path.join(nodeHome, 'wallet.json');
+      const keystore = new EncryptedKeystore();
+      const hasKeystore = keystore.exists();
+      const hasLegacy = existsSync(walletPath);
 
-      if (!existsSync(walletPath)) {
+      if (!hasKeystore && !hasLegacy) {
         logger.error('No wallet found. Run `syn start` first to create one.');
         process.exit(1);
       }
@@ -1093,9 +1104,62 @@ async function bootstrap() {
       logger.log('   Never share it with anyone. Never paste it on a website.');
       logger.log('');
 
-      // Honour the env var so the desktop UI (no TTY) can invoke this
-      // command non-interactively. Interactive terminal users still get
-      // a prompt when no env var is set.
+      // Hardened branch: keystore-backed wallets (node-ui installs, and
+      // any CLI install since the keystore migration). Mirrors the
+      // passphrase-resolution chain in `start`:
+      //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE (file-mounted secret)
+      //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD (back-compat)
+      //   3. interactive prompt
+      if (hasKeystore) {
+        try {
+          const filePass = await readPassphraseFromFile(
+            process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+            logger,
+          );
+          const envPassRaw = process.env.SYNAPSEIA_WALLET_PASSWORD?.trim()
+            || process.env.WALLET_PASSWORD?.trim();
+          let pass: string;
+          if (filePass != null) {
+            pass = filePass;
+          } else if (envPassRaw && envPassRaw.length > 0) {
+            pass = envPassRaw;
+          } else {
+            const { password } = await import('@inquirer/prompts');
+            pass = await password({
+              message: 'Enter your vault passphrase to reveal the private key:',
+            });
+          }
+
+          const secretKeyBytes = await keystore.decrypt(pass);
+          const { Keypair } = await import('@solana/web3.js');
+          const kp = Keypair.fromSecretKey(secretKeyBytes);
+          const publicKey = kp.publicKey.toBase58();
+
+          const { default: bs58 } = await import('bs58');
+          const base58Key = bs58.encode(secretKeyBytes);
+
+          logger.log(`__PRIVATE_KEY__ ${base58Key}`);
+          logger.log('');
+          logger.log('═══════════════════════════════════════════════════');
+          logger.log(`  Wallet address:  ${publicKey}`);
+          logger.log(`  Private key (base58):`);
+          logger.log(`  ${base58Key}`);
+          logger.log('═══════════════════════════════════════════════════');
+          logger.log('');
+          logger.log('Copy the private key above. It will NOT be shown again.');
+          logger.log('');
+          process.exit(0);
+        } catch (err) {
+          if (err instanceof EncryptedKeystoreError && err.code === 'INVALID_PASSPHRASE') {
+            logger.error('Wrong passphrase. Private key NOT revealed.');
+          } else {
+            logger.error(`Failed to unlock keystore: ${(err as Error).message}`);
+          }
+          process.exit(1);
+        }
+      }
+
+      // Legacy fallback: operators who never migrated off wallet.json.
       let pwd: string;
       const envPwd = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
       if (envPwd) {
@@ -1103,15 +1167,11 @@ async function bootstrap() {
       } else {
         const { password } = await import('@inquirer/prompts');
         pwd = await password({
-          message: 'Enter your wallet password to reveal the private key:',
+          message: 'Enter your vault passphrase to reveal the private key:',
         });
       }
 
       try {
-        // TODO(phase0.3-followup): migrate `export-keypair` to the
-        // hardened EncryptedKeystore so it stops reading the legacy
-        // SYNAPSEIA_WALLET_PASSWORD env var and decrypting wallet.json.
-        // See CHANGELOG "Known limitations" under the keystore entry.
         const wallet = await walletService.load(nodeHome, pwd);
 
         const { default: bs58 } = await import('bs58');
@@ -1134,7 +1194,7 @@ async function bootstrap() {
       } catch (err) {
         const msg = (err as Error).message;
         if (msg.includes('decrypt') || msg.includes('password') || msg.includes('auth')) {
-          logger.error('Wrong password. Private key NOT revealed.');
+          logger.error('Wrong passphrase. Private key NOT revealed.');
         } else {
           logger.error(`Failed to load wallet: ${msg}`);
         }

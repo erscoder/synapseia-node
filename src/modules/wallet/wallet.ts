@@ -209,14 +209,18 @@ export class WalletHelper {
       // Generate mnemonic (12 words = 128 bits entropy)
       const mnemonic = bip39.generateMnemonic(128);
 
-      // Derive seed from mnemonic
+      // Derive seed from mnemonic, then derive the Solana keypair via
+      // BIP44 path m/44'/501'/0'/0' so the mnemonic is portable to
+      // Phantom / Solflare / Solana CLI. A direct Keypair.fromSeed on
+      // the raw seed would produce a wallet unrecoverable from the
+      // mnemonic in any standard Solana wallet.
+      const { derivePath } = await import('ed25519-hd-key');
       const seed = await bip39.mnemonicToSeed(mnemonic);
+      const derivationPath = "m/44'/501'/0'/0'";
+      const { key } = derivePath(derivationPath, seed.toString('hex'));
 
-      // Use first 32 bytes of seed as private key
-      const seedBytes = new Uint8Array(seed).slice(0, 32);
-
-      // Generate keypair from seed
-      const keypair = Keypair.fromSeed(seedBytes);
+      // Generate keypair from derived seed
+      const keypair = Keypair.fromSeed(key);
 
       const wallet: SolanaWallet = {
         publicKey: keypair.publicKey.toBase58(),

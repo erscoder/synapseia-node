@@ -111,7 +111,6 @@ export async function isVinaAvailable(opts?: RunDockingOptions): Promise<boolean
   try {
     await assertBinariesAvailable(opts);
     vinaAvailableCache = true;
-    logger.log(`[docking] Vina + Open Babel detected — advertising 'docking' capability`);
     return true;
   } catch {
     // Don't cache negatives — operator may install vina/obabel after node
