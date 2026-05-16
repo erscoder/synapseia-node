@@ -1,5 +1,31 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix: docking apt/dnf lock retry + plan-parse WARN — 0.8.61 (ea7e5684)
+
+Two bugs surfaced via live POD1/POD2 log analysis.
+
+- **Bug 1 — Docking install apt-get lock misclassified as no-pm
+  (HIGH)**: POD1 hit `E: Could not get lock /var/cache/apt/archives/lock.
+  It is held by process 1213 (apt-get)` and the old code reported "no
+  supported package manager found" — lying about the cause. Result:
+  POD1 ended up permanently without Vina + obabel binaries; docking
+  WOs sent to that pod failed. New `installWithLockRetry` helper
+  unifies retry for apt-get (exit 100) and dnf (stderr regex). 3
+  attempts, 30s/60s/90s backoff via injectable `sleepFn`. Non-lock
+  failures bail with real exit code + stderr tail (no dnf fallback
+  when apt-get works). `extractExitCode` + `extractStderrTail`
+  exported for shape-variance unit coverage.
+- **Bug 6 — Plan-parse silent quality degradation (LOW)**: old INFO
+  log "Failed to parse plan, using default" hid the failure. New WARN
+  with `model=`, `output_len=`, `reason=`, and head-500 / tail-200
+  preview via `truncateMiddle`. `parseExecutionPlan` extracted to a
+  free function so the unit-test surface is the function, not a
+  public class method (LOW-1 reviewer finding).
+
+Tests: 17 new cases (4 dnf retry + 4 helper micro + 9 parser /
+truncation). Build PASS. `install.ts` 92.25% stmts, `plan-execution.ts`
+96.29% stmts on touched paths.
+
 ## [2026-05-16] fix(node): docking timeout + embedding auto-pull + training LLM resolver + 0.8.60 (e5951cb1)
 
 Three operator-reported issues:
