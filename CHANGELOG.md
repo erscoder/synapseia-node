@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] chore(release): bump 0.8.54 lockstep (bde170b5)
+
+Lockstep release bundling this cycle's fixes:
+
+- **`syn start` crash + LoRA cap probes + clear deps error**
+  (`a5ed81ff`) — multi-fix patch surfaced by an M1 16 GB operator
+  boot. Fixes `Cannot read properties of undefined (reading 'length')`
+  when `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` is unset; adds pre-flight
+  `syn config` UX guard; installs full LoRA Python stack on Tier 1+
+  nodes; introduces `lora_training` + `lora_generation` cap probes
+  in heartbeat (M1 16 GB qualifies for `lora_training` via MPS, NOT
+  for `lora_generation` which is CUDA-only); bumps
+  `LORA_GENERATION_MEM_FLOOR_MB` 4096 → 12288; surfaces clear
+  `pip3 install ...` hint when LoRA subprocess crashes on missing
+  module. Pairs with coord `b54d68b5` (subtype-driven LORA cap
+  routing).
+
+**BREAKING for old fleet**: nodes < 0.8.54 don't advertise
+`lora_training`/`lora_generation`; LORA WOs created post-deploy
+silently skip-route on those nodes (strict subset cap match) until
+each operator upgrades the CLI. Single-operator deployments self-heal
+on `syn start` upgrade.
+
 ## [2026-05-16] fix(node): syn start crash + LoRA cap probes + clear deps error (a5ed81ff)
 
 Multi-fix patch addressing two production crashes and a fleet routing
