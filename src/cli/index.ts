@@ -331,12 +331,6 @@ async function bootstrap() {
           process.exit(6);
         }
 
-        if (!existsSync(CONFIG_FILE)) {
-          logger.error('❌ No configuration found.');
-          logger.error('   Run `syn config` first to set up this node.');
-          process.exit(3);
-        }
-
         const config = configService.load();
         // Resolve nodeHome to a CONCRETE path up-front. Passing
         // `process.env.SYNAPSEIA_HOME` raw (undefined when not set) and
@@ -584,162 +578,15 @@ async function bootstrap() {
           }
         }
 
-        // ── Python3 + PyTorch check + optional install ────────────────────
-        const { isPyTorchAvailable: checkTorch } = await import('../modules/model/trainer.js');
-        const { execSync: execSyncFn, spawnSync } = await import('child_process');
-
-        // Check python3 availability first
-        const hasPython = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0;
-        const hasTorch = hasPython && await checkTorch();
-
-        if (!hasTorch) {
-          logger.log('\n⚡ Hyperparam Search capability detected!');
-          logger.log('   Your node can run micro-transformer training to optimize');
-          logger.log('   AI hyperparameters and earn SYN rewards.');
-          logger.log('   This requires Python 3 + PyTorch (CPU only, no GPU needed).\n');
-
-          // In non-interactive environments (Docker), skip PyTorch install prompt
-          let installTorch: boolean | null;
-          if (process.env.CI || process.env.DOCKER || !process.stdout.isTTY) {
-            logger.warn('Non-interactive environment — skipping PyTorch install. Set INSTALL_TORCH=1 to auto-install.');
-            installTorch = process.env.INSTALL_TORCH === '1';
-          } else {
-            const { confirm } = await import('@inquirer/prompts');
-            installTorch = await safePrompt(() => confirm({
-              message: 'Install Python3 + PyTorch now? (recommended)',
-              default: true,
-            }));
-          }
-
-          if (installTorch) {
-            const plat = os.platform();
-
-            // Required versions
-            const REQUIRED_PYTHON_MINOR = 14;   // Python 3.14.x
-            const TORCH_VERSION = '2.10.0';      // Tested and confirmed working
-
-            // Step 1: install python3 if missing or wrong version
-            const pythonVersionRaw = spawnSync('python3', ['--version'], { stdio: 'pipe' });
-            const pythonVersionStr = (pythonVersionRaw.stdout?.toString() ?? '').trim(); // e.g. "Python 3.14.3"
-            // S2.8: regex was /Python 3\.(\.\d+)/ which never matches
-            // (literal `.` followed by `\.\d+` = `..\d+`). Result was
-            // pythonMinor=0 every boot, triggering a pointless reinstall
-            // each time. Fixed to capture the minor digit group only.
-            const pythonMinor = parseInt(pythonVersionStr.match(/^Python 3\.(\d+)/)?.[1] ?? '0', 10);
-            const hasPythonCorrect = hasPython && pythonMinor >= REQUIRED_PYTHON_MINOR;
-
-            if (!hasPythonCorrect) {
-              logger.log(`\n📦 Installing Python 3.${REQUIRED_PYTHON_MINOR}+ (current: ${pythonVersionStr || 'none'})...`);
-              try {
-                if (plat === 'darwin') {
-                  const hasBrew = spawnSync('brew', ['--version'], { stdio: 'ignore' }).status === 0;
-                  if (hasBrew) {
-                    // Install specific minor version via pyenv or brew python@3.14 formula
-                    const hasPyenv = spawnSync('pyenv', ['--version'], { stdio: 'ignore' }).status === 0;
-                    if (hasPyenv) {
-                      execSyncFn(`pyenv install 3.${REQUIRED_PYTHON_MINOR} --skip-existing`, { stdio: 'inherit' });
-                      execSyncFn(`pyenv global 3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
-                    } else {
-                      // brew python@3.14 formula (may not exist yet for very new versions)
-                      try {
-                        execSyncFn(`brew install python@3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
-                        execSyncFn(`brew link --force python@3.${REQUIRED_PYTHON_MINOR}`, { stdio: 'inherit' });
-                      } catch {
-                        // fallback: install latest python3 via brew
-                        execSyncFn('brew install python3', { stdio: 'inherit' });
-                      }
-                    }
-                  } else {
-                    logger.warn(`⚠️  Homebrew not found. Install Python 3.${REQUIRED_PYTHON_MINOR} from https://www.python.org/downloads/`);
-                    logger.warn('   Then re-run syn start to enable Hyperparam Search.');
-                    logger.log('   Continuing without Hyperparam Search...\n');
-                  }
-                } else if (plat === 'linux') {
-                  const hasApt = spawnSync('apt-get', ['--version'], { stdio: 'ignore' }).status === 0;
-                  const hasDnf = spawnSync('dnf', ['--version'], { stdio: 'ignore' }).status === 0;
-                  if (hasApt) {
-                    // Ubuntu/Debian: use deadsnakes PPA for specific Python versions
-                    try {
-                      execSyncFn(`sudo add-apt-repository -y ppa:deadsnakes/ppa`, { stdio: 'inherit' });
-                      execSyncFn(`sudo apt-get update`, { stdio: 'inherit' });
-                      execSyncFn(`sudo apt-get install -y python3.${REQUIRED_PYTHON_MINOR} python3.${REQUIRED_PYTHON_MINOR}-venv python3-pip`, { stdio: 'inherit' });
-                      execSyncFn(`sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.${REQUIRED_PYTHON_MINOR} 1`, { stdio: 'inherit' });
-                    } catch {
-                      execSyncFn('sudo apt-get install -y python3 python3-pip', { stdio: 'inherit' });
-                    }
-                  } else if (hasDnf) {
-                    execSyncFn(`sudo dnf install -y python3.${REQUIRED_PYTHON_MINOR} python3-pip`, { stdio: 'inherit' });
-                  } else {
-                    execSyncFn('sudo pacman -S --noconfirm python python-pip', { stdio: 'inherit' });
-                  }
-                } else {
-                  logger.warn(`⚠️  Unsupported OS. Install Python 3.${REQUIRED_PYTHON_MINOR} manually: https://www.python.org`);
-                  logger.log('   Continuing without Hyperparam Search...\n');
-                }
-                logger.log(`✅ Python 3.${REQUIRED_PYTHON_MINOR} installed.\n`);
-              } catch {
-                logger.warn(`⚠️  Python 3.${REQUIRED_PYTHON_MINOR} install failed. Install manually: https://www.python.org/downloads/`);
-                logger.warn('   Continuing without Hyperparam Search.\n');
-              }
-            }
-
-            // Step 2: install torch==2.10.0 (CPU-only wheel, no CUDA, ~200MB)
-            const pythonNow = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0;
-            if (pythonNow) {
-              // Check if correct torch version is already installed
-              const torchCheck = spawnSync(
-                'python3', ['-c', `import torch; assert torch.__version__ == '${TORCH_VERSION}', torch.__version__`],
-                { stdio: 'pipe' }
-              );
-              if (torchCheck.status === 0) {
-                logger.log(`✅ PyTorch ${TORCH_VERSION} already installed.\n`);
-              } else {
-                logger.log(`📦 Installing PyTorch ${TORCH_VERSION} (CPU-only, ~200MB)...`);
-                try {
-                  execSyncFn(
-                    `pip3 install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`,
-                    { stdio: 'inherit' }
-                  );
-                  logger.log(`✅ PyTorch ${TORCH_VERSION} installed! Your node can now run Hyperparam Search.\n`);
-                } catch {
-                  logger.warn(`⚠️  PyTorch install failed. Try manually: pip3 install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`);
-                  logger.warn('   Continuing without Hyperparam Search.\n');
-                }
-              }
-
-              // LoRA training stack: transformers + peft + datasets + safetensors + accelerate.
-              // Only installed on Tier 1+ nodes with enough RAM/VRAM to run a PubMedBERT-class
-              // model. Tier 0 / underpowered nodes skip to keep their footprint small.
-              const loraTierOk = hardware.hardwareClass >= 1
-                && (hardware.gpuVramGb > 0 || hardware.ramGb >= 16);
-              if (loraTierOk) {
-                const loraCheck = spawnSync(
-                  'python3', ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
-                  { stdio: 'pipe' }
-                );
-                if (loraCheck.status === 0) {
-                  logger.log('✅ LoRA training stack already installed.\n');
-                } else {
-                  logger.log('📦 Installing LoRA training stack (~500MB)...');
-                  try {
-                    execSyncFn(
-                      'pip3 install transformers peft datasets safetensors accelerate',
-                      { stdio: 'inherit' }
-                    );
-                    logger.log('✅ LoRA training stack installed! Your node can now run LoRA WOs.\n');
-                  } catch {
-                    logger.warn('⚠️  LoRA stack install failed. Try manually: pip3 install transformers peft datasets safetensors accelerate');
-                    logger.warn('   Continuing without LoRA training.\n');
-                  }
-                }
-              } else {
-                logger.log('Skipping LoRA stack — node tier too low for LoRA WOs.\n');
-              }
-            }
-          } else {
-            logger.log('   Skipping. Node will start without Hyperparam Search.\n');
-            logger.log('   To enable later:\n     pip3 install torch\n');
-          }
+        // ── Python deps (venv + torch + LoRA + bitsandbytes) ──────────────
+        // Idempotent: each phase probes "already installed" first and skips
+        // re-running. The desktop UI invokes `syn install-deps` during its
+        // loading screen so by the time the user clicks Start this is a
+        // cheap no-op. Terminal users hit the same path on first boot.
+        const { installPythonDeps } = await import('../utils/install-deps.js');
+        const installResult = await installPythonDeps({ hardware });
+        if (!installResult.success && installResult.errors.length > 0) {
+          installResult.errors.forEach((e) => logger.warn(`[Install] ${e}`));
         }
 
         logger.log(SYPNASEIA_HEADER);
@@ -783,33 +630,11 @@ async function bootstrap() {
         // Tier is a separate column (`nodes.tier`), NOT a capabilities entry.
         const capabilities = heartbeatHelper.determineCapabilities(hardware);
 
-        // ── Docking deps auto-install (first GPU boot only) ─────────────────
-        // Auto-install Vina + Open Babel when the node has a GPU and the
-        // binaries are missing. Non-fatal: a failed install just leaves
-        // `docking` off the advertised cap list and the coord skips dispatch.
-        // Subsequent boots see isVinaAvailable === true and skip this path.
-        const hasGpu = capabilities.includes('gpu_training')
-          || capabilities.includes('gpu_inference');
-        if (hasGpu) {
-          try {
-            const { isVinaAvailable } = await import('../modules/docking');
-            const vinaPresent = await isVinaAvailable().catch(() => false);
-            if (!vinaPresent) {
-              const { installDockingDeps } = await import('../modules/docking/install');
-              logger.log('[bootstrap] GPU detected and Vina/Open Babel missing — attempting auto-install...');
-              const result = await installDockingDeps();
-              if (result.installed) {
-                logger.log(`[bootstrap] Vina + Open Babel installed in ${result.durationMs}ms — heartbeat will pick up docking cap on next tick`);
-              } else {
-                logger.warn(`[bootstrap] Docking auto-install skipped: ${result.reason}`);
-              }
-            }
-          } catch (err) {
-            // Defensive: any unexpected error in the bootstrap auto-install
-            // path must not break node boot. Log and continue.
-            logger.warn(`[bootstrap] Docking auto-install threw: ${(err as Error).message}`);
-          }
-        }
+        // Docking deps (Vina + Open Babel) are installed by the `install-deps` flow
+        // invoked at app boot. The desktop UI calls `install_python_deps` Tauri command
+        // before the unlock screen so all setup completes before the operator clicks Start.
+        // Terminal users get the same idempotent install on first `syn start` via
+        // installPythonDeps() called earlier in this action.
 
         // ── SYN token account activation ─────────────────────────────────────
         logger.log('\nChecking SYN token account activation...');
@@ -919,6 +744,29 @@ async function bootstrap() {
         await new Promise<void>(() => {});
       }
     );
+
+  // ── install-deps ───────────────────────────────────────────────────────────
+  // Standalone pre-boot setup step. Streams phase events as JSON lines
+  // prefixed with `[INSTALL_PROGRESS]` so the Tauri parent can parse them
+  // and forward to the desktop loading screen. Idempotent — safe to invoke
+  // on every UI boot; phases that are already satisfied emit `status: 'skip'`.
+  // Does NOT require wallet unlock or any config — it's purely a dep install.
+  program
+    .command('install-deps')
+    .description('Install Python deps (venv, torch, LoRA stack, bitsandbytes) for training caps')
+    .action(async () => {
+      const { installPythonDeps } = await import('../utils/install-deps.js');
+      const hardware = hardwareService.detect();
+      const result = await installPythonDeps({
+        hardware,
+        onProgress: (event) => {
+          // The `[INSTALL_PROGRESS]` prefix is the contract with Tauri parsing.
+          // One JSON object per line, single-line so split-on-\n works upstream.
+          process.stdout.write(`[INSTALL_PROGRESS] ${JSON.stringify(event)}\n`);
+        },
+      });
+      process.exit(result.success ? 0 : 1);
+    });
 
   // ── status ─────────────────────────────────────────────────────────────────
   program

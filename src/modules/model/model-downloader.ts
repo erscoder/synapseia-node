@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 
 export type ExecSyncFn = (cmd: string, options?: Record<string, unknown>) => void;
 
@@ -50,7 +51,7 @@ export class ModelDownloaderHelper {
 
     try {
       execSyncFn(
-        `python3 -c "from huggingface_hub import snapshot_download; snapshot_download('${modelId}', local_dir='${cacheDir}')"`,
+        `"${resolvePython()}" -c "from huggingface_hub import snapshot_download; snapshot_download('${modelId}', local_dir='${cacheDir}')"`,
         { stdio: 'inherit' },
       );
       logger.log(`[ModelDownloader] Model "${modelId}" downloaded to ${cacheDir}`);

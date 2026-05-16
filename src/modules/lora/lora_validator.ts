@@ -47,6 +47,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 import { IdentityHelper } from '../identity/identity';
 import type {
   LoraSubtype,
@@ -57,7 +58,10 @@ import type {
 } from './types';
 
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.LORA_VAL_TIMEOUT_MS || '1800000', 10); // 30 min
-const DEFAULT_PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
+// PYTHON_BIN env wins; otherwise resolve lazily (venv if present, else system).
+function defaultPythonBin(): string {
+  return process.env.PYTHON_BIN || resolvePython();
+}
 const MAX_ADAPTER_BYTES = 200 * 1024 * 1024; // 200 MB
 const MAX_VAL_SET_BYTES = 50 * 1024 * 1024;  // 50 MB
 
@@ -184,7 +188,7 @@ export async function runLoraValidation(
     await assertFileExists(scriptPath, `Python LoRA eval script not found at ${scriptPath}`);
 
     await runPython(
-      options.pythonBin ?? DEFAULT_PYTHON_BIN,
+      options.pythonBin ?? defaultPythonBin(),
       scriptPath,
       {
         adapterPath,

@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
+import { resolvePython } from '../../utils/python-venv';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -96,7 +97,7 @@ export class DiLoCoTrainerHelper {
     };
 
     return new Promise((res, reject) => {
-      const proc = spawnFn('python3', [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const proc = spawnFn(resolvePython(), [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });
       let stderr = '';
       let finalResult: DiLoCoResult | null = null;
       let timedOut = false;

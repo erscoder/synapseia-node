@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { totalmem } from 'os';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 import type { MutationProposal } from './mutation-engine';
 
 /**
@@ -265,7 +266,7 @@ export class TrainerHelper {
     if (TrainerHelper.pyTorchCache === true) return true;
 
     const result = await new Promise<boolean>((res) => {
-      const proc = spawn('python3', ['-c', 'import torch; print(torch.__version__)'], {
+      const proc = spawn(resolvePython(), ['-c', 'import torch; print(torch.__version__)'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let settled = false;
@@ -479,7 +480,7 @@ export class TrainerHelper {
       // Thread-cap env vars belt-and-suspenders: train_micro.py already sets
       // these with setdefault before `import torch`, but passing them through
       // the spawn guarantees they're present even if the script is edited.
-      const pythonProcess = spawn('python3', ['-u', pythonScriptPath], {
+      const pythonProcess = spawn(resolvePython(), ['-u', pythonScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,

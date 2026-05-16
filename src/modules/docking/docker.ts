@@ -21,6 +21,7 @@
 
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
@@ -35,7 +36,9 @@ import type {
 
 const RECEPTOR_CACHE_DIR = path.join(os.homedir(), '.synapseia', 'docking', 'receptors');
 const DEFAULT_VINA_TIMEOUT_MS = parseInt(process.env.VINA_TIMEOUT_MS || '1200000', 10); // 20 min
-const DEFAULT_VINA_BIN = process.env.VINA_BIN || 'vina';
+const VINA_HOME_BIN = path.join(os.homedir(), '.synapseia', 'bin', 'vina');
+const DEFAULT_VINA_BIN = process.env.VINA_BIN
+  || (existsSync(VINA_HOME_BIN) ? VINA_HOME_BIN : 'vina');
 const DEFAULT_OBABEL_BIN = process.env.OBABEL_BIN || 'obabel';
 
 export interface RunDockingOptions {

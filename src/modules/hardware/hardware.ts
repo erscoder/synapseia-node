@@ -16,6 +16,7 @@ import { Injectable } from '@nestjs/common';
 
 import type { ModelCategory } from '../model/model-catalog';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 
 /**
  * Module-level flag to ensure the boot diagnostic only fires once per
@@ -509,14 +510,15 @@ export class HardwareHelper {
    * Returns true when both are satisfied.
    */
   canTrain(): boolean {
-    // 1. Check python3 exists
-    const python = spawnSync('python3', ['--version'], { stdio: 'pipe' });
+    // 1. Check python exists (venv first, else system python3)
+    const pythonBin = resolvePython();
+    const python = spawnSync(pythonBin, ['--version'], { stdio: 'pipe' });
     if (python.status !== 0 || python.error) {
       return false;
     }
 
     // 2. Check torch is importable
-    const torchCheck = spawnSync('python3', ['-c', 'import torch'], { stdio: 'pipe' });
+    const torchCheck = spawnSync(pythonBin, ['-c', 'import torch'], { stdio: 'pipe' });
     return torchCheck.status === 0 && !torchCheck.error;
   }
 
@@ -538,20 +540,21 @@ export class HardwareHelper {
       return false;
     }
 
-    // Check python3
-    const python = spawnSync('python3', ['--version'], { stdio: 'pipe' });
+    // Check python (venv first, else system python3)
+    const pythonBin = resolvePython();
+    const python = spawnSync(pythonBin, ['--version'], { stdio: 'pipe' });
     if (python.status !== 0 || python.error) {
       return false;
     }
 
     // Check torch
-    const torchCheck = spawnSync('python3', ['-c', 'import torch'], { stdio: 'pipe' });
+    const torchCheck = spawnSync(pythonBin, ['-c', 'import torch'], { stdio: 'pipe' });
     if (torchCheck.status !== 0 || torchCheck.error) {
       return false;
     }
 
     // Check peft
-    const peftCheck = spawnSync('python3', ['-c', 'import peft'], { stdio: 'pipe' });
+    const peftCheck = spawnSync(pythonBin, ['-c', 'import peft'], { stdio: 'pipe' });
     return peftCheck.status === 0 && !peftCheck.error;
   }
 

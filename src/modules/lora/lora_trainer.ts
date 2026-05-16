@@ -24,6 +24,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 import type {
   LoraSubmissionPayload,
   LoraValMetrics,
@@ -31,7 +32,11 @@ import type {
 } from './types';
 
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.LORA_TIMEOUT_MS || '14400000', 10); // 4h
-const DEFAULT_PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
+// PYTHON_BIN env wins; otherwise resolve lazily (venv if present, else system).
+// Lazy because the venv may be created during boot after this module loads.
+function defaultPythonBin(): string {
+  return process.env.PYTHON_BIN || resolvePython();
+}
 
 export interface RunLoraOptions {
   pythonBin?: string;
@@ -74,7 +79,7 @@ export async function runLora(input: RunLoraInput, options: RunLoraOptions = {})
     await assertFileExists(scriptPath, `Python LoRA trainer script not found at ${scriptPath}`);
 
     await runPython(
-      options.pythonBin ?? DEFAULT_PYTHON_BIN,
+      options.pythonBin ?? defaultPythonBin(),
       scriptPath,
       { ...payload, peerId, workOrderId, outDir: workDir },
       options.timeoutMs ?? DEFAULT_TIMEOUT_MS,

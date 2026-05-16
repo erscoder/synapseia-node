@@ -8,6 +8,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as os from 'os';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
@@ -166,6 +167,7 @@ export function __resetCapabilitySnapshotForTests(): void {
   lastAnnouncedCapabilities = null;
   loraStackCache = null;
   cudaCache = null;
+  loraStackWarnEmitted = false;
 }
 
 /**
@@ -180,7 +182,7 @@ async function isLoraStackAvailable(): Promise<boolean> {
   const { spawn } = await import('node:child_process');
   const result = await new Promise<boolean>((res) => {
     const proc = spawn(
-      'python3',
+      resolvePython(),
       ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -204,7 +206,7 @@ async function isCudaAvailable(): Promise<boolean> {
   const { spawn } = await import('node:child_process');
   const result = await new Promise<boolean>((res) => {
     const proc = spawn(
-      'python3',
+      resolvePython(),
       ['-c', 'import torch; assert torch.cuda.is_available()'],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -229,6 +231,16 @@ async function isCudaAvailable(): Promise<boolean> {
  * cached value immediately, no re-spawn).
  */
 let warmupStarted = false;
+
+/**
+ * Hotfix 0.8.55: throttle the "LoRA Python stack not found" warn to fire
+ * AT MOST ONCE per process lifetime. Live operator on M1 16 GB was seeing
+ * the warn every 60s heartbeat tick because they qualify (Tier 4,
+ * ramGb >= 16) but never installed the stack. Module-private flag mirrors
+ * `lastAnnouncedCapabilities` — one snapshot per process, reset only via
+ * the test-only `__resetCapabilitySnapshotForTests` hook.
+ */
+let loraStackWarnEmitted = false;
 export function warmCapabilityProbes(): void {
   if (warmupStarted) return;
   warmupStarted = true;
@@ -719,11 +731,22 @@ export class HeartbeatHelper {
       const hasCapacity = hardware.gpuVramGb > 0 || hardware.ramGb >= 16;
       if (hasLoraStack && hasCapacity) {
         caps.push('lora_training');
-      } else if (!hasLoraStack) {
-        logger.warn(
-          '[Heartbeat] LoRA Python stack not found — not advertising lora_training. ' +
-          'Install with: pip3 install transformers peft datasets safetensors accelerate',
-        );
+      } else if (!hasLoraStack && hasCapacity && !loraStackWarnEmitted) {
+        // Hotfix 0.8.55: gate the warn on (a) node abstractly qualifies
+        // (else telling them to install is noise), (b) current free RAM
+        // is at least the LoRA floor (else memory pressure means even an
+        // installed stack would be filtered out by applyMemoryPressureFilter),
+        // and (c) we haven't already warned this process. Without the
+        // throttle the message spammed every 60s tick on qualifying nodes
+        // that lacked the Python stack.
+        const freeMB = readAvailableMemMB();
+        if (freeMB >= LORA_TRAINING_MEM_FLOOR_MB) {
+          logger.warn(
+            '[Heartbeat] LoRA Python stack not found — not advertising lora_training. ' +
+            'Install with: pip3 install transformers peft datasets safetensors accelerate',
+          );
+          loraStackWarnEmitted = true;
+        }
       }
     } catch (err) {
       logger.warn(`[Heartbeat] LoRA stack probe failed: ${(err as Error).message}`);
