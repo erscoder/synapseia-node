@@ -4,17 +4,36 @@
  */
 
 import { jest } from '@jest/globals';
-import { PlanExecutionNode } from '../nodes/plan-execution';
+import { PlanExecutionNode, parseExecutionPlan, truncateMiddle } from '../nodes/plan-execution';
 import type { AgentState, ExecutionStep } from '../state';
 import { DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 
-// Mock logger to avoid console output during tests
-jest.mock('../../../../utils/logger', () => ({
-  log: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-}));
+// Mock logger to avoid console output during tests AND let assertions
+// observe warn() calls (Bug 6 — silent quality degradation surfaced as WARN).
+// `jest.mock` is hoisted above imports, so the factory must construct the
+// spies inline (no closing-over outer-scope vars). We then re-import the
+// mocked module below and grab the spies for assertions.
+jest.mock('../../../../utils/logger', () => {
+  const m = {
+    log: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  };
+  return {
+    __esModule: true,
+    default: m,
+    logger: m,
+    log: m,
+    warn: m.warn,
+    error: m.error,
+    debug: m.debug,
+  };
+});
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const loggerMock = (require('../../../../utils/logger') as { default: { log: jest.Mock; info: jest.Mock; warn: jest.Mock; error: jest.Mock; debug: jest.Mock } }).default;
 
 describe('PlanExecutionNode', () => {
   let node: PlanExecutionNode;
@@ -22,6 +41,12 @@ describe('PlanExecutionNode', () => {
   let mockExecution: { extractResearchPayload: ReturnType<typeof jest.fn> };
 
   beforeEach(() => {
+    // Reset logger spies so each test sees its own calls in isolation.
+    loggerMock.log.mockClear();
+    loggerMock.info.mockClear();
+    loggerMock.warn.mockClear();
+    loggerMock.error.mockClear();
+    loggerMock.debug.mockClear();
     mockLlmService = {
       generate: jest.fn(),
       generateJSON: jest.fn(),
@@ -253,6 +278,132 @@ describe('PlanExecutionNode', () => {
       expect(result.executionPlan).toEqual([]);
       expect(result.currentStepIndex).toBe(0);
       expect(mockLlmService.generateJSON).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Bug 6 — parseExecutionPlan logs WARN (not INFO) with raw output preview
+  // ──────────────────────────────────────────────────────────────────────
+
+  describe('parseExecutionPlan (Bug 6 — silent quality degradation)', () => {
+    function getWarnMessages(): string[] {
+      return loggerMock.warn.mock.calls.map((c) => String(c[0]));
+    }
+
+    it('truncated JSON: warns at WARN level with raw output preview + model name', () => {
+      const truncated = '[{"id":"1","action":"fetch_context","description":"open ended';
+      const out = parseExecutionPlan(truncated, 'phi4-mini');
+      expect(out).toEqual(DEFAULT_EXECUTION_PLAN);
+      const msgs = getWarnMessages();
+      // Plan-parse path emits exactly one warn; the outer execute() warn
+      // is NOT reached because this is a direct method invocation.
+      const parseFailMsgs = msgs.filter((m) => m.includes('LLM plan parse failed'));
+      expect(parseFailMsgs).toHaveLength(1);
+      expect(parseFailMsgs[0]).toContain('model=phi4-mini');
+      expect(parseFailMsgs[0]).toContain(`output_len=${truncated.length}`);
+      expect(parseFailMsgs[0]).toContain('falling back to default 3-step plan');
+      // Raw output preview included verbatim (input is shorter than head+tail,
+      // so the full string survives).
+      expect(parseFailMsgs[0]).toContain('open ended');
+    });
+
+    it('leading prose before JSON: parseLlmJson recovers, no warn fired', () => {
+      // parseLlmJson tolerates `Here is the plan: [...]` shape because the
+      // structure extractor recovers `[...]`. So this is actually a HAPPY
+      // path — assert NO warn fires + valid plan returned.
+      const validPlan = [
+        { id: '1', action: 'fetch_context', description: 'A' },
+        { id: '2', action: 'analyze_paper', description: 'B' },
+      ];
+      const withProse = `Here is the plan:\n${JSON.stringify(validPlan)}\n\nThat's it.`;
+      const out = parseExecutionPlan(withProse, 'gpt-4');
+      expect(out).toEqual(validPlan);
+      expect(loggerMock.warn).not.toHaveBeenCalled();
+    });
+
+    it('totally non-JSON: warns at WARN level (NOT info) with model name', () => {
+      const garbage = 'sorry, I cannot help with that request.';
+      const out = parseExecutionPlan(garbage, 'mini-max');
+      expect(out).toEqual(DEFAULT_EXECUTION_PLAN);
+      // Critical: warn fired, info NOT fired with the parse-fail message.
+      const parseFailWarn = loggerMock.warn.mock.calls.find((c) =>
+        String(c[0]).includes('LLM plan parse failed'),
+      );
+      expect(parseFailWarn).toBeDefined();
+      expect(String(parseFailWarn?.[0])).toContain('model=mini-max');
+      const parseFailInfo = loggerMock.info.mock.calls.find((c) =>
+        String(c[0]).includes('Failed to parse plan'),
+      );
+      expect(parseFailInfo).toBeUndefined();
+    });
+
+    it('valid plan: no warn fires', () => {
+      const validPlan = [
+        { id: '1', action: 'fetch_context', description: 'A' },
+        { id: '2', action: 'analyze_paper', description: 'B' },
+        { id: '3', action: 'generate_hypothesis', description: 'C' },
+      ];
+      const out = parseExecutionPlan(JSON.stringify(validPlan), 'phi4');
+      expect(out).toEqual(validPlan);
+      expect(loggerMock.warn).not.toHaveBeenCalled();
+    });
+
+    it('empty array (all-invalid actions filtered): warns with structural-fail reason', () => {
+      const allInvalid = JSON.stringify([
+        { id: '1', action: 'bogus_action', description: 'X' },
+      ]);
+      const out = parseExecutionPlan(allInvalid, 'phi4');
+      expect(out).toEqual(DEFAULT_EXECUTION_PLAN);
+      const parseFailWarn = loggerMock.warn.mock.calls.find((c) =>
+        String(c[0]).includes('LLM plan parse failed'),
+      );
+      expect(parseFailWarn).toBeDefined();
+      expect(String(parseFailWarn?.[0])).toContain('No valid steps found');
+    });
+
+    it('long output: preview truncated to head 500 + tail 200 with " ... " separator', () => {
+      // Build a long non-JSON string so the parser definitively fails and
+      // the preview path triggers. 500 H chars + 800 mid + 200 T chars.
+      const head = 'H'.repeat(500);
+      const tail = 'T'.repeat(200);
+      const mid = 'M'.repeat(800);
+      const giant = `${head}${mid}${tail}`;
+      parseExecutionPlan(giant, 'big-model');
+      const parseFailWarn = loggerMock.warn.mock.calls.find((c) =>
+        String(c[0]).includes('LLM plan parse failed'),
+      );
+      expect(parseFailWarn).toBeDefined();
+      const msg = String(parseFailWarn?.[0]);
+      // Preview contains the head and tail but NOT the middle stretch.
+      expect(msg).toContain(head);
+      expect(msg).toContain(tail);
+      expect(msg).toContain(' ... ');
+      // Middle Ms (800 of them, well over the elision boundary) absent.
+      expect(msg.includes('M'.repeat(600))).toBe(false);
+    });
+  });
+
+  describe('truncateMiddle helper', () => {
+    it('returns the input verbatim when shorter than head+tail', () => {
+      expect(truncateMiddle('short', 500, 200)).toBe('short');
+    });
+
+    it('returns the input verbatim when exactly head+tail length', () => {
+      const s = 'x'.repeat(700);
+      expect(truncateMiddle(s, 500, 200)).toBe(s);
+    });
+
+    it('elides the middle with " ... " when longer', () => {
+      const s = 'a'.repeat(500) + 'MIDDLE' + 'b'.repeat(200);
+      const out = truncateMiddle(s, 500, 200);
+      expect(out.startsWith('a'.repeat(500))).toBe(true);
+      expect(out.endsWith('b'.repeat(200))).toBe(true);
+      expect(out).toContain(' ... ');
+      expect(out).not.toContain('MIDDLE');
+    });
+
+    it('empty string returns empty string (no elision)', () => {
+      expect(truncateMiddle('', 500, 200)).toBe('');
     });
   });
 });
