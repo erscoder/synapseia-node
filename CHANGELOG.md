@@ -1,5 +1,32 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): verbose install progress + Ollama pull throttled logs + 0.8.57 (f1ff856b)
+
+Operator UX fixes for apparent-hang silence during first-boot setup
+(reported by terminal operator after seeing `created venv` followed
+by ~1-3 min of zero output while torch + LoRA stack downloaded
+silently, then more silence per Ollama layer pull):
+
+1. **start banner + phase logs**: `start` action prints a banner
+   explaining the ~700 MB first-boot download with phase breakdown
+   (venv + PyTorch + LoRA stack + Vina/Open Babel). Subsequent
+   boots short-circuit on all-installed so the banner is cheap.
+   `installPythonDeps` now receives an `onProgress` callback that
+   logs each phase event with status icon (running/done/skip/error).
+2. **pip stdio inherit**: three pip `execSync` calls in
+   `install-deps.ts` (torch, lora-stack, bitsandbytes) switched from
+   `stdio: 'pipe'` → `stdio: 'inherit'` so pip's own progress bar
+   streams to the terminal. Probes that read `.status`
+   programmatically (torch/lora/cuda/bnb import checks) stay on
+   `pipe` since their output is parsed.
+3. **Ollama pull throttled logs**: `pullModel` only logged once per
+   digest change — a 4 GB layer download produced a single log line
+   then silence. New logic logs on digest change OR every 5 s, with
+   `(completed/total MB)` so the operator sees real progress within
+   the same digest.
+
+Version bump 0.8.56 → 0.8.57. Lockstep with sub coord + node-ui.
+
 ## [2026-05-16] fix(node): getModelByName matches ollamaTag field + 0.8.56 (f87edbc9)
 
 Live operator error: `Error: Model 'ollama/gemma3:12b' not found in
