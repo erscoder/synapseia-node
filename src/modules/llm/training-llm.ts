@@ -90,7 +90,7 @@ function buildCloudModel(
 const CAPABLE_SIZE_MARKERS: RegExp[] = [
   /:?(72b|70b)\b/i,
   /:?(34b|32b)\b/i,
-  /:?(14b|13b)\b/i,
+  /:?(12b|13b|14b)\b/i,
   /:?(8b|7b)\b/i,
   /:?(4b)\b/i,
   /:?(3b)\b/i,
@@ -105,10 +105,40 @@ const INCAPABLE_EXACT: string[] = [
   'tinyllama:latest',
 ];
 
+/**
+ * Embedding-only models — known not to support chat completion. The mutation
+ * engine prompts via /api/chat which rejects these with "does not support
+ * chat", so they must never enter the training fallback chain. Substring
+ * match (case-insensitive) so common forks / repacks under different
+ * namespaces (e.g. `locusai/all-minilm-l6-v2:latest`) also match.
+ */
+const EMBEDDING_MODEL_MARKERS: string[] = [
+  'all-minilm',
+  'nomic-embed',
+  'mxbai-embed',
+  'bge-large',
+  'bge-base',
+  'bge-small',
+  'snowflake-arctic-embed',
+  'paraphrase-multilingual-minilm',
+];
+
+/**
+ * True when the modelId looks like an embedding-only model (no chat support).
+ * Used by both the capable filter and the `others` fallback filter so the
+ * mutation engine never picks an embedding model as primary OR fallback.
+ */
+export function isEmbeddingOnlyModel(modelId: string): boolean {
+  if (!modelId) return true;
+  const lower = modelId.toLowerCase();
+  return EMBEDDING_MODEL_MARKERS.some(m => lower.includes(m));
+}
+
 export function isCapableTrainingModel(modelId: string): boolean {
   if (!modelId) return false;
   const lower = modelId.toLowerCase();
   if (INCAPABLE_EXACT.some(bad => lower === bad.toLowerCase())) return false;
+  if (isEmbeddingOnlyModel(lower)) return false;
   return CAPABLE_SIZE_MARKERS.some(re => re.test(lower));
 }
 
@@ -235,12 +265,14 @@ export async function resolveTrainingChain(
 
   const capable = ollamaInstalled.filter(isCapableTrainingModel);
   capable.sort((a, b) => rankModel(b) - rankModel(a));
-  // TODO: filter chain to chat-capable models only — `others` currently
-  // includes embedding models (e.g. all-minilm-l6-v2) which fail with
-  // "does not support chat" when the mutation engine prompts them.
-  // Track chat vs embedding capability per Ollama model and exclude
-  // non-chat models from the fallback chain entirely.
-  const others = ollamaInstalled.filter(m => !isCapableTrainingModel(m));
+  // `others` is the last-resort cascade tail (small-but-installed chat
+  // models). Embedding-only models (all-minilm, nomic-embed, …) are
+  // EXCLUDED here even though they're not "capable" — they would fail
+  // with "does not support chat" at the mutation engine call site and
+  // poison the chain.
+  const others = ollamaInstalled.filter(
+    m => !isCapableTrainingModel(m) && !isEmbeddingOnlyModel(m),
+  );
 
   const cloud = buildCloudModel(env.LLM_CLOUD_MODEL, env.LLM_CLOUD_PROVIDER);
 

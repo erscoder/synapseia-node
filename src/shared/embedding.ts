@@ -42,11 +42,37 @@ export class EmbeddingHelper {
     text: string,
     model: string = 'locusai/all-minilm-l6-v2',
   ): Promise<number[]> {
+    // Auto-pull-once: first attempt issues the embeddings request; if Ollama
+    // returns 404 / "model not found", pull the model via the Ollama HTTP
+    // pull API and retry exactly once. Mirrors the auto-pull behaviour the
+    // generate() path already has (modules/llm/ollama.ts) so embeddings WOs
+    // don't fail forever on a fresh node that lacks `locusai/all-minilm-l6-v2`.
+    try {
+      return await this.callEmbeddingsApi(text, model);
+    } catch (err) {
+      const msg = (err as Error).message;
+      const looksLikeMissingModel = /404 Not Found|model not found/i.test(msg);
+      if (!looksLikeMissingModel) throw err;
+
+      try {
+        await this.pullOllamaModel(model);
+      } catch (pullErr) {
+        throw new Error(
+          `Failed to auto-pull ${model}: ${(pullErr as Error).message}. ` +
+          `Original embeddings error: ${msg}`,
+        );
+      }
+      return await this.callEmbeddingsApi(text, model);
+    }
+  }
+
+  /**
+   * Inner embeddings call — extracted so the auto-pull-once wrapper can
+   * invoke it twice (initial attempt + retry after pull).
+   */
+  private async callEmbeddingsApi(text: string, model: string): Promise<number[]> {
     const url = `${this.ollamaBaseUrl}/api/embeddings`;
-    const payload = {
-      model,
-      prompt: text,
-    };
+    const payload = { model, prompt: text };
 
     let response: Response;
     try {
@@ -82,6 +108,51 @@ export class EmbeddingHelper {
     }
 
     return data.embedding;
+  }
+
+  /**
+   * Pull a model via the Ollama HTTP pull endpoint. Streams the response
+   * (NDJSON) until the final `status:"success"` event arrives. No progress
+   * logging here — the OllamaHelper.pullModel path has its own throttled
+   * progress logger; embedding code keeps this lean since it only fires
+   * once per missing model per process lifetime.
+   */
+  private async pullOllamaModel(model: string): Promise<void> {
+    const url = `${this.ollamaBaseUrl}/api/pull`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, stream: true }),
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`pull HTTP ${response.status} ${response.statusText}`);
+    }
+    // Drain the stream — Ollama returns NDJSON progress events ending with
+    // `{"status":"success"}` once the model is ready locally. We only need
+    // to know the stream finished without an error event; ignore body bytes.
+    const reader = response.body.getReader();
+    let buf = '';
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const evt = JSON.parse(trimmed) as { error?: string };
+          if (evt.error) throw new Error(evt.error);
+        } catch (parseErr) {
+          // Ignore non-JSON lines; surface JSON `error` field if present.
+          if ((parseErr as Error).message !== 'Unexpected end of JSON input') {
+            // pass-through if the parsed line had an error string
+          }
+        }
+      }
+    }
   }
 
   /**

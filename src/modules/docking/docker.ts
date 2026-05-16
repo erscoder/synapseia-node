@@ -149,10 +149,13 @@ async function ensureReceptorCached(pdbId: string): Promise<string> {
 async function prepReceptorPdbqt(pdbPath: string, opts: RunDockingOptions): Promise<string> {
   const out = pdbPath.replace(/\.pdb$/, '.pdbqt');
   if (await fileExists(out)) return out;
-  // -xr keeps only polar hydrogens; -p7.4 sets pH for protonation
+  // -xr keeps only polar hydrogens; -p7.4 sets pH for protonation.
+  // 180s timeout: receptor protonation is faster than ligand --gen3d
+  // but big receptors (>500 residues) can still exceed 60s on a busy
+  // CPU. Match the ligand budget for consistency.
   await runChild(opts.obabelBin ?? DEFAULT_OBABEL_BIN, [
     pdbPath, '-O', out, '-xr', '-p', '7.4',
-  ], { timeoutMs: 60_000 });
+  ], { timeoutMs: 180_000 });
   return out;
 }
 
@@ -161,9 +164,12 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   const ligandPdbqtPath = path.join(workDir, 'ligand.pdbqt');
   await fs.promises.writeFile(ligandSmiPath, smiles + '\n', 'utf8');
   // --gen3d builds a 3D conformer from SMILES; -h adds explicit hydrogens.
+  // 180s timeout: drug-like ligands (Indinavir, Imatinib, etc) with many
+  // rotatable bonds can exceed 60s on a CPU under load. Operators reported
+  // legitimate Indinavir runs timing out at 60s.
   await runChild(opts.obabelBin ?? DEFAULT_OBABEL_BIN, [
     ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', '-h',
-  ], { timeoutMs: 60_000 });
+  ], { timeoutMs: 180_000 });
   return ligandPdbqtPath;
 }
 
