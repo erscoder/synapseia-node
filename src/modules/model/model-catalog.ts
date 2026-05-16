@@ -387,7 +387,13 @@ export class ModelCatalogHelper {
 
   getModelByName(name: string): ModelInfo | null {
     const normalized = this.normalizeModelName(name);
-    return MODEL_CATALOG.find((m) => m.name === normalized || m.name === name) || null;
+    const ollamaStripped = name.replace(/^ollama\//, '');
+    return MODEL_CATALOG.find((m) =>
+      m.name === normalized ||
+      m.name === name ||
+      m.ollamaTag === ollamaStripped ||
+      m.ollamaTag === name
+    ) || null;
   }
 }
 
