@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): getModelByName matches ollamaTag field + 0.8.56 (f87edbc9)
+
+Live operator error: `Error: Model 'ollama/gemma3:12b' not found in
+catalog`. Catalog entries carry BOTH a dash-form `name`
+(`gemma-3-12b`) and a canonical Ollama `ollamaTag` (`gemma3:12b`).
+The 0.8.45 `migrateModelSlug` rewrites dash-form to canonical tag
+on every config load, so `config.defaultModel` always lands on the
+canonical form (`ollama/gemma3:12b`). But `getModelByName` only
+compared against the `name` field — normalized `ollama/gemma3:12b`
+becomes `gemma3-12b` (no hyphen between "gemma" and "3") and
+never matches `gemma-3-12b`. Surfaces on every catalog model whose
+`ollamaTag` differs structurally from `name`.
+
+Fix: `getModelByName` now ALSO matches the `ollamaTag` field, with
+and without the `ollama/` prefix. 4-line patch.
+
+Version bump 0.8.55 → 0.8.56. Lockstep with sub coord + node-ui.
+Tests: 55/55 model-catalog suite pass.
+
 ## [2026-05-16] fix(node): venv-based deps + boot-time install-deps + Mac Vina binary + 0.8.55 (4c9ead22)
 
 Hotfix bundle addressing 5 distinct issues surfaced by an M1 16 GB
