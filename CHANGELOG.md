@@ -1,5 +1,57 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): BIP44 mnemonic + export-key keystore + remove docking log + 0.8.58 (6248db06)
+
+### Critical — BIP44 mnemonic derivation
+
+Pre-0.8.58 wallets generated the keypair via
+`Keypair.fromSeed(seed.slice(0, 32))` directly, bypassing the standard
+`m/44'/501'/0'/0'` BIP44 path that Phantom / Solflare / Solana CLI all
+use. Result: the mnemonic shown at first boot did NOT recover the same
+wallet when imported into any standard Solana wallet (live operator
+confirmed via Phantom — different pubkey returned).
+
+Fix: imports `ed25519-hd-key`, derives `m/44'/501'/0'/0'` from the BIP39
+seed, uses the derived key as the seed for `Keypair.fromSeed`. Applied
+at BOTH keypair-from-mnemonic call sites:
+- `cli/index.ts:425-446` (fresh-install keystore branch).
+- `modules/wallet/wallet.ts:210-219` (legacy wallet service).
+
+EXISTING WALLETS unaffected: `keystore.json` stores the raw `secretKey`,
+so wallets created on ≤ 0.8.57 continue to load correctly via
+`keystore.decrypt(passphrase)`. Their mnemonic remains non-portable
+(pre-existing fact). Only NEW wallets generated from 0.8.58 onward are
+BIP44-derived and Phantom-recoverable.
+
+Operators on pre-0.8.58 wallets who need Phantom recovery: use the new
+`syn export-key` (now keystore-aware) to extract the raw secretKey,
+then import it into Phantom via "Import private key" (NOT mnemonic).
+
+### `syn export-key` supports keystore
+
+Pre-0.8.58 `export-key` checked `existsSync('~/.synapseia/wallet.json')`
+(legacy plaintext-encrypted file). Fresh keystore-only installs have
+`wallet.keystore.json` instead → command exited 1 with "No wallet
+found".
+
+Fix: checks `keystore.exists()` FIRST, prompts for vault passphrase
+(message updated to match keystore terminology), calls
+`keystore.decrypt(passphrase)` to get `secretKey`, base58-encodes.
+Falls back to the legacy `wallet.json` path only when keystore is
+missing.
+
+### Remove per-boot docking detection log
+
+`docking/docker.ts:114` deleted. `isVinaAvailable` caches positive
+only — the log fired once per process. Operator finds it noisy.
+Heartbeat advertise is implicit via caps array, no log needed.
+
+### Dep added
+
+- `ed25519-hd-key@^2.0.0` — standard Solana BIP44 helper.
+
+Version bump 0.8.57 → 0.8.58. Lockstep with sub coord + node-ui.
+
 ## [2026-05-16] fix(node): verbose install progress + Ollama pull throttled logs + 0.8.57 (f1ff856b)
 
 Operator UX fixes for apparent-hang silence during first-boot setup
