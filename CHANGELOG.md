@@ -1,5 +1,40 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] feat(node): npm registry as latestVersion source + 0.8.59 (d372dc52)
+
+Decouples node CLI self-update from coordinator version. Pre-0.8.59
+`preflightVersionCheck` (`update-checker.ts`) fetched `coord/version`
+and used `latestNodeVersion` baked into the coord image at Fly build
+time — every node-only hotfix forced a coord Fly redeploy to refresh
+that single field even when coord-side code was unchanged.
+
+New flow in `update-checker.ts`:
+- `fetchNpmLatest()` queries the npm registry dist-tags endpoint
+  directly:
+  `https://registry.npmjs.org/-/package/@synapseia-network%2Fnode/dist-tags`.
+  Returns `latest` field on success, `null` on any error (5 s timeout).
+- `preflightVersionCheck` parallel-fetches BOTH npm latest AND coord
+  `/version`. npm wins as `latestVersion` source; coord still owns
+  `minNodeVersion` (security / compatibility floor).
+- Fallback chain: npm OK → use npm latest; npm down → fallback to
+  coord `latestNodeVersion`; both down → warn + skip the update gate.
+
+`node-ui` already queried npm directly via `fetch_npm_latest` in Tauri
+Rust (`commands.rs::install_synapseia_node`). Both client artifacts
+now agree on the npm registry as the canonical truth source.
+
+### Sync rule update (BREAKING for release workflow)
+
+- `node` + `node-ui` continue to share versions (lockstep client
+  release cycle).
+- **coord is now independent.** Bump coord only when coord-side code
+  changes OR when raising the `minNodeVersion` floor. No more
+  mandatory Fly redeploy on node-only hotfixes.
+- This release is the first under the new rule: coord stays on
+  0.8.58, only node + node-ui bump to 0.8.59.
+
+Version bump 0.8.58 → 0.8.59 (node + node-ui only).
+
 ## [2026-05-16] fix(node): BIP44 mnemonic + export-key keystore + remove docking log + 0.8.58 (6248db06)
 
 ### Critical — BIP44 mnemonic derivation
