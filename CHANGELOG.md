@@ -1,5 +1,94 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): venv-based deps + boot-time install-deps + Mac Vina binary + 0.8.55 (4c9ead22)
+
+Hotfix bundle addressing 5 distinct issues surfaced by an M1 16 GB
+operator boot:
+
+### 1. Removed config-file pre-flight guard
+
+The 0.8.54 `existsSync(CONFIG_FILE)` guard caused a boot loop after
+self-update: operators with a wallet keystore but no `config.json`
+exited 3 with "Run `syn config` first" on every retry. Reality:
+`loadConfig()` already returns valid defaults when the file is
+missing — the guard was redundant + harmful.
+
+### 2. venv-based Python deps (cross-platform)
+
+`pip3 install` system-wide is rejected by PEP 668 on macOS Homebrew
+Python, Debian/Ubuntu 3.11+, and Windows Store Python — the entire
+0.8.54 install flow failed silently for those operators (most Macs).
+
+New: single venv at `$SYNAPSEIA_HOME/venv` (default
+`~/.synapseia/venv/`). All `torch`, `transformers`, `peft`,
+`datasets`, `safetensors`, `accelerate`, and `bitsandbytes` (CUDA-
+only) land in the venv. Cross-platform binary resolution
+(`Scripts/python.exe` on Windows, `bin/python` on macOS/Linux). All
+Python subprocess spawns (`train_lora.py`, `eval_lora.py`,
+`diloco_train.py`, `train_micro.py`, hardware probes, heartbeat
+probes) now go through `resolvePython()` which prefers the venv
+interpreter when present.
+
+### 3. `syn install-deps` subcommand + boot-time install via Tauri
+
+New CLI subcommand `install-deps` extracts the venv + pip install
+logic into a reusable, idempotent `installPythonDeps()` helper.
+Each phase probes "already installed" first and emits `status: skip`
+instead of re-running. Phases:
+`venv | torch | lora-stack | cuda-probe | bitsandbytes | docking |
+complete`. The CLI streams `[INSTALL_PROGRESS] <json>` lines to
+stdout. The desktop UI's new `install_python_deps` Tauri command
+spawns `syn install-deps`, parses those lines, and emits
+`python-install-progress` events to the loading screen so the
+operator sees every phase live BEFORE clicking Start. Subsequent
+boots short-circuit on all-installed and route directly to wallet
+unlock.
+
+### 4. macOS AutoDock Vina via GitHub binary
+
+`brew install autodock-vina` always fails — no such formula in
+homebrew-core (only `open-babel` is). New macOS docking install:
+- `brew install open-babel` (works).
+- `curl https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.5/vina_1.2.5_macos_<arch>`
+  to `~/.synapseia/bin/vina` + `chmod +x`. `<arch>` resolves to
+  `arm64` or `x86_64`.
+- `DEFAULT_VINA_BIN` in `docking/docker.ts` probes
+  `~/.synapseia/bin/vina` before PATH fallback.
+
+Linux (apt-get / dnf with `autodock-vina openbabel`) and Windows
+(unsupported, manual) branches unchanged.
+
+### 5. LoRA warn throttle + free-RAM gate
+
+The "LoRA Python stack not found — Install with: pip3 install ..."
+warn fired every 60 s heartbeat. New: module-level
+`loraStackWarnEmitted` flag emits the warn at most once per process
+lifetime. ALSO gated on free RAM >= `LORA_TRAINING_MEM_FLOOR_MB`
+(4 GB) — telling a memory-pressed node to install deps it cannot
+use is noise.
+
+### 6. Standalone LoRA stack install (operators with pre-existing torch)
+
+0.8.54 wrapped the LoRA stack install inside `if (!hasTorch) { ... }`.
+Operators who pre-installed torch (most M1 dev boxes) skipped the
+entire block and never got `transformers`/`peft`/etc. New standalone
+block runs when `hasTorch && !hasLoraStack && tier qualifies`. Gates:
+`hardwareClass >= 1 AND (gpuVramGb > 0 OR ramGb >= 16)`. Opt-out via
+`INSTALL_LORA=false`. Auto-installs without prompt (operator already
+has torch — implicit consent for Python deps).
+
+### Version bump
+
+0.8.54 → 0.8.55. Lockstep with sub coord + node-ui (same hotfix
+cycle).
+
+### Verification
+
+- `pnpm --filter @synapseia-network/node build` → green.
+- `pnpm --filter @synapseia/node-ui build` → green.
+- `cargo build --release` (src-tauri) → green.
+- Live operator (M1 16 GB) tested DMG after each fix iteration.
+
 ## [2026-05-16] chore(release): bump 0.8.54 lockstep (bde170b5)
 
 Lockstep release bundling this cycle's fixes:
