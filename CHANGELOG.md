@@ -1,5 +1,93 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): syn start crash + LoRA cap probes + clear deps error (a5ed81ff)
+
+Multi-fix patch addressing two production crashes and a fleet routing
+gap surfaced by an M1 16 GB operator boot.
+
+### `syn start` crash — `Cannot read properties of undefined (reading 'length')`
+
+- `cli/index.ts:406,412` — `readPassphraseFromFile()` returns
+  `string | undefined`; loose `!= null` replaces strict `!== null`
+  so the `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`-unset path doesn't
+  crash on `.length`. Patterns P10 (lying contract) and P29
+  (mock-only spec hid the bug — no test exercised the
+  `filePass === undefined` branch in start command).
+
+### `syn start` UX guard for missing config
+
+- `cli/index.ts:329-333` — pre-flight `!existsSync(CONFIG_FILE)`
+  check exits 3 with `Run \`syn config\` first` BEFORE any
+  keystore/wallet flow. Operators no longer type a 12+ char
+  passphrase and back up a mnemonic only to discover the node is
+  misconfigured.
+
+### LoRA training crash — `No module named 'transformers'`
+
+Root cause: `syn start` only installed `torch`; `train_lora.py`
+imports `transformers + peft + datasets + safetensors + accelerate`.
+Heartbeat advertised `gpu_training`/`cpu_training` based on hardware
+only (no probe for LoRA stack), so torch-only nodes accepted LoRA
+WOs and crashed on subprocess `import transformers`. M1 16 GB nodes
+also got LORA_GENERATION WOs even though that subtype requires CUDA.
+
+- `cli/index.ts:689-735` — install flow now installs
+  `transformers peft datasets safetensors accelerate` after torch,
+  gated on `hardwareClass >= 1` AND (`gpuVramGb > 0` OR
+  `ramGb >= 16`). Tier 0 / Docker / underpowered nodes skip. The
+  install is wrapped in its own try/catch and never aborts boot —
+  hyperparam search still works on torch-only nodes. A pre-check
+  skips reinstall when all 5 packages already importable so we
+  don't re-run pip on every boot.
+- `heartbeat.ts:168-225` — cached probe helpers
+  `isLoraStackAvailable()` + `isCudaAvailable()`. Positive-only
+  cache mirroring the existing `isPyTorchAvailable` convention so
+  the heartbeat tick doesn't re-spawn `python3` every 60 s. Reset
+  helpers extended for tests via
+  `__resetCapabilitySnapshotForTests`.
+- `heartbeat.ts:691-715` — `determineCapabilitiesAsync` probes
+  `lora_training` (requires LoRA stack import + `gpuVramGb > 0` OR
+  `ramGb >= 16`) and `lora_generation` (requires `lora_training`
+  present AND `torch.cuda.is_available()`). M1 16 GB qualifies for
+  `lora_training` via MPS but NOT for `lora_generation`. Both caps
+  auto-strip under memory pressure via `TRAINING_FLOORS_MB`.
+- `heartbeat.ts:19,146` — import `LORA_GENERATION_MEM_FLOOR_MB` +
+  register `lora_generation: 12288` in the floor table.
+- `heartbeat.ts:221-244` — exported `warmCapabilityProbes()`
+  (idempotent via module-level `warmupStarted` flag), wired into
+  `cli/index.ts` bootstrap right after `app.get(HeartbeatHelper)`.
+  Fires torch / lora / cuda / vina probes in parallel before the
+  first heartbeat tick so cold-start nodes don't overrun the 60 s
+  tick deadline (was 8-15 s of sequential `python3` cold-imports).
+- `trainer.ts:68-74` — `LORA_GENERATION_MEM_FLOOR_MB = 12288`
+  (12 GB; BioGPT-Large 1.5B in fp16 + activations + optimizer +
+  LoRA buffers). Up from initial 4096 after reviewer round 1
+  (H-1) flagged the under-floor would OOM on accept.
+- `lora_trainer.ts:192-205` — `runPython` error path detects
+  stderr matching
+  `/No module named '(transformers|peft|datasets|safetensors|accelerate)'/`
+  and prepends a `pip3 install ...` hint to the `LoraError`
+  message. Raw exit code + stderr tail preserved.
+
+### Cap-routing breaking change
+
+Pairs with coordinator `b54d68b5` (subtype-driven LORA cap routing
+via `lora_training` / `lora_generation` instead of
+`gpu_training` / `cpu_training`). **Operators must upgrade the
+CLI to bid on LORA WOs after coord deploy** — old nodes silently
+skip-route LoRA WOs because the strict subset cap match excludes
+them. Single-operator deployments self-heal on `syn start` upgrade
+(install flow installs the LoRA stack, heartbeat advertises the
+new caps).
+
+### Verification
+
+- `pnpm --filter @synapseia-network/node build` → green.
+- Heartbeat suite 48/48 pass.
+- Reviewer (`superpowers:code-reviewer`) round 2 verdict: SHIP.
+  Round 1 BLOCKER B-1 (fleet rollout stall) deferred with
+  CHANGELOG note + lockstep release plan.
+
 ## [2026-05-15] chore(release): bump 0.8.53 lockstep (cb822133)
 
 Lockstep release bundling the C sub-fix from this cycle:
