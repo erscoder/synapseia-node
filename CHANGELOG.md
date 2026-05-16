@@ -1,5 +1,33 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(heartbeat): surface lora_training probe stderr — 0.8.62 (3fa1d2dc)
+
+**Bug 12 (HIGH)** — pods don't advertise `lora_training` cap despite
+having stack installed. LORA_TRAINING round (pool 5000 SYN) sat at 0
+participants.
+
+**Root cause (diagnostic gap)**: `isLoraStackAvailable()` spawned
+`python -c "import transformers, peft, datasets, safetensors,
+accelerate"` but DISCARDED stderr. Probe failure surfaced as silent
+`false`. Warn site was ALSO gated on `freeMB ≥
+LORA_TRAINING_MEM_FLOOR_MB` — suppressed on memory-pressured hosts.
+
+**Fix**:
+- Capture stderr 2 KiB cap, record `loraStackLastError`. Probe reason
+  reported verbatim.
+- Timeout 30s → 60s for cold `transformers` import.
+- Warn site drops memory gate, emits captured reason. Hint points at
+  venv pip.
+- Positive cache: successful probes never re-spawn (1× per process
+  lifetime). Failure path re-spawns each heartbeat.
+
+After deploy, next heartbeat WARN identifies actual probe failure
+(likely `transformers` ImportError on torch CPU wheel ABI,
+PYTHONPATH collision, or timeout). Operator then decides reinstall /
+rebuild / switch to GPU torch wheel.
+
+Tests: 5 new cases. heartbeat suite 39/39 pass.
+
 ## [2026-05-16] fix: docking apt/dnf lock retry + plan-parse WARN — 0.8.61 (ea7e5684)
 
 Two bugs surfaced via live POD1/POD2 log analysis.
