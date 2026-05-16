@@ -16,6 +16,7 @@ import {
   TRAINING_MEM_FLOOR_MB,
   GPU_TRAINING_MEM_FLOOR_MB,
   LORA_TRAINING_MEM_FLOOR_MB,
+  LORA_GENERATION_MEM_FLOOR_MB,
   DILOCO_TRAINING_MEM_FLOOR_MB,
   CPU_INFERENCE_MEM_FLOOR_MB,
   GPU_INFERENCE_MEM_FLOOR_MB,
@@ -142,6 +143,7 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
   cpu_training: TRAINING_MEM_FLOOR_MB,
   gpu_training: GPU_TRAINING_MEM_FLOOR_MB,
   lora_training: LORA_TRAINING_MEM_FLOOR_MB,
+  lora_generation: LORA_GENERATION_MEM_FLOOR_MB,
   diloco_training: DILOCO_TRAINING_MEM_FLOOR_MB,
   cpu_inference: CPU_INFERENCE_MEM_FLOOR_MB,
   gpu_inference: GPU_INFERENCE_MEM_FLOOR_MB,
@@ -162,6 +164,82 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
  */
 export function __resetCapabilitySnapshotForTests(): void {
   lastAnnouncedCapabilities = null;
+  loraStackCache = null;
+  cudaCache = null;
+}
+
+/**
+ * Cached LoRA stack probe. Mirrors the positive-only cache pattern from
+ * `TrainerHelper.isPyTorchAvailable` — a successful import is stable for
+ * the process lifetime, so we avoid re-spawning python3 every 60s heartbeat.
+ * A failed import is NOT cached so transient slowness recovers on the next tick.
+ */
+let loraStackCache: boolean | null = null;
+async function isLoraStackAvailable(): Promise<boolean> {
+  if (loraStackCache === true) return true;
+  const { spawn } = await import('node:child_process');
+  const result = await new Promise<boolean>((res) => {
+    const proc = spawn(
+      'python3',
+      ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let settled = false;
+    const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
+    proc.on('close', (code) => settle(code === 0));
+    proc.on('error', () => settle(false));
+    setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
+  });
+  if (result) loraStackCache = true;
+  return result;
+}
+
+/**
+ * Cached CUDA probe. Same positive-only cache strategy as the LoRA stack —
+ * CUDA availability is a hardware fact stable for the process lifetime.
+ */
+let cudaCache: boolean | null = null;
+async function isCudaAvailable(): Promise<boolean> {
+  if (cudaCache === true) return true;
+  const { spawn } = await import('node:child_process');
+  const result = await new Promise<boolean>((res) => {
+    const proc = spawn(
+      'python3',
+      ['-c', 'import torch; assert torch.cuda.is_available()'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let settled = false;
+    const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
+    proc.on('close', (code) => settle(code === 0));
+    proc.on('error', () => settle(false));
+    setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
+  });
+  if (result) cudaCache = true;
+  return result;
+}
+
+/**
+ * Fire-and-forget warmup of all capability probe caches.
+ * Called once at process boot (from cli/index.ts after AppModule init)
+ * so the first heartbeat tick at +0s doesn't pay the cold-start cost
+ * of 3 sequential python3 spawns + Ollama HTTP.
+ *
+ * Idempotent: all underlying probes are positive-cache, so a second
+ * call after the first has populated the caches is a no-op (returns
+ * cached value immediately, no re-spawn).
+ */
+let warmupStarted = false;
+export function warmCapabilityProbes(): void {
+  if (warmupStarted) return;
+  warmupStarted = true;
+  // All these helpers are idempotent and positive-cache.
+  // Errors from any individual probe are already swallowed inside
+  // each helper — no top-level catch so any uncaught reject still
+  // surfaces in tests.
+  void isPyTorchAvailable();
+  void isLoraStackAvailable();
+  void isCudaAvailable();
+  void isVinaAvailable();
 }
 
 export interface HeartbeatPayload {
@@ -630,6 +708,36 @@ export class HeartbeatHelper {
         // surfacing.
       } catch (err) {
         logger.warn(`[Heartbeat] Training LLM detection failed: ${(err as Error).message}`);
+      }
+    }
+
+    // lora_training: requires full LoRA Python stack (transformers+peft+datasets)
+    // AND enough RAM/VRAM to fit a PubMedBERT-class model. M1 16GB qualifies via MPS;
+    // Tier 0 Docker nodes don't. Cache positive result (process-lifetime stable).
+    try {
+      const hasLoraStack = await isLoraStackAvailable();
+      const hasCapacity = hardware.gpuVramGb > 0 || hardware.ramGb >= 16;
+      if (hasLoraStack && hasCapacity) {
+        caps.push('lora_training');
+      } else if (!hasLoraStack) {
+        logger.warn(
+          '[Heartbeat] LoRA Python stack not found — not advertising lora_training. ' +
+          'Install with: pip3 install transformers peft datasets safetensors accelerate',
+        );
+      }
+    } catch (err) {
+      logger.warn(`[Heartbeat] LoRA stack probe failed: ${(err as Error).message}`);
+    }
+
+    // lora_generation: CUDA-only subtype (BioGPT-Large 1.5B). M1 MPS does NOT qualify.
+    // Only push when CUDA is actually available, not just any GPU. Gated on lora_training
+    // being present (otherwise the deps for generation aren't installed either).
+    if (caps.includes('lora_training')) {
+      try {
+        const hasCuda = await isCudaAvailable();
+        if (hasCuda) caps.push('lora_generation');
+      } catch (err) {
+        logger.warn(`[Heartbeat] CUDA probe failed: ${(err as Error).message}`);
       }
     }
 

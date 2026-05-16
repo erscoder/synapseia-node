@@ -191,8 +191,18 @@ function runPython(bin: string, script: string, payload: object, timeoutMs: numb
     proc.on('error', err => { clearTimeout(timer); reject(new LoraError(err.message, 'spawn')); });
     proc.on('close', code => {
       clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new LoraError(`python3 train_lora.py exited with code ${code}: ${stderr.slice(0, 800)}`, 'python'));
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      // Surface a friendly hint when the failure is a missing Python dep
+      // (transformers/peft/datasets/safetensors/accelerate). Keeps the raw
+      // exit code + stderr tail so reviewers can still see the original error.
+      const missingDep = stderr.match(/No module named '(transformers|peft|datasets|safetensors|accelerate)'/);
+      const hint = missingDep
+        ? `[LoRA] Python deps missing. Install: pip3 install transformers peft datasets safetensors accelerate\n`
+        : '';
+      reject(new LoraError(`${hint}python3 train_lora.py exited with code ${code}: ${stderr.slice(0, 800)}`, 'python'));
     });
   });
 }

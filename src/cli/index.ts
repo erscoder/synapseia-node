@@ -70,7 +70,7 @@ import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE, MODEL_SLUG_REGEX, DEFAULT_SOLANA_RPC_URL } from '../modules/config/config';
 import { getCoordinatorUrl, getCoordinatorWsUrl } from '../constants/coordinator';
-import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
+import { HeartbeatHelper, warmCapabilityProbes } from '../modules/heartbeat/heartbeat';
 import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
 import {
   getGlobalTelemetryClient,
@@ -260,6 +260,11 @@ async function bootstrap() {
   const p2pService = app.get(P2pService);
   const heartbeatHelper =app.get(HeartbeatHelper)
 
+  // H-3: warm capability probe caches in parallel so the first heartbeat
+  // tick (+0s) doesn't pay the cold-start cost of 3 sequential python3
+  // spawns + Vina probe (8-15s worst-case, risks >60s tick deadline).
+  warmCapabilityProbes();
+
   const VERSION = getPackageVersion();
   const program = new Command();
   program.name('synapseia').description('Synapseia Network Node CLI').version(VERSION);
@@ -324,6 +329,12 @@ async function bootstrap() {
           logger.error(`   Started at: ${existingLock.startedAt}`);
           logger.error(`   Stop it before running 'synapseia start' again.`);
           process.exit(6);
+        }
+
+        if (!existsSync(CONFIG_FILE)) {
+          logger.error('❌ No configuration found.');
+          logger.error('   Run `syn config` first to set up this node.');
+          process.exit(3);
         }
 
         const config = configService.load();
@@ -397,13 +408,13 @@ async function bootstrap() {
             logger.error('[Keystore] no wallet found and stdin is not a TTY — cannot prompt for a new passphrase. Set SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or run on an interactive shell first.');
             process.exit(7);
           }
-          if (filePass !== null && filePass.length < 12) {
+          if (filePass != null && filePass.length < 12) {
             logger.error('[Keystore] SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE passphrase is shorter than 12 characters — aborting');
             process.exit(7);
           }
           logger.log('First-time setup: creating a new wallet and encrypting it into the hardened keystore.');
           let pass1: string;
-          if (filePass !== null) {
+          if (filePass != null) {
             pass1 = filePass;
             logger.log('[Keystore] passphrase loaded from SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE — skipping interactive prompt');
           } else {
@@ -694,6 +705,35 @@ async function bootstrap() {
                   logger.warn(`⚠️  PyTorch install failed. Try manually: pip3 install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`);
                   logger.warn('   Continuing without Hyperparam Search.\n');
                 }
+              }
+
+              // LoRA training stack: transformers + peft + datasets + safetensors + accelerate.
+              // Only installed on Tier 1+ nodes with enough RAM/VRAM to run a PubMedBERT-class
+              // model. Tier 0 / underpowered nodes skip to keep their footprint small.
+              const loraTierOk = hardware.hardwareClass >= 1
+                && (hardware.gpuVramGb > 0 || hardware.ramGb >= 16);
+              if (loraTierOk) {
+                const loraCheck = spawnSync(
+                  'python3', ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
+                  { stdio: 'pipe' }
+                );
+                if (loraCheck.status === 0) {
+                  logger.log('✅ LoRA training stack already installed.\n');
+                } else {
+                  logger.log('📦 Installing LoRA training stack (~500MB)...');
+                  try {
+                    execSyncFn(
+                      'pip3 install transformers peft datasets safetensors accelerate',
+                      { stdio: 'inherit' }
+                    );
+                    logger.log('✅ LoRA training stack installed! Your node can now run LoRA WOs.\n');
+                  } catch {
+                    logger.warn('⚠️  LoRA stack install failed. Try manually: pip3 install transformers peft datasets safetensors accelerate');
+                    logger.warn('   Continuing without LoRA training.\n');
+                  }
+                }
+              } else {
+                logger.log('Skipping LoRA stack — node tier too low for LoRA WOs.\n');
               }
             }
           } else {

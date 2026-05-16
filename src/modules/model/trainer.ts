@@ -66,6 +66,14 @@ export const GPU_TRAINING_MEM_FLOOR_MB = 4096;
 export const LORA_TRAINING_MEM_FLOOR_MB = 4096;
 
 /**
+ * Minimum free RAM (MB) for `lora_generation`. CUDA-only subtype.
+ * BioGPT-Large 1.5B requires CUDA VRAM headroom for fp16 weights (~6 GB) +
+ * activations + optimizer state + LoRA adapter buffers; 12 GB minimum keeps
+ * OOM rate near zero on cold-start.
+ */
+export const LORA_GENERATION_MEM_FLOOR_MB = 12288;
+
+/**
  * Minimum free RAM (MB) for `diloco_training`. Distributed gradient
  * aggregation needs a 7B-class base loaded in RAM plus the gradient
  * buffers; 6 GB is the floor empirically.
