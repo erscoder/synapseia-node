@@ -166,8 +166,34 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
 export function __resetCapabilitySnapshotForTests(): void {
   lastAnnouncedCapabilities = null;
   loraStackCache = null;
+  loraStackLastError = null;
+  loraStackForcedFalseForTest = false;
   cudaCache = null;
   loraStackWarnEmitted = false;
+}
+
+/**
+ * Test-only seed for the LoRA stack probe. Drives both branches of
+ * `determineCapabilitiesAsync` without spawning a real python3
+ * (dynamic `await import('node:child_process')` inside the probe
+ * bypasses `jest.mock('child_process')`, so module-level injection is
+ * the cleanest test surface). Pass `available=true` to skip the probe
+ * entirely; pass `false` plus a `reason` to drive the failure-diagnostic
+ * warn path. Production code never calls this.
+ */
+export function __seedLoraStackProbeForTests(
+  available: boolean,
+  reason: string | null = null,
+): void {
+  if (available) {
+    loraStackCache = true;
+    loraStackForcedFalseForTest = false;
+    loraStackLastError = null;
+  } else {
+    loraStackCache = null;
+    loraStackForcedFalseForTest = true;
+    loraStackLastError = reason;
+  }
 }
 
 /**
@@ -175,25 +201,86 @@ export function __resetCapabilitySnapshotForTests(): void {
  * `TrainerHelper.isPyTorchAvailable` — a successful import is stable for
  * the process lifetime, so we avoid re-spawning python3 every 60s heartbeat.
  * A failed import is NOT cached so transient slowness recovers on the next tick.
+ *
+ * Bug 12 (HIGH) — pods install the LoRA stack at boot
+ * (`install-deps.ts` phase 3 emits `[↷] LoRA training stack already
+ * installed` per its venvPython probe) yet `isLoraStackAvailable()`
+ * returns false at heartbeat time and `lora_training` is never
+ * advertised. The original probe discarded stderr, so operators had no
+ * way to diagnose WHY the runtime import failed (cold transformers
+ * import > 30s timeout? PYTHONPATH collision pulling stale module?
+ * post-install ABI mismatch?). The probe now captures stderr + exit
+ * code into module-private `loraStackLastError` so the heartbeat caller
+ * can surface the real failure reason in its one-shot diagnostic warn.
+ * Timeout bumped 30s → 60s — `import transformers` cold on a busy pod
+ * mid-Ollama-serve routinely exceeds 30s.
  */
 let loraStackCache: boolean | null = null;
+let loraStackLastError: string | null = null;
+/** Test-only sticky-false override. Production keeps it null so the negative
+ *  result is never cached (transient slowness retries on the next heartbeat). */
+let loraStackForcedFalseForTest: boolean = false;
+
+/** @internal Exposed for the heartbeat caller's diagnostic warn. */
+function getLoraStackLastError(): string | null {
+  return loraStackLastError;
+}
+
 async function isLoraStackAvailable(): Promise<boolean> {
   if (loraStackCache === true) return true;
+  if (loraStackForcedFalseForTest) return false;
   const { spawn } = await import('node:child_process');
-  const result = await new Promise<boolean>((res) => {
+  const probeResult = await new Promise<{ ok: boolean; reason: string | null }>((res) => {
     const proc = spawn(
       resolvePython(),
       ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
+    let stderr = '';
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      // Cap captured stderr at 2 KiB so a runaway traceback never
+      // bloats the heartbeat log line. The first line of a Python
+      // ImportError already names the missing module.
+      if (stderr.length < 2048) {
+        stderr += chunk.toString('utf-8');
+      }
+    });
     let settled = false;
-    const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
-    proc.on('close', (code) => settle(code === 0));
-    proc.on('error', () => settle(false));
-    setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
+    const settle = (ok: boolean, reason: string | null) => {
+      if (!settled) {
+        settled = true;
+        res({ ok, reason });
+      }
+    };
+    proc.on('close', (code) => {
+      if (code === 0) {
+        settle(true, null);
+      } else {
+        // First non-empty line of stderr is the most useful — Python
+        // tracebacks put the actual ImportError class + message last,
+        // but for triage the file/module that failed is sufficient.
+        const trimmed = stderr.trim();
+        const firstSignal = trimmed
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0)
+          .pop() ?? `exit code ${code}`;
+        settle(false, firstSignal);
+      }
+    });
+    proc.on('error', (err) => settle(false, `spawn failed: ${err.message}`));
+    setTimeout(() => {
+      try { proc.kill(); } catch { /* ignore */ }
+      settle(false, 'probe timed out after 60s (cold transformers import on a busy host can hit this — heartbeat will retry next cycle)');
+    }, 60_000);
   });
-  if (result) loraStackCache = true;
-  return result;
+  if (probeResult.ok) {
+    loraStackCache = true;
+    loraStackLastError = null;
+  } else {
+    loraStackLastError = probeResult.reason;
+  }
+  return probeResult.ok;
 }
 
 /**
@@ -732,21 +819,24 @@ export class HeartbeatHelper {
       if (hasLoraStack && hasCapacity) {
         caps.push('lora_training');
       } else if (!hasLoraStack && hasCapacity && !loraStackWarnEmitted) {
-        // Hotfix 0.8.55: gate the warn on (a) node abstractly qualifies
-        // (else telling them to install is noise), (b) current free RAM
-        // is at least the LoRA floor (else memory pressure means even an
-        // installed stack would be filtered out by applyMemoryPressureFilter),
-        // and (c) we haven't already warned this process. Without the
-        // throttle the message spammed every 60s tick on qualifying nodes
-        // that lacked the Python stack.
-        const freeMB = readAvailableMemMB();
-        if (freeMB >= LORA_TRAINING_MEM_FLOOR_MB) {
-          logger.warn(
-            '[Heartbeat] LoRA Python stack not found — not advertising lora_training. ' +
-            'Install with: pip3 install transformers peft datasets safetensors accelerate',
-          );
-          loraStackWarnEmitted = true;
-        }
+        // Bug 12: emit the captured probe failure reason so operators can
+        // tell apart (a) "transformers not in venv" (re-run install-deps),
+        // (b) "import timed out — venv too slow / pod overloaded" (raise
+        // timeout or wait for next heartbeat), and (c) "ImportError: cannot
+        // import name X from torch" (ABI mismatch — torch wheel ≠ what
+        // transformers expects). Previously the warn was gated on
+        // `freeMB >= LORA_TRAINING_MEM_FLOOR_MB`, which silently suppressed
+        // the diagnostic on pods that ALSO had memory pressure — masking
+        // the real failure. Memory-pressure-driven stripping lives in
+        // `applyMemoryPressureFilter` (separate concern); the probe failure
+        // warn must NOT be gated on it.
+        const reason = getLoraStackLastError() ?? 'no error captured';
+        logger.warn(
+          `[Heartbeat] LoRA Python stack probe failed — not advertising lora_training. ` +
+          `Reason: ${reason}. ` +
+          `Re-install with: "${resolvePython()}" -m pip install transformers peft datasets safetensors accelerate`,
+        );
+        loraStackWarnEmitted = true;
       }
     } catch (err) {
       logger.warn(`[Heartbeat] LoRA stack probe failed: ${(err as Error).message}`);
