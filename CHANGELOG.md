@@ -1,5 +1,38 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-16] fix(node): docking timeout + embedding auto-pull + training LLM resolver + 0.8.60 (e5951cb1)
+
+Three operator-reported issues:
+
+1. **Docking obabel timeout 60s → 180s**
+   (`docker.ts:155,166`). Drug-like ligands (Indinavir, Imatinib)
+   with many rotatable bonds exceed 60 s on busy CPUs. Live timeout
+   on Indinavir SMILES reproduced.
+
+2. **Embedding auto-pull on 404** (`shared/embedding.ts`). The
+   `/api/embeddings` path threw a hard error on missing model
+   (only logged `Pull it with: ollama pull <model>` hint); next
+   WO retried with the same missing model → loop. Now mirrors the
+   `generate()` auto-pull behaviour: on 404 / "model not found",
+   calls `/api/pull`, streams to completion, retries the
+   embeddings request once.
+
+3. **Training LLM resolver two bugs**
+   (`modules/llm/training-llm.ts`):
+   - `CAPABLE_SIZE_MARKERS` lacked `12b` — gemma3:12b dropped to
+     the `others` fallback bucket instead of being recognized as
+     capable. Added `12b` alongside `13b|14b`.
+   - `others` fallback chain included embedding-only models
+     (`locusai/all-minilm-l6-v2`, `nomic-embed`, `bge-*`, etc)
+     which fail with "does not support chat" when the mutation
+     engine prompts them. New `isEmbeddingOnlyModel(modelId)`
+     substring-matches known embedding prefixes;
+     `isCapableTrainingModel` and the `others` filter both exclude
+     them.
+
+Version bump 0.8.59 → 0.8.60. Lockstep with node-ui only — coord
+stays on 0.8.58 per the new decoupled rule.
+
 ## [2026-05-16] feat(node): npm registry as latestVersion source + 0.8.59 (d372dc52)
 
 Decouples node CLI self-update from coordinator version. Pre-0.8.59
