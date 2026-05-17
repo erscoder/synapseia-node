@@ -3,8 +3,12 @@
  * Tests for HeartbeatHelper.sendHeartbeat, startPeriodicHeartbeat, determineCapabilities
  */
 
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { HeartbeatHelper } from '../modules/heartbeat/heartbeat';
+import { jest, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from '@jest/globals';
+import {
+  HeartbeatHelper,
+  __seedLoraStackProbeForTests,
+  __resetCapabilitySnapshotForTests,
+} from '../modules/heartbeat/heartbeat';
 import { IpifyService } from '../modules/shared/infrastructure/ipify.service';
 
 const mockPost: any = jest.fn();
@@ -35,11 +39,27 @@ describe('HeartbeatHelper', () => {
   let helper: HeartbeatHelper;
   const mockIpifyService = new IpifyService() as any;
 
+  // `sendHeartbeat` calls determineCapabilitiesAsync which on POD-sized
+  // hardware (ramGb=16) triggers isLoraStackAvailable() — a real python3
+  // spawn with a 60s non-unref'd setTimeout (heartbeat.ts:492). That timer
+  // pins the jest worker past the test and trips the "worker process has
+  // failed to exit gracefully" warning. Seeding the probe false up-front
+  // skips the spawn entirely.
+  beforeAll(() => {
+    __seedLoraStackProbeForTests(false, 'test seed — no spawn');
+  });
+
+  afterAll(() => {
+    __resetCapabilitySnapshotForTests();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockPost.mockReset();
     mockResolvePublicIp.mockResolvedValue('1.2.3.4');
     helper = new HeartbeatHelper(mockIpifyService);
+    // Re-seed after clearAllMocks in case other helpers tampered with module state.
+    __seedLoraStackProbeForTests(false, 'test seed — no spawn');
   });
 
   describe('determineCapabilities', () => {
