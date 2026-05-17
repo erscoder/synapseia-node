@@ -1,5 +1,25 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(heartbeat): bump LORA + DiLoCo training memory floors (791f26de)
+
+- `LORA_TRAINING_MEM_FLOOR_MB` raised 4096 → 8192. The mps fp16 path
+  (Apple Silicon) holds base model + LoRA adapters resident in unified
+  memory; the previous floor was tuned for the cuda-4bit-quant path
+  and was OOMing Mac nodes at training start.
+- `DILOCO_TRAINING_MEM_FLOOR_MB` raised 6144 → 14336. Qwen2.5-7B fp16
+  weights occupy ~14 GB on mps. A 16 GB unified-memory Mac with
+  typical OS + browser + node-ui residency leaves <10 GB free and was
+  advertising diloco only to be OOM-killed mid-weight-load.
+- `GPU_TRAINING_MEM_FLOOR_MB` (4096) and `LORA_GENERATION_MEM_FLOOR_MB`
+  (12288) unchanged. Generic gpu_training stays low so under-powered
+  nodes can still participate in micro-training.
+- Invariant change: was `GPU_TRAINING == LORA_TRAINING < DILOCO_TRAINING`,
+  now `GPU_TRAINING < LORA_TRAINING < DILOCO_TRAINING`. Each successive
+  cap carries strictly more model state resident in system RAM.
+- Effect: Apple Silicon nodes with insufficient headroom stop
+  auto-classifying as capable for LoRA / DiLoCo training and stop
+  causing OOM-kill crashes during weight load.
+
 ## [2026-05-17] feat: 0.8.65 — agent legacy WO types + heartbeat/install-deps/diloco hardening
 
 **Bug 17a (agent-side counterpart)** — `WorkOrderType` union shrunk to drop
