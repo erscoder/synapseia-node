@@ -1,5 +1,41 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(heartbeat): cgroup-aware container memory gate — 0.8.73
+
+**Bug 21** — Pod RunPod container `memory.max = 31.7GB` < DiLoCo
+Qwen2.5-7B peak RAM ~25-30GB → OOM-killer kills training mid-load.
+`os.freemem()` reports host total (354GB) on libuv ≤ 18 — node
+advertises `diloco_training` cap on under-resourced container.
+
+Fix:
+- NEW `src/modules/heartbeat/container-mem.ts`:
+  - cgroup v2 reader `/sys/fs/cgroup/memory.max` (handles 'max'
+    literal + bytes parse + MAX_SAFE_INTEGER sentinel guard).
+  - cgroup v1 fallback `/sys/fs/cgroup/memory/memory.limit_in_bytes`
+    (handles "no limit" sentinel ~9.22e18).
+  - Memoized `getContainerTotalMemMB()` — container limit doesn't
+    change at runtime.
+  - Mac/Windows fallback: `os.totalmem()` (no cgroup = no container).
+- `applyContainerMemoryGate()` strips caps permanently if container
+  TOTAL too small:
+  - DiLoCo requires ≥40GB (default; env `HEARTBEAT_DILOCO_MIN_CONTAINER_MB`).
+  - LoRA requires ≥16GB (default; env `HEARTBEAT_LORA_MIN_CONTAINER_MB`).
+- Wired in `determineCapabilitiesAsync` AFTER probes, BEFORE
+  dynamic memory pressure filter (Bug 12 v3).
+- One-shot boot log: `[Capability] Container total RAM = XMB; diloco
+  requires Y MB → cap stripped permanently`.
+
+Differs from Bug 12 v3 (dynamic free-RAM hysteresis): this is
+**static container max** = hardware-class permanent gate. Container
+limit never grows at runtime; cap will not return on its own.
+
+Tests: 18 new in `heartbeat-container-mem.spec.ts` (uncached reader,
+gate, env override, full-helper integration). POD1 live scenario
+(31.7GB cgroup) explicitly tested. 1882/1882 total pass.
+
+P24 extension: documents Linux container case alongside macOS/Linux
+free-mem cases.
+
 ## [2026-05-17] fix(heartbeat): clearTimeout in LoRA/CUDA/PyTorch probe success paths — 0.8.72
 
 **Bug 23** — `setTimeout` literal sin captura en 3 probes (`isLoraStackAvailable`,

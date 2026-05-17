@@ -35,6 +35,7 @@ import {
   DOCKING_MEM_FLOOR_MB,
 } from '../model/trainer';
 import { isVinaAvailable } from '../docking';
+import { applyContainerMemoryGate, __resetContainerMemCacheForTests } from './container-mem';
 import { ModelDiscovery } from '../discovery/model-discovery';
 import { resolveTrainingLlmModel } from '../llm/training-llm';
 import { IpifyService } from '../shared/infrastructure/ipify.service';
@@ -317,6 +318,7 @@ export function __resetCapabilitySnapshotForTests(): void {
   loraStackLastError = null;
   loraStackForcedFalseForTest = false;
   loraStackMarkerChecked = false;
+  __resetContainerMemCacheForTests();
   cudaCache = null;
   loraStackWarnEmitted = false;
   dilocoModelCache = null;
@@ -1430,7 +1432,16 @@ export class HeartbeatHelper {
     } catch (err) {
       logger.warn(`[Heartbeat] Vina detection failed: ${(err as Error).message}`);
     }
-    return caps;
+
+    // Bug 21 (2026-05-17) — container memory hardware-class gate.
+    // Runs AFTER per-cap probes (so we only strip caps actually offered)
+    // and BEFORE the dynamic memory-pressure filter (which sees the
+    // output of this method). Caps whose container-class minimum exceeds
+    // the detected cgroup memory.max are PERMANENTLY stripped — hardware
+    // doesn't grow at runtime so there is no restore path. The dynamic
+    // filter still handles transient free-RAM pressure for caps that
+    // pass this gate. See `container-mem.ts` for thresholds + rationale.
+    return applyContainerMemoryGate(caps);
   }
 
   /**
