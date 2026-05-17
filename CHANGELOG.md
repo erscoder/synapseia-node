@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix: lora marker + diloco torch_dtype + plan-parse model — 0.8.63 (577378ad)
+
+- **Bug 12 v2 (HIGH)**: persistent on-disk LoRA stack marker
+  (`~/.synapseia/lora-stack-ok`). `isLoraStackAvailable()` hydrates
+  from marker on first call — no spawn race, no oscillation. Falls
+  back to probe only when marker absent/stale. Probe spawn + marker
+  write both gated on `venvExists()` (reviewer HIGH-1). Marker
+  validates `venvPython` path match. install-deps writes marker on
+  successful verify; deletes on failure.
+- **Bug 14 (HIGH)**: `diloco_train.py:180` `torch_dtype=` →
+  `dtype=` (kwarg removed in transformers 5.x). install-deps now
+  pins `transformers>=4.43` (floor where `dtype` exists). DiLoCo
+  training no longer crashes at model load.
+- **Bug 6 follow-up**: `plan-execution.ts` new `extractModelName(unknown)`
+  helper. Warn log now reads `model=ollama/gemma3:12b` instead of
+  `[object Object]`.
+
+Tests: 67 new across 3 spec files.
+
 ## [2026-05-17] fix(heartbeat): surface lora_training probe stderr — 0.8.62 (3fa1d2dc)
 
 **Bug 12 (HIGH)** — pods don't advertise `lora_training` cap despite
