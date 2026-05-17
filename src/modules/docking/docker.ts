@@ -41,11 +41,39 @@ const DEFAULT_VINA_BIN = process.env.VINA_BIN
   || (existsSync(VINA_HOME_BIN) ? VINA_HOME_BIN : 'vina');
 const DEFAULT_OBABEL_BIN = process.env.OBABEL_BIN || 'obabel';
 
+/**
+ * Default timeout for Open Babel `--gen3d` ligand prep and receptor
+ * protonation. Bumped 180s → 600s (10 min) after Bug 20 (2026-05-17):
+ * pod fleet observed legitimate drug-like ligands (Indinavir,
+ * Imatinib, etc.) regularly exceeding 180s on `obabel ligand.smi -O
+ * ligand.pdbqt --gen3d -h`. 3D conformer generation with explicit
+ * hydrogens on rotatable-bond-heavy molecules can take 5-10 min on a
+ * busy CPU — 600s is the measured worst-case observed in pod logs.
+ *
+ * Override via `DOCKING_OBABEL_TIMEOUT_MS` env var when running on
+ * slower hardware or with even more complex ligands. parseInt
+ * tolerates trailing garbage; NaN/0 falls back to the default.
+ */
+function parseObabelTimeoutEnv(): number {
+  const raw = process.env.DOCKING_OBABEL_TIMEOUT_MS;
+  if (!raw) return 600_000;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 600_000;
+}
+const DEFAULT_OBABEL_TIMEOUT_MS = parseObabelTimeoutEnv();
+
 export interface RunDockingOptions {
   /** Override binary names (mostly for tests). */
   vinaBin?: string;
   obabelBin?: string;
+  /** Vina invocation timeout (per-WO). Defaults to DEFAULT_VINA_TIMEOUT_MS. */
   timeoutMs?: number;
+  /**
+   * Open Babel invocation timeout for both receptor protonation and
+   * ligand `--gen3d`. Defaults to DEFAULT_OBABEL_TIMEOUT_MS (600s).
+   * Test-only injection point.
+   */
+  obabelTimeoutMs?: number;
   /** Override the working directory (default: a fresh temp dir per WO). */
   workDir?: string;
   /** Override hardware reporting (mostly for tests). */
@@ -150,12 +178,17 @@ async function prepReceptorPdbqt(pdbPath: string, opts: RunDockingOptions): Prom
   const out = pdbPath.replace(/\.pdb$/, '.pdbqt');
   if (await fileExists(out)) return out;
   // -xr keeps only polar hydrogens; -p7.4 sets pH for protonation.
-  // 180s timeout: receptor protonation is faster than ligand --gen3d
-  // but big receptors (>500 residues) can still exceed 60s on a busy
-  // CPU. Match the ligand budget for consistency.
+  // Shares the ligand `--gen3d` budget (DEFAULT_OBABEL_TIMEOUT_MS, 600s)
+  // because big receptors (>500 residues) can also be slow under load
+  // and there's no operational benefit to a separate cap. See Bug 20
+  // (2026-05-17) for the rationale behind the 600s default.
+  const timeoutMs = opts.obabelTimeoutMs ?? DEFAULT_OBABEL_TIMEOUT_MS;
   await runChild(opts.obabelBin ?? DEFAULT_OBABEL_BIN, [
     pdbPath, '-O', out, '-xr', '-p', '7.4',
-  ], { timeoutMs: 180_000 });
+  ], {
+    timeoutMs,
+    timeoutContext: { step: 'receptor-protonate', input: pdbPath },
+  });
   return out;
 }
 
@@ -164,12 +197,17 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   const ligandPdbqtPath = path.join(workDir, 'ligand.pdbqt');
   await fs.promises.writeFile(ligandSmiPath, smiles + '\n', 'utf8');
   // --gen3d builds a 3D conformer from SMILES; -h adds explicit hydrogens.
-  // 180s timeout: drug-like ligands (Indinavir, Imatinib, etc) with many
-  // rotatable bonds can exceed 60s on a CPU under load. Operators reported
-  // legitimate Indinavir runs timing out at 60s.
+  // 600s default (Bug 20, 2026-05-17): drug-like ligands like Indinavir
+  // (HIV-1 Protease) and Imatinib (BCR-ABL) with many rotatable bonds
+  // can take 5-10 min on a CPU under load. Operators can raise via
+  // DOCKING_OBABEL_TIMEOUT_MS for even more complex molecules.
+  const timeoutMs = opts.obabelTimeoutMs ?? DEFAULT_OBABEL_TIMEOUT_MS;
   await runChild(opts.obabelBin ?? DEFAULT_OBABEL_BIN, [
     ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', '-h',
-  ], { timeoutMs: 180_000 });
+  ], {
+    timeoutMs,
+    timeoutContext: { step: 'ligand-gen3d', input: smiles },
+  });
   return ligandPdbqtPath;
 }
 
@@ -298,7 +336,40 @@ function downloadFile(url: string, dest: string): Promise<void> {
   });
 }
 
-function runChild(bin: string, args: string[], opts: { timeoutMs: number }): Promise<{ stdout: string; stderr: string }> {
+/**
+ * Builds the timeout error message. Extracted so tests can assert the
+ * exact shape (step, input, env-var hint) without spinning child
+ * processes. Truncates SMILES/path to 200 chars so logs stay readable
+ * for pathological-length inputs.
+ */
+export function buildObabelTimeoutMessage(args: {
+  bin: string;
+  cliArgs: string[];
+  timeoutMs: number;
+  step?: string;
+  input?: string;
+}): string {
+  const truncatedInput = args.input && args.input.length > 200
+    ? args.input.slice(0, 200) + '…'
+    : args.input;
+  const lines = [
+    `Process timed out after ${args.timeoutMs}ms: ${args.bin} ${args.cliArgs.join(' ')}`,
+  ];
+  if (args.step) lines.push(`  step: ${args.step}`);
+  if (truncatedInput) lines.push(`  input: ${truncatedInput}`);
+  lines.push(
+    '  hint: raise DOCKING_OBABEL_TIMEOUT_MS for complex drug-like ligands (Indinavir, Imatinib, etc.).',
+  );
+  return lines.join('\n');
+}
+
+interface RunChildOpts {
+  timeoutMs: number;
+  /** Diagnostic context surfaced when the timeout fires. */
+  timeoutContext?: { step?: string; input?: string };
+}
+
+function runChild(bin: string, args: string[], opts: RunChildOpts): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -307,7 +378,13 @@ function runChild(bin: string, args: string[], opts: { timeoutMs: number }): Pro
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
     const timer = setTimeout(() => {
       try { proc.kill('SIGTERM'); } catch { /* noop */ }
-      reject(new Error(`Process timed out after ${opts.timeoutMs}ms: ${bin} ${args.join(' ')}`));
+      reject(new Error(buildObabelTimeoutMessage({
+        bin,
+        cliArgs: args,
+        timeoutMs: opts.timeoutMs,
+        step: opts.timeoutContext?.step,
+        input: opts.timeoutContext?.input,
+      })));
     }, opts.timeoutMs);
     proc.on('error', err => { clearTimeout(timer); reject(err); });
     proc.on('close', code => {
@@ -316,4 +393,24 @@ function runChild(bin: string, args: string[], opts: { timeoutMs: number }): Pro
       else reject(new Error(`${bin} exited with code ${code}: ${stderr.slice(0, 500)}`));
     });
   });
+}
+
+// ── Test-only exports ──────────────────────────────────────────────────────
+
+/**
+ * Test-only: returns the resolved default obabel timeout. Production
+ * code uses the module-private constant directly; tests assert against
+ * this helper so a future env-var rewrite stays observable.
+ */
+export function __getDefaultObabelTimeoutMs(): number {
+  return DEFAULT_OBABEL_TIMEOUT_MS;
+}
+
+/**
+ * Test-only: re-parses DOCKING_OBABEL_TIMEOUT_MS at call time so tests
+ * can mutate process.env and observe the new value without re-loading
+ * the module.
+ */
+export function __resolveObabelTimeoutMsForTests(): number {
+  return parseObabelTimeoutEnv();
 }

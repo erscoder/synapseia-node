@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(docking): obabel timeout 180s → 600s + env override — 0.8.71
+
+**Bug 20** — `obabel --gen3d -h` timeout 180s repeatedly hit on
+complex drug ligands (HIV-1 Protease/Indinavir, BCR-ABL Kinase/
+Imatinib) — 3D coordinate generation legitimately takes 5-10min for
+large molecules. Pod docking WOs failing in loop.
+
+- Default obabel timeout 180s → 600s (10min). Inline comment cites
+  pod log evidence (Indinavir/Imatinib 5-10min real-world). P4.
+- Env override `DOCKING_OBABEL_TIMEOUT_MS` (parseInt, fallback safe
+  on junk/zero/negative — P2 fail-safe).
+- `obabelTimeoutMs` opt on `RunDockingOptions` overrides env.
+- Timeout error message step-aware (gen3d vs convert), SMILES
+  truncated to 200 chars, includes operator hint to bump timeout
+  for complex molecules.
+- Pure helper `buildObabelTimeoutMessage` extracted for testability
+  (P29).
+- Both `--gen3d` (ligand) AND `-xr -p7.4` (receptor) protonation
+  share same cap — operationally same risk.
+
+Tests: 50/50 docking suites pass (+11 new in
+`obabel-timeout.spec.ts`). 1857/1857 total.
+
 ## [2026-05-17] fix(diloco): local_files_only runtime + drop HF_TOKEN dep — 0.8.70
 
 **Bug 18 v3** — Eliminate HF Hub runtime dependency for DiLoCo. Model
