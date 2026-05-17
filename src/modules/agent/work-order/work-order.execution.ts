@@ -17,6 +17,8 @@ import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../..
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
 import { InsufficientMemoryError } from '../../model/heavy-training-preflight';
+import { detectHardware } from '../../hardware/hardware';
+import { deriveTrainingRuntimeMode } from '../../hardware/runtime-mode';
 import { downloadAdapter } from '../../model/model-downloader';
 import { safeLoss } from './safe-loss';
 import type { AgentBrain } from '../agent-brain';
@@ -414,11 +416,18 @@ Abstract: ${payload.abstract}`;
     try { datasetPath = await this.coordinator.downloadDataset(coordinatorUrl, payload.domain); logger.log(`[DiLoCo] Using dataset: ${datasetPath}`); }
     catch (err) { logger.warn(`[DiLoCo] Dataset not available (${(err as Error).message}). Using datasetId.`); }
 
-    const hardware = capabilities.includes('cuda') ? 'cuda' : capabilities.includes('mps') ? 'mps' : 'cpu';
+    // Slice 18 (2026-05-17): derive runtime mode from the hardware probe,
+    // NOT from the `capabilities` cap list. The cap list never contains
+    // literal 'cuda' / 'mps' — only 'gpu', 'gpu_training', etc. — so the
+    // old ternary `capabilities.includes('cuda')` fell through to 'cpu'
+    // on NVIDIA pods and Python loaded fp32 weights → 44GB RSS → SIGKILL.
+    // See `runtime-mode.ts` docblock for full context.
+    const probe = detectHardware();
+    const hardware = deriveTrainingRuntimeMode({ gpuVramGb: probe.gpuVramGb });
 
     let dilocoResult;
     try {
-      dilocoResult = await runDiLoCoInnerLoop({ modelId: payload.modelId, adapterPath: localAdapterPath, datasetPath, innerSteps: payload.innerSteps, hyperparams: payload.hyperparams, hardware: hardware as 'cpu' | 'mps' | 'cuda', testMode: process.env.NODE_ENV === 'test' });
+      dilocoResult = await runDiLoCoInnerLoop({ modelId: payload.modelId, adapterPath: localAdapterPath, datasetPath, innerSteps: payload.innerSteps, hyperparams: payload.hyperparams, hardware, testMode: process.env.NODE_ENV === 'test' });
     } catch (err) {
       // Bug 28 (2026-05-17): preflight memory gate trips when container
       // headroom is insufficient. Treated as controlled skip — the WO
