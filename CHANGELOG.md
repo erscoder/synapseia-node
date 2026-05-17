@@ -1,5 +1,17 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(diloco): surface signal + HF_TOKEN passthrough + retry — 0.8.64 (b4d325af)
+
+**Bug 18 v2** — `diloco_train.py exited with code null` mid-weight-load.
+
+Root: node spawn callback got code=null (killed by signal, not Python sys.exit). Wrapper discarded signal arg → operators couldn't tell SIGKILL (OOM) from SIGSEGV (safetensors crash) from SIGPIPE (HF Hub TCP RST) from SIGTERM (timeout). Most likely SIGPIPE on shard 244/339 — HF Hub closes unauthenticated streaming connection.
+
+Fix:
+- `diloco-trainer.ts` captures signal name + per-signal hint, passes HF_TOKEN env explicitly (warn if absent), 8KB stderr cap.
+- `diloco_train.py` new `_load_with_retry` (3 attempts, exponential backoff). Wraps all 3 `from_pretrained()` calls. Emits `{info: hf_auth=token|anonymous}` at start.
+
+7 new tests. Operator action: set `HF_TOKEN` env on pods to avoid HF rate limits.
+
 ## [2026-05-17] fix: lora marker + diloco torch_dtype + plan-parse model — 0.8.63 (577378ad)
 
 - **Bug 12 v2 (HIGH)**: persistent on-disk LoRA stack marker
