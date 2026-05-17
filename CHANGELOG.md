@@ -1,5 +1,39 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(install-deps): auto-detect NVIDIA + torch+cu121 wheel — 0.8.81 (a3833e2a)
+
+**ROOT CAUSE FOUND for DiLoCo OOM on NVIDIA pods.**
+
+`install-deps.ts:194` hardcoded `--index-url whl/cpu` → torch CPU-only
+wheel installed regardless of GPU → `torch.cuda.is_available()=False` →
+`diloco_train.py` fell to fp32 path (no BitsAndBytesConfig 4-bit) →
+7B model fp32 = 28 GB weights + overhead = **47 GB peak RSS** → SIGKILL
+(cgroup max 46.6 GB).
+
+Verified live 2026-05-17 21:14 UTC: memory sampler showed rssMB peak=47083.
+Manual fix on pod (`pip install torch==2.5.1 --index-url whl/cu121`) →
+`torch.cuda.is_available()=True` → CUDA 4-bit quant path → ~5 GB peak.
+
+Fix:
+- New `pickTorchWheel({ platform, nvidiaProbeFn })` helper:
+  - Linux + NVIDIA → cu121 wheel
+  - macOS → default wheel (MPS-enabled)
+  - Windows + NVIDIA → cu121, else cpu
+  - Linux without NVIDIA → cpu wheel
+  - Probe error → cpu wheel (fail-CLOSED per P24)
+- `defaultNvidiaProbe()`: tries `nvidia-smi` first, fallback `/dev/nvidia0`.
+- Phase 5 bitsandbytes gating now on `wheel.label === 'cu121'` (was the
+  broken cudaAvailable probe that itself depended on torch CUDA bindings).
+- Phase 2 torch install uses `--force-reinstall` when migrating cpu→cu121.
+- `TORCH_VERSION` bumped 2.10.0 → 2.5.1 (published on cpu + cu121 +
+  macOS default; old 2.10.0 was cpu-only).
+
+Operator action: existing operators auto-migrate on next node boot —
+install-deps detects wrong wheel, re-installs correct one (~700 MB
+re-download for NVIDIA).
+
+10 new tests covering all platform × NVIDIA-probe branches + fail-safe.
+
 ## [2026-05-17] feat(node): per-class slot + threshold bump + memory sampler + Python tuning — 0.8.80 (a97baf54)
 
 Plan B Slices 9+10+11. Pod evidence: cgroup 46.6 GB, swap.max=0, oom_kill=10.
