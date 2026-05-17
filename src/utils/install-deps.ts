@@ -2,10 +2,12 @@ import { execSync, spawnSync } from 'child_process';
 import * as os from 'os';
 import logger from './logger';
 import {
+  deleteLoraStackMarker,
   ensureVenv,
   venvExists,
   venvPip,
   venvPython,
+  writeLoraStackMarker,
 } from './python-venv';
 import type { Hardware } from '../modules/hardware/hardware';
 
@@ -180,24 +182,83 @@ export async function installPythonDeps(
   } else if (loraOptOut) {
     emit({ phase: 'lora-stack', status: 'skip', message: 'INSTALL_LORA=false; skipping LoRA stack' });
   } else {
-    const loraProbe = spawnSync(
+    // Bug 12 v2: the post-install probe is the AUTHORITATIVE signal
+    // for writing the marker. Both branches below (skip when already
+    // installed, install fresh) MUST end with a verification probe so
+    // the marker only exists when the import truly succeeds for this
+    // venv. Each probe captures stdout to extract transformers.__version__
+    // for telemetry (purely informational; missing is fine).
+    const runVerifyProbe = () => spawnSync(
       venvPython(),
-      ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
-      { stdio: 'pipe' },
+      [
+        '-c',
+        'import transformers, peft, datasets, safetensors, accelerate; print(transformers.__version__)',
+      ],
+      { stdio: 'pipe', encoding: 'utf-8' },
     );
+    const writeMarkerFromProbe = (probe: ReturnType<typeof runVerifyProbe>) => {
+      // Bug 12 v2 (reviewer MED-2): guard on venvExists() — the probe
+      // above already used venvPython() so a missing venv would have
+      // exit-code-failed before reaching here, but the explicit guard
+      // documents the invariant that the marker MUST NEVER exist
+      // without the venv it points to.
+      if (!venvExists()) return;
+      const versionLine = (probe.stdout ?? '').toString().trim().split('\n').pop()?.trim();
+      writeLoraStackMarker({
+        venvPython: venvPython(),
+        transformersVersion: versionLine && versionLine.length > 0 ? versionLine : undefined,
+      });
+    };
+    const loraProbe = runVerifyProbe();
     if (loraProbe.status === 0) {
+      // Already-installed path. Write the marker NOW so the next node
+      // boot can prime its cache without re-spawning the probe.
+      // Without this, an operator who pre-installed deps manually
+      // would never get marker coverage until they hit phase 3 install.
+      writeMarkerFromProbe(loraProbe);
       emit({ phase: 'lora-stack', status: 'skip', message: 'LoRA training stack already installed' });
     } else {
       emit({ phase: 'lora-stack', status: 'running', message: 'Installing LoRA training stack (~500MB)...' });
       try {
+        // Pin transformers floor to 4.43: that release introduced the
+        // `dtype` keyword on `from_pretrained` which our DiLoCo /
+        // LoRA scripts rely on. transformers 5.x hard-removed the
+        // legacy `torch_dtype` kwarg → pods that installed unpinned
+        // ended up on 5.8.1 and crashed every DiLoCo accept (Bug 14
+        // 2026-05-17). No upper-pin: we want pods to track upstream
+        // security fixes, and `dtype` is stable across 4.43→5.x.
         execSync(
-          `"${venvPip()}" install transformers peft datasets safetensors accelerate`,
+          `"${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`,
           { stdio: 'inherit' },
         );
-        result.installedLoraStack = true;
-        emit({ phase: 'lora-stack', status: 'done', message: 'LoRA training stack installed' });
+        // POST-install verify is required (not just trusted from
+        // pip's exit code): pip can succeed while the install
+        // produces a broken stack (torch ABI mismatch,
+        // half-extracted wheel on a low-disk pod, etc.). The marker
+        // MUST only exist when `import transformers, peft, …`
+        // actually succeeds.
+        const verify = runVerifyProbe();
+        if (verify.status === 0) {
+          writeMarkerFromProbe(verify);
+          result.installedLoraStack = true;
+          emit({ phase: 'lora-stack', status: 'done', message: 'LoRA training stack installed' });
+        } else {
+          // Install reported success but verification failed —
+          // delete any stale marker from a previous boot so the
+          // node doesn't keep advertising lora_training based on
+          // outdated state, then surface the verify stderr so the
+          // operator knows WHICH import broke.
+          deleteLoraStackMarker();
+          const verifyStderr = (verify.stderr ?? '').toString().trim().split('\n').pop() ?? `exit ${verify.status}`;
+          const msg = `LoRA stack install completed but post-install import failed: ${verifyStderr}. Try manually: "${venvPython()}" -c "import transformers, peft, datasets, safetensors, accelerate"`;
+          emit({ phase: 'lora-stack', status: 'error', message: msg });
+          result.errors.push(msg);
+        }
       } catch (err) {
-        const msg = `LoRA stack install failed: ${(err as Error).message}. Try manually: "${venvPip()}" install transformers peft datasets safetensors accelerate`;
+        // pip failed outright — also remove any stale marker so
+        // we don't advertise caps based on a previous run.
+        deleteLoraStackMarker();
+        const msg = `LoRA stack install failed: ${(err as Error).message}. Try manually: "${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`;
         emit({ phase: 'lora-stack', status: 'error', message: msg });
         result.errors.push(msg);
       }

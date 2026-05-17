@@ -176,8 +176,14 @@ def run_full_mode(config: dict) -> None:
             model_id, quantization_config=bnb_config, device_map="auto"
         )
     else:
+        # transformers 5.x renamed `torch_dtype` → `dtype` (deprecation
+        # since 4.43, hard-removed in 5.0). Pods upgraded to 5.8.1 and the
+        # old kwarg raised TypeError at from_pretrained call → process
+        # exit code null → every DiLoCo WO crashed pre-train. Use `dtype`
+        # going forward; install-deps pins transformers>=4.43 to guarantee
+        # the keyword is recognized on older venvs too. See Bug 14.
         base_model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch.float32
+            model_id, dtype=torch.float32
         )
         base_model = base_model.to(device)
 

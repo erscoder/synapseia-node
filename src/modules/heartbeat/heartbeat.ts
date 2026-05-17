@@ -8,7 +8,14 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as os from 'os';
 import logger from '../../utils/logger';
-import { resolvePython } from '../../utils/python-venv';
+import {
+  deleteLoraStackMarker,
+  readLoraStackMarker,
+  resolvePython,
+  venvExists,
+  venvPython,
+  writeLoraStackMarker,
+} from '../../utils/python-venv';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
@@ -168,6 +175,7 @@ export function __resetCapabilitySnapshotForTests(): void {
   loraStackCache = null;
   loraStackLastError = null;
   loraStackForcedFalseForTest = false;
+  loraStackMarkerChecked = false;
   cudaCache = null;
   loraStackWarnEmitted = false;
 }
@@ -185,6 +193,11 @@ export function __seedLoraStackProbeForTests(
   available: boolean,
   reason: string | null = null,
 ): void {
+  // Mark hydration done so the seed deterministically wins over any
+  // marker that may exist on the host where tests run. Without this
+  // a developer with `~/.synapseia/lora-stack-ok` present locally
+  // would see the "false seed" branch turn into a true result.
+  loraStackMarkerChecked = true;
   if (available) {
     loraStackCache = true;
     loraStackForcedFalseForTest = false;
@@ -197,29 +210,53 @@ export function __seedLoraStackProbeForTests(
 }
 
 /**
- * Cached LoRA stack probe. Mirrors the positive-only cache pattern from
- * `TrainerHelper.isPyTorchAvailable` — a successful import is stable for
- * the process lifetime, so we avoid re-spawning python3 every 60s heartbeat.
- * A failed import is NOT cached so transient slowness recovers on the next tick.
+ * Cached LoRA stack probe.
  *
- * Bug 12 (HIGH) — pods install the LoRA stack at boot
- * (`install-deps.ts` phase 3 emits `[↷] LoRA training stack already
- * installed` per its venvPython probe) yet `isLoraStackAvailable()`
- * returns false at heartbeat time and `lora_training` is never
- * advertised. The original probe discarded stderr, so operators had no
- * way to diagnose WHY the runtime import failed (cold transformers
- * import > 30s timeout? PYTHONPATH collision pulling stale module?
- * post-install ABI mismatch?). The probe now captures stderr + exit
- * code into module-private `loraStackLastError` so the heartbeat caller
- * can surface the real failure reason in its one-shot diagnostic warn.
- * Timeout bumped 30s → 60s — `import transformers` cold on a busy pod
- * mid-Ollama-serve routinely exceeds 30s.
+ * Bug 12 v2 (root cause) — pre-fix code respawned `python -c "import
+ * transformers, peft, datasets, safetensors, accelerate"` on every
+ * heartbeat tick whose process cache was cold. Cold transformers import
+ * is 4-5s on a busy pod and ANY single 60s timeout poisoned the cap
+ * set until the next probe succeeded. Live coord log 2026-05-17 showed
+ * POD1 caps oscillating every ~3min between 7 (no lora) and 9 (with
+ * lora_training + lora_generation, since lora_generation is gated on
+ * lora_training per heartbeat:848).
+ *
+ * Fix layers (in resolution order each tick):
+ *   1. Process-cache: positive result is sticky for the process lifetime.
+ *      Once we've ever returned true, return true (avoid the probe even
+ *      if the marker is later deleted by an operator mid-run).
+ *   2. Marker hydration: on FIRST tick after boot, attempt to read
+ *      `~/.synapseia/lora-stack-ok`. If present and its `venvPython`
+ *      matches our current `venvPython()`, prime the cache → return
+ *      true. NO probe spawn. This is the path POD1 hits every boot
+ *      after install-deps writes the marker.
+ *   3. Probe fallback: when neither cache nor marker is valid, spawn
+ *      the import probe with stderr capture + 60s timeout. On success,
+ *      write the marker for future boots. On failure, delete any
+ *      stale marker (operator may have `pip uninstall`ed transformers
+ *      after the marker was written — keeping the marker would let
+ *      the node keep advertising lora_training).
+ *
+ * Negative results are NOT cached (transient slowness recovers on next
+ * tick), and the probe captures stderr into `loraStackLastError` so
+ * the heartbeat caller can surface the real failure reason in its
+ * one-shot diagnostic warn.
+ *
+ * Contract: deterministic per-tick result for any node that has run
+ * install-deps successfully on this venv. Coord-side capability drift
+ * for LoRA caps should be a one-time install/uninstall event, never a
+ * per-tick race.
  */
 let loraStackCache: boolean | null = null;
 let loraStackLastError: string | null = null;
 /** Test-only sticky-false override. Production keeps it null so the negative
  *  result is never cached (transient slowness retries on the next heartbeat). */
 let loraStackForcedFalseForTest: boolean = false;
+/** Have we attempted to hydrate the cache from the on-disk marker yet?
+ *  Module-private one-shot: the marker read is cheap (single fs stat +
+ *  small JSON parse) but doing it on every tick when the cache is
+ *  already populated is wasteful. */
+let loraStackMarkerChecked: boolean = false;
 
 /** @internal Exposed for the heartbeat caller's diagnostic warn. */
 function getLoraStackLastError(): string | null {
@@ -229,10 +266,47 @@ function getLoraStackLastError(): string | null {
 async function isLoraStackAvailable(): Promise<boolean> {
   if (loraStackCache === true) return true;
   if (loraStackForcedFalseForTest) return false;
+  // Marker hydration — one-shot per process. If install-deps wrote a
+  // marker for THIS venv, trust it and skip the probe entirely. This
+  // is the steady-state path that eliminates the cap oscillation seen
+  // in live coord drift logs (POD1 toggling lora_training every ~3min).
+  //
+  // Bug 12 v2 (reviewer HIGH-1): the marker is only trustworthy when
+  // the venv it points to still EXISTS. Pre-fix this branch trusted
+  // any marker whose `venvPython` field string-matched `venvPython()`
+  // — but if the operator deleted ~/.synapseia/venv after install-deps
+  // wrote the marker, the string still matches even though the
+  // interpreter is gone. Gating hydration on `venvExists()` makes the
+  // marker self-invalidate when the venv disappears; the explicit
+  // delete keeps the next boot from re-reading a known-dead marker.
+  if (!loraStackMarkerChecked) {
+    loraStackMarkerChecked = true;
+    const marker = readLoraStackMarker();
+    if (marker && venvExists()) {
+      loraStackCache = true;
+      loraStackLastError = null;
+      return true;
+    }
+    if (marker && !venvExists()) {
+      deleteLoraStackMarker();
+    }
+  }
+  // Bug 12 v2 (reviewer HIGH-1): the probe MUST spawn the venv
+  // interpreter (where install-deps lands the transformers wheels) —
+  // NOT `resolvePython()`, which falls back to system `python3` when
+  // the venv is missing. Without the venv there is no transformers
+  // import to test (and writing a marker for a non-existent venv
+  // would be a lie that the next boot would cheerfully trust). Short-
+  // circuit with `false` before paying the spawn cost; the operator
+  // can re-run `syn install-deps` to recreate the venv.
+  if (!venvExists()) {
+    loraStackLastError = 'venv not found at ~/.synapseia/venv (run `syn install-deps`)';
+    return false;
+  }
   const { spawn } = await import('node:child_process');
   const probeResult = await new Promise<{ ok: boolean; reason: string | null }>((res) => {
     const proc = spawn(
-      resolvePython(),
+      venvPython(),
       ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -277,8 +351,31 @@ async function isLoraStackAvailable(): Promise<boolean> {
   if (probeResult.ok) {
     loraStackCache = true;
     loraStackLastError = null;
+    // Late-bind the marker: if install-deps never ran (e.g. operator
+    // bootstrapped the venv manually with their own pip installs),
+    // the marker won't exist yet. Writing it here means the NEXT
+    // node restart can prime the cache from the marker and skip the
+    // 4-5s cold transformers import on first tick.
+    //
+    // Bug 12 v2 (reviewer HIGH-1): the venv MUST exist for the write
+    // to be honest. We early-returned `false` above when
+    // !venvExists(), so reaching here implies the venv was present —
+    // the guard remains as documentation + belt-and-braces against
+    // future refactors that move the early-return.
+    if (venvExists()) {
+      writeLoraStackMarker({
+        venvPython: venvPython(),
+      });
+    }
   } else {
     loraStackLastError = probeResult.reason;
+    // Marker invalidation: if a marker exists but the runtime probe
+    // failed, the marker is lying (operator may have `pip
+    // uninstall`ed transformers after install-deps wrote the marker).
+    // Delete it so the next boot doesn't keep the cache primed under
+    // false pretenses. Subsequent ticks fall through to the probe
+    // until the operator reinstalls.
+    deleteLoraStackMarker();
   }
   return probeResult.ok;
 }

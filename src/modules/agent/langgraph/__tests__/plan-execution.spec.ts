@@ -4,7 +4,7 @@
  */
 
 import { jest } from '@jest/globals';
-import { PlanExecutionNode, parseExecutionPlan, truncateMiddle } from '../nodes/plan-execution';
+import { PlanExecutionNode, parseExecutionPlan, truncateMiddle, extractModelName } from '../nodes/plan-execution';
 import type { AgentState, ExecutionStep } from '../state';
 import { DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 
@@ -380,6 +380,80 @@ describe('PlanExecutionNode', () => {
       expect(msg).toContain(' ... ');
       // Middle Ms (800 of them, well over the elision boundary) absent.
       expect(msg.includes('M'.repeat(600))).toBe(false);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Bug 6 follow-up — model name coercion (no more `[object Object]`)
+  // ──────────────────────────────────────────────────────────────────────
+
+  describe('extractModelName helper', () => {
+    it('returns string input verbatim', () => {
+      expect(extractModelName('gemma3:12b')).toBe('gemma3:12b');
+    });
+
+    it('extracts modelId from LLMModel-shaped object with providerId prefix', () => {
+      expect(
+        extractModelName({ provider: 'cloud', providerId: 'openai', modelId: 'gpt-4o-mini' }),
+      ).toBe('openai/gpt-4o-mini');
+    });
+
+    it('extracts modelId from LLMModel-shaped object without providerId, falls back to provider', () => {
+      expect(
+        extractModelName({ provider: 'ollama', providerId: '', modelId: 'phi4-mini' }),
+      ).toBe('ollama/phi4-mini');
+    });
+
+    it('extracts `model` field from generic config object', () => {
+      expect(extractModelName({ model: 'X' })).toBe('X');
+    });
+
+    it('extracts `name` field as final fallback', () => {
+      expect(extractModelName({ name: 'Y' })).toBe('Y');
+    });
+
+    it('returns "unknown" for null / undefined', () => {
+      expect(extractModelName(null)).toBe('unknown');
+      expect(extractModelName(undefined)).toBe('unknown');
+    });
+
+    it('returns "unknown" for empty string', () => {
+      expect(extractModelName('')).toBe('unknown');
+    });
+
+    it('falls back to String(value) for non-string primitives', () => {
+      expect(extractModelName(42)).toBe('42');
+      expect(extractModelName(true)).toBe('true');
+    });
+
+    it('falls back to String(value) for object without recognised fields', () => {
+      // Plain `{}` stringifies to `[object Object]` — acceptable last resort.
+      // The point of the helper is that LLMModel-shaped objects (the real
+      // production caller) NEVER take this path.
+      expect(extractModelName({ unrelated: 'field' })).toBe('[object Object]');
+    });
+  });
+
+  describe('parseExecutionPlan with LLMModel object (Bug 6 follow-up regression guard)', () => {
+    it('warn log contains real model name, not `[object Object]`, when passed an LLMModel object', () => {
+      const llmModel = { provider: 'ollama', providerId: '', modelId: 'gemma3:12b' };
+      parseExecutionPlan('not json at all', llmModel);
+      const parseFailWarn = loggerMock.warn.mock.calls.find((c) =>
+        String(c[0]).includes('LLM plan parse failed'),
+      );
+      expect(parseFailWarn).toBeDefined();
+      const msg = String(parseFailWarn?.[0]);
+      expect(msg).toContain('model=ollama/gemma3:12b');
+      expect(msg).not.toContain('[object Object]');
+    });
+
+    it('warn log uses providerId prefix when present (cloud model)', () => {
+      const llmModel = { provider: 'cloud', providerId: 'openai', modelId: 'gpt-4o-mini' };
+      parseExecutionPlan('garbage', llmModel);
+      const parseFailWarn = loggerMock.warn.mock.calls.find((c) =>
+        String(c[0]).includes('LLM plan parse failed'),
+      );
+      expect(String(parseFailWarn?.[0])).toContain('model=openai/gpt-4o-mini');
     });
   });
 

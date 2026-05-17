@@ -12,6 +12,43 @@ import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution'
 import { parseLlmJson } from '../../../../shared/parse-llm-json';
 
 /**
+ * Coerce an unknown model identifier into a printable string for log lines.
+ *
+ * Bug 6 follow-up (2026-05-17): callers were passing `config.llmModel`
+ * (an `LLMModel` object shaped `{ provider, providerId, modelId }`) into
+ * the warn-log template, which stringified as `[object Object]`. Operators
+ * lost visibility into WHICH model emitted the bad plan output.
+ *
+ * Accepts:
+ *   - `string` → returned verbatim (legacy callers, tests).
+ *   - `{ modelId }` / `{ model }` / `{ name }` object → extract the field.
+ *   - `null` / `undefined` → `'unknown'`.
+ *   - anything else → `String(value)` as a last resort.
+ *
+ * Kept exported for unit-test coverage of the shape matrix.
+ */
+export function extractModelName(maybeModel: unknown): string {
+  if (maybeModel == null) return 'unknown';
+  if (typeof maybeModel === 'string') return maybeModel.length > 0 ? maybeModel : 'unknown';
+  if (typeof maybeModel === 'object') {
+    const obj = maybeModel as Record<string, unknown>;
+    // Order matters: LLMModel uses `modelId`; generic shapes may use
+    // `model` or `name`. Pick the first string-valued candidate.
+    const candidate = obj.modelId ?? obj.model ?? obj.name;
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      // Include providerId/provider prefix when available so logs disambiguate
+      // identically-named models across providers (e.g. `openai/gpt-4o-mini`
+      // vs `groq/gpt-4o-mini`). Falls back to bare modelId when no provider.
+      const provider = typeof obj.providerId === 'string' && obj.providerId.length > 0
+        ? obj.providerId
+        : (typeof obj.provider === 'string' && obj.provider.length > 0 ? obj.provider : '');
+      return provider ? `${provider}/${candidate}` : candidate;
+    }
+  }
+  return String(maybeModel);
+}
+
+/**
  * Parse an LLM-emitted execution plan into `ExecutionStep[]`.
  *
  * Free function (not a class method) so it can be unit-tested directly
@@ -21,11 +58,13 @@ import { parseLlmJson } from '../../../../shared/parse-llm-json';
  * callers cannot bypass it because there is only one production caller
  * (the class itself) and that caller funnels through this function.
  *
- * `modelName` is passed through purely so the warn log can identify
- * the offending model when LLM output is non-parseable — visible
- * silent quality degradation was the original bug.
+ * `model` is passed through purely so the warn log can identify
+ * the offending model when LLM output is non-parseable. Accepts either
+ * a string OR an `LLMModel`-shaped object (or anything `extractModelName`
+ * can coerce) — visible silent quality degradation was the original bug.
  */
-export function parseExecutionPlan(jsonText: string, modelName = 'unknown'): ExecutionStep[] {
+export function parseExecutionPlan(jsonText: string, model: unknown = 'unknown'): ExecutionStep[] {
+  const modelName = extractModelName(model);
   try {
     // parseLlmJson handles trailing prose / stacked structures emitted
     // by providers that ignore response_format (MiniMax cloud, raw
