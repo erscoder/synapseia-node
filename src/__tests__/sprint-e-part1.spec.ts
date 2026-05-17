@@ -14,6 +14,7 @@ import {
   type SpawnFn,
   type StatFn,
 } from '../modules/model/diloco-trainer';
+import { resolvePython } from '../utils/python-venv';
 
 function makeSpawnMock(lines: string[], exitCode = 0): ReturnType<SpawnFn> {
   const proc = new EventEmitter();
@@ -151,7 +152,10 @@ describe('E2 — runDiLoCoInnerLoop', () => {
       { modelId: 'x', adapterPath: '/tmp/adapter', datasetPath: '/tmp/d.txt', innerSteps: 5, hyperparams: { batchSize: 4 }, hardware: 'mps', pythonScriptPath: '/custom/diloco_train.py' },
       undefined, mockSpawn, mockStatFn,
     );
-    expect(mockSpawn).toHaveBeenCalledWith('python3', ['/custom/diloco_train.py'], expect.any(Object));
+    // 0.8.55+ — diloco-trainer uses `resolvePython()` (venv interpreter if
+    // available, otherwise `python3` fallback) instead of hardcoding `python3`.
+    // Assert against the resolved interpreter so the test is host-agnostic.
+    expect(mockSpawn).toHaveBeenCalledWith(resolvePython(), ['/custom/diloco_train.py'], expect.any(Object));
   });
 });
 

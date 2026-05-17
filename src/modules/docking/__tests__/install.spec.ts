@@ -75,8 +75,17 @@ function makeAptStub(installSteps: AptStep[]) {
 const fastSleep = jest.fn(async (_ms: number) => undefined);
 
 describe('installDockingDeps', () => {
-  it('darwin happy path: brew install runs and returns installed=true', async () => {
-    const { fn, calls } = makeExecStub(['brew --version', 'brew install']);
+  it('darwin happy path: brew install open-babel + curl Vina binary runs and returns installed=true', async () => {
+    // 0.8.55+ split: autodock-vina is NOT in homebrew-core, so the installer
+    // brews open-babel and downloads the Vina binary from the AutoDock-Vina
+    // GitHub release. The stub must accept all four commands; the Vina binary
+    // is assumed absent at $HOME/.synapseia/bin/vina in the test env.
+    const { fn, calls } = makeExecStub([
+      'brew --version',
+      'brew install',
+      'curl ',
+      'chmod ',
+    ]);
     const result = await installDockingDeps({
       platform: 'darwin',
       execSyncFn: fn,
@@ -84,9 +93,16 @@ describe('installDockingDeps', () => {
     });
     expect(result.installed).toBe(true);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
-    expect(calls).toHaveLength(2);
+    // Either 2 calls (Vina already present + executable) or 4 calls
+    // (brew probe + brew install + curl + chmod). We assert the always-present
+    // calls and tolerate the conditional Vina-download branch.
     expect(calls[0].cmd).toBe('brew --version');
-    expect(calls[1].cmd).toBe('brew install autodock-vina open-babel');
+    expect(calls[1].cmd).toBe('brew install open-babel');
+    if (calls.length > 2) {
+      expect(calls.length).toBe(4);
+      expect(calls[2].cmd).toMatch(/^curl -sLf -o ".*\/\.synapseia\/bin\/vina" "https:\/\/github\.com\/ccsb-scripps\/AutoDock-Vina\/releases\/download\//);
+      expect(calls[3].cmd).toMatch(/^chmod \+x ".*\/\.synapseia\/bin\/vina"$/);
+    }
   });
 
   it('darwin without brew: returns installed=false with brew in reason', async () => {

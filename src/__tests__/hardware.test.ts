@@ -12,7 +12,11 @@ jest.mock('child_process', () => ({
   spawnSync: mockSpawnSync,
 }));
 
-// Mock os
+// Mock os.
+// IMPORTANT: must include `homedir` because hardware.ts transitively imports
+// utils/python-venv.ts which evaluates `homedir()` at module load time when
+// computing VENV_DIR / LORA_STACK_MARKER. Missing homedir would crash the
+// entire suite at import with "os_1.homedir is not a function".
 jest.mock('os', () => ({
   cpus: () => [{ model: 'Apple M3 Max' }],
   totalmem: () => 17179869184,
@@ -20,6 +24,8 @@ jest.mock('os', () => ({
   release: () => '23.0.0',
   arch: () => 'arm64',
   type: () => 'Darwin',
+  homedir: () => '/tmp/test-home',
+  tmpdir: () => '/tmp',
 }));
 
 describe('hardware (A13)', () => {
