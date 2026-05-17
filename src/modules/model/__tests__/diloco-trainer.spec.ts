@@ -25,17 +25,20 @@ import { EventEmitter } from 'events';
 // semantics it was originally written for (no localhost:11434 reach-out,
 // no cgroup reads).
 jest.mock('../../llm/ollama-pause', () => ({
-  maybePauseOllamaForDiloco: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
-  maybeRestartOllamaAfterDiloco: jest.fn(async () => undefined),
+  maybePauseOllamaForHeavyTraining: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
+  maybeRestartOllamaAfterHeavyTraining: jest.fn(async () => undefined),
 }));
 
-// Bug 28 (2026-05-17): runDiLoCoInnerLoop now also runs ensureMemForDiloco
-// before the spawn. Stub it to a no-op so this spec (which only cares about
-// spawn semantics) doesn't trip the cgroup-free-mem gate on hosts that
-// genuinely have <18 GB free at test time (CI runners are typically 4-7 GB).
-// The preflight logic itself is covered by diloco-preflight.spec.ts.
-jest.mock('../diloco-preflight', () => ({
-  ensureMemForDiloco: jest.fn(async () => undefined),
+// Bug 28 (2026-05-17) / Slice 8 (2026-05-17 rename): runDiLoCoInnerLoop now
+// also runs ensureMemForHeavyTraining before the spawn. Stub it to a no-op
+// so this spec (which only cares about spawn semantics) doesn't trip the
+// cgroup-free-mem gate on hosts that genuinely have <18 GB free at test
+// time (CI runners are typically 4-7 GB). The preflight logic itself is
+// covered by heavy-training-preflight.spec.ts.
+jest.mock('../heavy-training-preflight', () => ({
+  ensureMemForHeavyTraining: jest.fn(async () => undefined),
+  DILOCO_REQUIRED_FREE_MB: 18432,
+  LORA_REQUIRED_FREE_MB: 14336,
   InsufficientMemoryError: class InsufficientMemoryError extends Error {
     constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
       super(msg);
@@ -67,8 +70,9 @@ function makeFakeProc() {
 }
 
 /**
- * Bug 27: runDiLoCoInnerLoop now awaits maybePauseOllamaForDiloco()
- * BEFORE calling spawnFn. The pause helper is mocked above to resolve
+ * Bug 27 / Slice 8 rename: runDiLoCoInnerLoop now awaits
+ * maybePauseOllamaForHeavyTraining() BEFORE calling spawnFn. The pause
+ * helper is mocked above to resolve
  * immediately but the `await` still introduces a microtask boundary,
  * so tests must flush microtasks after kicking the promise but BEFORE
  * emitting events on the fake child — otherwise the listeners are not

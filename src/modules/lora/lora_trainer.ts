@@ -25,6 +25,14 @@ import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
+import {
+  maybePauseOllamaForHeavyTraining,
+  maybeRestartOllamaAfterHeavyTraining,
+} from '../llm/ollama-pause';
+import {
+  ensureMemForHeavyTraining,
+  LORA_REQUIRED_FREE_MB,
+} from '../model/heavy-training-preflight';
 import type {
   LoraSubmissionPayload,
   LoraValMetrics,
@@ -78,12 +86,33 @@ export async function runLora(input: RunLoraInput, options: RunLoraOptions = {})
     const scriptPath = options.scriptPath ?? resolveTrainScript();
     await assertFileExists(scriptPath, `Python LoRA trainer script not found at ${scriptPath}`);
 
-    await runPython(
-      options.pythonBin ?? defaultPythonBin(),
-      scriptPath,
-      { ...payload, peerId, workOrderId, outDir: workDir },
-      options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    );
+    // Slice 8 (2026-05-17): wrap the python spawn in the same Ollama
+    // pause + preflight memory gate envelope DiLoCo uses. `train_lora.py`
+    // loads a 7B-class fp16 base via `AutoModelForCausalLM.from_pretrained`
+    // without quantization (~14 GB load peak), so the OOM-kill window
+    // observed live on pod A40 for DiLoCo applies identically here. The
+    // pause MUST happen before the preflight gate so the kernel has a
+    // chance to reclaim Ollama's resident weights before we re-probe;
+    // the restart MUST happen in `finally` so an `InsufficientMemoryError`
+    // (controlled skip) does not leak the daemon in paused state.
+    //
+    // `InsufficientMemoryError` bubbles up through `runLora` into
+    // `executeLoraWorkOrder`, which converts it to
+    // `{ success: false, result: 'LoRA skipped: ...' }`. Per
+    // reviewer-lesson P21 we do NOT client-side re-queue — the
+    // coordinator's ACCEPTED-TTL expiry handles re-routing.
+    const ollamaHandle = await maybePauseOllamaForHeavyTraining();
+    try {
+      await ensureMemForHeavyTraining(LORA_REQUIRED_FREE_MB);
+      await runPython(
+        options.pythonBin ?? defaultPythonBin(),
+        scriptPath,
+        { ...payload, peerId, workOrderId, outDir: workDir },
+        options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
+    } finally {
+      await maybeRestartOllamaAfterHeavyTraining(ollamaHandle);
+    }
 
     const adapterPath = path.join(workDir, 'adapter_model.safetensors');
     const metricsPath = path.join(workDir, 'metrics.json');

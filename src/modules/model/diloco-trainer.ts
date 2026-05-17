@@ -9,10 +9,13 @@ import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 import { resolvePython } from '../../utils/python-venv';
 import {
-  maybePauseOllamaForDiloco,
-  maybeRestartOllamaAfterDiloco,
+  maybePauseOllamaForHeavyTraining,
+  maybeRestartOllamaAfterHeavyTraining,
 } from '../llm/ollama-pause';
-import { ensureMemForDiloco, InsufficientMemoryError } from './diloco-preflight';
+import {
+  ensureMemForHeavyTraining,
+  DILOCO_REQUIRED_FREE_MB,
+} from './heavy-training-preflight';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -92,8 +95,9 @@ export class DiLoCoTrainerHelper {
    * `modules/llm/ollama-pause.ts` for the full invariant and tradeoffs.
    *
    * Bug 28 (2026-05-17): AFTER Ollama is paused and BEFORE the python
-   * spawn, run `ensureMemForDiloco()` — a controlled gate that drops
-   * FS page-cache + forces V8 GC and re-probes cgroup free memory.
+   * spawn, run `ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB)` —
+   * a controlled gate that drops FS page-cache + forces V8 GC and
+   * re-probes cgroup free memory.
    * If still insufficient, an `InsufficientMemoryError` is thrown and
    * propagates to `executeDiLoCoWorkOrder` which converts it into
    * `{ success: false }`. This prevents the SIGKILL loop observed
@@ -107,12 +111,12 @@ export class DiLoCoTrainerHelper {
     spawnFn: SpawnFn = spawn as unknown as SpawnFn,
     statFn: StatFn = (p) => statSync(p) as { size: number },
   ): Promise<DiLoCoResult> {
-    const ollamaHandle = await maybePauseOllamaForDiloco();
+    const ollamaHandle = await maybePauseOllamaForHeavyTraining();
     try {
-      await ensureMemForDiloco();
+      await ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB);
       return await this._spawnDiLoCoTrain(config, onProgress, spawnFn, statFn);
     } finally {
-      await maybeRestartOllamaAfterDiloco(ollamaHandle);
+      await maybeRestartOllamaAfterHeavyTraining(ollamaHandle);
     }
   }
 

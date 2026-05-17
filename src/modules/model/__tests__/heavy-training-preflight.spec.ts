@@ -1,7 +1,9 @@
 /**
- * diloco-preflight.spec.ts — Bug 28 (2026-05-17).
+ * heavy-training-preflight.spec.ts — Bug 28 (2026-05-17) + Slice 8
+ * (2026-05-17 rename).
  *
- * Covers the seven behavioral branches of `ensureMemForDiloco`:
+ * Covers the seven behavioral branches of `ensureMemForHeavyTraining`,
+ * driven with `DILOCO_REQUIRED_FREE_MB`:
  *   1. happy path — initial free >= required → no liberation, immediate pass.
  *   2. liberation reclaims enough — gc+drop+delay bridges the gap.
  *   3. liberation insufficient — throw `InsufficientMemoryError`.
@@ -10,20 +12,28 @@
  *   6. probe fail-CLOSED — `getFreeMemMB` throws → defaults to 0 → throw.
  *   7. forceGc called exactly once when initial below threshold.
  *
+ * Plus Slice 8 parity tests:
+ *   8. LoRA threshold liberation — same envelope shape, lower target.
+ *   9. ensureMemForDiloco deprecated wrapper still resolves identically.
+ *  10. Label inferred from threshold (DiLoCo vs LoRA) is reflected in
+ *      the thrown error message.
+ *
  * Reviewer-lesson P29 alignment: every spec asserts numeric reclaim
  * deltas and/or error fields, not just "didn't throw".
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import {
+  ensureMemForHeavyTraining,
   ensureMemForDiloco,
   InsufficientMemoryError,
   DILOCO_REQUIRED_FREE_MB,
+  LORA_REQUIRED_FREE_MB,
   defaultForceGc,
   defaultDropFsCache,
-} from '../diloco-preflight';
+} from '../heavy-training-preflight';
 
-describe('ensureMemForDiloco', () => {
+describe('ensureMemForHeavyTraining', () => {
   let forceGc: jest.Mock;
   let dropFsCache: jest.Mock<() => Promise<void>>;
   let delayMs: jest.Mock<(ms: number) => Promise<void>>;
@@ -38,7 +48,7 @@ describe('ensureMemForDiloco', () => {
     const getFreeMemMB = jest.fn(async () => DILOCO_REQUIRED_FREE_MB + 2048);
 
     await expect(
-      ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs }),
+      ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs }),
     ).resolves.toBeUndefined();
 
     expect(getFreeMemMB).toHaveBeenCalledTimes(1);
@@ -56,7 +66,7 @@ describe('ensureMemForDiloco', () => {
       .mockResolvedValueOnce(after);
 
     await expect(
-      ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs }),
+      ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs }),
     ).resolves.toBeUndefined();
 
     expect(getFreeMemMB).toHaveBeenCalledTimes(2);
@@ -76,7 +86,7 @@ describe('ensureMemForDiloco', () => {
       .mockResolvedValueOnce(after);
 
     await expect(
-      ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs }),
+      ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs }),
     ).rejects.toMatchObject({
       name: 'InsufficientMemoryError',
       freeMB: after,
@@ -85,7 +95,7 @@ describe('ensureMemForDiloco', () => {
 
     // Verify error message carries both numbers for ops triage.
     try {
-      await ensureMemForDiloco({
+      await ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, {
         getFreeMemMB: jest.fn<() => Promise<number>>()
           .mockResolvedValueOnce(before)
           .mockResolvedValueOnce(after),
@@ -99,6 +109,8 @@ describe('ensureMemForDiloco', () => {
       expect((err as Error).message).toContain(String(DILOCO_REQUIRED_FREE_MB));
       expect((err as Error).message).toContain(String(after));
       expect((err as Error).message).toContain(String(before));
+      // Slice 8: label inferred from threshold is in the message.
+      expect((err as Error).message).toContain('DiLoCo');
     }
   });
 
@@ -111,13 +123,13 @@ describe('ensureMemForDiloco', () => {
       .mockResolvedValueOnce(before)
       .mockResolvedValueOnce(after);
 
-    // drop_caches MUST swallow EACCES internally so ensureMemForDiloco
+    // drop_caches MUST swallow EACCES internally so ensureMemForHeavyTraining
     // never sees it — that's the contract. So we pass the defaultDropFsCache
     // wrapper around a denial here? Simpler: pass our own throwing fn
-    // and assert that ensureMemForDiloco awaits it without propagating.
+    // and assert that ensureMemForHeavyTraining awaits it without propagating.
     // (defaultDropFsCache has its own swallow logic; tested separately below.)
     await expect(
-      ensureMemForDiloco({
+      ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, {
         getFreeMemMB,
         dropFsCache: async () => {
           // Caller (defaultDropFsCache) catches; here we model the post-catch
@@ -153,7 +165,7 @@ describe('ensureMemForDiloco', () => {
     delete (globalThis as { gc?: () => void }).gc;
     try {
       await expect(
-        ensureMemForDiloco({
+        ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, {
           getFreeMemMB,
           dropFsCache,
           // Use the REAL defaultForceGc to exercise the warn-once branch.
@@ -174,7 +186,7 @@ describe('ensureMemForDiloco', () => {
       .mockResolvedValueOnce(0); // post-liberation also 0 → still fail
 
     await expect(
-      ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs }),
+      ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs }),
     ).rejects.toBeInstanceOf(InsufficientMemoryError);
 
     // Initial probe was treated as 0 (fail-CLOSED) → liberation ran.
@@ -191,7 +203,7 @@ describe('ensureMemForDiloco', () => {
 
     let caught: InsufficientMemoryError | null = null;
     try {
-      await ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs });
+      await ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs });
     } catch (err) {
       caught = err as InsufficientMemoryError;
     }
@@ -207,10 +219,71 @@ describe('ensureMemForDiloco', () => {
       .mockResolvedValueOnce(before)
       .mockResolvedValueOnce(after);
 
-    await ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs });
+    await ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs });
 
     expect(forceGc).toHaveBeenCalledTimes(1);
     expect(dropFsCache).toHaveBeenCalledTimes(1);
     expect(delayMs).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Slice 8 parity tests ────────────────────────────────────────────
+
+  it('8. LoRA threshold — same liberation flow, lower target → pass after reclaim', async () => {
+    // LoRA threshold (14336) is lower than DiLoCo (18432); same envelope
+    // shape but the gate trips at a different number. Exercise the full
+    // liberation path with the lower threshold to confirm parity.
+    const before = LORA_REQUIRED_FREE_MB - 1024;  // 13312
+    const after = LORA_REQUIRED_FREE_MB + 512;    // 14848
+
+    const getFreeMemMB = jest.fn<() => Promise<number>>()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+
+    await expect(
+      ensureMemForHeavyTraining(LORA_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs }),
+    ).resolves.toBeUndefined();
+
+    expect(getFreeMemMB).toHaveBeenCalledTimes(2);
+    expect(forceGc).toHaveBeenCalledTimes(1);
+    expect(dropFsCache).toHaveBeenCalledTimes(1);
+    expect(delayMs).toHaveBeenCalledTimes(1);
+    // Sanity: LORA threshold strictly below DILOCO so a same-free probe
+    // would pass LoRA but fail DiLoCo. Documents the intended ordering.
+    expect(LORA_REQUIRED_FREE_MB).toBeLessThan(DILOCO_REQUIRED_FREE_MB);
+  });
+
+  it('8b. LoRA threshold — InsufficientMemoryError carries LoRA label + LORA_REQUIRED_FREE_MB', async () => {
+    const before = LORA_REQUIRED_FREE_MB - 2048;
+    const after = LORA_REQUIRED_FREE_MB - 100;
+
+    const getFreeMemMB = jest.fn<() => Promise<number>>()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+
+    let caught: InsufficientMemoryError | null = null;
+    try {
+      await ensureMemForHeavyTraining(LORA_REQUIRED_FREE_MB, { getFreeMemMB, dropFsCache, forceGc, delayMs });
+    } catch (err) {
+      caught = err as InsufficientMemoryError;
+    }
+    expect(caught).toBeInstanceOf(InsufficientMemoryError);
+    expect(caught!.freeMB).toBe(after);
+    expect(caught!.requiredMB).toBe(LORA_REQUIRED_FREE_MB);
+    // Label "LoRA" must appear in the message so ops triage can tell
+    // which workload tripped without parsing the surrounding log lines.
+    expect(caught!.message).toContain('LoRA');
+    expect(caught!.message).toContain(String(LORA_REQUIRED_FREE_MB));
+  });
+
+  it('9. ensureMemForDiloco deprecated wrapper resolves identically to ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB)', async () => {
+    // Back-compat path: any pre-Slice-8 caller still works. Wrapper
+    // delegates with label="DiLoCo" so the error message contract is
+    // preserved.
+    const getFreeMemMB = jest.fn(async () => DILOCO_REQUIRED_FREE_MB + 1024);
+
+    await expect(
+      ensureMemForDiloco({ getFreeMemMB, dropFsCache, forceGc, delayMs }),
+    ).resolves.toBeUndefined();
+    expect(getFreeMemMB).toHaveBeenCalledTimes(1);
   });
 });

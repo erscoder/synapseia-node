@@ -8,11 +8,32 @@ import { EventEmitter } from 'events';
 // E2: diloco-trainer
 // ======================================================================
 
-// Bug 27: stub the Ollama pause helper so this E2 spec stays focused on
-// the python spawn semantics (no localhost:11434 probe, no cgroup read).
+// Bug 27 / Slice 8 rename: stub the Ollama pause helper so this E2 spec
+// stays focused on the python spawn semantics (no localhost:11434 probe,
+// no cgroup read). Both new + deprecated names are stubbed so this spec
+// is robust against the back-compat alias being dropped in a later PR.
 jest.mock('../modules/llm/ollama-pause', () => ({
+  maybePauseOllamaForHeavyTraining: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
+  maybeRestartOllamaAfterHeavyTraining: jest.fn(async () => undefined),
   maybePauseOllamaForDiloco: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
   maybeRestartOllamaAfterDiloco: jest.fn(async () => undefined),
+}));
+
+// Slice 8 (2026-05-17): runDiLoCoInnerLoop also runs
+// ensureMemForHeavyTraining before the spawn. Stub it to a no-op so this
+// E2 spec doesn't trip the cgroup-free-mem gate on hosts that have
+// <18 GB free at test time. Preflight logic is covered by
+// heavy-training-preflight.spec.ts.
+jest.mock('../modules/model/heavy-training-preflight', () => ({
+  ensureMemForHeavyTraining: jest.fn(async () => undefined),
+  DILOCO_REQUIRED_FREE_MB: 18432,
+  LORA_REQUIRED_FREE_MB: 14336,
+  InsufficientMemoryError: class InsufficientMemoryError extends Error {
+    constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
+      super(msg);
+      this.name = 'InsufficientMemoryError';
+    }
+  },
 }));
 
 import {

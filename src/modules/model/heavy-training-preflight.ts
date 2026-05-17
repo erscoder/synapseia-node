@@ -1,20 +1,27 @@
 /**
- * diloco-preflight.ts — DiLoCo pre-flight memory gate (Bug 28, 2026-05-17).
+ * heavy-training-preflight.ts — Pre-flight memory gate for heavy training
+ * workloads (DiLoCo and LoRA). Originally `diloco-preflight.ts`
+ * (Bug 28, 2026-05-17); generalized in Plan B / Slice 8 (2026-05-17) to
+ * also gate LoRA spawns, which load the same Qwen2.5-7B class base model
+ * via `AutoModelForCausalLM.from_pretrained` without quantization and
+ * therefore hit the same +14 GB fp16 load peak that originally triggered
+ * the SIGKILL loop on pod A40.
  *
  * Problem
  * -------
- * Bug 27 (Ollama pause) reduces but does not eliminate OOM during DiLoCo
- * weight load on memory-constrained pods. Verified live on pod A40
- * (cgroup 46.6 GB) 2026-05-17:
+ * Bug 27 (Ollama pause) reduces but does not eliminate OOM during the
+ * weight load of either DiLoCo or LoRA training on memory-constrained
+ * pods. Verified live on pod A40 (cgroup 46.6 GB) 2026-05-17 for DiLoCo:
  *   - 16:56 accept → 16:57 SIGKILL at ~94% weight load
  *   - 17:27 accept → 17:29 SIGKILL
  *   - 18:06 accept → 18:07 SIGKILL
  *   - 18:30 accept → 18:32 SIGKILL
  * Ollama pause DID fire (`Container 47683MB < 80000MB threshold;
- * pausing Ollama for DiLoCo`) but freed only ~200MB because the daemon
- * was idle (no model resident at SIGTERM time). Meanwhile HF page-cache
- * + node heap + venv residuals already had the container at 99% usage
- * before DiLoCo even spawned.
+ * pausing Ollama for heavy training`) but freed only ~200MB because the
+ * daemon was idle (no model resident at SIGTERM time). Meanwhile HF
+ * page-cache + node heap + venv residuals already had the container at
+ * 99% usage before training even spawned. LoRA has identical load-time
+ * footprint when the base is a 7B class model.
  *
  * Strategy
  * --------
@@ -25,11 +32,12 @@
  *   3. re-probe;
  *   4. if still below threshold, throw `InsufficientMemoryError`.
  *
- * The caller (`DiLoCoTrainerHelper.runDiLoCoInnerLoop`) propagates the
- * error; `executeDiLoCoWorkOrder` catches it and returns
+ * The caller (`DiLoCoTrainerHelper.runDiLoCoInnerLoop` or `runLora`)
+ * propagates the error; the WO-level handler (`executeDiLoCoWorkOrder`
+ * / `executeLoraWorkOrder`) catches it and returns
  * `{ success: false }` so the coordinator's standard ACCEPTED-TTL
- * expiry handles re-routing. We do NOT client-side re-queue the WO —
- * per reviewer-lesson P21 the receivedAt would be reset and starve.
+ * expiry handles re-routing. We do NOT client-side re-queue — per
+ * reviewer-lesson P21 the receivedAt would be reset and starve.
  *
  * Reviewer-lesson alignment
  * -------------------------
@@ -42,6 +50,11 @@
  *        re-creates the round after ACCEPTED TTL expires.
  *   P29 (mocks not silencers): the spec asserts numeric reclaim
  *        deltas and error fields, not just "didn't throw".
+ *   P11 (callers desincronizados): when this module was renamed from
+ *        `diloco-preflight` to `heavy-training-preflight`, all
+ *        importers were updated in the same PR. A deprecated
+ *        `ensureMemForDiloco()` wrapper is kept as a back-compat alias
+ *        but tagged @deprecated so future readers migrate.
  */
 
 import { promises as fs } from 'fs';
@@ -59,10 +72,33 @@ import logger from '../../utils/logger';
 export const DILOCO_REQUIRED_FREE_MB = 18432;
 
 /**
+ * Peak load for LoRA training (`train_lora.py`) on a 7B-class base
+ * model. The base is loaded with `AutoModelForCausalLM.from_pretrained`
+ * WITHOUT quantization (Slice 8 audit 2026-05-17,
+ * `scripts/train_lora.py:138-140`), so the load-time fp16 footprint
+ * matches DiLoCo's ~14 GB. UNLIKE DiLoCo, LoRA does not keep:
+ *   - a full fp32 Adam mirror (only adapter params, ~MB scale, are
+ *     optimized);
+ *   - a separate gradient buffer for the full backbone (gradients flow
+ *     to adapter params only).
+ * Steady-state RSS during training is therefore ~base + small overhead,
+ * not base + Adam + gradients. We allocate the same load-time peak
+ * floor (14 GB) WITHOUT the +4 GB Adam-mirror margin DiLoCo carries —
+ * the load step is the actual peak for LoRA. 14336 MB chosen over a
+ * looser 8 GB or 6 GB number because empirically `from_pretrained`
+ * with fp16 on a 7B already exceeds 8 GB during the safetensors
+ * memory-map + cudaMalloc/MPS-equivalent peer-resident copy phase.
+ * If a future LoRA base ships below 7B (e.g. 1B / 3B) this gate is
+ * still safe — it only over-skips on tiny pods, where Bug 21's
+ * container-class gate already prevents acceptance anyway.
+ */
+export const LORA_REQUIRED_FREE_MB = 14336;
+
+/**
  * After GC + drop_caches the kernel needs a tick to actually reclaim
  * pages. 500 ms is generous on Linux (typical reclaim <100 ms) but
- * costs nothing because DiLoCo runs are 5-15 minutes — the latency
- * is dominated by the python spawn that follows.
+ * costs nothing because heavy training runs are 5-15 minutes — the
+ * latency is dominated by the python spawn that follows.
  */
 export const PREFLIGHT_RE_PROBE_DELAY_MS = 500;
 
@@ -73,9 +109,12 @@ const CGROUP_V1_USAGE = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
 const DROP_CACHES_PATH = '/proc/sys/vm/drop_caches';
 
 /**
- * Controlled-failure error: the gate decided DiLoCo cannot safely
- * spawn. The caller MUST convert this into `{ success: false }`, not
- * propagate as a process crash.
+ * Controlled-failure error: the gate decided the heavy training spawn
+ * cannot safely proceed. The caller MUST convert this into
+ * `{ success: false }`, not propagate as a process crash. Both
+ * `freeMB` and `requiredMB` are surfaced so ops triage can tell at a
+ * glance how far the container is from threshold; the message label
+ * (DiLoCo / LoRA) identifies which workload tripped.
  */
 export class InsufficientMemoryError extends Error {
   constructor(
@@ -89,14 +128,14 @@ export class InsufficientMemoryError extends Error {
 }
 
 // One-time WARN guard for the global.gc message so we don't spam the
-// log on every DiLoCo round when --expose-gc isn't set.
+// log on every heavy-training round when --expose-gc isn't set.
 let gcUnavailableWarned = false;
 
 /**
  * Read cgroup v2 → v1 → no-cgroup, returning free MB inside the
  * container's memory accounting. Fail-CLOSED on any read error:
  * returns 0 so the gate trips and the WO is skipped via a controlled
- * `InsufficientMemoryError` rather than letting `diloco_train.py`
+ * `InsufficientMemoryError` rather than letting the python trainer
  * spawn into a container that may or may not have headroom.
  *
  * Fallback chain:
@@ -172,11 +211,11 @@ export async function defaultGetContainerFreeMemMB(): Promise<number> {
 export async function defaultDropFsCache(): Promise<void> {
   try {
     await fs.writeFile(DROP_CACHES_PATH, '3');
-    logger.log('[DiLoCo preflight] drop_caches issued (kernel page-cache reclaim)');
+    logger.log('[Preflight] drop_caches issued (kernel page-cache reclaim)');
   } catch (err) {
     const msg = (err as NodeJS.ErrnoException).code ?? (err as Error).message;
     logger.warn(
-      `[DiLoCo preflight] drop_caches denied (${msg}) — skipping; ` +
+      `[Preflight] drop_caches denied (${msg}) — skipping; ` +
       'consider running container with --cap-add=SYS_ADMIN',
     );
   }
@@ -192,13 +231,13 @@ export function defaultForceGc(): void {
   const g = (globalThis as { gc?: () => void }).gc;
   if (typeof g === 'function') {
     g();
-    logger.log('[DiLoCo preflight] forced V8 GC');
+    logger.log('[Preflight] forced V8 GC');
     return;
   }
   if (!gcUnavailableWarned) {
     gcUnavailableWarned = true;
     logger.warn(
-      '[DiLoCo preflight] global.gc unavailable — start node with ' +
+      '[Preflight] global.gc unavailable — start node with ' +
       '--expose-gc to enable V8 GC reclaim',
     );
   }
@@ -207,23 +246,34 @@ export function defaultForceGc(): void {
 /**
  * Main entry point. See file-level docblock for the full strategy.
  *
- * Test-only overrides via `opts` let the spec inject deterministic
- * memory readings, gc, drop_caches, and delay. Production callers
- * pass no opts and get the defaults.
+ * @param requiredMB minimum free container memory in MB for the spawn
+ *                   to be considered safe. Pass `DILOCO_REQUIRED_FREE_MB`
+ *                   for DiLoCo, `LORA_REQUIRED_FREE_MB` for LoRA.
+ * @param opts test-only overrides — production callers omit and get
+ *             the defaults. A `label` may be passed to disambiguate
+ *             the log prefix (e.g. "DiLoCo" / "LoRA"); defaults to
+ *             the workload name implied by `requiredMB` when matched,
+ *             else "Training".
  *
  * @throws InsufficientMemoryError if memory is still below threshold
  *         after liberation. Caller treats this as controlled skip.
  */
-export async function ensureMemForDiloco(opts?: {
-  getFreeMemMB?: () => Promise<number>;
-  dropFsCache?: () => Promise<void>;
-  forceGc?: () => void;
-  delayMs?: (ms: number) => Promise<void>;
-}): Promise<void> {
+export async function ensureMemForHeavyTraining(
+  requiredMB: number,
+  opts?: {
+    getFreeMemMB?: () => Promise<number>;
+    dropFsCache?: () => Promise<void>;
+    forceGc?: () => void;
+    delayMs?: (ms: number) => Promise<void>;
+    label?: string;
+  },
+): Promise<void> {
   const getFreeMemMB = opts?.getFreeMemMB ?? defaultGetContainerFreeMemMB;
   const dropFsCache = opts?.dropFsCache ?? defaultDropFsCache;
   const forceGc = opts?.forceGc ?? defaultForceGc;
   const delayMs = opts?.delayMs ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const label = opts?.label ?? defaultLabelForRequired(requiredMB);
+  const tag = `[Preflight ${label}]`;
 
   // 1. Initial probe — short-circuit when there's already headroom.
   //    Wrapped in try/catch so a probe throw is treated as fail-CLOSED
@@ -233,21 +283,19 @@ export async function ensureMemForDiloco(opts?: {
     initialFree = await getFreeMemMB();
   } catch (err) {
     logger.warn(
-      `[DiLoCo preflight] free-mem probe failed (${(err as Error).message}) — ` +
+      `${tag} free-mem probe failed (${(err as Error).message}) — ` +
       'fail-CLOSED (treating as 0 MB free)',
     );
     initialFree = 0;
   }
 
-  if (initialFree >= DILOCO_REQUIRED_FREE_MB) {
-    logger.log(
-      `[DiLoCo preflight] free=${initialFree}MB >= required=${DILOCO_REQUIRED_FREE_MB}MB — pass`,
-    );
+  if (initialFree >= requiredMB) {
+    logger.log(`${tag} free=${initialFree}MB >= required=${requiredMB}MB — pass`);
     return;
   }
 
   logger.warn(
-    `[DiLoCo preflight] free=${initialFree}MB < required=${DILOCO_REQUIRED_FREE_MB}MB — running liberation`,
+    `${tag} free=${initialFree}MB < required=${requiredMB}MB — running liberation`,
   );
 
   // 2. Active liberation: V8 GC then kernel drop_caches then settle.
@@ -261,23 +309,49 @@ export async function ensureMemForDiloco(opts?: {
     finalFree = await getFreeMemMB();
   } catch (err) {
     logger.warn(
-      `[DiLoCo preflight] post-liberation probe failed (${(err as Error).message}) — ` +
+      `${tag} post-liberation probe failed (${(err as Error).message}) — ` +
       'fail-CLOSED (treating as 0 MB free)',
     );
     finalFree = 0;
   }
 
-  if (finalFree < DILOCO_REQUIRED_FREE_MB) {
+  if (finalFree < requiredMB) {
     throw new InsufficientMemoryError(
-      `DiLoCo needs ${DILOCO_REQUIRED_FREE_MB}MB free after liberation, ` +
+      `${label} needs ${requiredMB}MB free after liberation, ` +
       `only ${finalFree}MB available (was ${initialFree}MB before)`,
       finalFree,
-      DILOCO_REQUIRED_FREE_MB,
+      requiredMB,
     );
   }
 
   const reclaimed = finalFree - initialFree;
-  logger.log(
-    `[DiLoCo preflight] liberation reclaimed ${reclaimed}MB; final free=${finalFree}MB — pass`,
-  );
+  logger.log(`${tag} liberation reclaimed ${reclaimed}MB; final free=${finalFree}MB — pass`);
+}
+
+/**
+ * Pick a default log label from the threshold value. Avoids forcing
+ * every caller to pass an explicit label when the requirement uniquely
+ * identifies the workload. Falls back to "Training" for custom
+ * thresholds (test-only).
+ */
+function defaultLabelForRequired(requiredMB: number): string {
+  if (requiredMB === DILOCO_REQUIRED_FREE_MB) return 'DiLoCo';
+  if (requiredMB === LORA_REQUIRED_FREE_MB) return 'LoRA';
+  return 'Training';
+}
+
+/**
+ * @deprecated Use `ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, opts)`.
+ * Kept as a thin alias so pre-Slice-8 callers (and any vendor of this
+ * module) still compile during the migration window. Behavior is
+ * identical to the new function with `requiredMB =
+ * DILOCO_REQUIRED_FREE_MB` and `label = "DiLoCo"`.
+ */
+export async function ensureMemForDiloco(opts?: {
+  getFreeMemMB?: () => Promise<number>;
+  dropFsCache?: () => Promise<void>;
+  forceGc?: () => void;
+  delayMs?: (ms: number) => Promise<void>;
+}): Promise<void> {
+  return ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB, { ...opts, label: 'DiLoCo' });
 }

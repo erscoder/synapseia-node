@@ -16,7 +16,7 @@ import { runLoraValidation, LoraValidationError } from '../../lora/lora_validato
 import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
-import { InsufficientMemoryError } from '../../model/diloco-preflight';
+import { InsufficientMemoryError } from '../../model/heavy-training-preflight';
 import { downloadAdapter } from '../../model/model-downloader';
 import { safeLoss } from './safe-loss';
 import type { AgentBrain } from '../agent-brain';
@@ -619,6 +619,16 @@ Abstract: ${payload.abstract}`;
       );
       return { result: JSON.stringify(submission), success: true };
     } catch (err) {
+      // Slice 8 (2026-05-17): preflight memory gate trips when container
+      // headroom is insufficient. Treated as controlled skip — the WO
+      // returns success:false and the coord ACCEPTED-TTL expiry handles
+      // re-routing. Do NOT client-side re-queue (reviewer-lesson P21:
+      // re-queue would reset receivedAt → starvation). Same path the
+      // DiLoCo handler uses (see executeDiLoCoWorkOrder).
+      if (err instanceof InsufficientMemoryError) {
+        logger.warn(`[LoRA] skipped: ${err.message}`);
+        return { result: `LoRA skipped: ${err.message}`, success: false };
+      }
       const stage = err instanceof LoraError ? `[${err.stage}] ` : '';
       const msg = (err as Error).message;
       logger.error(` LoRA training failed ${stage}${msg}`);

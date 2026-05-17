@@ -1,3 +1,25 @@
+// Slice 8 (2026-05-17): runLora now wraps the python spawn in an Ollama
+// pause + preflight memory gate envelope (see
+// modules/model/heavy-training-preflight.ts). Stub both so this
+// integration spec (which actually spawns python) stays focused on the
+// orchestration semantics it was originally written for and doesn't
+// trip the cgroup-free-mem gate on CI runners with <14 GB free.
+jest.mock('../../llm/ollama-pause', () => ({
+  maybePauseOllamaForHeavyTraining: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
+  maybeRestartOllamaAfterHeavyTraining: jest.fn(async () => undefined),
+}));
+jest.mock('../../model/heavy-training-preflight', () => ({
+  ensureMemForHeavyTraining: jest.fn(async () => undefined),
+  DILOCO_REQUIRED_FREE_MB: 18432,
+  LORA_REQUIRED_FREE_MB: 14336,
+  InsufficientMemoryError: class InsufficientMemoryError extends Error {
+    constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
+      super(msg);
+      this.name = 'InsufficientMemoryError';
+    }
+  },
+}));
+
 import { runLora, LoraError } from '../lora_trainer';
 import type { LoraWorkOrderPayload } from '../types';
 import * as fs from 'fs';
