@@ -52,19 +52,47 @@ export class FetchWorkOrdersNode {
     logger.log(` Found ${workOrders.length} available work order(s)`);
     const now = Date.now();
 
-    // Bug 22 (2026-05-17) — intersect state.capabilities (boot-time
-    // snapshot stuck in agent config) with the LIVE heartbeat-filtered
-    // set. The boot snapshot is the "ceiling" of what we can ever do,
-    // the heartbeat snapshot is "what we can do RIGHT NOW after memory
-    // pressure stripped some". A cap that left the heartbeat must not
-    // be considered acceptable here even if state still lists it.
-    // Pre-primer (heartbeat null) currentCaps is `[]` → we fall back to
-    // state caps so a clean boot still works; the final hard guard
-    // lives in `accept-wo.ts` (fails closed on pre-primer).
+    // Bug 25 (2026-05-17) — LIVE heartbeat caps are AUTHORITATIVE.
+    //
+    // History:
+    //  - Bug 22 (2026-05-17) introduced an intersection
+    //    `state.capabilities ∩ live` to strip caps that the heartbeat
+    //    had removed under memory pressure (the agent state cached
+    //    `capabilities` at boot and never refreshed).
+    //  - Bug 25 (same day, regression) — the intersection ALSO silently
+    //    dropped caps that the heartbeat ADDED async after boot. The
+    //    sync boot-time `determineCapabilities()` only emits CPU/GPU
+    //    base caps; async probes (LoRA stack, DiLoCo model markers,
+    //    docking marker file, container/cgroup gate) add caps like
+    //    `diloco_training`, `lora_training`, `lora_generation`,
+    //    `docking` later in the first heartbeat tick. Those caps live
+    //    in `live` but never in `state.capabilities` → intersection
+    //    erased them → node visibly held the cap (coord drift logs
+    //    `added=[diloco_training]`) yet rejected every matching WO with
+    //    "cap not in current caps".
+    //
+    // Fix: trust live. The heartbeat snapshot is the post-filter,
+    // post-hysteresis "what coord knows about me right now" view — it
+    // already encodes both removals (memory pressure stripped a cap)
+    // AND additions (async probe finished, marker file appeared). The
+    // boot snapshot was always a strict subset of the steady-state
+    // truth, so the intersection was upper-bounded by the wrong set.
+    //
+    // Pre-primer fallback: `getCurrentCapabilities()` returns `[]`
+    // until the first heartbeat tick lands `lastAnnouncedCapabilities`.
+    // During that window we fall back to `state.capabilities` so a
+    // clean boot can still poll. Defense-in-depth: `accept-wo.ts` calls
+    // `canLocallyAcceptWorkOrder` against the same live snapshot, which
+    // fails closed when `currentCaps` is empty (wo-type-to-cap.ts:100)
+    // — so even if a WO slips past this pre-fetch filter pre-primer,
+    // the final accept gate will reject it.
+    //
+    // Out of scope: refreshing `state.capabilities` itself when the
+    // heartbeat sheds/adds caps. The state field is now effectively
+    // legacy (only used as the pre-primer fallback). See architectural
+    // note in spec.
     const live = getCurrentCapabilities();
-    const effectiveCaps = live.length > 0
-      ? (capabilities ?? []).filter((c) => live.includes(c))
-      : (capabilities ?? []);
+    const effectiveCaps = live.length > 0 ? Array.from(live) : (capabilities ?? []);
     const pending = workOrders.filter((wo: WorkOrder) => {
       // Capability guard: the coordinator should already filter by registered
       // capabilities, but defend against mismatches (e.g. a coordinator that

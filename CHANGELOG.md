@@ -1,5 +1,39 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(agent): drop fetch intersection, use live caps only — 0.8.74
+
+**Bug 25** — Bug 22 regression. `fetch-work-orders.ts` computed
+`effectiveCaps = liveCaps ∩ stateCaps`. stateCaps frozen at boot from
+sync `determineCapabilities()` lacks async-added caps
+(`diloco_training`, `lora_training`, `docking` — gated on marker files
+/ container memory / Python probes resolved in first heartbeat tick).
+Intersection silently drops them → pod with passing cgroup + markers
+NEVER accepts async-cap WOs.
+
+Live A40 pod proof: coord saw `added=[diloco_training]` ✓ but pod
+local `cap not in current caps [cpu_inference, gpu_training]` ❌.
+
+Fix:
+- `fetch-work-orders.ts` `effectiveCaps = liveCaps` (heartbeat
+  authoritative). Pre-primer fallback `stateCaps` when `liveCaps`
+  empty (clean boot before first heartbeat).
+- Defense-in-depth: `accept-wo.ts canLocallyAcceptWorkOrder` already
+  re-checks against live snapshot (Bug 22), preserved.
+
+Per-hardware behavior post-fix:
+- Mac (16GB cgroup): Bug 21 strips diloco → live caps exclude → fetch
+  correctly skips DiLoCo WOs.
+- Pod A40 (46GB cgroup): Bug 21 passes diloco → live caps include →
+  fetch correctly accepts DiLoCo WOs.
+
+Tests: 1892 pass (+4 from baseline 1888). New
+`fetch-work-orders.spec.ts` 10 tests via real
+`__seedCapabilitySnapshotForTests` (P29). Coverage 97.33% stmt.
+
+Architectural defer: `state.capabilities` now legacy (only pre-primer
+fallback uses it). Periodic refresh from live could close gap;
+deferred out of Bug 25 scope.
+
 ## [2026-05-17] fix(heartbeat): cgroup-aware container memory gate — 0.8.73
 
 **Bug 21** — Pod RunPod container `memory.max = 31.7GB` < DiLoCo
