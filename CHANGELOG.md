@@ -1,5 +1,37 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(diloco): pre-flight memory gate + active liberation — 0.8.78 (e8d76012)
+
+Plan B Slices 1+4. Fixes DiLoCo OOM-loop on pod (cgroup 46.6 GB,
+Qwen2.5-7B fp16 peak load ~14 GB, container already at 100% usage).
+
+New `packages/node/src/modules/model/diloco-preflight.ts`:
+- `ensureMemForDiloco()` runs AFTER Bug 27 Ollama pause, BEFORE
+  python spawn.
+- Active liberation: force V8 GC + drop FS page-cache (best-effort,
+  WARN on EACCES/EPERM with --cap-add=SYS_ADMIN hint).
+- Re-probe cgroup free. Throws InsufficientMemoryError if still
+  < DILOCO_REQUIRED_FREE_MB (18 GB).
+- Fallback chain: cgroup v2 → cgroup v1 → host os.freemem().
+  Fail-CLOSED returns 0 on probe error (per P24).
+
+Wiring:
+- diloco-trainer.ts:112 — preflight call inside Bug 27 try block,
+  Ollama restart in finally regardless.
+- work-order.execution.ts:422 — catches InsufficientMemoryError →
+  returns `{ success: false, result: 'DiLoCo skipped: ...' }`.
+
+No client-side re-queue (P21). WO stays ACCEPTED; coord's 2h
+ACCEPTED_STALE_MS re-routes via cron.
+
+Operational tuning:
+- `node --expose-gc` enables V8 forced GC reclaim (~100-500 MB).
+- Docker `--cap-add=SYS_ADMIN` enables drop_caches (~5-15 GB).
+- Both optional. Preflight degrades gracefully with WARN.
+
+9 new diloco-preflight tests + diloco-trainer spec stubbed to
+isolate spawn semantics from gate.
+
 ## [2026-05-17] feat(node): hardware probe re-run + npm-only version check — 0.8.77 (162e97a6)
 
 Slice 2 + Slice 7 of Plan B (DiLoCo OOM + cap-drift mitigation).
