@@ -1,5 +1,30 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(lora): preflight gate + Ollama pause envelope — 0.8.79 (b3897627)
+
+Plan B Slice 8. LoRA training now uses the same OOM-mitigation
+envelope as DiLoCo (Bug 27 Ollama pause + Slices 1+4 preflight gate).
+
+Generalized:
+- `ollama-pause.ts`: `maybePauseOllamaForDiloco` → `maybePauseOllamaForHeavyTraining`
+  with deprecated wrappers. New env `HEAVY_TRAINING_OLLAMA_PAUSE_THRESHOLD_MB`
+  takes precedence over legacy `DILOCO_*`.
+- `diloco-preflight.ts` → `heavy-training-preflight.ts`. `ensureMemForDiloco`
+  → `ensureMemForHeavyTraining(requiredMB, opts)` with parametric
+  label `[Preflight DiLoCo]` / `[Preflight LoRA]`.
+
+New constant:
+- `LORA_REQUIRED_FREE_MB = 14336` (same as DiLoCo because
+  `train_lora.py` loads fp16 base model without quantization →
+  identical load-time peak).
+
+Wired:
+- `lora_trainer.ts`: pause → preflight → spawn → restart-in-finally.
+- `executeLoraWorkOrder`: catches `InsufficientMemoryError` → returns
+  `{ success: false, result: 'LoRA skipped: ...' }`.
+
+14 suites / 124 node tests pass.
+
 ## [2026-05-17] feat(diloco): pre-flight memory gate + active liberation — 0.8.78 (e8d76012)
 
 Plan B Slices 1+4. Fixes DiLoCo OOM-loop on pod (cgroup 46.6 GB,
