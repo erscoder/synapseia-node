@@ -1,5 +1,39 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(node): per-class slot + threshold bump + memory sampler + Python tuning — 0.8.80 (a97baf54)
+
+Plan B Slices 9+10+11. Pod evidence: cgroup 46.6 GB, swap.max=0, oom_kill=10.
+DiLoCo OOM at 18 GB preflight — insufficient for mmap + activations +
+quant temp + CUDA pinned stack.
+
+**Slice 9 — per-class backpressure**:
+- HEAVY (TRAINING/DILOCO/LORA): 1 slot
+- LIGHT (INFERENCE/DOCKING/RESEARCH): 2 slots
+- Env: `MAX_HEAVY_WORK_ORDERS`, `MAX_LIGHT_WORK_ORDERS`
+- Legacy `MAX_CONCURRENT_WORK_ORDERS` → LIGHT-only with WARN
+- 24 tests
+
+**Slice 10 — preflight bump + memory sampler**:
+- DILOCO_REQUIRED_FREE_MB: 18432 → 36864 (36 GB)
+- LORA_REQUIRED_FREE_MB: 14336 → 24576 (24 GB)
+- `memory-sampler.ts`: 500ms cadence container free + python proc RSS
+- Throttled log (≥1 GB delta), final summary
+- Wired into diloco-trainer + lora_trainer spawn paths
+
+**Slice 11 — Python tuning**:
+- `low_cpu_mem_usage=True` (transformers lazy load, try/except fallback)
+- `pin_memory=False` on DataLoader
+- `gc.collect()` + `torch.cuda.empty_cache()` after load + every 10 steps
+- LoRA: same plus `dataloader_pin_memory=False`
+
+Operational:
+- New env: `MAX_HEAVY_WORK_ORDERS=1`, `MAX_LIGHT_WORK_ORDERS=2`
+- Pods <36 GB cgroup → DiLoCo never spawns (by design, refuse vs OOM)
+- Run node with `--expose-gc` + Docker `--cap-add=SYS_ADMIN`
+
+Pending: Slice 12 (graceful watchdog kill at 90% mem),
+Slice 13/14 (hardwareClass-based capability gating).
+
 ## [2026-05-17] feat(lora): preflight gate + Ollama pause envelope — 0.8.79 (b3897627)
 
 Plan B Slice 8. LoRA training now uses the same OOM-mitigation
