@@ -1,5 +1,36 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] chore(release): 0.8.66 lockstep (2eb074e8)
+
+Bundles three sub-releases since 0.8.65:
+
+- **fix(rewards-vault)** `e18b15bc` — `claim_rewards` instruction was
+  sending 7 accounts; contract expects 8 with `pause_state` at slot 1.
+  Anchor was mapping `reward_account` into `pause_state` slot →
+  `AccountDiscriminatorMismatch` (error 3002 / 0xbba). Operators
+  could not claim work-order rewards from the CLI or node-ui. Extracted
+  builder to pure helper + 12 regression tests.
+- **fix(heartbeat)** `791f26de` — `LORA_TRAINING_MEM_FLOOR_MB` 4096→8192
+  and `DILOCO_TRAINING_MEM_FLOOR_MB` 6144→14336. mps fp16 path on
+  Apple Silicon holds the full base model in unified RAM
+  (Qwen2.5-7B ≈ 14 GB). Old floors let 16 GB Macs auto-classify as
+  DiLoCo-capable then OOM-killed mid-weight-load. Architectural
+  invariant flipped from `GPU == LORA < DILOCO` to
+  `GPU < LORA < DILOCO`. `GPU_TRAINING_MEM_FLOOR_MB` (4096) kept low
+  so under-resourced nodes still micro-train.
+- **test** `8225f478` — realigned 3 suites that drifted from 0.8.55+
+  implementation changes: install.spec.ts (brew + curl Vina flow),
+  hardware.test.ts (homedir mock for transitive python-venv import),
+  sprint-e-part1.spec.ts (resolvePython spawn arg). 131/132 suites
+  green (1 skipped intentional). Test-side fixes only — no business
+  logic touched.
+
+Operator impact: Mac M-series nodes with <14 GB free RAM will stop
+advertising `diloco_training`; <8 GB free stop `lora_training` on the
+next heartbeat (~60 s after deploy). Coord skip-routes accordingly.
+RunPod pods (32-128 GB RAM) unaffected. `claim-rewards` flow on
+node-ui and CLI now succeeds.
+
 ## [2026-05-17] fix(heartbeat): bump LORA + DiLoCo training memory floors (791f26de)
 
 - `LORA_TRAINING_MEM_FLOOR_MB` raised 4096 → 8192. The mps fp16 path
