@@ -376,7 +376,7 @@ export async function installPythonDeps(
         message: `DiLoCo model ${DEFAULT_DILOCO_MODEL_ID} already cached (${sizeGb} GB)`,
       });
     } else {
-      const downloadResult = runDilocoModelDownload(DEFAULT_DILOCO_MODEL_ID, emit);
+      const downloadResult = await runDilocoModelDownload(DEFAULT_DILOCO_MODEL_ID, emit);
       if (downloadResult.ok) {
         result.installedDilocoModel = true;
         const sizeGb = (downloadResult.sizeBytes / (1024 ** 3)).toFixed(2);
@@ -386,15 +386,18 @@ export async function installPythonDeps(
           message: `DiLoCo model ${DEFAULT_DILOCO_MODEL_ID} downloaded (${sizeGb} GB)`,
         });
       } else {
-        // Non-blocking warn — the absent marker tells heartbeat NOT to
-        // advertise diloco_training, which is the desired outcome.
-        // Don't push to result.errors so success=true is preserved (the
-        // node is still usable for LoRA / Vina / inference WOs).
-        emit({
-          phase: 'diloco-model',
-          status: 'error',
-          message: `DiLoCo model pre-download failed: ${downloadResult.reason}. Node will not advertise diloco_training. Re-run \`syn install-deps\` after fixing network / HF_TOKEN.`,
-        });
+        // Bug 18 v3: FAIL LOUD. Runtime is local-only — without the
+        // marker, the diloco_training cap will not be advertised AND
+        // any rogue WO that bypassed the gate would fail-fast in
+        // _resolve_local_snapshot(). We push to result.errors so the
+        // operator sees a clear "DiLoCo unavailable" signal at install
+        // time rather than discovering it after the first round.
+        // The node remains usable for other caps (LoRA, Vina,
+        // inference) — diloco_training is the only cap that depends on
+        // this marker.
+        const msg = `DiLoCo model pre-download failed: ${downloadResult.reason}. Node will NOT advertise diloco_training. Re-run \`syn install-deps\` after fixing network connectivity (optionally set HF_TOKEN for higher Hub rate limit during install).`;
+        emit({ phase: 'diloco-model', status: 'error', message: msg });
+        result.errors.push(`diloco-model: ${downloadResult.reason}`);
       }
     }
   }
@@ -454,27 +457,39 @@ export async function installPythonDeps(
  * Pre-download the DiLoCo foundation model into the local Hugging Face
  * cache and persist a marker so heartbeat can gate `diloco_training`.
  *
+ * This is the ONLY place where the foundation model is fetched from
+ * the Hub. The runtime path (`diloco_train.py`) loads with
+ * `local_files_only=True` and fails fast if the cache is missing — so
+ * a failed pre-download means the node will NOT advertise
+ * `diloco_training` (heartbeat gates on the marker) and the coord
+ * routes DiLoCo work elsewhere automatically.
+ *
  * Uses `huggingface_hub.snapshot_download` via the venv python rather
  * than the `huggingface-cli` binary — the CLI is an optional extra and
  * may not be on PATH inside the venv, while `snapshot_download` is the
  * canonical function `from_pretrained()` calls internally. Same cache
  * layout, same auth handling, same download semantics.
  *
- * HF_TOKEN is inherited from the spawn env. Anonymous download works
- * too but is rate-limited — install-deps is single-shot at install
- * time (no WO timeout pressure), so transient rate-limit retries are
- * tolerable here in a way they are NOT at runtime.
+ * HF_TOKEN is honored at install time only (operator opt-in for higher
+ * Hub rate limit during the one-time download). Runtime never reads it.
+ * Anonymous download also works but may hit rate limits on a fresh
+ * pod — we retry transient errors with exponential backoff.
  *
- * Exported (default-export wrapped) so the install-deps spec can
- * exercise it in isolation with a mocked subprocess.
+ * Retry policy: up to `MAX_DOWNLOAD_ATTEMPTS` attempts with backoff.
+ * `snapshot_download` itself is idempotent (resumes from partial cache
+ * on each attempt), so re-spawning the subprocess is cheap on retry —
+ * already-downloaded shards are detected via etag and skipped.
  *
  * @internal exported for testing only — production callers go through
  *           `installPythonDeps`.
  */
-export function runDilocoModelDownload(
+export async function runDilocoModelDownload(
   modelId: string,
   emit: (event: InstallDepsEvent) => void,
-): { ok: true; sizeBytes: number; cacheDir: string } | { ok: false; reason: string } {
+  spawnFn: typeof spawnSync = spawnSync,
+  sleepFn: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<{ ok: true; sizeBytes: number; cacheDir: string } | { ok: false; reason: string }> {
   emit({
     phase: 'diloco-model',
     status: 'running',
@@ -494,24 +509,52 @@ export function runDilocoModelDownload(
     'print("DILOCO_CACHE_DIR=" + path)',
   ].join('\n');
 
-  const result = spawnSync(venvPython(), ['-c', pyScript], {
-    encoding: 'utf-8',
-    stdio: 'pipe',
-    env: { ...process.env },
-  });
+  const MAX_DOWNLOAD_ATTEMPTS = 3;
+  let lastReason = '';
+  let lastStdout = '';
+  for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt++) {
+    const result = spawnFn(venvPython(), ['-c', pyScript], {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      env: { ...process.env },
+    });
 
-  if (result.status !== 0) {
-    const stderrTail = (result.stderr ?? '').toString().trim().split('\n').pop() ?? `exit ${result.status}`;
-    return { ok: false, reason: stderrTail.slice(0, 500) };
+    if (result.status === 0) {
+      lastStdout = (result.stdout ?? '').toString();
+      break;
+    }
+
+    const stderrTail =
+      (result.stderr ?? '').toString().trim().split('\n').pop() ?? `exit ${result.status}`;
+    lastReason = stderrTail.slice(0, 500);
+
+    if (attempt < MAX_DOWNLOAD_ATTEMPTS) {
+      const delayMs = 5_000 * Math.pow(2, attempt - 1); // 5s, 10s
+      emit({
+        phase: 'diloco-model',
+        status: 'running',
+        message: `snapshot_download attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS} failed (${lastReason}); retrying in ${delayMs / 1000}s...`,
+      });
+      // Bug 18 v3 reviewer LOW-1: previously a busy-wait `while (Date.now()
+      // < end) {}` pegged a CPU core at 100% for 5s + 10s during retry
+      // backoff, starving pip and other co-resident processes. Replaced
+      // with an async setTimeout — install-deps is already invoked from
+      // an async caller, and `sleepFn` is injectable so specs stay fast
+      // by replacing it with a no-op resolver.
+      await sleepFn(delayMs);
+    }
+  }
+
+  if (!lastStdout) {
+    return { ok: false, reason: lastReason || 'snapshot_download failed after all retries' };
   }
 
   // Extract the cache dir from the marker line. snapshot_download
   // prints nothing else to stdout under normal operation, but a chatty
   // tqdm progress bar could appear on stderr — we only parse stdout.
-  const stdout = (result.stdout ?? '').toString();
-  const match = stdout.match(/DILOCO_CACHE_DIR=(.+)$/m);
+  const match = lastStdout.match(/DILOCO_CACHE_DIR=(.+)$/m);
   if (!match) {
-    return { ok: false, reason: `snapshot_download succeeded but cache dir not captured from stdout (got: ${stdout.slice(-200)})` };
+    return { ok: false, reason: `snapshot_download succeeded but cache dir not captured from stdout (got: ${lastStdout.slice(-200)})` };
   }
   const cacheDir = match[1]!.trim();
   if (!existsSync(cacheDir)) {

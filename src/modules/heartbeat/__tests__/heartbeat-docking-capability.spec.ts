@@ -18,7 +18,7 @@
  * it to drive both branches of the heartbeat builder deterministically.
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 // Mock the docking module BEFORE importing the heartbeat module under
 // test. Jest hoists `jest.mock` to the top of the file, but the mock
@@ -56,7 +56,11 @@ jest.mock('../../llm/training-llm', () => ({
     .mockResolvedValue('llama3.2:1b'),
 }));
 
-import { HeartbeatHelper } from '../heartbeat';
+import {
+  HeartbeatHelper,
+  __seedLoraStackProbeForTests,
+  __resetCapabilitySnapshotForTests,
+} from '../heartbeat';
 import { isVinaAvailable } from '../../docking';
 import type { Hardware } from '../../hardware/hardware';
 
@@ -76,8 +80,21 @@ describe('HeartbeatHelper.determineCapabilitiesAsync — docking capability', ()
   let helper: HeartbeatHelper;
 
   beforeEach(() => {
+    // Seed the LoRA stack probe to `false` so determineCapabilitiesAsync
+    // never spawns its real python3 import-probe — that spawn schedules
+    // a non-unref'd 60s setTimeout (heartbeat.ts:492) that keeps the
+    // jest worker alive past the test boundary and trips the "worker
+    // process has failed to exit gracefully" warning. POD hardware
+    // qualifies (ramGb=16) so without this seed the spec hits the
+    // probe spawn even though no LoRA assertion is made.
+    __resetCapabilitySnapshotForTests();
+    __seedLoraStackProbeForTests(false, 'test seed — no spawn');
     helper = new HeartbeatHelper({ resolvePublicIp: jest.fn() } as any);
     mockedIsVinaAvailable.mockReset();
+  });
+
+  afterEach(() => {
+    __resetCapabilitySnapshotForTests();
   });
 
   it("includes 'docking' in capabilities when Vina is detected", async () => {

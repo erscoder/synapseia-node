@@ -1,15 +1,15 @@
 /**
- * DiLoCoTrainerHelper — spec covering Bug 18 fixes.
+ * DiLoCoTrainerHelper — spec covering Bug 18 v3 (local-only runtime).
  *
  * The original pod log showed `[Inner loop failed: diloco_train.py
- * exited with code null]` mid weight-load (244/339 shards) on a 256GB
- * pod with no OOM. `code === null` in Node child_process means the
- * child was killed by a signal — the diagnostic was useless because
- * the wrapper never surfaced WHICH signal.
+ * exited with code null]` mid weight-load. v2 added retry + diagnostics
+ * but kept HF Hub I/O. v3 eliminates HF Hub from the runtime path
+ * entirely — `diloco_train.py` loads with `local_files_only=True` and
+ * the foundation model is pre-downloaded by `syn install-deps`.
  *
  * These tests exercise the wrapper's handling of:
  *   1. signal-kill close events → meaningful error message per signal.
- *   2. HF_TOKEN env passthrough → child sees the token explicitly.
+ *   2. HF_TOKEN env stripped from child env (no longer needed).
  *   3. non-zero exit-with-code → stderr tail still surfaced.
  *   4. happy path with progress callbacks.
  *
@@ -52,7 +52,7 @@ function baseConfig() {
   };
 }
 
-describe('DiLoCoTrainerHelper (Bug 18)', () => {
+describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
   let helper: DiLoCoTrainerHelper;
 
   beforeEach(() => {
@@ -90,27 +90,29 @@ describe('DiLoCoTrainerHelper (Bug 18)', () => {
     await expect(pending).rejects.toThrow(/native crash/);
   });
 
-  it('surfaces SIGPIPE with HF Hub RST hint and stderr tail', async () => {
+  it('surfaces SIGPIPE with local-only hint and stderr tail', async () => {
     const proc = makeFakeProc();
     const spawnFn = jest.fn(() => proc) as unknown as SpawnFn;
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
-    proc.stderr.emit('data', Buffer.from('urllib3.exceptions.ProtocolError: Connection broken\n'));
+    proc.stderr.emit('data', Buffer.from('BrokenPipeError: [Errno 32] Broken pipe\n'));
     proc.emit('close', null, 'SIGPIPE');
 
     await expect(pending).rejects.toThrow(/SIGPIPE/);
     await expect(pending).rejects.toThrow(/broken pipe/);
-    await expect(pending).rejects.toThrow(/Connection broken/);
+    await expect(pending).rejects.toThrow(/Broken pipe/);
   });
 
-  it('passes HF_TOKEN through to the child env explicitly', async () => {
+  it('Bug 18 v3: HF_TOKEN is stripped from child env (runtime is local-only)', async () => {
     process.env.HF_TOKEN = 'hf_test_token_abc';
     const proc = makeFakeProc();
     const spawnFn = jest.fn((_cmd: string, _args: string[], options: any) => {
-      // Assert env is forwarded.
+      // Assert HF_TOKEN was scrubbed before spawn so the Python child
+      // cannot use it for any model load (local_files_only=True forbids
+      // Hub I/O anyway, but defense-in-depth).
       expect(options.env).toBeDefined();
-      expect(options.env.HF_TOKEN).toBe('hf_test_token_abc');
+      expect(options.env.HF_TOKEN).toBeUndefined();
       return proc;
     }) as unknown as SpawnFn;
     const statFn = jest.fn(() => ({ size: 0 }));
@@ -119,6 +121,20 @@ describe('DiLoCoTrainerHelper (Bug 18)', () => {
     proc.emit('close', 1, null);
     await expect(pending).rejects.toThrow(/exited with code 1/);
     expect(spawnFn).toHaveBeenCalled();
+  });
+
+  it('Bug 18 v3: HF_TOKEN absent from child env when also absent from parent (no leak)', async () => {
+    delete process.env.HF_TOKEN;
+    const proc = makeFakeProc();
+    const spawnFn = jest.fn((_cmd: string, _args: string[], options: any) => {
+      expect(options.env.HF_TOKEN).toBeUndefined();
+      return proc;
+    }) as unknown as SpawnFn;
+    const statFn = jest.fn(() => ({ size: 0 }));
+
+    const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    proc.emit('close', 1, null);
+    await expect(pending).rejects.toThrow(/exited with code 1/);
   });
 
   it('non-zero exit code includes stderr tail (capped to last 512 bytes of message)', async () => {

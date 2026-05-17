@@ -139,18 +139,18 @@ def run_test_mode(config: dict) -> None:
     })
 
 
-def _load_with_retry(loader_fn, what: str, max_attempts: int = 3, base_delay: float = 5.0):
+def _load_with_retry(loader_fn, what: str, max_attempts: int = 2, base_delay: float = 1.0):
     """
-    Bug 18: wrap `from_pretrained` in retry/backoff so transient HF Hub
-    network failures (rate-limit 429, connection reset, partial shard
-    download) get a chance to recover instead of bubbling up as an
-    uncaught exception (best case) or a native SIGSEGV/SIGPIPE in
-    safetensors/hf_transfer (worst case → exit code null).
+    Bug 18 v3 (refactored): with `local_files_only=True` the only failures
+    `from_pretrained` can raise are deterministic cache-miss / corrupt-file
+    errors (OSError, EnvironmentError). Network-flake retries no longer
+    make sense — there is no network round-trip anymore.
 
-    Catches `Exception` deliberately wide because the relevant ones live
-    across multiple optional modules (urllib3, requests, huggingface_hub,
-    safetensors, torch). We bail immediately on TypeError / ValueError
-    which indicate programmer error, not transient network state.
+    We keep a thin 2-attempt retry only to absorb a transient mmap / fd
+    pressure race that we have occasionally seen on highly-loaded pods
+    (the second open succeeds when the first hits "too many open files").
+
+    Bails immediately on TypeError / ValueError (programmer error).
     """
     last_err = None
     for attempt in range(1, max_attempts + 1):
@@ -178,51 +178,63 @@ def _load_with_retry(loader_fn, what: str, max_attempts: int = 3, base_delay: fl
     raise RuntimeError(f"{what} failed without capturing an error")
 
 
-def _resolve_local_model_args(model_id: str) -> dict:
+def _resolve_local_snapshot(model_id: str) -> str:
     """
-    Bug 18 v3: prefer the install-deps-pre-downloaded model over a runtime
-    HF Hub fetch. Reads ~/.synapseia/diloco-model-ok (written by
-    install-deps after `snapshot_download` succeeded) and returns kwargs
-    suitable for `from_pretrained()`:
+    Bug 18 v3 (refactored): resolve the local snapshot path for `model_id`
+    from the install-deps marker. Fail-fast (raises RuntimeError) when no
+    valid marker exists — DiLoCo runtime is local-only by design and
+    MUST NOT attempt any HF Hub round-trip.
 
-        { "local_files_only": True, "cache_dir": "<snapshot path>" }
+    Looks for `~/.synapseia/diloco-model-ok` (override via SYNAPSEIA_HOME).
+    Returns the absolute snapshot directory suitable for passing directly
+    as `pretrained_model_name_or_path` to `from_pretrained()`.
 
-    If the marker is absent / stale / model_id mismatched, returns an
-    empty dict — `from_pretrained()` falls back to a Hub fetch as
-    before. The heartbeat gate on `diloco_training` should have
-    prevented WO acceptance in that case, so reaching here without a
-    valid marker is already an anomaly — but we don't hard-fail so a
-    manually-bootstrapped operator with a pre-populated HF cache still
-    works.
+    Raises RuntimeError with an operator-actionable hint when:
+      - marker file missing
+      - marker JSON corrupt / wrong shape
+      - marker is for a different modelId
+      - cacheDir on disk no longer exists
+
+    P2 fail-closed: never silently fall back to a Hub fetch.
     """
-    marker_path = os.environ.get("SYNAPSEIA_HOME")
-    if marker_path:
-        marker_path = os.path.join(marker_path, "diloco-model-ok")
+    base = os.environ.get("SYNAPSEIA_HOME")
+    if base:
+        marker_path = os.path.join(base, "diloco-model-ok")
     else:
         marker_path = os.path.join(os.path.expanduser("~"), ".synapseia", "diloco-model-ok")
 
+    hint = (
+        f"DiLoCo model '{model_id}' not cached locally. "
+        f"Run `syn install-deps` to pre-download the foundation model. "
+        f"(Looked for marker at {marker_path})"
+    )
+
     if not os.path.exists(marker_path):
-        return {}
+        raise RuntimeError(hint)
     try:
         with open(marker_path, "r", encoding="utf-8") as f:
             marker = json.load(f)
-    except Exception:
-        return {}
+    except Exception as e:
+        raise RuntimeError(f"{hint} — marker exists but is unreadable: {e}")
 
     if not isinstance(marker, dict):
-        return {}
+        raise RuntimeError(f"{hint} — marker is not a JSON object")
     if marker.get("modelId") != model_id:
-        return {}
+        raise RuntimeError(
+            f"{hint} — marker is for modelId={marker.get('modelId')!r}, "
+            f"requested {model_id!r}"
+        )
     cache_dir = marker.get("cacheDir")
     if not isinstance(cache_dir, str) or not os.path.exists(cache_dir):
-        return {}
+        raise RuntimeError(
+            f"{hint} — marker points to cacheDir={cache_dir!r} which does not exist on disk"
+        )
 
-    # cache_dir in the marker points to the snapshot dir (e.g.
+    # cache_dir points to the snapshot directory (e.g.
     # ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B/snapshots/<sha>).
-    # `from_pretrained` accepts that directly as `pretrained_model_name_or_path`
-    # but we also pass `local_files_only=True` to forbid any Hub round-trip.
-    # We override `model_id` at the call site to point at the snapshot.
-    return {"local_files_only": True, "snapshot_path": cache_dir}
+    # `from_pretrained` accepts that path directly with
+    # `local_files_only=True`, which forbids any Hub round-trip.
+    return cache_dir
 
 
 def run_full_mode(config: dict) -> None:
@@ -244,31 +256,16 @@ def run_full_mode(config: dict) -> None:
     lr = hyperparams.get("learningRate", 2e-4)
     batch_size = hyperparams.get("batchSize", 4)
 
-    # Bug 18 v3: prefer the install-deps pre-download (marker-gated). When
-    # present, `from_pretrained()` runs with local_files_only=True and the
-    # snapshot path as the pretrained-name — zero HF Hub round-trips at
-    # runtime. The HF_TOKEN warn below stays for the legacy-bootstrap
-    # path where a marker is absent (operator manually pre-populated the
-    # HF cache without running install-deps).
-    local_args = _resolve_local_model_args(model_id)
-    if local_args:
-        # Substitute model_id with the snapshot path so `from_pretrained`
-        # reads from disk only. local_files_only=True belt-and-braces
-        # forbids any Hub fallback even if the snapshot is incomplete.
-        pretrained_name = local_args["snapshot_path"]
-        load_kwargs_extra = {"local_files_only": True}
-        log({"info": f"diloco_model_source=local snapshot={pretrained_name}"})
-    else:
-        pretrained_name = model_id
-        load_kwargs_extra = {}
-        log({"info": f"diloco_model_source=hf_hub model_id={model_id} (no install-deps marker; consider running `syn install-deps`)"})
-
-    # Bug 18: anonymous HF Hub downloads get throttled/RST'd after a few
-    # retries → "exit code null" mid-load. Surface the auth state up to
-    # the TS wrapper log so operators can correlate. HF_TOKEN is also
-    # inherited from the spawn env (set explicitly in diloco-trainer.ts).
-    hf_token_present = bool(os.environ.get("HF_TOKEN", "").strip())
-    log({"info": f"hf_auth={'token' if hf_token_present else 'anonymous'} model_id={model_id}"})
+    # Bug 18 v3: DiLoCo runtime is LOCAL-ONLY. The install-deps phase
+    # pre-downloads the foundation model once and writes a marker; here
+    # we resolve the marker to a snapshot path and load with
+    # `local_files_only=True`. No HF Hub round-trip ever happens at
+    # runtime — eliminates rate-limit / mid-load SIGPIPE failure modes
+    # entirely. Cache miss fails fast with an operator-actionable hint
+    # (P2 fail-closed; no silent download).
+    pretrained_name = _resolve_local_snapshot(model_id)
+    load_kwargs_extra = {"local_files_only": True}
+    log({"info": f"diloco_model_source=local snapshot={pretrained_name}"})
 
     device = "cpu"
     if hardware == "mps" and torch.backends.mps.is_available():

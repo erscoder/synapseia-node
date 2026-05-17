@@ -8,7 +8,6 @@ import { spawn, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 import { resolvePython } from '../../utils/python-venv';
-import logger from '../../utils/logger';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -97,20 +96,21 @@ export class DiLoCoTrainerHelper {
       testMode: config.testMode ?? false,
     };
 
-    // Bug 18: pods crashed mid weight-load with "exit code null" (signal
-    // kill, not a Python exception). Build an explicit env so:
-    //   1. HF_TOKEN inheritance is observable in logs (anonymous HF Hub
-    //      requests get throttled / RST'd after a few retries → SIGPIPE /
-    //      native safetensors crash → exit code null).
-    //   2. HF_HUB_ENABLE_HF_TRANSFER stays opt-in (the `hf_transfer`
-    //      accelerator segfaults on partial downloads which manifests as
-    //      exit code null too — never auto-enable it).
-    //   3. TRANSFORMERS_OFFLINE / HF_HUB_DISABLE_TELEMETRY are forwarded.
+    // Bug 18 v3: DiLoCo runtime is LOCAL-ONLY — the foundation model is
+    // pre-downloaded by `syn install-deps` and `diloco_train.py` loads
+    // with `local_files_only=True`. No HF Hub round-trip happens at
+    // runtime, so HF_TOKEN is no longer needed (or passed). We also
+    // strip HF_TOKEN from the child env defensively: even if some
+    // operator sets it for unrelated tooling, the Python script will
+    // never look at it for the model load path.
+    //
+    // Forwarded env vars left alone:
+    //   - HF_HUB_ENABLE_HF_TRANSFER: stays opt-in. With local_files_only
+    //     it shouldn't matter, but a future code path that re-enables
+    //     a network call would still want the same opt-in posture.
+    //   - HF_HUB_DISABLE_TELEMETRY / TRANSFORMERS_OFFLINE: harmless.
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
-    const hfTokenPresent = !!(process.env.HF_TOKEN && process.env.HF_TOKEN.trim().length > 0);
-    if (!hfTokenPresent) {
-      logger.warn(' DiLoCo: HF_TOKEN not set — anonymous HF Hub downloads are rate-limited. Set HF_TOKEN in operator env to avoid mid-load throttling crashes (Bug 18).');
-    }
+    delete childEnv.HF_TOKEN;
 
     return new Promise((res, reject) => {
       const proc = spawnFn(resolvePython(), [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], env: childEnv });
@@ -162,19 +162,18 @@ export class DiLoCoTrainerHelper {
         }
       });
 
-      // Bug 18: `close` callback receives `(code: number | null, signal:
+      // Bug 18 v3: `close` callback receives `(code: number | null, signal:
       // NodeJS.Signals | null)`. `code === null` means the process was
-      // killed by a signal — operators previously saw "exited with code
-      // null" with zero diagnostic value. Surface the signal name (SIGKILL
-      // ≈ OOM, SIGSEGV ≈ native crash in safetensors/hf_transfer, SIGPIPE
-      // ≈ network RST, SIGTERM ≈ our own timeout) plus the stderr tail.
+      // killed by a signal — surface the signal name + stderr tail.
+      // Since the runtime is now local-only (no HF Hub I/O), SIGPIPE
+      // is unexpected; the hint mentions disk/IPC rather than network.
       proc.on('close', (code, signal) => {
         clearTimeout(timeoutHandle);
         if (timedOut) return;
         if (code === null && signal) {
           const hint = signal === 'SIGKILL' ? 'likely OOM-killer or container memory limit'
-            : signal === 'SIGSEGV' ? 'native crash (safetensors / hf_transfer / torch C-ext); consider unsetting HF_HUB_ENABLE_HF_TRANSFER'
-            : signal === 'SIGPIPE' ? 'broken pipe (HF Hub connection RST during weight stream; set HF_TOKEN to avoid anonymous-rate throttling)'
+            : signal === 'SIGSEGV' ? 'native crash (safetensors / torch C-ext); check disk integrity of the install-deps snapshot'
+            : signal === 'SIGPIPE' ? 'broken pipe (unexpected with local_files_only; check stdout/stderr consumer)'
             : signal === 'SIGTERM' ? 'terminated by external signal'
             : `signal ${signal}`;
           reject(new Error(`diloco_train.py killed by signal ${signal} (${hint}). stderr tail: ${stderr.trim().slice(-512) || '(empty)'}`));

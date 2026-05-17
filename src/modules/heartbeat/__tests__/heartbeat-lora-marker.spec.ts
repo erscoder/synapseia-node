@@ -25,7 +25,7 @@
  *      for operators with manually-bootstrapped venvs).
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, jest } from '@jest/globals';
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -95,6 +95,30 @@ const POD_HARDWARE: Hardware = {
 } as Hardware;
 
 describe('HeartbeatHelper — LoRA marker hydration (Bug 12 v2)', () => {
+  // Marker-hydration tests advertise lora_training → triggers isCudaAvailable()
+  // which spawns python with a 30s non-unref'd setTimeout (heartbeat.ts:608).
+  // There is no public seed for cudaCache, so we wrap the global setTimeout
+  // to `.unref()` every timer scheduled while this spec runs. Real wall-clock
+  // semantics don't matter (the spawn resolves via close/error before the
+  // timeout could fire) — we just don't want the timer pinning the event
+  // loop and tripping the worker force-exit warning.
+  const realSetTimeout = global.setTimeout;
+  let unrefingSetTimeout: typeof global.setTimeout;
+
+  beforeAll(() => {
+    unrefingSetTimeout = ((handler: any, timeout?: number, ...args: any[]) => {
+      const t = realSetTimeout(handler, timeout, ...args);
+      if (typeof (t as any).unref === 'function') (t as any).unref();
+      return t;
+    }) as any;
+    (unrefingSetTimeout as any).__promisify__ = (realSetTimeout as any).__promisify__;
+    global.setTimeout = unrefingSetTimeout;
+  });
+
+  afterAll(() => {
+    global.setTimeout = realSetTimeout;
+  });
+
   beforeEach(() => {
     process.env.SYNAPSEIA_HOME = TMP_HOME;
     mkdirSync(TMP_HOME, { recursive: true });

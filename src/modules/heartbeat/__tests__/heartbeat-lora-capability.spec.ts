@@ -37,7 +37,7 @@
  *      Docker node, no GPU, < 16 GB RAM) regardless of probe result.
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach, beforeAll, afterAll } from '@jest/globals';
 import logger from '../../../utils/logger';
 import {
   HeartbeatHelper,
@@ -97,6 +97,30 @@ const SMALL_DOCKER_HARDWARE: Hardware = {
 describe('HeartbeatHelper.determineCapabilitiesAsync — lora_training capability (Bug 12)', () => {
   let helper: HeartbeatHelper;
   let warnSpy: jest.SpiedFunction<typeof logger.warn>;
+  // The success-path test below seeds the LoRA stack probe true → caps include
+  // lora_training → triggers isCudaAvailable() which spawns python with a 30s
+  // non-unref'd setTimeout (heartbeat.ts:608). That timer keeps the jest worker
+  // alive past the test boundary. There is no public seed for cudaCache, so
+  // we wrap the global setTimeout to `.unref()` every timer scheduled during
+  // the spec — the real wall-clock semantics don't matter here (the spawn
+  // already resolved via close/error before the timeout fires), only that the
+  // timer doesn't pin the event loop.
+  const realSetTimeout = global.setTimeout;
+  let unrefingSetTimeout: typeof global.setTimeout;
+
+  beforeAll(() => {
+    unrefingSetTimeout = ((handler: any, timeout?: number, ...args: any[]) => {
+      const t = realSetTimeout(handler, timeout, ...args);
+      if (typeof (t as any).unref === 'function') (t as any).unref();
+      return t;
+    }) as any;
+    (unrefingSetTimeout as any).__promisify__ = (realSetTimeout as any).__promisify__;
+    global.setTimeout = unrefingSetTimeout;
+  });
+
+  afterAll(() => {
+    global.setTimeout = realSetTimeout;
+  });
 
   beforeEach(() => {
     __resetCapabilitySnapshotForTests();

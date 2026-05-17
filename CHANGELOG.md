@@ -1,5 +1,30 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(diloco): local_files_only runtime + drop HF_TOKEN dep — 0.8.70
+
+**Bug 18 v3** — Eliminate HF Hub runtime dependency for DiLoCo. Model
+already pre-downloaded at install-deps phase (Bug 18 v3 partial); now
+runtime `from_pretrained()` forced `local_files_only=True` so no
+metadata roundtrip to HF Hub. Operator no longer needs HF_TOKEN to run
+DiLoCo training.
+
+- `diloco_train.py` `_resolve_local_snapshot` reads marker
+  (`~/.synapseia/diloco-model-ok`) + validates JSON + modelId + cacheDir
+  + raises with operator hint on any failure (P2 fail-closed).
+- `AutoModelForCausalLM.from_pretrained` + `AutoTokenizer.from_pretrained`
+  both `local_files_only=True`.
+- `diloco-trainer.ts` scrubs HF_TOKEN from spawn env (defense in depth)
+  + drops Bug 18 v2 anonymous-rate-limit warn.
+- `install-deps.ts` `runDilocoModelDownload` 3-attempt retry with async
+  exponential backoff (5s/10s, no CPU busy-wait). FAILS LOUD via
+  `result.errors.push` → CLI exit 1 → Tauri UI surfaces immediately.
+
+Tests: 1846/1846 pass (+11). 5 install-deps retry tests + 5 python
+local-only tests against real python3 (auto-skips if absent) + spec
+update HF_TOKEN scrub assertion.
+
+Out of scope: LoRA training same anti-pattern (deferred Bug 18 v4).
+
 ## [2026-05-17] fix(agent): cap-aware local accept gate — 0.8.69
 
 **Bug 22** — Node accepted WO whose type ∉ current advertised caps. Live
