@@ -1,5 +1,33 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(docking): vina download URL (mac_aarch64 not macos_arm64) (83b8601a)
+
+**Latent since 0.8.55** — every macOS Vina install attempted by the
+docking auto-installer hit GitHub HTTP 404 silently. Operator log
+captured 2026-05-17: `Command failed: curl -sLf -o
+"/Users/kike/.synapseia/bin/vina"
+"https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.5/vina_1.2.5_macos_arm64"`.
+
+Root cause: URL template in `modules/docking/install.ts` used
+`_macos_${arch}` with `arch ∈ {arm64, x86_64}`, but the real GH
+release assets are `vina_1.2.5_mac_aarch64` / `vina_1.2.5_mac_x86_64`
+(no `os`, and ARM uses `aarch64` not `arm64`). Two-typo regression
+hidden by non-fatal installer contract: Phase 7 emitted error but
+boot succeeded, operators with stale `vina` on `$PATH` or from
+prior brew tap never noticed; new Mac installs since 0.8.55 silently
+shipped with `docking` cap missing.
+
+Fix:
+- URL template now `vina_<ver>_mac_<arch>` with `arch ∈ {aarch64, x86_64}`.
+- Post-`chmod +x` we now spawn `${vinaBinPath} --version` (10s
+  timeout). A 4 KB HTML 404 page can pass `chmod +x` and exist on
+  disk — only the version probe catches non-Mach-O garbage. Caller
+  gets `installed=false, reason="Vina downloaded but --version
+  probe failed: ${err}"` instead of advertising a broken cap.
+- Tests parametrize both arm64 and x64 paths with literal-substring
+  regression guards (`vina_1.2.5_mac_aarch64` / `mac_x86_64`) plus
+  explicit negative guard against the stale `macos_` prefix.
+
 ## [2026-05-17] fix(heartbeat): caps oscillation hysteresis + cooldown + tick cache — 0.8.67
 
 **Bug 12 v3** — Live evidence on coord HTTP heartbeat log showed peer
@@ -431,9 +459,10 @@ unlock.
 `brew install autodock-vina` always fails — no such formula in
 homebrew-core (only `open-babel` is). New macOS docking install:
 - `brew install open-babel` (works).
-- `curl https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.5/vina_1.2.5_macos_<arch>`
+- `curl https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.5/vina_1.2.5_mac_<arch>`
   to `~/.synapseia/bin/vina` + `chmod +x`. `<arch>` resolves to
-  `arm64` or `x86_64`.
+  `aarch64` or `x86_64`. (Original 0.8.55 ship used `macos_arm64`
+  which 404s — see 2026-05-17 hotfix entry at top of changelog.)
 - `DEFAULT_VINA_BIN` in `docking/docker.ts` probes
   `~/.synapseia/bin/vina` before PATH fallback.
 
