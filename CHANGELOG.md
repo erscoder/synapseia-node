@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): TRAINING WO hardware probe (parallel of Slice 18) — 0.8.84
+
+Slice 19. ROOT CAUSE #3 for OOM on micro-training WO. Slice 18 fixed
+DiLoCo path; the TRAINING (executeMicroTrainingWorkOrder) path had
+the same bug class:
+
+`work-order.execution.ts:338` used
+`capabilities.includes('gpu') ? 'gpu' : 'cpu'`. The heartbeat's
+authoritative cap builder `determineCapabilities()`
+(heartbeat.ts:1270) never pushes the literal `'gpu'` cap — only
+`'gpu_training'` / `'gpu_inference'`. So every TRAINING WO ran with
+Python `hardware='cpu'`, loaded fp32 weights on GPU pods, and OOM'd
+on any non-tiny model. Confirmed live 2026-05-17 22:55 on A40 pod:
+TRAINING WO accepted, payload `hardware=cpu`, completed only because
+the micro-trainer model was small enough — but the cap mismatch
+would have killed any larger one.
+
+Fix: mirror Slice 18 — call `detectHardware()` + `deriveTrainingRuntimeMode()`,
+collapse 'cuda'/'mps' into 'gpu' for `trainMicroModel()`'s
+`'cpu' | 'gpu'` contract. The hardware probe is the single source of
+truth for runtime mode (cap list is fine for routing but not for
+runtime selection).
+
 ## [2026-05-17] fix(node): derive python hardware mode from gpuVramGb — 0.8.83 (602c9d0f)
 
 ROOT CAUSE #2 for DiLoCo OOM. After Slices 16/17 (cu121 wheel +

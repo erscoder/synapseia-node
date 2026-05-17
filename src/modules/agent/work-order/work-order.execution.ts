@@ -333,9 +333,20 @@ Abstract: ${payload.abstract}`;
       logger.warn(` Corpus for '${payload.domain}' not available (${(err as Error).message}). Falling back to built-in synthetic data.`);
     }
 
+    // Slice 19 (2026-05-17): mirror Slice 18 (DiLoCo) for TRAINING WO.
+    // `capabilities.includes('gpu')` was always false — heartbeat's
+    // `determineCapabilities()` never pushes the literal `'gpu'` cap
+    // (only `gpu_training`/`gpu_inference`). Result: every TRAINING WO
+    // ran with Python `hardware='cpu'`, loading fp32 weights and OOMing
+    // on any model larger than ~2B params. Drive from the hardware probe
+    // instead. trainMicroModel's contract is `'cpu' | 'gpu'`, so collapse
+    // 'cuda'/'mps' from deriveTrainingRuntimeMode into 'gpu'.
+    const trainProbe = detectHardware();
+    const trainRuntimeMode = deriveTrainingRuntimeMode({ gpuVramGb: trainProbe.gpuVramGb });
+    const trainHardware: 'cpu' | 'gpu' = trainRuntimeMode === 'cpu' ? 'cpu' : 'gpu';
     let trainingResult;
     try {
-      trainingResult = await trainMicroModel({ proposal: mutation, datasetPath, hardware: capabilities.includes('gpu') ? 'gpu' : 'cpu', runNumber: iteration });
+      trainingResult = await trainMicroModel({ proposal: mutation, datasetPath, hardware: trainHardware, runNumber: iteration });
     } catch (err) {
       // Training failure is recoverable at the coordinator level — the WO is
       // returned as `success:false` and reassigned. Logging at warn keeps the
