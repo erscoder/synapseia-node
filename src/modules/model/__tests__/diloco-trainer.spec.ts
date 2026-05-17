@@ -18,6 +18,17 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
+
+// Bug 27 (2026-05-17): runDiLoCoInnerLoop now wraps the python spawn in
+// an Ollama pause/restart envelope (see modules/llm/ollama-pause.ts).
+// Stub the pause helper so this spec stays focused on the spawn
+// semantics it was originally written for (no localhost:11434 reach-out,
+// no cgroup reads).
+jest.mock('../../llm/ollama-pause', () => ({
+  maybePauseOllamaForDiloco: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
+  maybeRestartOllamaAfterDiloco: jest.fn(async () => undefined),
+}));
+
 import { DiLoCoTrainerHelper, type SpawnFn } from '../diloco-trainer';
 
 type AnyFn = (...args: any[]) => any;
@@ -38,6 +49,21 @@ function makeFakeProc() {
   proc.stderr = stderr;
   proc.kill = jest.fn();
   return proc;
+}
+
+/**
+ * Bug 27: runDiLoCoInnerLoop now awaits maybePauseOllamaForDiloco()
+ * BEFORE calling spawnFn. The pause helper is mocked above to resolve
+ * immediately but the `await` still introduces a microtask boundary,
+ * so tests must flush microtasks after kicking the promise but BEFORE
+ * emitting events on the fake child — otherwise the listeners are not
+ * yet attached when the synchronous `proc.emit(...)` fires.
+ */
+async function flushMicrotasks(): Promise<void> {
+  // Two ticks: one for the pause mock's await, one for the inner
+  // _spawnDiLoCoTrain to wire up listeners on proc.stdout/stderr/close.
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function baseConfig() {
@@ -69,6 +95,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
 
     // Emit some HF tqdm-ish stderr noise, then signal-kill.
     proc.stderr.emit('data', Buffer.from('Loading weights: 244/339\n'));
@@ -84,6 +111,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.emit('close', null, 'SIGSEGV');
 
     await expect(pending).rejects.toThrow(/SIGSEGV/);
@@ -96,6 +124,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.stderr.emit('data', Buffer.from('BrokenPipeError: [Errno 32] Broken pipe\n'));
     proc.emit('close', null, 'SIGPIPE');
 
@@ -118,6 +147,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.emit('close', 1, null);
     await expect(pending).rejects.toThrow(/exited with code 1/);
     expect(spawnFn).toHaveBeenCalled();
@@ -133,6 +163,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.emit('close', 1, null);
     await expect(pending).rejects.toThrow(/exited with code 1/);
   });
@@ -143,6 +174,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.stderr.emit('data', Buffer.from('Traceback ...\nValueError: bad config\n'));
     proc.emit('close', 1, null);
 
@@ -162,6 +194,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
       spawnFn,
       statFn,
     );
+    await flushMicrotasks();
 
     proc.stdout.emit('data', Buffer.from(JSON.stringify({ step: 1, loss: 2.5, lr: 1e-3 }) + '\n'));
     proc.stdout.emit('data', Buffer.from(JSON.stringify({ step: 4, loss: 1.2, lr: 1e-3 }) + '\n'));
@@ -186,6 +219,7 @@ describe('DiLoCoTrainerHelper (Bug 18 v3)', () => {
     const statFn = jest.fn(() => ({ size: 0 }));
 
     const pending = helper.runDiLoCoInnerLoop(baseConfig(), undefined, spawnFn, statFn);
+    await flushMicrotasks();
     proc.stdout.emit('data', Buffer.from(JSON.stringify({ error: 'AutoModel.from_pretrained failed after 3 attempts' }) + '\n'));
     proc.emit('close', 1, null);
 

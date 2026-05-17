@@ -1,5 +1,37 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(diloco): pause Ollama on small containers to fit DiLoCo — 0.8.76
+
+**Bug 27** — DiLoCo Qwen2.5-7B peak RAM ~25-30GB + Ollama overhead
+exceeds Bug 21 40GB threshold on pods 40-80GB → OOM. Verified live
+pod A40 (cgroup 46.6GB) OOM-killed at 94% weight load.
+
+Strategy: pause Ollama daemon before DiLoCo spawn if container <80GB,
+restart after (success OR failure). Pods 40-80GB now train DiLoCo
+without OOM.
+
+- NEW `src/modules/llm/ollama-pause.ts`:
+  `maybePauseOllamaForDiloco` + `maybeRestartOllamaAfterDiloco`.
+  Threshold `DILOCO_OLLAMA_PAUSE_THRESHOLD_MB=80_000` (env override
+  `DILOCO_OLLAMA_PAUSE_THRESHOLD_MB`).
+- `diloco-trainer.ts`: try/finally envelope around python spawn.
+  Pause snapshot before spawn → restart in finally regardless of
+  success/failure.
+- Fail-open posture: pkill OR restart failure → WARN, don't block
+  DiLoCo or rethrow (P2 tradeoff: worst case = status quo OOM).
+- Uses container-total (Bug 21 memoized) — NOT os.freemem (P24).
+
+Restart cycle ~15s warmup max. Backpressure slot already serializes
+DiLoCo so no concurrent pause races.
+
+Tests: 1905 pass (+13). New ollama-pause.spec.ts 12 tests covering
+threshold gate, pause+restart cycle, try/finally, env override (+ invalid),
+pkill fail (error event + sync throw), restart fail swallow, ollama spawn
+sync throw, reset hooks. Coverage 98.61% lines.
+
+Deferred to Bug 27 v2: LoRA same pattern (trainer.ts:503), pkill -fx
+pattern refinement to avoid argv self-match.
+
 ## [2026-05-17] fix(agent): MOLECULAR_DOCKING → 'docking' cap name fix — 0.8.75
 
 **Bug 26** — trivial typo. `wo-type-to-cap.ts` mapped

@@ -8,6 +8,10 @@ import { spawn, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 import { resolvePython } from '../../utils/python-venv';
+import {
+  maybePauseOllamaForDiloco,
+  maybeRestartOllamaAfterDiloco,
+} from '../llm/ollama-pause';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -79,11 +83,38 @@ export interface DiLoCoResult {
 
 @Injectable()
 export class DiLoCoTrainerHelper {
+  /**
+   * Public entry point. Wraps the actual python spawn in a Bug 27
+   * pause/restart envelope: on memory-constrained containers (<80 GB by
+   * default) Ollama is SIGTERM'd before the spawn and restarted in a
+   * `finally` block regardless of success/failure. See
+   * `modules/llm/ollama-pause.ts` for the full invariant and tradeoffs.
+   */
   async runDiLoCoInnerLoop(
     config: DiLoCoConfig,
     onProgress?: (update: DiLoCoProgressUpdate) => void,
     spawnFn: SpawnFn = spawn as unknown as SpawnFn,
     statFn: StatFn = (p) => statSync(p) as { size: number },
+  ): Promise<DiLoCoResult> {
+    const ollamaHandle = await maybePauseOllamaForDiloco();
+    try {
+      return await this._spawnDiLoCoTrain(config, onProgress, spawnFn, statFn);
+    } finally {
+      await maybeRestartOllamaAfterDiloco(ollamaHandle);
+    }
+  }
+
+  /**
+   * Internal: spawn `diloco_train.py` and resolve with the parsed
+   * result. Extracted from `runDiLoCoInnerLoop` so the pause/restart
+   * envelope wraps a single async call. No behavioral changes from
+   * the pre-Bug-27 implementation.
+   */
+  private async _spawnDiLoCoTrain(
+    config: DiLoCoConfig,
+    onProgress: ((update: DiLoCoProgressUpdate) => void) | undefined,
+    spawnFn: SpawnFn,
+    statFn: StatFn,
   ): Promise<DiLoCoResult> {
     const scriptPath = config.pythonScriptPath ?? resolveDilocoScript();
     const startTime = Date.now();

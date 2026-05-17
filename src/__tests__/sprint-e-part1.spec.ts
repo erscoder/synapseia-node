@@ -7,6 +7,14 @@ import { EventEmitter } from 'events';
 // ======================================================================
 // E2: diloco-trainer
 // ======================================================================
+
+// Bug 27: stub the Ollama pause helper so this E2 spec stays focused on
+// the python spawn semantics (no localhost:11434 probe, no cgroup read).
+jest.mock('../modules/llm/ollama-pause', () => ({
+  maybePauseOllamaForDiloco: jest.fn(async () => ({ wasRunning: false, pausedAt: 0 })),
+  maybeRestartOllamaAfterDiloco: jest.fn(async () => undefined),
+}));
+
 import {
   runDiLoCoInnerLoop,
   DiLoCoTrainerHelper,
