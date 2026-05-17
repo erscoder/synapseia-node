@@ -21,6 +21,11 @@ import {
   getRewardsVaultProgramId as resolveRewardsVaultProgramId,
   getSynTokenMint as resolveSynTokenMint,
 } from '../../constants/programs';
+import {
+  buildClaimRewardsInstruction,
+  deriveRewardAccountPDA,
+  deriveTreasuryAuthorityPDA,
+} from './rewards-vault-instruction';
 
 const DEFAULT_CU_LIMIT = 1_400_000;
 const DEFAULT_CU_PRICE_MICROLAMPORTS = 10_000;
@@ -39,31 +44,8 @@ function getSolanaRpcUrl(): string {
   return process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 }
 
-function deriveVaultStatePDA(programId: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('vault_state')],
-    programId,
-  )[0];
-}
-
-function deriveRewardAccountPDA(owner: PublicKey, programId: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('reward_account'), owner.toBuffer()],
-    programId,
-  )[0];
-}
-
-function deriveTreasuryAuthorityPDA(programId: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('rewards_treasury')],
-    programId,
-  )[0];
-}
-
-function createClaimRewardsInstructionData(): Buffer {
-  // IDL discriminator for `claim_rewards` — no args.
-  return Buffer.from([4, 144, 132, 71, 116, 23, 151, 80]);
-}
+// PDA derivations + instruction builder live in `./rewards-vault-instruction`
+// (pure helpers, no wallet/RPC deps, jest-friendly).
 
 /**
  * Claim all pending work-order rewards from the rewards vault PDA to the
@@ -95,7 +77,6 @@ export async function claimWorkOrderRewards(): Promise<string> {
   }
   logger.log(`Claimable balance: ${unclaimed} SYN`);
 
-  const vaultState = deriveVaultStatePDA(programId);
   const treasuryAuthority = deriveTreasuryAuthorityPDA(programId);
   const treasuryTokenAccount = await getAssociatedTokenAddress(
     synMint,
@@ -121,22 +102,15 @@ export async function claimWorkOrderRewards(): Promise<string> {
     );
   }
 
-  // Account order taken from the `claim_rewards` IDL entry. Writable flags
-  // match the IDL: vault_state, reward_account, owner, treasury_token_account,
-  // owner_token_account are writable; treasury_authority + token_program are
-  // read-only.
-  instructions.push(new TransactionInstruction({
+  // 8-account `claim_rewards` instruction. See buildClaimRewardsInstruction
+  // for full slot ordering — pause_state in slot 1 is mandatory (omitting it
+  // shifts reward_account into the pause_state slot and the program rejects
+  // with AccountDiscriminatorMismatch).
+  instructions.push(buildClaimRewardsInstruction({
     programId,
-    data: createClaimRewardsInstructionData(),
-    keys: [
-      { pubkey: vaultState,            isSigner: false, isWritable: true  },
-      { pubkey: rewardAccount,         isSigner: false, isWritable: true  },
-      { pubkey: owner,                 isSigner: true,  isWritable: true  },
-      { pubkey: treasuryAuthority,     isSigner: false, isWritable: false },
-      { pubkey: treasuryTokenAccount,  isSigner: false, isWritable: true  },
-      { pubkey: ownerTokenAccount,     isSigner: false, isWritable: true  },
-      { pubkey: TOKEN_PROGRAM_ID,      isSigner: false, isWritable: false },
-    ],
+    owner,
+    treasuryTokenAccount,
+    ownerTokenAccount,
   }));
 
   const tx = new Transaction().add(...instructions);
