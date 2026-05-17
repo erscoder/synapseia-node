@@ -10,8 +10,8 @@
  *   embedding         → 900 MB   (Ollama-routed under hasOllama)
  *   gpu_inference     → 2048 MB  (Ollama daemon resident on system RAM)
  *   gpu_training      → 4096 MB  (local PyTorch spawn)
- *   lora_training     → 4096 MB  (local PyTorch spawn)
- *   diloco_training   → 6144 MB  (local PyTorch spawn)
+ *   lora_training     → 8192 MB  (local PyTorch spawn; mps fp16 holds base + adapters)
+ *   diloco_training   → 14336 MB (local PyTorch spawn; mps fp16 holds 7B base resident)
  *
  * Two root causes share the floor mechanism: training caps spawn a
  * Python+torch process, inference / llm / embedding / cpu_inference /
@@ -57,7 +57,7 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
   // separate strip-at-500MB and cpu_inference-specific cases cover
   // their stripping behaviour.
   const BASE_CAPS = ['cpu_inference', 'inference'];
-  const HEALTHY = DILOCO_TRAINING_MEM_FLOOR_MB + 1000; // 7144 — clears every floor
+  const HEALTHY = DILOCO_TRAINING_MEM_FLOOR_MB + 1000; // floor + 1 GB headroom — clears every floor
 
   beforeEach(() => {
     __resetCapabilitySnapshotForTests();
@@ -95,11 +95,13 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
     expect(out).toContain('inference');
   });
 
-  it('keeps cpu/gpu/lora but strips diloco at 5 GB free', () => {
+  it('keeps cpu/gpu/lora but strips diloco between LORA and DILOCO floors', () => {
     helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], HEALTHY);
+    // Just above LORA floor (8192) so lora clears, but well below
+    // DILOCO floor (14336) so diloco strips.
     const out = helper.applyMemoryPressureFilter(
       [...BASE_CAPS, ...ALL_TRAINING_CAPS],
-      5000,
+      LORA_TRAINING_MEM_FLOOR_MB + 1000,
     );
     expect(out).toContain('cpu_training');
     expect(out).toContain('gpu_training');
@@ -122,13 +124,25 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
     // Start under heavy pressure → only base caps survive.
     helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 500);
 
-    // Recover to 2 GB → cpu_training comes back.
+    // Recover to 2 GB → cpu_training comes back; gpu (4 GB floor) still stripped.
     let out = helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 2048);
     expect(out).toContain('cpu_training');
     expect(out).not.toContain('gpu_training');
 
-    // Recover to 5 GB → gpu/lora come back, diloco still stripped.
-    out = helper.applyMemoryPressureFilter([...BASE_CAPS, ...ALL_TRAINING_CAPS], 5000);
+    // Recover just above GPU floor (4096) → gpu back; lora (8192) + diloco still stripped.
+    out = helper.applyMemoryPressureFilter(
+      [...BASE_CAPS, ...ALL_TRAINING_CAPS],
+      GPU_TRAINING_MEM_FLOOR_MB + 100,
+    );
+    expect(out).toContain('gpu_training');
+    expect(out).not.toContain('lora_training');
+    expect(out).not.toContain('diloco_training');
+
+    // Recover just above LORA floor (8192) → gpu + lora back; diloco still stripped.
+    out = helper.applyMemoryPressureFilter(
+      [...BASE_CAPS, ...ALL_TRAINING_CAPS],
+      LORA_TRAINING_MEM_FLOOR_MB + 100,
+    );
     expect(out).toContain('gpu_training');
     expect(out).toContain('lora_training');
     expect(out).not.toContain('diloco_training');
@@ -336,7 +350,11 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
   });
 
   // Sanity: floor constants are exported and have the expected ordering.
-  it('floor constants are ordered: 900 tier (cpu_inference == inference == llm == embedding == cpu_training == docking) < gpu_inference < gpu == lora < diloco', () => {
+  // 2026-05-17: invariant changed from `gpu == lora < diloco` to
+  // `gpu < lora < diloco`. LoRA holds base + adapters resident in
+  // unified memory on mps fp16; generic gpu_training does not, so
+  // they no longer share a floor. DiLoCo carries a 7B base resident.
+  it('floor constants are ordered: 900 tier (cpu_inference == inference == llm == embedding == cpu_training == docking) < gpu_inference < gpu < lora < diloco', () => {
     expect(CPU_INFERENCE_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(INFERENCE_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(LLM_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
@@ -344,7 +362,9 @@ describe('HeartbeatHelper — per-capability memory-pressure gating (Bug G1)', (
     expect(DOCKING_MEM_FLOOR_MB).toBe(TRAINING_MEM_FLOOR_MB);
     expect(TRAINING_MEM_FLOOR_MB).toBeLessThan(GPU_INFERENCE_MEM_FLOOR_MB);
     expect(GPU_INFERENCE_MEM_FLOOR_MB).toBeLessThan(GPU_TRAINING_MEM_FLOOR_MB);
-    expect(GPU_TRAINING_MEM_FLOOR_MB).toBe(LORA_TRAINING_MEM_FLOOR_MB);
+    // LoRA holds base + adapters resident; gpu_training is a generic
+    // micro-training gate that stays at the lower 4 GB floor.
+    expect(GPU_TRAINING_MEM_FLOOR_MB).toBeLessThan(LORA_TRAINING_MEM_FLOOR_MB);
     expect(LORA_TRAINING_MEM_FLOOR_MB).toBeLessThan(DILOCO_TRAINING_MEM_FLOOR_MB);
   });
 

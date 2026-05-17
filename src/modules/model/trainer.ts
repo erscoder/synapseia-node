@@ -60,11 +60,19 @@ export const TRAINING_MEM_FLOOR_MB = 900;
 export const GPU_TRAINING_MEM_FLOOR_MB = 4096;
 
 /**
- * Minimum free RAM (MB) for `lora_training`. Same magnitude as
- * gpu_training; kept separate so we can tune one without the other
- * when the LoRA path matures and its real-world footprint diverges.
+ * Minimum free RAM (MB) for `lora_training`. The mps fp16 path holds
+ * the base model AND the LoRA adapters resident in system RAM (unified
+ * memory on Apple Silicon); the cuda 4-bit-quant path still fits
+ * comfortably under this floor. 8 GB is the empirical floor on Apple
+ * Silicon to avoid OOM at training start when the OS, browser, and
+ * node-ui are also resident.
+ *
+ * Note: as of 2026-05-17 this is intentionally `>` `GPU_TRAINING_MEM_FLOOR_MB`
+ * (was equal). Generic `gpu_training` stays at 4 GB so under-powered
+ * nodes can still participate in micro-training; LoRA carries more
+ * model state and needs the higher floor.
  */
-export const LORA_TRAINING_MEM_FLOOR_MB = 4096;
+export const LORA_TRAINING_MEM_FLOOR_MB = 8192;
 
 /**
  * Minimum free RAM (MB) for `lora_generation`. CUDA-only subtype.
@@ -75,11 +83,18 @@ export const LORA_TRAINING_MEM_FLOOR_MB = 4096;
 export const LORA_GENERATION_MEM_FLOOR_MB = 12288;
 
 /**
- * Minimum free RAM (MB) for `diloco_training`. Distributed gradient
- * aggregation needs a 7B-class base loaded in RAM plus the gradient
- * buffers; 6 GB is the floor empirically.
+ * Minimum free RAM (MB) for `diloco_training`. The mps fp16 path keeps
+ * Qwen2.5-7B base weights (~14 GB) resident in unified memory plus the
+ * gradient/optimizer buffers. The cuda path uses 4-bit quant and fits
+ * in <6 GB VRAM, but this floor measures system RAM — what mps shares
+ * with the OS. A 14 GB floor keeps a 16 GB unified-memory Mac below
+ * threshold under typical OS + browser + node-ui residency (<10 GB
+ * free in practice), which is what we want — those nodes OOM at
+ * weight-load time on the mps fp16 path. Production incident
+ * 2026-05-17 on node-kike: 16 GB M-series advertised diloco with 6 GB
+ * free, OOM-killed mid-load.
  */
-export const DILOCO_TRAINING_MEM_FLOOR_MB = 6144;
+export const DILOCO_TRAINING_MEM_FLOOR_MB = 14336;
 
 /**
  * Memory floor for advertising the `cpu_inference` capability.
