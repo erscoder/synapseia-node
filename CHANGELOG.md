@@ -1,5 +1,47 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(agent): cap-aware local accept gate — 0.8.69
+
+**Bug 22** — Node accepted WO whose type ∉ current advertised caps. Live
+evidence Mac M-series node-kike: caps stripped `diloco_training` via
+memory floor (correctly), yet accepted `wo_diloco_…` and started loading
+Qwen2.5-7B → about to OOM. Coord tier matrix (Bug 17a) allowed because
+user staked tier=3, but node should NEVER accept a WO type it doesn't
+itself advertise.
+
+Fix:
+- NEW `src/modules/agent/work-order/wo-type-to-cap.ts` central
+  WO-type → cap mapping (`Record<NonNullable<WorkOrder['type']>, string |
+  readonly string[]>`, compile-exhaustive) + `canLocallyAcceptWorkOrder()`
+  helper with fail-closed semantics on null/unknown caps (P2).
+- `accept-wo.ts` — final hard gate BEFORE `backpressure.acquire` +
+  `coordinator.acceptWorkOrder` POST. Single funnel (P6 verified —
+  no other accept call site).
+- `fetch-work-orders.ts` — pre-fetch defense-in-depth filter via
+  intersection of state caps × live heartbeat caps.
+- `heartbeat.ts` — exposes `getCurrentCapabilities()` getter on the
+  filter snapshot.
+
+WO-type → cap mapping:
+| WO type | Primary cap(s) |
+|---|---|
+| CPU_INFERENCE | cpu_inference |
+| GPU_INFERENCE | gpu_inference |
+| RESEARCH | inference OR llm (alias fallback) |
+| TRAINING | cpu_training |
+| DILOCO_TRAINING | diloco_training |
+| LORA_TRAINING | lora_training |
+| LORA_VALIDATION | lora_training + LORA_VALIDATOR_ENABLED='true' env gate |
+| MOLECULAR_DOCKING | molecular_docking |
+
+LORA_VALIDATION extra gate: opt-in env required (validator role is paid
+trust signal, prevents wasted /accept round-trip when env flag not set).
+
+Tests: 1835 pass / 0 fail (+8 from baseline 1827). New
+`wo-type-to-cap.spec.ts` 14 tests + 3 Bug-22 tests in
+`langgraph-nodes.test.ts`. Coverage on new module: 100% stmts /
+94.7% branches.
+
 ## [2026-05-17] chore(release): 0.8.68 lockstep (96b98d96)
 
 Ships one critical fix since 0.8.67:

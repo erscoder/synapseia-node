@@ -267,10 +267,48 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
 };
 
 /**
+ * Bug 22 (2026-05-17) — cap-aware local accept gate.
+ *
+ * Returns the most recently announced capability set (post
+ * `applyMemoryPressureFilter` strip + hysteresis). Used by the agent
+ * accept path (`accept-wo.ts`, `fetch-work-orders.ts`) to refuse WOs
+ * whose required cap was stripped after agent boot — the agent state
+ * caches `capabilities` at boot via `config.capabilities` and is never
+ * refreshed when heartbeat sheds caps under memory pressure.
+ *
+ * Pre-primer (heartbeat never sent) returns `[]`, forcing the accept
+ * gate to fail-closed (P2) — better to skip a WO than OOM the node
+ * because we accepted on an empty cap snapshot.
+ *
+ * Reads the module-private `lastAnnouncedCapabilities` directly (same
+ * pattern as `__resetCapabilitySnapshotForTests`) so the helper can be
+ * a plain function — no DI plumbing, no service-locator round-trips,
+ * no concerns about multiple `HeartbeatHelper` instances having
+ * divergent snapshots.
+ *
+ * Also: when the heartbeat is alive and announcing caps, this is the
+ * authoritative "what does coord know about me right now" answer —
+ * the snapshot coord most recently received from us. (Coord may have
+ * its own staleness window or drift detection between heartbeats, but
+ * this is the best-effort node-local view of the announced state.)
+ */
+export function getCurrentCapabilities(): readonly string[] {
+  return lastAnnouncedCapabilities ?? [];
+}
+
+/**
  * Test-only hook. Resets the module-private "previous" capability snapshot
  * so each unit test starts from a clean slate. Production code never calls
  * this — the snapshot is intentionally process-scoped at runtime.
  */
+/**
+ * Test-only seed for `lastAnnouncedCapabilities`. Lets accept-gate tests
+ * (Bug 22) drive the snapshot without spinning a full heartbeat cycle.
+ */
+export function __seedCapabilitySnapshotForTests(caps: string[] | null): void {
+  lastAnnouncedCapabilities = caps;
+}
+
 export function __resetCapabilitySnapshotForTests(): void {
   lastAnnouncedCapabilities = null;
   capLastFlipAt.clear();

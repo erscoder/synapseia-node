@@ -129,11 +129,18 @@ import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
 import { AgentBrainHelper } from '../../agent-brain';
 import type { WorkOrder } from '../state';
 import type { WorkOrderAgentConfig } from '../../work-order/work-order.types';
+import {
+  __seedCapabilitySnapshotForTests,
+  __resetCapabilitySnapshotForTests,
+} from '../../../heartbeat/heartbeat';
 
 const TEST_CONFIG: WorkOrderAgentConfig = {
   coordinatorUrl: 'http://localhost:3701',
   peerId: 'test_peer',
-  capabilities: ['llm'],
+  // Bug 22 (2026-05-17): include caps for every WO type fixture exercised
+  // in this file so the cap-aware accept gate (wo-type-to-cap.ts) doesn't
+  // reject by default.
+  capabilities: ['llm', 'inference', 'cpu_training', 'diloco_training'],
   llmModel: { provider: 'ollama' as const, modelId: 'phi4-mini', providerId: undefined },
   intervalMs: 5000,
 };
@@ -240,6 +247,22 @@ describe('FetchWorkOrdersNode', () => {
     const mockBackpressure = { canAccept: jest.fn().mockReturnValue(true), getInFlight: jest.fn().mockReturnValue(0), getMaxConcurrent: jest.fn().mockReturnValue(2), acquire: jest.fn().mockReturnValue(true), release: jest.fn() } as any;
     node = new FetchWorkOrdersNode(coordinator, execution, mockBackpressure);
     node.reset();
+    // Bug 22: seed heartbeat snapshot covering all WO type primary caps
+    // used in this describe block (RESEARCH→inference, TRAINING→cpu_training,
+    // DILOCO_TRAINING→diloco_training). Without this, intersection of state
+    // caps with live caps is empty → every WO is skipped on the live-caps gate.
+    __seedCapabilitySnapshotForTests([
+      'llm',
+      'inference',
+      'cpu_inference',
+      'cpu_training',
+      'gpu_training',
+      'diloco_training',
+    ]);
+  });
+
+  afterEach(() => {
+    __resetCapabilitySnapshotForTests();
   });
 
   it('returns empty when coordinator returns empty', async () => {

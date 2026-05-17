@@ -67,6 +67,10 @@ import { EvaluateEconomicsNode } from '../nodes/evaluate-economics';
 import { AcceptWorkOrderNode } from '../nodes/accept-wo';
 import { UpdateMemoryNode } from '../nodes/update-memory';
 import { AgentBrainHelper } from '../../agent-brain';
+import {
+  __seedCapabilitySnapshotForTests,
+  __resetCapabilitySnapshotForTests,
+} from '../../../heartbeat/heartbeat';
 
 // Mocked helpers (constructed after jest.mock calls above)
 const { WorkOrderCoordinatorHelper } = require('../../work-order/work-order.coordinator');
@@ -106,13 +110,13 @@ function makeState(overrides: Partial<AgentState> = {}): AgentState {
     config: {
       coordinatorUrl: 'http://localhost:3701',
       peerId: 'peer1',
-      capabilities: ['llm'],
+      capabilities: ['llm', 'inference'],
       llmModel: { provider: 'ollama', modelId: 'phi4-mini', providerId: '' },
       intervalMs: 5000,
     },
     coordinatorUrl: 'http://localhost:3701',
     peerId: 'peer1',
-    capabilities: ['llm'],
+    capabilities: ['llm', 'inference'],
     ...overrides,
   };
 }
@@ -151,6 +155,21 @@ describe('FetchWorkOrdersNode', () => {
     // and don't rely on module-level mocks
     node = new FetchWorkOrdersNode(coordinator, execution, mockBackpressure as any);
     node.reset();
+    // Bug 22: seed heartbeat snapshot so the cap-gate has data.
+    // Cover all caps used by fixtures in this block (llm for RESEARCH +
+    // inference for the type→cap mapping, cpu_training for TRAINING WOs).
+    __seedCapabilitySnapshotForTests([
+      'llm',
+      'inference',
+      'cpu_inference',
+      'cpu_training',
+      'gpu_training',
+      'diloco_training',
+    ]);
+  });
+
+  afterEach(() => {
+    __resetCapabilitySnapshotForTests();
   });
 
   it('returns empty array when coordinator returns empty', async () => {
@@ -245,6 +264,15 @@ describe('AcceptWorkOrderNode', () => {
     };
     (node as any).coordinator = mockCoordinator;
     mockBackpressure.acquire.mockReturnValue(true);
+    // Bug 22: seed heartbeat snapshot so the cap gate has data. RESEARCH_WO
+    // requires `inference` per the WO-type-to-cap mapping plus `llm` per
+    // its requiredCapabilities array. Tests that exercise the gate
+    // explicitly seed their own snapshot.
+    __seedCapabilitySnapshotForTests(['llm', 'inference']);
+  });
+
+  afterEach(() => {
+    __resetCapabilitySnapshotForTests();
   });
 
   it('accepts work order successfully', async () => {
@@ -261,6 +289,77 @@ describe('AcceptWorkOrderNode', () => {
   it('returns false when no work order', async () => {
     const result = await node.execute(makeState({ selectedWorkOrder: null }));
     expect(result.accepted).toBe(false);
+  });
+
+  // ── Bug 22 (2026-05-17) — cap-aware local accept gate ───────────────────
+  it('rejects DILOCO WO when diloco_training is stripped from current caps', async () => {
+    // Reproduces the live bug: heartbeat shed `diloco_training` under
+    // memory pressure but state.capabilities (boot snapshot) still had it.
+    // The accept path MUST consult the live snapshot, not state.
+    __seedCapabilitySnapshotForTests([
+      'cpu_inference',
+      'inference',
+      'llm',
+      'embedding',
+      'gpu_inference',
+      'cpu_training',
+      'gpu_training',
+    ]);
+    const dilocoWo: WorkOrder = {
+      id: 'wo_diloco_x',
+      title: 'DiLoCo training: medical',
+      description: 'training',
+      type: 'DILOCO_TRAINING',
+      requiredCapabilities: ['diloco_training'],
+      rewardAmount: '1000000000',
+      status: 'PENDING',
+      creatorAddress: 'creator1',
+      createdAt: Date.now(),
+    };
+    const result = await node.execute(
+      makeState({
+        selectedWorkOrder: dilocoWo,
+        // state still has it from boot — must be ignored in favor of live
+        capabilities: ['diloco_training', 'cpu_inference', 'llm'],
+      }),
+    );
+    expect(result.accepted).toBe(false);
+    // Coordinator MUST NOT have been called — gate must reject before POST
+    expect(
+      (node as any).coordinator.acceptWorkOrder,
+    ).not.toHaveBeenCalled();
+    // Backpressure slot MUST NOT have been acquired
+    expect(mockBackpressure.acquire).not.toHaveBeenCalled();
+  });
+
+  it('rejects fail-closed when heartbeat has not primed (empty current caps)', async () => {
+    __seedCapabilitySnapshotForTests(null);
+    const result = await node.execute(makeState({ selectedWorkOrder: RESEARCH_WO }));
+    expect(result.accepted).toBe(false);
+    expect(
+      (node as any).coordinator.acceptWorkOrder,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects fail-closed for unknown WO type even when caps look healthy', async () => {
+    __seedCapabilitySnapshotForTests([
+      'cpu_inference',
+      'gpu_inference',
+      'diloco_training',
+      'lora_training',
+      'inference',
+      'llm',
+    ]);
+    const unknownWo: WorkOrder = {
+      ...RESEARCH_WO,
+      id: 'wo_unknown',
+      type: undefined,
+    };
+    const result = await node.execute(makeState({ selectedWorkOrder: unknownWo }));
+    expect(result.accepted).toBe(false);
+    expect(
+      (node as any).coordinator.acceptWorkOrder,
+    ).not.toHaveBeenCalled();
   });
 });
 

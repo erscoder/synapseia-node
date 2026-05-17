@@ -4,6 +4,8 @@ import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution'
 import { BackpressureService } from '../../work-order/backpressure.service';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
+import { canLocallyAcceptWorkOrder } from '../../work-order/wo-type-to-cap';
+import { getCurrentCapabilities } from '../../../heartbeat/heartbeat';
 import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
 import { isChatInferenceActive } from '../../../inference/chat-inference-state';
@@ -50,18 +52,33 @@ export class FetchWorkOrdersNode {
     logger.log(` Found ${workOrders.length} available work order(s)`);
     const now = Date.now();
 
-    const ownCaps = new Set(capabilities ?? []);
+    // Bug 22 (2026-05-17) — intersect state.capabilities (boot-time
+    // snapshot stuck in agent config) with the LIVE heartbeat-filtered
+    // set. The boot snapshot is the "ceiling" of what we can ever do,
+    // the heartbeat snapshot is "what we can do RIGHT NOW after memory
+    // pressure stripped some". A cap that left the heartbeat must not
+    // be considered acceptable here even if state still lists it.
+    // Pre-primer (heartbeat null) currentCaps is `[]` → we fall back to
+    // state caps so a clean boot still works; the final hard guard
+    // lives in `accept-wo.ts` (fails closed on pre-primer).
+    const live = getCurrentCapabilities();
+    const effectiveCaps = live.length > 0
+      ? (capabilities ?? []).filter((c) => live.includes(c))
+      : (capabilities ?? []);
     const pending = workOrders.filter((wo: WorkOrder) => {
       // Capability guard: the coordinator should already filter by registered
       // capabilities, but defend against mismatches (e.g. a coordinator that
-      // trusts self-reported caps, or a WO whose requirements were tightened
-      // after the node's heartbeat). Without this guard the node wastes an
-      // HTTP round-trip and logs "likely race condition" on the inevitable
-      // 400 from /accept.
-      const required = wo.requiredCapabilities ?? [];
-      const missing = required.filter(c => !ownCaps.has(c));
-      if (missing.length > 0) {
-        logger.log(` WO "${wo.title}" requires [${required.join(',')}] — missing [${missing.join(',')}], skipping`);
+      // trusts self-reported caps, a WO whose requirements were tightened
+      // after the node's heartbeat, or — Bug 22 — a cap stripped from
+      // the live heartbeat AFTER the agent state was seeded at boot).
+      // Without this guard the node wastes an HTTP round-trip and logs
+      // "likely race condition" on the inevitable 400 from /accept,
+      // OR — worse — coord rubber-stamps and the node OOMs trying to
+      // execute a WO whose required cap was stripped under memory
+      // pressure.
+      const gate = canLocallyAcceptWorkOrder(wo, effectiveCaps);
+      if (!gate.ok) {
+        logger.log(` WO "${wo.title}" skipped: ${gate.reason}`);
         return false;
       }
       // Skip work orders already rejected by economic evaluation
