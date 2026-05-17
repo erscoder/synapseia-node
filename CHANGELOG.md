@@ -1,5 +1,36 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(heartbeat): clearTimeout in LoRA/CUDA/PyTorch probe success paths — 0.8.72
+
+**Bug 23** — `setTimeout` literal sin captura en 3 probes (`isLoraStackAvailable`,
+`isCudaAvailable`, `isPyTorchAvailable`) pineaba event loop 30-60s post-success
+porque no había forma de `clearTimeout`. Production: delays graceful shutdown.
+Jest: worker leak warning.
+
+Fix (opción B — `clearTimeout` en success/error paths):
+- `const killTimer = setTimeout(...)` captured
+- `proc.on('close')` + `proc.on('error')` BOTH `clearTimeout(killTimer)`
+  antes de `settle()`
+- Inline P10 comment: "kill timer must be cleared in success/error paths —
+  otherwise pins event loop until firing, delaying graceful shutdown"
+- NO `.unref()` — clearTimeout más limpio (libera proc ref + closure
+  immediately, no espera GC)
+
+3 sites fixed (P28 grep):
+- `heartbeat.ts:492` isLoraStackAvailable (60s timeout)
+- `heartbeat.ts:608` isCudaAvailable (30s timeout)
+- `trainer.ts:293` isPyTorchAvailable (30s timeout)
+
+Tests: new `heartbeat-probe-timers.spec.ts` — 6 tests (3 per probe:
+happy / error / timeout). Uses `jest.useFakeTimers()` +
+`jest.getTimerCount()` real assertions (P29). 77/77 heartbeat suite
+pass cold 3x, zero worker-leak warnings. `--detectOpenHandles` clean.
+
+Test surface: 5 `__*ForTests` exports on heartbeat (dynamic
+`import('node:child_process')` defeats `jest.mock`, module-level
+injection only clean surface). Follow-up: extract probe-runner
+helper to eliminate duplication (LOW reviewer note).
+
 ## [2026-05-17] fix(docking): obabel timeout 180s → 600s + env override — 0.8.71
 
 **Bug 20** — `obabel --gen3d -h` timeout 180s repeatedly hit on

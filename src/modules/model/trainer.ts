@@ -286,11 +286,16 @@ export class TrainerHelper {
       });
       let settled = false;
       const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
-      proc.on('close', (code) => settle(code === 0));
-      proc.on('error', () => settle(false));
       // 30s — `import torch` on a cold cache can take 5-10s on macOS, longer
       // when the CPU is busy with another training run.
-      setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
+      // Bug 23 (HIGH): kill timer must be cleared in success/error paths —
+      // otherwise pins event loop until firing, delaying graceful shutdown.
+      const killTimer = setTimeout(() => {
+        try { proc.kill(); } catch { /* ignore */ }
+        settle(false);
+      }, 30_000);
+      proc.on('close', (code) => { clearTimeout(killTimer); settle(code === 0); });
+      proc.on('error', () => { clearTimeout(killTimer); settle(false); });
     });
 
     if (result) TrainerHelper.pyTorchCache = true;

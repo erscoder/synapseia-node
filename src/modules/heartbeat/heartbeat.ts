@@ -356,6 +356,49 @@ export function __seedLoraStackProbeForTests(
 }
 
 /**
+ * Test-only spawn override. The dynamic `await import('node:child_process')`
+ * inside `isLoraStackAvailable` / `isCudaAvailable` (and `trainer.ts`)
+ * bypasses `jest.mock('child_process')`, so module-level injection is the
+ * cleanest test surface for the timer-leak regression (Bug 23). When set,
+ * the probe path delegates to this factory instead of the real spawn.
+ * Production code never calls this; `null` means "use real spawn".
+ */
+let probeSpawnOverrideForTest:
+  | ((cmd: string, args: readonly string[]) => import('node:child_process').ChildProcess)
+  | null = null;
+
+export function __setProbeSpawnOverrideForTests(
+  fn: ((cmd: string, args: readonly string[]) => import('node:child_process').ChildProcess) | null,
+): void {
+  probeSpawnOverrideForTest = fn;
+}
+
+/** Test-only: also force-reset the LoRA marker-check + venvExists short-circuit
+ *  so the spec exercises the spawn path deterministically. */
+export function __forceLoraProbeSpawnForTests(): void {
+  loraStackMarkerChecked = true;     // skip marker hydration
+  loraStackCache = null;             // miss positive cache
+  loraStackForcedFalseForTest = false; // do not short-circuit false
+}
+
+/** Test-only: reset the CUDA cache so a fresh probe runs. */
+export function __resetCudaCacheForTests(): void {
+  cudaCache = null;
+}
+
+/** Test-only export of the LoRA probe so the timer-leak spec can drive
+ *  the success/error/timeout paths directly. Bug 23 regression test. */
+export async function __isLoraStackAvailableForTests(): Promise<boolean> {
+  return isLoraStackAvailable();
+}
+
+/** Test-only export of the CUDA probe so the timer-leak spec can drive
+ *  the success/error/timeout paths directly. Bug 23 regression test. */
+export async function __isCudaAvailableForTests(): Promise<boolean> {
+  return isCudaAvailable();
+}
+
+/**
  * Cached LoRA stack probe.
  *
  * Bug 12 v2 (root cause) — pre-fix code respawned `python -c "import
@@ -445,16 +488,17 @@ async function isLoraStackAvailable(): Promise<boolean> {
   // would be a lie that the next boot would cheerfully trust). Short-
   // circuit with `false` before paying the spawn cost; the operator
   // can re-run `syn install-deps` to recreate the venv.
-  if (!venvExists()) {
+  if (!venvExists() && probeSpawnOverrideForTest === null) {
     loraStackLastError = 'venv not found at ~/.synapseia/venv (run `syn install-deps`)';
     return false;
   }
-  const { spawn } = await import('node:child_process');
+  const spawn = probeSpawnOverrideForTest
+    ?? (await import('node:child_process')).spawn;
   const probeResult = await new Promise<{ ok: boolean; reason: string | null }>((res) => {
     const proc = spawn(
       venvPython(),
       ['-c', 'import transformers, peft, datasets, safetensors, accelerate'],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+      { stdio: ['ignore', 'pipe', 'pipe'] } as any,
     );
     let stderr = '';
     proc.stderr?.on('data', (chunk: Buffer) => {
@@ -472,7 +516,18 @@ async function isLoraStackAvailable(): Promise<boolean> {
         res({ ok, reason });
       }
     };
+    // Bug 23 (HIGH): kill timer must be cleared in success/error paths —
+    // otherwise pins event loop until firing, delaying graceful shutdown
+    // and leaking "A worker process has failed to exit gracefully" warnings
+    // in the test suite. clearTimeout is preferred over .unref() because it
+    // also releases the proc closure scope immediately, instead of waiting
+    // for GC after the 60s firing.
+    const killTimer = setTimeout(() => {
+      try { proc.kill(); } catch { /* ignore */ }
+      settle(false, 'probe timed out after 60s (cold transformers import on a busy host can hit this — heartbeat will retry next cycle)');
+    }, 60_000);
     proc.on('close', (code) => {
+      clearTimeout(killTimer);
       if (code === 0) {
         settle(true, null);
       } else {
@@ -488,11 +543,10 @@ async function isLoraStackAvailable(): Promise<boolean> {
         settle(false, firstSignal);
       }
     });
-    proc.on('error', (err) => settle(false, `spawn failed: ${err.message}`));
-    setTimeout(() => {
-      try { proc.kill(); } catch { /* ignore */ }
-      settle(false, 'probe timed out after 60s (cold transformers import on a busy host can hit this — heartbeat will retry next cycle)');
-    }, 60_000);
+    proc.on('error', (err) => {
+      clearTimeout(killTimer);
+      settle(false, `spawn failed: ${err.message}`);
+    });
   });
   if (probeResult.ok) {
     loraStackCache = true;
@@ -594,18 +648,24 @@ function isDilocoModelAvailable(): boolean {
 let cudaCache: boolean | null = null;
 async function isCudaAvailable(): Promise<boolean> {
   if (cudaCache === true) return true;
-  const { spawn } = await import('node:child_process');
+  const spawn = probeSpawnOverrideForTest
+    ?? (await import('node:child_process')).spawn;
   const result = await new Promise<boolean>((res) => {
     const proc = spawn(
       resolvePython(),
       ['-c', 'import torch; assert torch.cuda.is_available()'],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+      { stdio: ['ignore', 'pipe', 'pipe'] } as any,
     );
     let settled = false;
     const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
-    proc.on('close', (code) => settle(code === 0));
-    proc.on('error', () => settle(false));
-    setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } settle(false); }, 30_000);
+    // Bug 23 (HIGH): kill timer must be cleared in success/error paths —
+    // otherwise pins event loop until firing, delaying graceful shutdown.
+    const killTimer = setTimeout(() => {
+      try { proc.kill(); } catch { /* ignore */ }
+      settle(false);
+    }, 30_000);
+    proc.on('close', (code) => { clearTimeout(killTimer); settle(code === 0); });
+    proc.on('error', () => { clearTimeout(killTimer); settle(false); });
   });
   if (result) cudaCache = true;
   return result;
