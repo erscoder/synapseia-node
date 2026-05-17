@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] chore(release): 0.8.68 lockstep (96b98d96)
+
+Ships one critical fix since 0.8.67:
+
+- **fix(docking)** `83b8601a` — macOS Vina download URL was wrong since
+  0.8.55. Generated `vina_1.2.5_macos_arm64` → HTTP 404 on every Mac.
+  Real assets: `vina_1.2.5_mac_aarch64` and `vina_1.2.5_mac_x86_64`.
+  Every Mac operator failed Phase 7 silently; nodes that ended up with
+  `docking` cap active had stale `vina` from a prior brew tap or
+  PATH residue and crashed WO execution at precheck. Fix: corrected
+  ternary (`arm64 → aarch64`) + URL segment (`macos → mac`) + new
+  post-download `${vinaBinPath} --version` probe with 10 s timeout to
+  catch future drift where curl downloads a GH 404 HTML page that
+  chmod-executes cleanly but isn't real Mach-O. Parametrized arm64 +
+  x64 tests with literal-URL substring assertions + verify-failure
+  path (21/21 docking install tests pass). Linux apt-get / dnf path
+  untouched.
+
+Coord stays at 0.8.66 (decoupled — no coord-side changes this cycle,
+no Fly redeploy needed). Operator action after upgrade: re-run
+`syn install-deps` (or restart node-ui which boot-time installs) to
+land Vina at `~/.synapseia/bin/vina`.
+
 ## [2026-05-17] fix(docking): vina download URL (mac_aarch64 not macos_arm64) (83b8601a)
 
 **Latent since 0.8.55** — every macOS Vina install attempted by the
