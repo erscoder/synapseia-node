@@ -14,7 +14,7 @@ import {
 } from '../llm/ollama-pause';
 import {
   ensureMemForHeavyTraining,
-  DILOCO_REQUIRED_FREE_MB,
+  requiredMemForHeavyTraining,
 } from './heavy-training-preflight';
 import { startMemorySampler } from './memory-sampler';
 
@@ -114,7 +114,7 @@ export class DiLoCoTrainerHelper {
   ): Promise<DiLoCoResult> {
     const ollamaHandle = await maybePauseOllamaForHeavyTraining();
     try {
-      await ensureMemForHeavyTraining(DILOCO_REQUIRED_FREE_MB);
+      await ensureMemForHeavyTraining(requiredMemForHeavyTraining('DiLoCo'), { label: 'DiLoCo' });
       return await this._spawnDiLoCoTrain(config, onProgress, spawnFn, statFn);
     } finally {
       await maybeRestartOllamaAfterHeavyTraining(ollamaHandle);

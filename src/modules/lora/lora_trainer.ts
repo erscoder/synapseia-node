@@ -31,7 +31,7 @@ import {
 } from '../llm/ollama-pause';
 import {
   ensureMemForHeavyTraining,
-  LORA_REQUIRED_FREE_MB,
+  requiredMemForHeavyTraining,
 } from '../model/heavy-training-preflight';
 import { startMemorySampler } from '../model/memory-sampler';
 import type {
@@ -104,7 +104,7 @@ export async function runLora(input: RunLoraInput, options: RunLoraOptions = {})
     // coordinator's ACCEPTED-TTL expiry handles re-routing.
     const ollamaHandle = await maybePauseOllamaForHeavyTraining();
     try {
-      await ensureMemForHeavyTraining(LORA_REQUIRED_FREE_MB);
+      await ensureMemForHeavyTraining(requiredMemForHeavyTraining('LoRA'), { label: 'LoRA' });
       await runPython(
         options.pythonBin ?? defaultPythonBin(),
         scriptPath,

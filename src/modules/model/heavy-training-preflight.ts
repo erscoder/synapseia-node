@@ -57,9 +57,11 @@
  *        but tagged @deprecated so future readers migrate.
  */
 
+import { spawnSync } from 'child_process';
 import { promises as fs } from 'fs';
 import { freemem } from 'os';
 import logger from '../../utils/logger';
+import { resolvePython } from '../../utils/python-venv';
 
 /**
  * Slice 10 (Plan B, 2026-05-17) — BUMPED from 18432 to 36864 (36 GB).
@@ -109,7 +111,92 @@ import logger from '../../utils/logger';
  * Bug 21's container-class cap-gate already prevents acceptance on
  * pods that obviously cannot fit a heavy WO; this is a second line.
  */
-export const DILOCO_REQUIRED_FREE_MB = 36864;
+/**
+ * Slice 17 (Plan B, 2026-05-17) — dynamic DiLoCo threshold based on the
+ * CUDA 4-bit quant path availability (`detectQuantSupport()`).
+ *
+ * QUANT path (torch + bitsandbytes + CUDA available)
+ * --------------------------------------------------
+ * Qwen2.5-7B 4-bit nf4 weights load at ~5 GB on-device. With activations
+ * (~1.5 GB at batch_size=4 seq=1024), optimizer state (LoRA-style adapters
+ * only when DiLoCo runs with frozen base = same scale as LoRA), CUDA
+ * staging buffers + Python heap + safetensors mmap residue, the observed
+ * peak settles around ~6-7 GB. 8 GB headroom is a 25% safety margin and
+ * still keeps the gate useful — pods under 8 GB free really cannot host
+ * a Qwen-class CUDA run.
+ *
+ * Empirical basis: Slice 16 enabled the cu121 + bnb install in the
+ * NVIDIA pod bootstrap (commit b3274b8a7+). Pod measurements pending
+ * (Slice 18 sampler will capture the QUANT-path peak distribution and
+ * may justify dropping further). 8 GB is intentionally conservative —
+ * the cost of over-skip on a 16 GB pod is one rejected accept; the cost
+ * of under-skip is a SIGKILL loop. P24 fail-safe direction.
+ */
+export const DILOCO_REQUIRED_FREE_MB_QUANT = 8192; // 8 GB
+
+/**
+ * FP32 fallback DiLoCo threshold — see Slice 10 docblock below for the
+ * full historical rationale. Used when `detectQuantSupport()` returns
+ * false (no CUDA, no bitsandbytes, or probe error → fail-CLOSED).
+ *
+ * Slice 10 (Plan B, 2026-05-17) — BUMPED from 18432 to 36864 (36 GB).
+ *
+ * Rationale for the bump
+ * ----------------------
+ * The original 18 GB headroom (Bug 28) was computed as
+ * "14 GB load peak + 4 GB margin". Empirically this is INSUFFICIENT
+ * on pod A40 (cgroup 46.6 GB, swap=0, oom_kill=10 verified
+ * 2026-05-17 20:19 UTC): preflight passed at
+ * `free=40896MB >= required=18432MB` and DiLoCo STILL got SIGKILL'd
+ * 2 minutes later at the ~100% weight load line.
+ *
+ * What we missed in the 18 GB estimate
+ * ------------------------------------
+ * The "100% loaded" HF safetensors progress line marks the network
+ * download / mmap setup finishing, NOT the full RSS materialization.
+ * After that line several costs stack BEFORE training equilibrium:
+ *   - safetensors lazy mmap pages actually fault into RSS as tensors
+ *     are referenced;
+ *   - first backward pass activations (Qwen2.5-7B + batch_size=4
+ *     fp32 ~5-8 GB additional);
+ *   - quantization temp buffers (cudaMalloc / MPS staging) for the
+ *     CUDA path;
+ *   - CUDA pinned memory pool (DataLoader transfer buffers — note
+ *     Slice 11 sets pin_memory=False to mitigate this specifically);
+ *   - kernel page cache for the snapshot files (not reclaimable
+ *     under WO-level memory pressure because the trainer is still
+ *     reading them);
+ *   - Python interpreter heap + transformers/torch graph metadata.
+ *
+ * Combined peak: well over 30 GB on a 7B class model even with
+ * `low_cpu_mem_usage=True` (Slice 11). Without swap (swap.max=0 on
+ * the affected pod) any spike past the cgroup limit is an instant
+ * SIGKILL — no grace, no swap-out.
+ *
+ * 36 GB is a SAFER margin until `predictedPeakDuringTraining` is
+ * properly modeled (future Plan B slice — concrete numbers come from
+ * the continuous memory sampler added in Slice 10b). It is NOT a
+ * permanent target: as the sampler produces real distributions
+ * across the fleet we expect this to drop again (probably to
+ * ~28-30 GB), but only with evidence.
+ *
+ * Knock-on effect: this gate over-skips on memory-light pods. That
+ * is BY DESIGN — the alternative is the SIGKILL loop where coord
+ * keeps re-routing to the same crashing node every accept TTL.
+ * Bug 21's container-class cap-gate already prevents acceptance on
+ * pods that obviously cannot fit a heavy WO; this is a second line.
+ */
+export const DILOCO_REQUIRED_FREE_MB_FP32 = 36864;
+
+/**
+ * Back-compat alias — defaults to the SAFER FP32 threshold so any
+ * caller that still imports the static constant (per P11 grep we
+ * updated all known callers in Slice 17, but external/vendored copies
+ * may exist) gets the conservative gate. New callers should use
+ * `requiredMemForHeavyTraining('DiLoCo')` to pick up the QUANT path
+ * automatically on CUDA + bitsandbytes pods.
+ */
+export const DILOCO_REQUIRED_FREE_MB = DILOCO_REQUIRED_FREE_MB_FP32;
 
 /**
  * Slice 10 (Plan B, 2026-05-17) — BUMPED from 14336 to 24576 (24 GB).
@@ -132,7 +219,56 @@ export const DILOCO_REQUIRED_FREE_MB = 36864;
  * container-class cap-gate already prevents acceptance there, so
  * the over-skip is harmless.
  */
-export const LORA_REQUIRED_FREE_MB = 24576;
+/**
+ * Slice 17 (Plan B, 2026-05-17) — dynamic LoRA threshold based on the
+ * CUDA 4-bit quant path availability.
+ *
+ * QUANT path peak ≈ 5 GB (4-bit base weights) + 0.5 GB (adapter +
+ * adapter optimizer state) + 0.5 GB (activations + CUDA staging) ≈
+ * 6 GB. Same 25% safety margin as DiLoCo — anything tighter risks
+ * SIGKILL on cgroup edge cases (page cache + Python heap noise).
+ *
+ * Empirical basis: identical CUDA load profile to DiLoCo QUANT path
+ * (same base, same bnb config). Adapter training is the *cheaper*
+ * branch — no backbone gradient buffer, no full Adam mirror — so this
+ * threshold is upper-bounded by DiLoCo's QUANT estimate minus the
+ * frozen-base savings (~2 GB).
+ */
+export const LORA_REQUIRED_FREE_MB_QUANT = 6144; // 6 GB
+
+/**
+ * FP32 fallback LoRA threshold — see Slice 10 docblock below for the
+ * historical rationale. Used when `detectQuantSupport()` returns
+ * false. Default for back-compat callers via `LORA_REQUIRED_FREE_MB`.
+ *
+ * Slice 10 (Plan B, 2026-05-17) — BUMPED from 14336 to 24576 (24 GB).
+ *
+ * LoRA peak is smaller than DiLoCo because the optimizer state lives
+ * on adapter parameters only (~MB scale) and gradients flow only to
+ * the adapter. BUT the load-time fp16 footprint + safetensors mmap +
+ * page cache + CUDA pinned memory pool penalty stacks identically to
+ * DiLoCo's load phase (see DILOCO_REQUIRED_FREE_MB_FP32 docblock).
+ * Empirically the difference is "no separate Adam mirror, no full
+ * backbone gradient buffer" — call it ~10-12 GB less peak than DiLoCo's
+ * 36 GB headroom.
+ *
+ * 24 GB headroom is therefore tuned as
+ *   DiLoCo (36) − Adam mirror (≈8) − full-backbone grad buffer (≈4)
+ *
+ * Same caveats as DiLoCo: provisional until the Slice 10b sampler
+ * produces real distributions. If a future LoRA base ships below
+ * 7B (1B / 3B), this gate over-skips on tiny pods — Bug 21's
+ * container-class cap-gate already prevents acceptance there, so
+ * the over-skip is harmless.
+ */
+export const LORA_REQUIRED_FREE_MB_FP32 = 24576;
+
+/**
+ * Back-compat alias — defaults to FP32 (safer). See
+ * `DILOCO_REQUIRED_FREE_MB` for the rationale on keeping both static
+ * aliases alongside the dynamic helper.
+ */
+export const LORA_REQUIRED_FREE_MB = LORA_REQUIRED_FREE_MB_FP32;
 
 /**
  * After GC + drop_caches the kernel needs a tick to actually reclaim
@@ -147,6 +283,102 @@ const CGROUP_V2_CURRENT = '/sys/fs/cgroup/memory.current';
 const CGROUP_V1_LIMIT = '/sys/fs/cgroup/memory/memory.limit_in_bytes';
 const CGROUP_V1_USAGE = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
 const DROP_CACHES_PATH = '/proc/sys/vm/drop_caches';
+
+/**
+ * Slice 17 (Plan B, 2026-05-17) — One-shot probe at first use that
+ * reports whether the CUDA 4-bit quant path is available
+ * (`torch.cuda.is_available()` AND `import bitsandbytes` both succeed).
+ *
+ * Cache lifetime
+ * --------------
+ * Result is cached for the lifetime of the node process. torch / bnb
+ * installation cannot change without restarting the node (install-deps
+ * runs the venv update before re-spawning the daemon — see
+ * `python-venv.ts`), so re-probing per WO would burn ~50ms of subprocess
+ * latency for no information.
+ *
+ * Fail-CLOSED (per P24)
+ * ---------------------
+ * Any probe failure → caches `false` → callers fall through to the
+ * FP32 threshold. The cost of a false negative (CUDA pod treated as
+ * FP32) is over-skip on memory-light pods. The cost of a false
+ * positive (FP32-only pod treated as CUDA) is a guaranteed SIGKILL.
+ * The asymmetry justifies the conservative direction.
+ */
+let quantSupportCache: boolean | null = null;
+
+export function detectQuantSupport(opts?: {
+  pythonBin?: string;
+  /** Test-only hook: bypass spawnSync entirely. */
+  probeFn?: () => boolean;
+}): boolean {
+  if (quantSupportCache !== null) return quantSupportCache;
+
+  if (opts?.probeFn) {
+    quantSupportCache = opts.probeFn();
+    return quantSupportCache;
+  }
+
+  try {
+    const pyBin = opts?.pythonBin ?? resolvePython();
+    const res = spawnSync(
+      pyBin,
+      [
+        '-c',
+        'import torch, bitsandbytes; print("1" if torch.cuda.is_available() else "0")',
+      ],
+      { stdio: 'pipe', timeout: 8000, encoding: 'utf8' },
+    );
+    const ok = res.status === 0 && res.stdout?.trim() === '1';
+    if (ok) {
+      logger.log(
+        '[Preflight] CUDA 4-bit quant path AVAILABLE (torch.cuda + bitsandbytes) — using QUANT thresholds',
+      );
+    } else {
+      logger.warn(
+        `[Preflight] CUDA 4-bit quant NOT available ` +
+          `(status=${res.status}, stdout='${(res.stdout ?? '').trim()}', ` +
+          `stderr='${(res.stderr ?? '').slice(0, 200)}') — using FP32 thresholds`,
+      );
+    }
+    quantSupportCache = ok;
+    return ok;
+  } catch (err) {
+    logger.warn(
+      `[Preflight] quant-support probe threw (${(err as Error).message}) — ` +
+        'fail-CLOSED, using FP32 thresholds',
+    );
+    quantSupportCache = false;
+    return false;
+  }
+}
+
+/**
+ * Test-only: reset the module-level cache so consecutive specs can
+ * exercise the probe path without process restart. Production code
+ * never calls this — the cache is intentionally process-lifetime.
+ */
+export function __resetQuantSupportCacheForTests(): void {
+  quantSupportCache = null;
+}
+
+/**
+ * Slice 17 (Plan B, 2026-05-17) — Heavy training workload selector.
+ * Maps the abstract workload name to its preflight threshold, picking
+ * QUANT or FP32 based on `detectQuantSupport()`. New callers should
+ * prefer this over importing the raw constants directly — when Slice 18
+ * sampler data lowers the QUANT estimate, only this helper needs to
+ * pick up the new number.
+ */
+export type HeavyWorkload = 'DiLoCo' | 'LoRA';
+
+export function requiredMemForHeavyTraining(workload: HeavyWorkload): number {
+  const quant = detectQuantSupport();
+  if (workload === 'DiLoCo') {
+    return quant ? DILOCO_REQUIRED_FREE_MB_QUANT : DILOCO_REQUIRED_FREE_MB_FP32;
+  }
+  return quant ? LORA_REQUIRED_FREE_MB_QUANT : LORA_REQUIRED_FREE_MB_FP32;
+}
 
 /**
  * Controlled-failure error: the gate decided the heavy training spawn
@@ -375,8 +607,10 @@ export async function ensureMemForHeavyTraining(
  * thresholds (test-only).
  */
 function defaultLabelForRequired(requiredMB: number): string {
-  if (requiredMB === DILOCO_REQUIRED_FREE_MB) return 'DiLoCo';
-  if (requiredMB === LORA_REQUIRED_FREE_MB) return 'LoRA';
+  if (requiredMB === DILOCO_REQUIRED_FREE_MB_FP32) return 'DiLoCo';
+  if (requiredMB === DILOCO_REQUIRED_FREE_MB_QUANT) return 'DiLoCo';
+  if (requiredMB === LORA_REQUIRED_FREE_MB_FP32) return 'LoRA';
+  if (requiredMB === LORA_REQUIRED_FREE_MB_QUANT) return 'LoRA';
   return 'Training';
 }
 

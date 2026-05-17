@@ -33,8 +33,19 @@ jest.mock('../../llm/ollama-pause', () => ({
 
 jest.mock('../../model/heavy-training-preflight', () => ({
   ensureMemForHeavyTraining: (...args: unknown[]) => mockEnsureMem(...args),
+  // Slice 17: caller now selects the threshold via the dynamic helper.
+  // Mock returns LORA_REQUIRED_FREE_MB so existing assertions on the
+  // numeric value keep working without touching the probe path.
+  requiredMemForHeavyTraining: (workload: 'DiLoCo' | 'LoRA') =>
+    workload === 'DiLoCo' ? 18432 : 14336,
+  detectQuantSupport: () => false,
+  __resetQuantSupportCacheForTests: () => undefined,
   DILOCO_REQUIRED_FREE_MB: 18432,
+  DILOCO_REQUIRED_FREE_MB_FP32: 18432,
+  DILOCO_REQUIRED_FREE_MB_QUANT: 8192,
   LORA_REQUIRED_FREE_MB: 14336,
+  LORA_REQUIRED_FREE_MB_FP32: 14336,
+  LORA_REQUIRED_FREE_MB_QUANT: 6144,
   InsufficientMemoryError: class InsufficientMemoryError extends Error {
     constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
       super(msg);
@@ -127,7 +138,7 @@ describe('runLora envelope — Slice 8 OOM mitigation', () => {
     // Envelope invariants
     expect(mockPause).toHaveBeenCalledTimes(1);
     expect(mockEnsureMem).toHaveBeenCalledTimes(1);
-    expect(mockEnsureMem).toHaveBeenCalledWith(LORA_REQUIRED_FREE_MB);
+    expect(mockEnsureMem).toHaveBeenCalledWith(LORA_REQUIRED_FREE_MB, { label: 'LoRA' });
     expect(mockRestart).toHaveBeenCalledTimes(1);
     // Restart receives the pause handle so the no-op short-circuit
     // works when wasRunning=false.

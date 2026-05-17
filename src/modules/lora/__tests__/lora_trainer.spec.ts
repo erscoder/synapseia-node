@@ -10,8 +10,16 @@ jest.mock('../../llm/ollama-pause', () => ({
 }));
 jest.mock('../../model/heavy-training-preflight', () => ({
   ensureMemForHeavyTraining: jest.fn(async () => undefined),
+  requiredMemForHeavyTraining: (workload: 'DiLoCo' | 'LoRA') =>
+    workload === 'DiLoCo' ? 18432 : 14336,
+  detectQuantSupport: () => false,
+  __resetQuantSupportCacheForTests: () => undefined,
   DILOCO_REQUIRED_FREE_MB: 18432,
+  DILOCO_REQUIRED_FREE_MB_FP32: 18432,
+  DILOCO_REQUIRED_FREE_MB_QUANT: 8192,
   LORA_REQUIRED_FREE_MB: 14336,
+  LORA_REQUIRED_FREE_MB_FP32: 14336,
+  LORA_REQUIRED_FREE_MB_QUANT: 6144,
   InsufficientMemoryError: class InsufficientMemoryError extends Error {
     constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
       super(msg);
