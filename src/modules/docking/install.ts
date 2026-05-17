@@ -217,9 +217,14 @@ export async function installDockingDeps(
         }
       }
       if (!vinaReady) {
-        const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+        // GH release asset naming convention (verified live 2026-05-17 against
+        // ccsb-scripps/AutoDock-Vina v1.2.5): `vina_<ver>_mac_<arch>` where
+        // `<arch>` is `aarch64` (not `arm64`) on Apple Silicon and `x86_64`
+        // on Intel. Prior 0.8.55+ template used `macos_arm64` → 404 on every
+        // Mac install, silent fail because installer is non-fatal.
+        const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
         const vinaVersion = '1.2.5';
-        const vinaUrl = `https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v${vinaVersion}/vina_${vinaVersion}_macos_${arch}`;
+        const vinaUrl = `https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v${vinaVersion}/vina_${vinaVersion}_mac_${arch}`;
         try {
           mkdirSync(path.dirname(vinaBinPath), { recursive: true });
           exec(`curl -sLf -o "${vinaBinPath}" "${vinaUrl}"`, {
@@ -231,6 +236,20 @@ export async function installDockingDeps(
           return {
             installed: false,
             reason: `open-babel installed but Vina download failed (${vinaUrl}): ${(err as Error).message}`,
+            durationMs: Date.now() - t0,
+          };
+        }
+        // Post-download verify: curl with `-f` already 404-fails, but a
+        // mis-redirected mirror or HTML decoy page could yield a chmod-able
+        // garbage file. Probe `vina --version` so a non-Mach-O binary is
+        // caught here instead of silently advertising `docking` cap and
+        // crashing later when the first WO arrives.
+        try {
+          exec(`"${vinaBinPath}" --version`, { stdio: 'pipe', timeout: 10_000 });
+        } catch (err) {
+          return {
+            installed: false,
+            reason: `Vina downloaded but --version probe failed: ${(err as Error).message}`,
             durationMs: Date.now() - t0,
           };
         }

@@ -75,33 +75,117 @@ function makeAptStub(installSteps: AptStep[]) {
 const fastSleep = jest.fn(async (_ms: number) => undefined);
 
 describe('installDockingDeps', () => {
-  it('darwin happy path: brew install open-babel + curl Vina binary runs and returns installed=true', async () => {
+  it('darwin happy path (arm64): brew + curl mac_aarch64 Vina + chmod + version probe → installed=true', async () => {
     // 0.8.55+ split: autodock-vina is NOT in homebrew-core, so the installer
     // brews open-babel and downloads the Vina binary from the AutoDock-Vina
-    // GitHub release. The stub must accept all four commands; the Vina binary
-    // is assumed absent at $HOME/.synapseia/bin/vina in the test env.
-    const { fn, calls } = makeExecStub([
-      'brew --version',
-      'brew install',
-      'curl ',
-      'chmod ',
-    ]);
-    const result = await installDockingDeps({
-      platform: 'darwin',
-      execSyncFn: fn,
-      env: {},
-    });
-    expect(result.installed).toBe(true);
-    expect(result.durationMs).toBeGreaterThanOrEqual(0);
-    // Either 2 calls (Vina already present + executable) or 4 calls
-    // (brew probe + brew install + curl + chmod). We assert the always-present
-    // calls and tolerate the conditional Vina-download branch.
-    expect(calls[0].cmd).toBe('brew --version');
-    expect(calls[1].cmd).toBe('brew install open-babel');
-    if (calls.length > 2) {
-      expect(calls.length).toBe(4);
-      expect(calls[2].cmd).toMatch(/^curl -sLf -o ".*\/\.synapseia\/bin\/vina" "https:\/\/github\.com\/ccsb-scripps\/AutoDock-Vina\/releases\/download\//);
-      expect(calls[3].cmd).toMatch(/^chmod \+x ".*\/\.synapseia\/bin\/vina"$/);
+    // GitHub release. Bug fixed 2026-05-17: prior template emitted
+    // `vina_<ver>_macos_arm64` which 404s; real asset is `mac_aarch64`.
+    // Stub accepts: brew probe + brew install + curl + chmod + version probe.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      const { fn, calls } = makeExecStub([
+        'brew --version',
+        'brew install',
+        'curl ',
+        'chmod ',
+        '"', // version probe is `"${vinaBinPath}" --version`
+      ]);
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+      });
+      expect(result.installed).toBe(true);
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+      // Either 2 calls (Vina already present + executable) or 5 calls
+      // (brew probe + brew install + curl + chmod + version probe).
+      expect(calls[0].cmd).toBe('brew --version');
+      expect(calls[1].cmd).toBe('brew install open-babel');
+      if (calls.length > 2) {
+        expect(calls.length).toBe(5);
+        // Regression guard against P28: literal substring of GH release
+        // naming convention. Any future drift (mac→macos, aarch64→arm64,
+        // version bump without updating template) trips this assertion.
+        expect(calls[2].cmd).toContain('vina_1.2.5_mac_aarch64');
+        expect(calls[2].cmd).toMatch(/^curl -sLf -o ".*\/\.synapseia\/bin\/vina" "https:\/\/github\.com\/ccsb-scripps\/AutoDock-Vina\/releases\/download\/v1\.2\.5\/vina_1\.2\.5_mac_aarch64"$/);
+        expect(calls[3].cmd).toMatch(/^chmod \+x ".*\/\.synapseia\/bin\/vina"$/);
+        // Post-download verify probe: vina --version. Catches HTML-404
+        // decoy pages that downloaded + chmod'd but aren't Mach-O.
+        expect(calls[4].cmd).toMatch(/^".*\/\.synapseia\/bin\/vina" --version$/);
+      }
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin happy path (x64): curl asset uses mac_x86_64 segment', async () => {
+    // Symmetric to arm64 test — assert the x86_64 arch mapping path. Same
+    // GH release naming convention (`mac_x86_64`), no `macos_` prefix.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+    try {
+      const { fn, calls } = makeExecStub([
+        'brew --version',
+        'brew install',
+        'curl ',
+        'chmod ',
+        '"',
+      ]);
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+      });
+      expect(result.installed).toBe(true);
+      if (calls.length > 2) {
+        expect(calls[2].cmd).toContain('vina_1.2.5_mac_x86_64');
+        // Negative guard: stale 0.8.55-0.8.65 literal must not reappear.
+        expect(calls[2].cmd).not.toContain('macos_');
+        expect(calls[2].cmd).not.toContain('mac_arm64');
+      }
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin: vina --version probe failure → installed=false with probe reason', async () => {
+    // P29 — exercise the real spawn-call path. The post-download verify
+    // catches the case where curl-with-`-f` somehow returned a non-Mach-O
+    // file (mirror outage HTML, captive portal, partial write). chmod
+    // succeeds on garbage; only `vina --version` reveals the corruption.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      // Stub accepts curl + chmod but throws on the version probe.
+      const calls: ExecCall[] = [];
+      const fn = jest.fn((cmd: unknown) => {
+        const c = String(cmd);
+        calls.push({ cmd: c });
+        if (c === 'brew --version') return Buffer.from('');
+        if (c.startsWith('brew install')) return Buffer.from('');
+        if (c.startsWith('curl ')) return Buffer.from('');
+        if (c.startsWith('chmod ')) return Buffer.from('');
+        if (/\.synapseia\/bin\/vina" --version$/.test(c)) {
+          throw new Error('exec format error');
+        }
+        throw new Error(`stub: unexpected cmd: ${c}`);
+      }) as unknown as typeof import('node:child_process').execSync;
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+      });
+      // Only assert when Vina was actually downloaded (binary absent in test env).
+      // If $HOME/.synapseia/bin/vina happens to exist, vinaReady=true and we
+      // never hit the probe — that's the early-skip branch, not under test.
+      if (calls.some((c) => c.cmd.startsWith('curl '))) {
+        expect(result.installed).toBe(false);
+        expect(result.reason).toMatch(/Vina downloaded but --version probe failed/);
+        expect(result.reason).toMatch(/exec format error/);
+      }
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
     }
   });
 
