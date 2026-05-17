@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(agent): MOLECULAR_DOCKING → 'docking' cap name fix — 0.8.75
+
+**Bug 26** — trivial typo. `wo-type-to-cap.ts` mapped
+`MOLECULAR_DOCKING: 'molecular_docking'` but heartbeat advertises
+`'docking'` (heartbeat.ts:1431) and coord requires `'docking'`
+(`DockingDispatchCron.ts:16 DOCKING_CAPABILITY`). Mismatch → pod
+local rejected every MOLECULAR_DOCKING WO despite having `docking`
+cap.
+
+Fix: `MOLECULAR_DOCKING: 'docking'` matches three-way (heartbeat +
+coord + mapping). Inline comment explains rationale + regression-guard
+test pins the value.
+
+P11 grep clean: zero functional `'molecular_docking'` literals. P28
+defer: cap strings still scattered across node + coord (no shared
+const module yet). Refactor `extract CAP_* constants` deferred.
+
+Tests 18/18 wo-type-to-cap suite. Build clean.
+
 ## [2026-05-17] fix(agent): drop fetch intersection, use live caps only — 0.8.74
 
 **Bug 25** — Bug 22 regression. `fetch-work-orders.ts` computed

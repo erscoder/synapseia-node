@@ -56,7 +56,14 @@ const WO_TYPE_TO_CAP: Record<
   // canLocallyAcceptWorkOrder.
   LORA_VALIDATION: 'lora_training',
   // Molecular docking (AutoDock Vina, local subprocess).
-  MOLECULAR_DOCKING: 'molecular_docking',
+  // Cap string is 'docking' (NOT 'molecular_docking') to match what
+  // heartbeat.ts advertises (`caps.push('docking')` at line 1431) and
+  // what the coord-side DockingDispatchCron requires
+  // (`DOCKING_CAPABILITY = 'docking'`). Bug 26 (2026-05-17): an earlier
+  // mapping used 'molecular_docking' which never matched the heartbeat
+  // string, so MOLECULAR_DOCKING WOs were skipped locally despite the
+  // pod advertising docking caps. Single source of truth = 'docking'.
+  MOLECULAR_DOCKING: 'docking',
 };
 
 /**

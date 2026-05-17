@@ -37,7 +37,19 @@ describe('woTypeToCap', () => {
     expect(woTypeToCap({ type: 'DILOCO_TRAINING' })).toBe('diloco_training');
     expect(woTypeToCap({ type: 'LORA_TRAINING' })).toBe('lora_training');
     expect(woTypeToCap({ type: 'LORA_VALIDATION' })).toBe('lora_training');
-    expect(woTypeToCap({ type: 'MOLECULAR_DOCKING' })).toBe('molecular_docking');
+    // Bug 26 (2026-05-17): MOLECULAR_DOCKING maps to 'docking' (NOT
+    // 'molecular_docking') because heartbeat.ts advertises 'docking' and
+    // coord's DockingDispatchCron requires 'docking'. The earlier
+    // 'molecular_docking' string was a typo — it never matched the
+    // heartbeat advertisement, so docking WOs were silently skipped.
+    expect(woTypeToCap({ type: 'MOLECULAR_DOCKING' })).toBe('docking');
+  });
+
+  it('MOLECULAR_DOCKING resolves to the same cap heartbeat advertises (Bug 26)', () => {
+    // Regression guard: if anyone renames the cap, both heartbeat.ts and
+    // coord-side DOCKING_CAPABILITY must move together. This test pins
+    // the value so a one-sided rename fails CI loudly.
+    expect(woTypeToCap({ type: 'MOLECULAR_DOCKING' })).toBe('docking');
   });
 
   it('returns null for missing type (fail-closed)', () => {
