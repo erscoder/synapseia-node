@@ -31,6 +31,34 @@ import type { Hardware } from '../modules/hardware/hardware';
  *
  * Event contract is shared with the Tauri command + frontend loading
  * screen. See InstallDepsEvent below.
+ *
+ * ── PyTorch wheel selection (Slice 16 — Bug DiLoCo OOM root cause) ──────
+ *
+ * Historically this file HARDCODED `--index-url https://download.pytorch.org/whl/cpu`,
+ * which installed CPU-only torch wheels on EVERY platform — including
+ * NVIDIA Linux pods (RunPod A40, etc.). Effect on DiLoCo:
+ *
+ *   - `torch.cuda.is_available()` returned `False` on real NVIDIA hardware
+ *     because the installed torch wheel had no CUDA bindings.
+ *   - `diloco_train.py` gates its 4-bit BitsAndBytesConfig load on
+ *     `device == "cuda"`. With CUDA flagged unavailable, it fell back to
+ *     fp32, which needs ~28 GB just for Qwen2.5-7B weights and ~47 GB
+ *     peak during from_pretrained — over the pod cgroup limit (46.6 GB)
+ *     → OOM kill mid-load.
+ *   - `bitsandbytes` install was also skipped because Phase 5 gates on
+ *     `cudaAvailable` (derived from the same broken torch probe).
+ *
+ * Manual verified-working fix on a live A40 pod (2026-05-17):
+ *   pip install torch==2.5.1 --index-url \
+ *     https://download.pytorch.org/whl/cu121 --force-reinstall
+ *   → torch.cuda.is_available() = True, A40 detected, 4-bit path live.
+ *
+ * `pickTorchWheel()` now probes for NVIDIA hardware BEFORE deciding
+ * which wheel to install. macOS gets the default wheel (MPS-enabled
+ * via Apple Silicon). NVIDIA Linux/Windows get the cu121 wheel.
+ * Everything else falls back to the cpu wheel. Phase 5 bitsandbytes
+ * is now gated on the wheel choice, not the post-install torch probe,
+ * so an installed-but-broken torch can't suppress bnb either.
  */
 
 export type InstallDepsPhase =
@@ -74,10 +102,159 @@ export interface InstallDepsResult {
   errors: string[];
 }
 
-/** Pinned torch version — must match the previous inline install. */
-const TORCH_VERSION = '2.10.0';
+/**
+ * Pinned torch version — bumped to 2.5.1 (Slice 16, 2026-05-17).
+ *
+ * Why the change from 2.10.0 → 2.5.1:
+ *   - The previous 2.10.0 pin was only ever published as a CPU wheel
+ *     in the previous `whl/cpu` channel. The CUDA channel
+ *     (`whl/cu121`) does NOT carry 2.10.0 wheels — pip would 404 and
+ *     the install would fail for every NVIDIA operator the moment
+ *     this slice flipped on.
+ *   - 2.5.1 is the most recent torch that is published on BOTH the
+ *     cpu and cu121 indexes (and also via the default index for
+ *     macOS MPS), so the same pin works across all wheel choices.
+ *   - It is the exact version verified working on the A40 pod that
+ *     uncovered the DiLoCo OOM root cause (manual repro 2026-05-17).
+ *
+ * Bumping torch is a coordinated change: any operator with the old
+ * 2.10.0 cpu wheel installed will be migrated to 2.5.1 on next boot
+ * (the version probe at the top of Phase 2 will fail and trigger a
+ * reinstall against the correct wheel index for their hardware).
+ */
+const TORCH_VERSION = '2.5.1';
 /** Minimum Python minor version (3.x). */
 const REQUIRED_PYTHON_MINOR = 14;
+
+/** Result of selecting which PyTorch wheel index to install from. */
+export interface TorchWheelChoice {
+  /**
+   * Value passed to `pip install --index-url …`. `null` means "do not
+   * pass --index-url at all" — let pip resolve from the default PyPI
+   * index. Used on macOS where the default wheel ships MPS support.
+   */
+  indexUrl: string | null;
+  /** Human label for logging + telemetry. */
+  label: 'cu121' | 'cpu' | 'mps/default';
+  /** Whether NVIDIA hardware was detected on this host. */
+  hasNvidia: boolean;
+  /** One-line explanation of WHY this wheel was chosen (logged). */
+  reason: string;
+}
+
+/**
+ * Probe for NVIDIA hardware on the local host.
+ *
+ * Two-stage detection:
+ *   1. `nvidia-smi --query-gpu=name --format=csv,noheader` — works on
+ *      any host with the NVIDIA driver tools installed. Exits 0 and
+ *      prints at least one GPU name when an NVIDIA GPU is attached.
+ *   2. `/dev/nvidia0` device file — fallback for stripped-down
+ *      containers (some RunPod / vast.ai templates ship without the
+ *      `nvidia-smi` CLI but still expose `/dev/nvidia*` to the
+ *      container).
+ *
+ * Per P24 discipline: fail-CLOSED. Any unexpected exception bubbling
+ * out of `execSync` / `existsSync` is treated as "no NVIDIA" so a
+ * broken probe falls back to the cpu wheel — wrong but harmless —
+ * instead of crashing install-deps and bricking node boot.
+ *
+ * NOTE: this is the production default probe. Tests inject their own
+ * via `pickTorchWheel({ nvidiaProbeFn })`.
+ */
+function defaultNvidiaProbe(): boolean {
+  try {
+    const out = execSync('nvidia-smi --query-gpu=name --format=csv,noheader', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5_000,
+    })
+      .toString()
+      .trim();
+    if (out.length > 0) return true;
+  } catch {
+    // nvidia-smi missing, non-zero exit, or timed out. Fall through
+    // to the device-file fallback — some container images ship the
+    // device nodes without the CLI.
+  }
+  try {
+    if (existsSync('/dev/nvidia0')) return true;
+  } catch {
+    // existsSync on a path like /dev/nvidia0 doesn't normally throw
+    // on POSIX, but a hostile mount could in theory — swallow to
+    // stay fail-closed.
+  }
+  return false;
+}
+
+/**
+ * Decide which PyTorch wheel index to use for THIS host. Pure function
+ * — accepts `platform` + `nvidiaProbeFn` overrides so tests can drive
+ * every branch without touching real hardware.
+ *
+ * Decision matrix:
+ *   - macOS (any arch)        → default wheel (MPS via Apple Silicon)
+ *   - Linux + NVIDIA detected → cu121 wheel
+ *   - Linux + no NVIDIA       → cpu wheel (current pre-slice behaviour)
+ *   - Windows + NVIDIA        → cu121 wheel
+ *   - Windows + no NVIDIA     → cpu wheel
+ *   - Anything else           → cpu wheel (safe default)
+ *
+ * The reason string is logged and surfaced in the `InstallDepsEvent`
+ * for the install phase so operators can see WHY their wheel was
+ * picked when debugging "why doesn't torch.cuda.is_available() work".
+ */
+export function pickTorchWheel(opts: {
+  platform?: NodeJS.Platform;
+  nvidiaProbeFn?: () => boolean;
+} = {}): TorchWheelChoice {
+  const platform = opts.platform ?? os.platform();
+  const probeFn = opts.nvidiaProbeFn ?? defaultNvidiaProbe;
+
+  // Per P24: any throw from a user-supplied (or default) probe is
+  // treated as "no NVIDIA" — never crash install-deps because the
+  // hardware probe blew up.
+  let hasNvidia = false;
+  try {
+    hasNvidia = probeFn();
+  } catch {
+    hasNvidia = false;
+  }
+
+  if (platform === 'darwin') {
+    return {
+      indexUrl: null,
+      label: 'mps/default',
+      hasNvidia: false, // macOS never gets NVIDIA CUDA; MPS is the GPU path
+      reason: 'macOS detected — using default PyPI wheel (MPS-enabled via Apple Silicon)',
+    };
+  }
+
+  if ((platform === 'linux' || platform === 'win32') && hasNvidia) {
+    return {
+      indexUrl: 'https://download.pytorch.org/whl/cu121',
+      label: 'cu121',
+      hasNvidia: true,
+      reason: 'NVIDIA GPU detected — installing CUDA 12.1 PyTorch wheel for GPU acceleration',
+    };
+  }
+
+  if (platform === 'linux' || platform === 'win32') {
+    return {
+      indexUrl: 'https://download.pytorch.org/whl/cpu',
+      label: 'cpu',
+      hasNvidia: false,
+      reason: 'No NVIDIA GPU detected — installing CPU PyTorch wheel',
+    };
+  }
+
+  // Unknown platform (freebsd, sunos, aix, …): safest default.
+  return {
+    indexUrl: 'https://download.pytorch.org/whl/cpu',
+    label: 'cpu',
+    hasNvidia,
+    reason: `Unsupported platform '${platform}' — falling back to CPU PyTorch wheel`,
+  };
+}
 
 /**
  * Default DiLoCo foundation model. Matches:
@@ -108,11 +285,16 @@ const DILOCO_MODEL_MIN_SIZE_BYTES = 500 * 1024 * 1024;
  *
  * Phases (in order):
  *   1. venv          — create ~/.synapseia/venv if absent
- *   2. torch         — pip install torch CPU wheel (system-wide check first)
+ *   2. torch         — pip install torch wheel selected per host:
+ *                      NVIDIA Linux/Win → cu121, macOS → default (MPS),
+ *                      everything else → cpu. Migrating an existing
+ *                      cpu→cu121 install uses --force-reinstall.
  *   3. lora-stack    — pip install transformers + peft + datasets + safetensors + accelerate
  *                      (only on Tier 1+ nodes with enough RAM/VRAM)
- *   4. cuda-probe    — probe torch.cuda.is_available()
- *   5. bitsandbytes  — pip install bitsandbytes (only when CUDA present)
+ *   4. cuda-probe    — probe torch.cuda.is_available() for telemetry
+ *                      (informational; Phase 5 gates on wheel choice)
+ *   5. bitsandbytes  — pip install bitsandbytes (only when cu121 wheel
+ *                      was installed in Phase 2)
  *   6. diloco-model  — pre-download DiLoCo foundation model (Qwen2.5-7B,
  *                      ~13 GB) into the HF cache so runtime DiLoCo WOs
  *                      never hit Hugging Face Hub (Bug 18 v3). Gated on
@@ -179,25 +361,77 @@ export async function installPythonDeps(
   }
 
   // ── Phase 2: torch ──────────────────────────────────────────────────────
-  // Probe the venv interpreter (where the install lands).
+  // Pick the wheel BEFORE the version probe so the "already installed"
+  // path can also verify the installed wheel matches the expected
+  // flavor (cu121 on NVIDIA, mps/default on macOS, cpu otherwise).
+  // Without that check, an operator who installed cpu torch under the
+  // old hardcoded path would be left with a stale cpu wheel even after
+  // attaching an A40 — `torch.cuda.is_available()` would still return
+  // False and DiLoCo would still OOM.
+  const torchWheel = pickTorchWheel();
+  logger.log(`[install-deps] ${torchWheel.reason}`);
+
+  // Two-part probe:
+  //   1. version matches the pin (cheap import + __version__ compare).
+  //   2. CUDA-availability matches the expected wheel flavor.
+  //      - cu121 wheel must expose torch.cuda.is_available() == True
+  //      - cpu / mps wheels must expose torch.cuda.is_available() == False
+  //      Either mismatch → force reinstall against the correct index.
+  const expectCuda = torchWheel.label === 'cu121';
+  const torchProbeScript = [
+    'import torch, sys',
+    `assert torch.__version__.startswith('${TORCH_VERSION}'), torch.__version__`,
+    `cuda_ok = torch.cuda.is_available()`,
+    `expect_cuda = ${expectCuda ? 'True' : 'False'}`,
+    'sys.exit(0 if cuda_ok == expect_cuda else 2)',
+  ].join('\n');
   const torchProbe = spawnSync(
     venvPython(),
-    ['-c', `import torch; assert torch.__version__ == '${TORCH_VERSION}', torch.__version__`],
+    ['-c', torchProbeScript],
     { stdio: 'pipe' },
   );
-  if (torchProbe.status === 0) {
-    emit({ phase: 'torch', status: 'skip', message: `PyTorch ${TORCH_VERSION} already installed` });
+  const torchInstalledAndMatches = torchProbe.status === 0;
+
+  if (torchInstalledAndMatches) {
+    emit({
+      phase: 'torch',
+      status: 'skip',
+      message: `PyTorch ${TORCH_VERSION} (${torchWheel.label}) already installed`,
+    });
   } else {
-    emit({ phase: 'torch', status: 'running', message: `Installing PyTorch ${TORCH_VERSION} (CPU wheel, ~200MB)...` });
+    // status == 2 means version OK but wheel flavor wrong → MIGRATING.
+    // Any other failure (1, null, missing) means torch absent or wrong
+    // version. Both cases need an install. We pass --force-reinstall
+    // when migrating so pip will overwrite the existing same-version
+    // cpu wheel with the cu121 (or vice versa) wheel; without it pip
+    // would see "torch==2.5.1 already installed" and no-op.
+    const isMigrating = torchProbe.status === 2;
+    const indexArg = torchWheel.indexUrl ? `--index-url ${torchWheel.indexUrl}` : '';
+    const forceArg = isMigrating ? '--force-reinstall' : '';
+    const installCmd = [
+      `"${venvPip()}"`,
+      'install',
+      `torch==${TORCH_VERSION}`,
+      indexArg,
+      forceArg,
+    ].filter(Boolean).join(' ');
+
+    const runningMsg = isMigrating
+      ? `Migrating PyTorch to ${torchWheel.label} wheel (was ${torchWheel.label === 'cu121' ? 'cpu' : 'cu121'}); reinstalling ${TORCH_VERSION}...`
+      : `Installing PyTorch ${TORCH_VERSION} (${torchWheel.label} wheel)...`;
+    emit({ phase: 'torch', status: 'running', message: runningMsg });
+
     try {
-      execSync(
-        `"${venvPip()}" install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`,
-        { stdio: 'inherit' },
-      );
+      execSync(installCmd, { stdio: 'inherit' });
       result.installedTorch = true;
-      emit({ phase: 'torch', status: 'done', message: `PyTorch ${TORCH_VERSION} installed` });
+      emit({
+        phase: 'torch',
+        status: 'done',
+        message: `PyTorch ${TORCH_VERSION} (${torchWheel.label}) installed`,
+      });
     } catch (err) {
-      const msg = `PyTorch install failed: ${(err as Error).message}. Try manually: "${venvPip()}" install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cpu`;
+      const manualHint = `Try manually: ${installCmd}`;
+      const msg = `PyTorch install failed: ${(err as Error).message}. ${manualHint}`;
       emit({ phase: 'torch', status: 'error', message: msg });
       result.errors.push(msg);
       // Continue — LoRA install will likely fail too, but we let the next
@@ -302,24 +536,44 @@ export async function installPythonDeps(
   }
 
   // ── Phase 4: cuda-probe ─────────────────────────────────────────────────
-  // Probe AFTER LoRA install so torch is importable. Non-fatal — CPU-only
-  // nodes simply skip phase 5.
-  let cudaAvailable = false;
+  // Slice 16: this phase used to be the SOLE source of truth for whether
+  // bitsandbytes should install. That broke when the hardcoded cpu wheel
+  // hid real CUDA hardware (A40 pods showing is_available()==False). The
+  // probe still runs for informational telemetry, but Phase 5 now gates
+  // on the wheel CHOICE (torchWheel.label === 'cu121'), which is the
+  // upstream signal — if we installed a CUDA wheel, we want bnb.
   const cudaProbe = spawnSync(
     venvPython(),
-    ['-c', 'import torch; assert torch.cuda.is_available()'],
-    { stdio: 'pipe' },
+    ['-c', 'import torch; print("cuda_ok=" + str(torch.cuda.is_available()))'],
+    { stdio: 'pipe', encoding: 'utf-8' },
   );
-  if (cudaProbe.status === 0 && !cudaProbe.error) {
-    cudaAvailable = true;
-    emit({ phase: 'cuda-probe', status: 'done', message: 'CUDA available' });
+  const cudaRuntimeOk =
+    cudaProbe.status === 0
+    && !cudaProbe.error
+    && (cudaProbe.stdout ?? '').toString().includes('cuda_ok=True');
+  if (cudaRuntimeOk) {
+    emit({ phase: 'cuda-probe', status: 'done', message: 'CUDA available at runtime' });
+  } else if (torchWheel.label === 'cu121') {
+    // Wheel says CUDA but runtime disagrees — likely a missing driver
+    // or libc++ mismatch. Surface as a warning, but still attempt bnb
+    // (it may still install; runtime DiLoCo will fail loudly if not).
+    emit({
+      phase: 'cuda-probe',
+      status: 'error',
+      message: 'cu121 torch wheel installed but torch.cuda.is_available()=False — check NVIDIA driver / libcuda',
+    });
   } else {
-    emit({ phase: 'cuda-probe', status: 'skip', message: 'CUDA not available (CPU-only node)' });
+    emit({ phase: 'cuda-probe', status: 'skip', message: 'CUDA not available (CPU-only / MPS node)' });
   }
 
   // ── Phase 5: bitsandbytes ───────────────────────────────────────────────
-  // CUDA-only, needed by DiLoCo full mode for 4-bit quantization.
-  if (cudaAvailable) {
+  // Gated on the wheel choice, not the runtime cuda probe. Rationale:
+  // if we installed the cu121 wheel, the operator's intent is GPU
+  // compute, and bnb is required for DiLoCo 4-bit. A failed runtime
+  // probe (driver issue) shouldn't suppress bnb install — better to
+  // have bnb available and surface the driver problem separately than
+  // to skip bnb and have DiLoCo silently fall back to fp32 OOM.
+  if (torchWheel.label === 'cu121') {
     const bnbProbe = spawnSync(
       venvPython(),
       ['-c', 'import bitsandbytes'],

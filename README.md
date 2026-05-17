@@ -195,6 +195,7 @@ Main loop — registers the node, heartbeats, executes work orders.
 - `synapseia export-key` — export the wallet private key (prompts for password).
 - `synapseia wallet-create` / `wallet-verify` — wallet provisioning helpers.
 - `synapseia stop` — stop a running node.
+- `synapseia install-deps` — install Python deps (venv, PyTorch, LoRA stack, bitsandbytes, AutoDock Vina). On NVIDIA hosts (Linux/Windows with `nvidia-smi` or `/dev/nvidia0`), automatically installs the CUDA-enabled PyTorch wheel (`whl/cu121`) so `torch.cuda.is_available()` returns `True` and DiLoCo can use 4-bit quantization. On macOS the default MPS-enabled wheel is used; everywhere else falls back to the CPU wheel. Verify with `python -c 'import torch; print(torch.cuda.is_available())'` after install.
 
 Run any command with `--help` for the full option list.
 
