@@ -1,5 +1,42 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(node): hardware probe re-run + npm-only version check — 0.8.77 (162e97a6)
+
+Slice 2 + Slice 7 of Plan B (DiLoCo OOM + cap-drift mitigation).
+
+**Slice 2 — hardware.ts dynamic probe**:
+- `detectHardware()` split into `buildStaticHardware()` (cached
+  lifetime) + `probeDynamicHardware()` (60s TTL cache).
+- Dynamic fields re-probed: `hasOllama`, `hasCloudLlm`.
+- Static fields cached lifetime: cpuCores, ramGb, gpuVramGb,
+  hardwareClass, gpuModel.
+- UP↔DOWN transitions emit `logger.warn` so operators see cap flips.
+- New constants: `DYNAMIC_PROBE_TTL_MS = 60_000` (exported);
+  `OLLAMA_PROBE_TIMEOUT_MS` env override (default 2000ms).
+- Fixes live bug: pod had Ollama UP with models cached, but
+  advertised no `llm` cap → coord rejected RESEARCH WOs. Root: probe
+  ran once at boot; if Ollama was warming up at that moment, cache
+  pinned `hasOllama=false` forever. After 0.8.77 the next heartbeat
+  (≤60s) re-probes and `llm`/`inference`/`embedding` caps restore.
+- 7 new dynamic-probe tests + 2 existing cache-identity tests
+  rewritten. 158 hardware tests green.
+
+**Slice 7 — update-checker.ts npm-only**:
+- `preflightVersionCheck` removes coord `/version` fallback for
+  `latestNodeVersion`. npm registry is the only authority.
+- If npm unreachable → preflight returns null + WARN; node boots
+  anyway (fail-open by design — skipping optional update check is
+  safer than downgrading from a stale coord value).
+- `VersionInfo` narrowed: `{ protocolVersion, minNodeVersion }`.
+  Dropped: `latestNodeVersion`, `latestNodeUiVersion`.
+- `checkVersion()` now takes `latestNodeVersion` as separate arg
+  (from npm).
+- Coord-side mirror in coord 0.8.68 drops the same fields from
+  `/version` response.
+- 11→18 update-checker tests. New: npm-down WARN path, npm 404
+  no-fallback, coord-down npm-up happy path, coord-fields-ignored
+  assertion.
+
 ## [2026-05-17] feat(diloco): pause Ollama on small containers to fit DiLoCo — 0.8.76
 
 **Bug 27** — DiLoCo Qwen2.5-7B peak RAM ~25-30GB + Ollama overhead
