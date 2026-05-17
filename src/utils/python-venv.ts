@@ -54,6 +54,40 @@ export const LORA_STACK_MARKER = process.env.SYNAPSEIA_HOME
   : join(homedir(), '.synapseia', 'lora-stack-ok');
 
 /**
+ * Persistent on-disk marker file recording that the DiLoCo foundation
+ * model has been pre-downloaded into the local Hugging Face cache.
+ *
+ * Bug 18 v3 (root cause): DiLoCo work orders crashed mid-load with
+ * "exit code null" because `AutoModelForCausalLM.from_pretrained()`
+ * hit Hugging Face Hub at runtime. Anonymous downloads of a 7B model
+ * (~13 GB across multiple shards) got throttled / RST'd partway,
+ * killing the Python process with SIGPIPE / SIGSEGV inside the
+ * safetensors / hf_transfer native extensions. HF_TOKEN helped but
+ * still failed on flaky pod networks because the request volume per
+ * accept (10+ shard downloads per cold start) compounded the failure
+ * probability.
+ *
+ * Fix: install-deps pre-downloads the model ONCE (at install time,
+ * which is tolerant of slow / rate-limited fetches because there's no
+ * WO timeout). The runtime script then opens with
+ * `local_files_only=True` and never touches HF Hub. The heartbeat
+ * gates the `diloco_training` capability on this marker — pods that
+ * failed to pre-download simply don't advertise the cap, so the
+ * coordinator routes the WO elsewhere instead of letting it crash.
+ *
+ * Marker shape: `{ modelId, cacheDir, downloadedAt, sizeBytes }`.
+ * `modelId` is the HF identifier (e.g. `Qwen/Qwen2.5-7B`).
+ * `cacheDir` is the absolute snapshot path inside the HF cache so
+ * the runtime script can pass it as `cache_dir=...` for deterministic
+ * resolution. `sizeBytes` is captured at write time for forensic
+ * inspection of `~/.synapseia/diloco-model-ok` — no runtime reader.
+ * `downloadedAt` is unix epoch millis for the same forensic purpose.
+ */
+export const DILOCO_MODEL_MARKER = process.env.SYNAPSEIA_HOME
+  ? join(process.env.SYNAPSEIA_HOME, 'diloco-model-ok')
+  : join(homedir(), '.synapseia', 'diloco-model-ok');
+
+/**
  * Persisted shape. Kept intentionally small (≤ 200 bytes typical) so a
  * single fsync covers the whole file.
  *
@@ -173,6 +207,111 @@ export function deleteLoraStackMarker(): void {
     if (existsSync(LORA_STACK_MARKER)) unlinkSync(LORA_STACK_MARKER);
   } catch (err) {
     logger.warn(`[python-venv] LoRA marker delete failed: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Persisted DiLoCo model marker shape. Mirrors the LoRA marker design:
+ * write atomically via tmp+rename, validate strictly on read, treat any
+ * IO failure as "marker absent" (forces a fresh probe / re-download).
+ *
+ * `modelId` MUST match the HF identifier the runtime script will load.
+ * If install-deps pinned a different model id than the runtime expects,
+ * the cap is dropped — the operator has to re-run install-deps to
+ * realign. This is safer than trusting a marker for `Qwen/Qwen2.5-7B`
+ * when the runtime is actually trying to load `microsoft/biogpt`.
+ *
+ * `cacheDir` is the absolute snapshot path (e.g.
+ * `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B/snapshots/abcdef`)
+ * — the runtime script passes this to `from_pretrained(cache_dir=...)`.
+ */
+export interface DilocoModelMarker {
+  modelId: string;
+  cacheDir: string;
+  downloadedAt: number;
+  sizeBytes: number;
+}
+
+/**
+ * Read + validate the DiLoCo model marker. Returns `null` on:
+ *   - file absent / unreadable / corrupt JSON
+ *   - missing required fields (modelId, cacheDir, downloadedAt, sizeBytes)
+ *   - `modelId` mismatch vs caller-provided `expectedModelId`
+ *   - `cacheDir` no longer exists on disk (operator deleted the HF cache)
+ *
+ * Heartbeat callers that get `null` MUST NOT advertise `diloco_training`.
+ */
+export function readDilocoModelMarker(
+  expectedModelId: string,
+): DilocoModelMarker | null {
+  if (!existsSync(DILOCO_MODEL_MARKER)) return null;
+  let raw: string;
+  try {
+    raw = readFileSync(DILOCO_MODEL_MARKER, 'utf-8');
+  } catch (err) {
+    logger.warn(`[python-venv] DiLoCo marker unreadable: ${(err as Error).message}`);
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const p = parsed as Record<string, unknown>;
+  if (
+    typeof p['modelId'] !== 'string'
+    || typeof p['cacheDir'] !== 'string'
+    || typeof p['downloadedAt'] !== 'number'
+    || typeof p['sizeBytes'] !== 'number'
+  ) {
+    return null;
+  }
+  const marker: DilocoModelMarker = {
+    modelId: p['modelId'] as string,
+    cacheDir: p['cacheDir'] as string,
+    downloadedAt: p['downloadedAt'] as number,
+    sizeBytes: p['sizeBytes'] as number,
+  };
+  if (marker.modelId !== expectedModelId) return null;
+  // Cache dir disappeared (operator nuked ~/.cache/huggingface). The
+  // marker is lying — refuse to trust it so the heartbeat doesn't
+  // advertise a cap whose backing weights are gone. Delete is left to
+  // the caller — read is observation-only.
+  if (!existsSync(marker.cacheDir)) return null;
+  return marker;
+}
+
+/**
+ * Atomic write of the DiLoCo model marker. Same tmp+rename pattern as
+ * `writeLoraStackMarker`. Non-throwing: returns true on success, false
+ * on any IO failure.
+ */
+export function writeDilocoModelMarker(marker: DilocoModelMarker): boolean {
+  try {
+    mkdirSync(dirname(DILOCO_MODEL_MARKER), { recursive: true });
+    const tmp = `${DILOCO_MODEL_MARKER}.tmp`;
+    writeFileSync(tmp, JSON.stringify(marker), { encoding: 'utf-8' });
+    if (process.platform === 'win32' && existsSync(DILOCO_MODEL_MARKER)) {
+      try { unlinkSync(DILOCO_MODEL_MARKER); } catch { /* tolerate */ }
+    }
+    renameSync(tmp, DILOCO_MODEL_MARKER);
+    return true;
+  } catch (err) {
+    logger.warn(`[python-venv] DiLoCo marker write failed: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/**
+ * Best-effort delete of the DiLoCo model marker. Non-throwing.
+ */
+export function deleteDilocoModelMarker(): void {
+  try {
+    if (existsSync(DILOCO_MODEL_MARKER)) unlinkSync(DILOCO_MODEL_MARKER);
+  } catch (err) {
+    logger.warn(`[python-venv] DiLoCo marker delete failed: ${(err as Error).message}`);
   }
 }
 

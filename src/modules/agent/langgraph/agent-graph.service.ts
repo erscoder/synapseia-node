@@ -164,12 +164,10 @@ export class AgentGraphService {
           case 'MOLECULAR_DOCKING': return 'executeDocking';
           case 'LORA_TRAINING':     return 'executeLora';
           case 'LORA_VALIDATION':   return 'executeLoraValidation';
-          // Legacy / non-langgraph types — coord never dispatches these to the
-          // langgraph path today but keep them mapped to the fail-loud sink so
-          // the runtime stays deterministic.
-          case 'INFERENCE':         return 'unknownType';
-          case 'COMPUTATION':       return 'unknownType';
-          case 'DATA_PROCESSING':   return 'unknownType';
+          // Undefined / unknown type → fail-loud sink. Legacy types
+          // (COMPUTATION / DATA_PROCESSING / INFERENCE) were dropped
+          // from the union 2026-05-17 — they now hit `default` and
+          // the `never` exhaustiveness guard.
           case undefined:           return 'unknownType';
           default: {
             // Compile-time exhaustiveness: if `WorkOrder.type` gains a new

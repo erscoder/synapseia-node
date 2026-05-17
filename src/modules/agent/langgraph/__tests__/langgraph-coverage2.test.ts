@@ -594,9 +594,6 @@ describe('router — exhaustiveness over all WorkOrderType', () => {
       case 'MOLECULAR_DOCKING': return 'executeDocking';
       case 'LORA_TRAINING':     return 'executeLora';
       case 'LORA_VALIDATION':   return 'executeLoraValidation';
-      case 'INFERENCE':         return 'unknownType';
-      case 'COMPUTATION':       return 'unknownType';
-      case 'DATA_PROCESSING':   return 'unknownType';
       case undefined:           return 'unknownType';
       default: {
         const _exhaustive: never = t;
@@ -623,9 +620,13 @@ describe('router — exhaustiveness over all WorkOrderType', () => {
     expect(route(undefined)).toBe('unknownType');
   });
 
-  it('legacy non-langgraph types route to unknownType', () => {
-    expect(route('INFERENCE')).toBe('unknownType');
-    expect(route('COMPUTATION')).toBe('unknownType');
-    expect(route('DATA_PROCESSING')).toBe('unknownType');
+  it('legacy / removed types (COMPUTATION, DATA_PROCESSING, INFERENCE) route to unknownType', () => {
+    // Cast through `unknown` because the runtime union no longer
+    // includes these legacy strings — they were dropped 2026-05-17.
+    // The router must still send them to the fail-loud sink in case
+    // a stale chain row surfaces them.
+    expect(route('INFERENCE' as unknown as WorkOrder['type'])).toBe('unknownType');
+    expect(route('COMPUTATION' as unknown as WorkOrder['type'])).toBe('unknownType');
+    expect(route('DATA_PROCESSING' as unknown as WorkOrder['type'])).toBe('unknownType');
   });
 });

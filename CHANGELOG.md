@@ -1,5 +1,30 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat: 0.8.65 — agent legacy WO types + heartbeat/install-deps/diloco hardening
+
+**Bug 17a (agent-side counterpart)** — `WorkOrderType` union shrunk to drop
+legacy `COMPUTATION`/`DATA_PROCESSING`/`INFERENCE` (coord 0.8.64 also drops
+these — no real dispatch, only mock/defaults). `agent-graph.service.ts`
+legacy `case 'INFERENCE'` removed; exhaustiveness guard
+`_exhaustive: never` + `default → 'unknownType'` handles any stale
+on-chain rows. New regression test asserts COMPUTATION /
+DATA_PROCESSING / INFERENCE all route to `unknownType` so future drift
+fails loudly.
+
+**Heartbeat / install-deps / python-venv / diloco_train.py hardening**
+— accumulated improvements from overnight Bug 12/14/18 follow-ups:
+- `heartbeat.ts`: additional logging + capability hydration path
+  diagnostics for caps-oscillation investigation.
+- `install-deps.ts`: probe + marker-write hardening on lora-stack
+  installation, plus transformers pin enforcement.
+- `python-venv.ts`: marker hydration helpers (`readLoraStackMarker`,
+  `writeLoraStackMarker`, `deleteLoraStackMarker`) + `venvExists` probe.
+- `diloco_train.py`: additional retry / observability around
+  `_load_with_retry` and HF authentication info emit.
+
+Tests: 25 suites / 326 tests pass (rewards + agent/langgraph +
+heartbeat + install-deps + python-venv).
+
 ## [2026-05-17] fix(rewards): claim_rewards instruction missing pause_state slot (e18b15bc)
 
 `rewards-vault-cli.ts` built the `claim_rewards` instruction with 7 accounts

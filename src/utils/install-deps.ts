@@ -1,12 +1,16 @@
 import { execSync, spawnSync } from 'child_process';
+import { existsSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
 import * as os from 'os';
 import logger from './logger';
 import {
   deleteLoraStackMarker,
   ensureVenv,
+  readDilocoModelMarker,
   venvExists,
   venvPip,
   venvPython,
+  writeDilocoModelMarker,
   writeLoraStackMarker,
 } from './python-venv';
 import type { Hardware } from '../modules/hardware/hardware';
@@ -35,6 +39,7 @@ export type InstallDepsPhase =
   | 'lora-stack'
   | 'cuda-probe'
   | 'bitsandbytes'
+  | 'diloco-model'
   | 'docking'
   | 'complete'
   | 'skipped';
@@ -64,6 +69,7 @@ export interface InstallDepsResult {
   installedTorch: boolean;
   installedLoraStack: boolean;
   installedBitsAndBytes: boolean;
+  installedDilocoModel: boolean;
   installedDocking: boolean;
   errors: string[];
 }
@@ -72,6 +78,28 @@ export interface InstallDepsResult {
 const TORCH_VERSION = '2.10.0';
 /** Minimum Python minor version (3.x). */
 const REQUIRED_PYTHON_MINOR = 14;
+
+/**
+ * Default DiLoCo foundation model. Matches:
+ *   - `diloco_train.py` default (`config.get("modelId", "Qwen/Qwen2.5-7B")`)
+ *   - coord-side `DiLoCoController` + `DiLoCoRoundCron` defaults.
+ * If/when coord starts pinning per-round model ids, this constant becomes
+ * a fallback — install-deps would need a `--diloco-model` CLI flag or
+ * env override (`SYNAPSEIA_DILOCO_MODEL`) to track per-pod assignments.
+ * Today every DiLoCo round uses Qwen2.5-7B so pinning here is correct.
+ */
+const DEFAULT_DILOCO_MODEL_ID =
+  process.env.SYNAPSEIA_DILOCO_MODEL?.trim() || 'Qwen/Qwen2.5-7B';
+
+/**
+ * Minimum cumulative cache size (bytes) considered "model is present".
+ * Qwen2.5-7B is ~13 GB across multiple safetensors shards; 500 MB
+ * comfortably covers tokenizer + config + at least one shard while
+ * still catching the failure mode where only a few KB of metadata
+ * downloaded before the network died. A pure config-only snapshot
+ * (~1 MB) MUST NOT pass this gate.
+ */
+const DILOCO_MODEL_MIN_SIZE_BYTES = 500 * 1024 * 1024;
 
 /**
  * Run a phased install of Python deps for the node runtime. Idempotent:
@@ -85,10 +113,17 @@ const REQUIRED_PYTHON_MINOR = 14;
  *                      (only on Tier 1+ nodes with enough RAM/VRAM)
  *   4. cuda-probe    — probe torch.cuda.is_available()
  *   5. bitsandbytes  — pip install bitsandbytes (only when CUDA present)
- *   6. docking       — install AutoDock Vina + Open Babel (GPU nodes only).
+ *   6. diloco-model  — pre-download DiLoCo foundation model (Qwen2.5-7B,
+ *                      ~13 GB) into the HF cache so runtime DiLoCo WOs
+ *                      never hit Hugging Face Hub (Bug 18 v3). Gated on
+ *                      the same tier check as lora-stack — only nodes that
+ *                      could actually run a DiLoCo WO do the download.
+ *                      Writes `~/.synapseia/diloco-model-ok` marker that
+ *                      heartbeat reads to advertise `diloco_training`.
+ *   7. docking       — install AutoDock Vina + Open Babel (GPU nodes only).
  *                      Function name `installPythonDeps` is historical — this
  *                      phase is non-Python (native binaries via brew/apt/dnf).
- *   7. complete      — final event with status=done|error
+ *   8. complete      — final event with status=done|error
  */
 export async function installPythonDeps(
   options: InstallDepsOptions,
@@ -103,6 +138,7 @@ export async function installPythonDeps(
     installedTorch: false,
     installedLoraStack: false,
     installedBitsAndBytes: false,
+    installedDilocoModel: false,
     installedDocking: false,
     errors: [],
   };
@@ -305,7 +341,65 @@ export async function installPythonDeps(
     }
   }
 
-  // ── Phase 6: docking (Vina + Open Babel) ────────────────────────────────
+  // ── Phase 6: diloco-model (pre-download foundation model) ───────────────
+  // Bug 18 v3: DiLoCo runtime was crashing mid weight-load because
+  // `from_pretrained()` was downloading the 7B model on every WO accept.
+  // Pre-download here ONCE so the runtime can use `local_files_only=True`
+  // and never hit HF Hub. Gated on the same hardware envelope as the
+  // LoRA stack — operators below Tier 1 / no GPU+RAM combo aren't viable
+  // DiLoCo runners and shouldn't pay the 13 GB disk cost.
+  //
+  // Non-blocking on failure: pods that can't download the model still
+  // boot and advertise other caps. The heartbeat gates `diloco_training`
+  // on the marker so the coord routes DiLoCo elsewhere automatically —
+  // strictly better than the pre-fix behaviour where the pod accepted
+  // the WO and crashed Python mid-load.
+  const dilocoTierOk = hardware.hardwareClass >= 1
+    && (hardware.gpuVramGb > 0 || hardware.ramGb >= 16);
+  const dilocoOptOut = process.env.INSTALL_DILOCO_MODEL === 'false';
+
+  if (!dilocoTierOk) {
+    emit({ phase: 'diloco-model', status: 'skip', message: 'Node tier too low for DiLoCo WOs; skipping model pre-download' });
+  } else if (dilocoOptOut) {
+    emit({ phase: 'diloco-model', status: 'skip', message: 'INSTALL_DILOCO_MODEL=false; skipping DiLoCo model pre-download' });
+  } else if (!venvExists()) {
+    // No venv = no huggingface_hub = no download. Don't error — earlier
+    // phases already emitted the venv failure; we just skip.
+    emit({ phase: 'diloco-model', status: 'skip', message: 'No venv available; DiLoCo model pre-download skipped' });
+  } else {
+    const existing = readDilocoModelMarker(DEFAULT_DILOCO_MODEL_ID);
+    if (existing && existing.sizeBytes >= DILOCO_MODEL_MIN_SIZE_BYTES) {
+      const sizeGb = (existing.sizeBytes / (1024 ** 3)).toFixed(2);
+      emit({
+        phase: 'diloco-model',
+        status: 'skip',
+        message: `DiLoCo model ${DEFAULT_DILOCO_MODEL_ID} already cached (${sizeGb} GB)`,
+      });
+    } else {
+      const downloadResult = runDilocoModelDownload(DEFAULT_DILOCO_MODEL_ID, emit);
+      if (downloadResult.ok) {
+        result.installedDilocoModel = true;
+        const sizeGb = (downloadResult.sizeBytes / (1024 ** 3)).toFixed(2);
+        emit({
+          phase: 'diloco-model',
+          status: 'done',
+          message: `DiLoCo model ${DEFAULT_DILOCO_MODEL_ID} downloaded (${sizeGb} GB)`,
+        });
+      } else {
+        // Non-blocking warn — the absent marker tells heartbeat NOT to
+        // advertise diloco_training, which is the desired outcome.
+        // Don't push to result.errors so success=true is preserved (the
+        // node is still usable for LoRA / Vina / inference WOs).
+        emit({
+          phase: 'diloco-model',
+          status: 'error',
+          message: `DiLoCo model pre-download failed: ${downloadResult.reason}. Node will not advertise diloco_training. Re-run \`syn install-deps\` after fixing network / HF_TOKEN.`,
+        });
+      }
+    }
+  }
+
+  // ── Phase 7: docking (Vina + Open Babel) ────────────────────────────────
   // GPU-only: mirrors the heartbeat capability gate (gpuVramGb > 0 produces
   // gpu_training / gpu_inference caps, which is what makes a node eligible
   // for docking dispatch). Non-GPU nodes skip — they would never be
@@ -342,7 +436,7 @@ export async function installPythonDeps(
     emit({ phase: 'docking', status: 'skip', message: 'No GPU detected — docking install skipped' });
   }
 
-  // ── Phase 7: complete ───────────────────────────────────────────────────
+  // ── Phase 8: complete ───────────────────────────────────────────────────
   if (result.errors.length === 0) {
     emit({ phase: 'complete', status: 'done', message: 'All Python deps ready' });
   } else {
@@ -354,6 +448,131 @@ export async function installPythonDeps(
     });
   }
   return result;
+}
+
+/**
+ * Pre-download the DiLoCo foundation model into the local Hugging Face
+ * cache and persist a marker so heartbeat can gate `diloco_training`.
+ *
+ * Uses `huggingface_hub.snapshot_download` via the venv python rather
+ * than the `huggingface-cli` binary — the CLI is an optional extra and
+ * may not be on PATH inside the venv, while `snapshot_download` is the
+ * canonical function `from_pretrained()` calls internally. Same cache
+ * layout, same auth handling, same download semantics.
+ *
+ * HF_TOKEN is inherited from the spawn env. Anonymous download works
+ * too but is rate-limited — install-deps is single-shot at install
+ * time (no WO timeout pressure), so transient rate-limit retries are
+ * tolerable here in a way they are NOT at runtime.
+ *
+ * Exported (default-export wrapped) so the install-deps spec can
+ * exercise it in isolation with a mocked subprocess.
+ *
+ * @internal exported for testing only — production callers go through
+ *           `installPythonDeps`.
+ */
+export function runDilocoModelDownload(
+  modelId: string,
+  emit: (event: InstallDepsEvent) => void,
+): { ok: true; sizeBytes: number; cacheDir: string } | { ok: false; reason: string } {
+  emit({
+    phase: 'diloco-model',
+    status: 'running',
+    message: `Pre-downloading DiLoCo model ${modelId} (~13 GB for Qwen2.5-7B; this is a one-time cost)...`,
+  });
+
+  // Inline python: snapshot_download returns the cache snapshot path.
+  // Print it on the last stdout line so we can capture it deterministically.
+  // We deliberately avoid `huggingface-cli download` because:
+  //   1. It's optional (installed only with `huggingface_hub[cli]`)
+  //   2. Its stdout format has changed between hf_hub releases
+  // `snapshot_download` API is stable since hf_hub 0.14.
+  const pyScript = [
+    'import os, sys, json',
+    'from huggingface_hub import snapshot_download',
+    `path = snapshot_download(repo_id=${JSON.stringify(modelId)}, token=os.environ.get("HF_TOKEN") or None)`,
+    'print("DILOCO_CACHE_DIR=" + path)',
+  ].join('\n');
+
+  const result = spawnSync(venvPython(), ['-c', pyScript], {
+    encoding: 'utf-8',
+    stdio: 'pipe',
+    env: { ...process.env },
+  });
+
+  if (result.status !== 0) {
+    const stderrTail = (result.stderr ?? '').toString().trim().split('\n').pop() ?? `exit ${result.status}`;
+    return { ok: false, reason: stderrTail.slice(0, 500) };
+  }
+
+  // Extract the cache dir from the marker line. snapshot_download
+  // prints nothing else to stdout under normal operation, but a chatty
+  // tqdm progress bar could appear on stderr — we only parse stdout.
+  const stdout = (result.stdout ?? '').toString();
+  const match = stdout.match(/DILOCO_CACHE_DIR=(.+)$/m);
+  if (!match) {
+    return { ok: false, reason: `snapshot_download succeeded but cache dir not captured from stdout (got: ${stdout.slice(-200)})` };
+  }
+  const cacheDir = match[1]!.trim();
+  if (!existsSync(cacheDir)) {
+    return { ok: false, reason: `snapshot_download returned ${cacheDir} but path does not exist` };
+  }
+
+  // Sum file sizes under the snapshot dir. HF caches use symlinks to
+  // a `blobs/` dir — we follow them via `statSync` (not lstatSync) so
+  // the count reflects actual on-disk bytes.
+  const sizeBytes = sumDirSize(cacheDir);
+  if (sizeBytes < DILOCO_MODEL_MIN_SIZE_BYTES) {
+    return {
+      ok: false,
+      reason: `downloaded cache size ${sizeBytes} bytes < min ${DILOCO_MODEL_MIN_SIZE_BYTES} (download likely incomplete)`,
+    };
+  }
+
+  const wrote = writeDilocoModelMarker({
+    modelId,
+    cacheDir,
+    downloadedAt: Date.now(),
+    sizeBytes,
+  });
+  if (!wrote) {
+    return { ok: false, reason: 'marker write failed (heartbeat will not see the download)' };
+  }
+  return { ok: true, sizeBytes, cacheDir };
+}
+
+/**
+ * Recursively sum file sizes under a directory, following symlinks.
+ * Used to compute the cache size of a HF model snapshot, where the
+ * snapshot directory is full of symlinks into a sibling `blobs/` dir.
+ *
+ * Defensive: tolerates broken symlinks and unreadable subdirs (returns
+ * partial sum rather than throwing). Worst case the result is an
+ * under-count, which would just fail the MIN_SIZE_BYTES gate and emit
+ * a sane "download incomplete" reason.
+ */
+function sumDirSize(dir: string): number {
+  let total = 0;
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  for (const name of entries) {
+    const p = join(dir, name);
+    try {
+      const st = statSync(p); // follows symlinks
+      if (st.isDirectory()) {
+        total += sumDirSize(p);
+      } else if (st.isFile()) {
+        total += st.size;
+      }
+    } catch {
+      // broken symlink / perm error — skip
+    }
+  }
+  return total;
 }
 
 /**

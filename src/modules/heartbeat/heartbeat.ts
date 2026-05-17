@@ -10,6 +10,7 @@ import * as os from 'os';
 import logger from '../../utils/logger';
 import {
   deleteLoraStackMarker,
+  readDilocoModelMarker,
   readLoraStackMarker,
   resolvePython,
   venvExists,
@@ -178,6 +179,11 @@ export function __resetCapabilitySnapshotForTests(): void {
   loraStackMarkerChecked = false;
   cudaCache = null;
   loraStackWarnEmitted = false;
+  dilocoModelCache = null;
+  dilocoModelLastError = null;
+  dilocoModelMarkerChecked = false;
+  dilocoModelForcedForTest = null;
+  dilocoModelWarnEmitted = false;
 }
 
 /**
@@ -381,6 +387,67 @@ async function isLoraStackAvailable(): Promise<boolean> {
 }
 
 /**
+ * Default DiLoCo foundation model id. MUST match `DEFAULT_DILOCO_MODEL_ID`
+ * in install-deps.ts — both reference the same on-disk marker. If they
+ * drift, install-deps writes a marker for X and heartbeat looks for Y →
+ * cap never advertised. Pinned constant keeps the two ends in lockstep
+ * until an env override (`SYNAPSEIA_DILOCO_MODEL`) is honoured both sides.
+ */
+const DILOCO_EXPECTED_MODEL_ID =
+  process.env.SYNAPSEIA_DILOCO_MODEL?.trim() || 'Qwen/Qwen2.5-7B';
+
+/**
+ * Cached DiLoCo model availability. Same positive-only cache strategy as
+ * the LoRA stack — once the marker is present and the cache_dir exists,
+ * the result is stable for the process lifetime. The runtime never
+ * downloads the model itself (Bug 18 v3), so only install-deps can flip
+ * this from false → true, and only by running again.
+ */
+let dilocoModelCache: boolean | null = null;
+let dilocoModelLastError: string | null = null;
+let dilocoModelMarkerChecked: boolean = false;
+let dilocoModelForcedForTest: boolean | null = null;
+
+/**
+ * Test-only seed for the DiLoCo model marker probe. Drives both
+ * branches of the cap gate without writing a real marker file.
+ * Production code never calls this.
+ */
+export function __seedDilocoModelProbeForTests(
+  available: boolean | null,
+  reason: string | null = null,
+): void {
+  dilocoModelMarkerChecked = true;
+  dilocoModelForcedForTest = available;
+  if (available === true) {
+    dilocoModelCache = true;
+    dilocoModelLastError = null;
+  } else if (available === false) {
+    dilocoModelCache = false;
+    dilocoModelLastError = reason;
+  } else {
+    dilocoModelCache = null;
+    dilocoModelLastError = null;
+  }
+}
+
+function isDilocoModelAvailable(): boolean {
+  if (dilocoModelForcedForTest !== null) return dilocoModelForcedForTest;
+  if (dilocoModelCache === true) return true;
+  if (!dilocoModelMarkerChecked) {
+    dilocoModelMarkerChecked = true;
+    const marker = readDilocoModelMarker(DILOCO_EXPECTED_MODEL_ID);
+    if (marker) {
+      dilocoModelCache = true;
+      dilocoModelLastError = null;
+      return true;
+    }
+    dilocoModelLastError = `no marker for ${DILOCO_EXPECTED_MODEL_ID} (run \`syn install-deps\` to pre-download)`;
+  }
+  return false;
+}
+
+/**
  * Cached CUDA probe. Same positive-only cache strategy as the LoRA stack —
  * CUDA availability is a hardware fact stable for the process lifetime.
  */
@@ -425,6 +492,14 @@ let warmupStarted = false;
  * the test-only `__resetCapabilitySnapshotForTests` hook.
  */
 let loraStackWarnEmitted = false;
+
+/**
+ * Bug 18 v3: throttle the "DiLoCo model not pre-downloaded" warn to fire
+ * AT MOST ONCE per process lifetime. Mirrors `loraStackWarnEmitted` —
+ * GPU pods that qualify for diloco_training but skipped install-deps
+ * would otherwise spam the warn every 60s heartbeat.
+ */
+let dilocoModelWarnEmitted = false;
 export function warmCapabilityProbes(): void {
   if (warmupStarted) return;
   warmupStarted = true;
@@ -948,6 +1023,33 @@ export class HeartbeatHelper {
         if (hasCuda) caps.push('lora_generation');
       } catch (err) {
         logger.warn(`[Heartbeat] CUDA probe failed: ${(err as Error).message}`);
+      }
+    }
+
+    // diloco_training: requires the foundation model to be pre-downloaded
+    // into the local HF cache (Bug 18 v3). Without this gate, accepting a
+    // DiLoCo WO triggers a runtime `from_pretrained()` against HF Hub
+    // which gets throttled / RST'd on flaky pod networks → process killed
+    // by signal mid-load → "exit code null". The cap is now strictly
+    // tied to the on-disk marker written by install-deps phase 6.
+    //
+    // Hardware envelope mirrors lora_training (same Tier 1+ qualifier);
+    // there's no point advertising diloco_training on a node that
+    // couldn't fit the model anyway. Pure marker-gated — no python spawn,
+    // no Hub round-trip, deterministic per-tick.
+    const dilocoHasCapacity = hardware.gpuVramGb > 0 || hardware.ramGb >= 16;
+    if (dilocoHasCapacity) {
+      const hasDilocoModel = isDilocoModelAvailable();
+      if (hasDilocoModel) {
+        caps.push('diloco_training');
+      } else if (!dilocoModelWarnEmitted) {
+        const reason = dilocoModelLastError ?? 'no error captured';
+        logger.warn(
+          `[Heartbeat] DiLoCo model not pre-downloaded — not advertising diloco_training. ` +
+          `Reason: ${reason}. ` +
+          `Run \`syn install-deps\` to download ${DILOCO_EXPECTED_MODEL_ID} into the local HF cache.`,
+        );
+        dilocoModelWarnEmitted = true;
       }
     }
 

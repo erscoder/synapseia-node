@@ -178,6 +178,53 @@ def _load_with_retry(loader_fn, what: str, max_attempts: int = 3, base_delay: fl
     raise RuntimeError(f"{what} failed without capturing an error")
 
 
+def _resolve_local_model_args(model_id: str) -> dict:
+    """
+    Bug 18 v3: prefer the install-deps-pre-downloaded model over a runtime
+    HF Hub fetch. Reads ~/.synapseia/diloco-model-ok (written by
+    install-deps after `snapshot_download` succeeded) and returns kwargs
+    suitable for `from_pretrained()`:
+
+        { "local_files_only": True, "cache_dir": "<snapshot path>" }
+
+    If the marker is absent / stale / model_id mismatched, returns an
+    empty dict — `from_pretrained()` falls back to a Hub fetch as
+    before. The heartbeat gate on `diloco_training` should have
+    prevented WO acceptance in that case, so reaching here without a
+    valid marker is already an anomaly — but we don't hard-fail so a
+    manually-bootstrapped operator with a pre-populated HF cache still
+    works.
+    """
+    marker_path = os.environ.get("SYNAPSEIA_HOME")
+    if marker_path:
+        marker_path = os.path.join(marker_path, "diloco-model-ok")
+    else:
+        marker_path = os.path.join(os.path.expanduser("~"), ".synapseia", "diloco-model-ok")
+
+    if not os.path.exists(marker_path):
+        return {}
+    try:
+        with open(marker_path, "r", encoding="utf-8") as f:
+            marker = json.load(f)
+    except Exception:
+        return {}
+
+    if not isinstance(marker, dict):
+        return {}
+    if marker.get("modelId") != model_id:
+        return {}
+    cache_dir = marker.get("cacheDir")
+    if not isinstance(cache_dir, str) or not os.path.exists(cache_dir):
+        return {}
+
+    # cache_dir in the marker points to the snapshot dir (e.g.
+    # ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B/snapshots/<sha>).
+    # `from_pretrained` accepts that directly as `pretrained_model_name_or_path`
+    # but we also pass `local_files_only=True` to forbid any Hub round-trip.
+    # We override `model_id` at the call site to point at the snapshot.
+    return {"local_files_only": True, "snapshot_path": cache_dir}
+
+
 def run_full_mode(config: dict) -> None:
     """
     Full mode: fine-tune Qwen2.5-7B (or configured modelId) with LoRA.
@@ -196,6 +243,25 @@ def run_full_mode(config: dict) -> None:
     hardware = config.get("hardware", "cpu")
     lr = hyperparams.get("learningRate", 2e-4)
     batch_size = hyperparams.get("batchSize", 4)
+
+    # Bug 18 v3: prefer the install-deps pre-download (marker-gated). When
+    # present, `from_pretrained()` runs with local_files_only=True and the
+    # snapshot path as the pretrained-name — zero HF Hub round-trips at
+    # runtime. The HF_TOKEN warn below stays for the legacy-bootstrap
+    # path where a marker is absent (operator manually pre-populated the
+    # HF cache without running install-deps).
+    local_args = _resolve_local_model_args(model_id)
+    if local_args:
+        # Substitute model_id with the snapshot path so `from_pretrained`
+        # reads from disk only. local_files_only=True belt-and-braces
+        # forbids any Hub fallback even if the snapshot is incomplete.
+        pretrained_name = local_args["snapshot_path"]
+        load_kwargs_extra = {"local_files_only": True}
+        log({"info": f"diloco_model_source=local snapshot={pretrained_name}"})
+    else:
+        pretrained_name = model_id
+        load_kwargs_extra = {}
+        log({"info": f"diloco_model_source=hf_hub model_id={model_id} (no install-deps marker; consider running `syn install-deps`)"})
 
     # Bug 18: anonymous HF Hub downloads get throttled/RST'd after a few
     # retries → "exit code null" mid-load. Surface the auth state up to
@@ -220,9 +286,10 @@ def run_full_mode(config: dict) -> None:
         )
         base_model = _load_with_retry(
             lambda: AutoModelForCausalLM.from_pretrained(
-                model_id, quantization_config=bnb_config, device_map="auto"
+                pretrained_name, quantization_config=bnb_config, device_map="auto",
+                **load_kwargs_extra,
             ),
-            what=f"AutoModelForCausalLM.from_pretrained({model_id}, 4bit)",
+            what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit)",
         )
     else:
         # transformers 5.x renamed `torch_dtype` → `dtype` (deprecation
@@ -232,8 +299,10 @@ def run_full_mode(config: dict) -> None:
         # going forward; install-deps pins transformers>=4.43 to guarantee
         # the keyword is recognized on older venvs too. See Bug 14.
         base_model = _load_with_retry(
-            lambda: AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float32),
-            what=f"AutoModelForCausalLM.from_pretrained({model_id}, fp32)",
+            lambda: AutoModelForCausalLM.from_pretrained(
+                pretrained_name, dtype=torch.float32, **load_kwargs_extra,
+            ),
+            what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, fp32)",
         )
         base_model = base_model.to(device)
 
@@ -252,8 +321,8 @@ def run_full_mode(config: dict) -> None:
         model = get_peft_model(base_model, lora_config)
 
     tokenizer = _load_with_retry(
-        lambda: AutoTokenizer.from_pretrained(model_id),
-        what=f"AutoTokenizer.from_pretrained({model_id})",
+        lambda: AutoTokenizer.from_pretrained(pretrained_name, **load_kwargs_extra),
+        what=f"AutoTokenizer.from_pretrained({pretrained_name})",
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
