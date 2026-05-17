@@ -8,6 +8,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 import { resolvePython } from '../../utils/python-venv';
+import logger from '../../utils/logger';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -96,8 +97,23 @@ export class DiLoCoTrainerHelper {
       testMode: config.testMode ?? false,
     };
 
+    // Bug 18: pods crashed mid weight-load with "exit code null" (signal
+    // kill, not a Python exception). Build an explicit env so:
+    //   1. HF_TOKEN inheritance is observable in logs (anonymous HF Hub
+    //      requests get throttled / RST'd after a few retries → SIGPIPE /
+    //      native safetensors crash → exit code null).
+    //   2. HF_HUB_ENABLE_HF_TRANSFER stays opt-in (the `hf_transfer`
+    //      accelerator segfaults on partial downloads which manifests as
+    //      exit code null too — never auto-enable it).
+    //   3. TRANSFORMERS_OFFLINE / HF_HUB_DISABLE_TELEMETRY are forwarded.
+    const childEnv: NodeJS.ProcessEnv = { ...process.env };
+    const hfTokenPresent = !!(process.env.HF_TOKEN && process.env.HF_TOKEN.trim().length > 0);
+    if (!hfTokenPresent) {
+      logger.warn(' DiLoCo: HF_TOKEN not set — anonymous HF Hub downloads are rate-limited. Set HF_TOKEN in operator env to avoid mid-load throttling crashes (Bug 18).');
+    }
+
     return new Promise((res, reject) => {
-      const proc = spawnFn(resolvePython(), [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const proc = spawnFn(resolvePython(), [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], env: childEnv });
       let stderr = '';
       let finalResult: DiLoCoResult | null = null;
       let timedOut = false;
@@ -134,12 +150,37 @@ export class DiLoCoTrainerHelper {
         }
       });
 
-      proc.stderr!.on('data', (data: Buffer) => { stderr += data.toString(); });
+      // Cap stderr accumulation to last 8KB so a chatty HF tqdm bar can't
+      // balloon a node-side string forever, while still preserving the
+      // tail (where the actual crash trace lives if Python managed to
+      // print one before being signalled).
+      const STDERR_CAP_BYTES = 8 * 1024;
+      proc.stderr!.on('data', (data: Buffer) => {
+        stderr += data.toString();
+        if (stderr.length > STDERR_CAP_BYTES) {
+          stderr = stderr.slice(-STDERR_CAP_BYTES);
+        }
+      });
 
-      proc.on('close', (code) => {
+      // Bug 18: `close` callback receives `(code: number | null, signal:
+      // NodeJS.Signals | null)`. `code === null` means the process was
+      // killed by a signal — operators previously saw "exited with code
+      // null" with zero diagnostic value. Surface the signal name (SIGKILL
+      // ≈ OOM, SIGSEGV ≈ native crash in safetensors/hf_transfer, SIGPIPE
+      // ≈ network RST, SIGTERM ≈ our own timeout) plus the stderr tail.
+      proc.on('close', (code, signal) => {
         clearTimeout(timeoutHandle);
         if (timedOut) return;
-        if (code !== 0) { reject(new Error(`diloco_train.py exited with code ${code}: ${stderr || 'unknown error'}`)); return; }
+        if (code === null && signal) {
+          const hint = signal === 'SIGKILL' ? 'likely OOM-killer or container memory limit'
+            : signal === 'SIGSEGV' ? 'native crash (safetensors / hf_transfer / torch C-ext); consider unsetting HF_HUB_ENABLE_HF_TRANSFER'
+            : signal === 'SIGPIPE' ? 'broken pipe (HF Hub connection RST during weight stream; set HF_TOKEN to avoid anonymous-rate throttling)'
+            : signal === 'SIGTERM' ? 'terminated by external signal'
+            : `signal ${signal}`;
+          reject(new Error(`diloco_train.py killed by signal ${signal} (${hint}). stderr tail: ${stderr.trim().slice(-512) || '(empty)'}`));
+          return;
+        }
+        if (code !== 0) { reject(new Error(`diloco_train.py exited with code ${code}: ${stderr.trim().slice(-512) || 'unknown error'}`)); return; }
         if (!finalResult) { reject(new Error('DiLoCo training completed but no result received')); return; }
         res(finalResult);
       });

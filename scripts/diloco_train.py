@@ -139,6 +139,45 @@ def run_test_mode(config: dict) -> None:
     })
 
 
+def _load_with_retry(loader_fn, what: str, max_attempts: int = 3, base_delay: float = 5.0):
+    """
+    Bug 18: wrap `from_pretrained` in retry/backoff so transient HF Hub
+    network failures (rate-limit 429, connection reset, partial shard
+    download) get a chance to recover instead of bubbling up as an
+    uncaught exception (best case) or a native SIGSEGV/SIGPIPE in
+    safetensors/hf_transfer (worst case → exit code null).
+
+    Catches `Exception` deliberately wide because the relevant ones live
+    across multiple optional modules (urllib3, requests, huggingface_hub,
+    safetensors, torch). We bail immediately on TypeError / ValueError
+    which indicate programmer error, not transient network state.
+    """
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return loader_fn()
+        except (TypeError, ValueError):
+            raise
+        except Exception as e:  # noqa: BLE001 — see docstring
+            last_err = e
+            err_name = type(e).__name__
+            if attempt == max_attempts:
+                log({
+                    "warn": f"{what} failed after {attempt} attempts ({err_name}: {str(e)[:200]}); giving up"
+                })
+                raise
+            delay = base_delay * (2 ** (attempt - 1))
+            log({
+                "warn": f"{what} attempt {attempt}/{max_attempts} failed ({err_name}: {str(e)[:200]}); retrying in {delay:.0f}s"
+            })
+            time.sleep(delay)
+    # Unreachable, but defensive — `raise` above always fires on the
+    # final attempt. Keeps type-checkers and reviewers happy.
+    if last_err is not None:
+        raise last_err
+    raise RuntimeError(f"{what} failed without capturing an error")
+
+
 def run_full_mode(config: dict) -> None:
     """
     Full mode: fine-tune Qwen2.5-7B (or configured modelId) with LoRA.
@@ -158,6 +197,13 @@ def run_full_mode(config: dict) -> None:
     lr = hyperparams.get("learningRate", 2e-4)
     batch_size = hyperparams.get("batchSize", 4)
 
+    # Bug 18: anonymous HF Hub downloads get throttled/RST'd after a few
+    # retries → "exit code null" mid-load. Surface the auth state up to
+    # the TS wrapper log so operators can correlate. HF_TOKEN is also
+    # inherited from the spawn env (set explicitly in diloco-trainer.ts).
+    hf_token_present = bool(os.environ.get("HF_TOKEN", "").strip())
+    log({"info": f"hf_auth={'token' if hf_token_present else 'anonymous'} model_id={model_id}"})
+
     device = "cpu"
     if hardware == "mps" and torch.backends.mps.is_available():
         device = "mps"
@@ -172,8 +218,11 @@ def run_full_mode(config: dict) -> None:
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
-        base_model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb_config, device_map="auto"
+        base_model = _load_with_retry(
+            lambda: AutoModelForCausalLM.from_pretrained(
+                model_id, quantization_config=bnb_config, device_map="auto"
+            ),
+            what=f"AutoModelForCausalLM.from_pretrained({model_id}, 4bit)",
         )
     else:
         # transformers 5.x renamed `torch_dtype` → `dtype` (deprecation
@@ -182,8 +231,9 @@ def run_full_mode(config: dict) -> None:
         # exit code null → every DiLoCo WO crashed pre-train. Use `dtype`
         # going forward; install-deps pins transformers>=4.43 to guarantee
         # the keyword is recognized on older venvs too. See Bug 14.
-        base_model = AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=torch.float32
+        base_model = _load_with_retry(
+            lambda: AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float32),
+            what=f"AutoModelForCausalLM.from_pretrained({model_id}, fp32)",
         )
         base_model = base_model.to(device)
 
@@ -201,7 +251,10 @@ def run_full_mode(config: dict) -> None:
         )
         model = get_peft_model(base_model, lora_config)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer = _load_with_retry(
+        lambda: AutoTokenizer.from_pretrained(model_id),
+        what=f"AutoTokenizer.from_pretrained({model_id})",
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
