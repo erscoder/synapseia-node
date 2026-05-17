@@ -2,11 +2,29 @@ import { lt, valid } from 'semver';
 import logger from './logger';
 import { getNodeVersion } from './version';
 
+/**
+ * Subset of fields the coordinator's `GET /version` endpoint exposes
+ * that the node still trusts.
+ *
+ * 2026-05-17: the legacy `latestNodeVersion` / `latestNodeUiVersion`
+ * fields were intentionally dropped from this contract. Coord-baked
+ * `LATEST_VERSION` got stale every time we shipped a node-only release
+ * without redeploying coord (live bug on 2026-05-17: coord 0.8.67
+ * reported `latestNodeVersion: "0.8.67"` while npm already had 0.8.76,
+ * so any node that fell back to coord risked downgrading itself).
+ *
+ * Source of truth split:
+ *   - `latestNodeVersion`  → npm registry (`fetchNpmLatest`). npm cannot
+ *                            be replaced by coord here: a node-only
+ *                            release is exactly the case where coord
+ *                            hasn't been redeployed.
+ *   - `minNodeVersion`     → coord (this interface). Security floor
+ *                            that npm cannot serve.
+ *   - `protocolVersion`    → coord (this interface).
+ */
 export interface VersionInfo {
   protocolVersion: number;
   minNodeVersion: string;
-  latestNodeVersion: string;
-  latestNodeUiVersion: string;
 }
 
 export enum UpdateStatus {
@@ -28,12 +46,19 @@ const NPM_DIST_TAGS_URL = `https://registry.npmjs.org/-/package/${NODE_PACKAGE_N
 
 /**
  * Fetch version info from the coordinator's GET /version endpoint.
+ *
+ * Only `protocolVersion` and `minNodeVersion` are consumed — any extra
+ * fields coord still returns for legacy compatibility are ignored.
  */
 export async function fetchVersionInfo(coordinatorUrl: string): Promise<VersionInfo | null> {
   try {
     const resp = await fetch(`${coordinatorUrl}/version`, { signal: AbortSignal.timeout(5000) });
     if (!resp.ok) return null;
-    return (await resp.json()) as VersionInfo;
+    const raw = (await resp.json()) as Partial<VersionInfo>;
+    if (typeof raw?.protocolVersion !== 'number' || typeof raw?.minNodeVersion !== 'string') {
+      return null;
+    }
+    return { protocolVersion: raw.protocolVersion, minNodeVersion: raw.minNodeVersion };
   } catch {
     return null;
   }
@@ -57,12 +82,23 @@ export async function fetchNpmLatest(): Promise<string | null> {
 }
 
 /**
- * Compare local node version against coordinator requirements.
+ * Compare local node version against the security floor (from coord) and
+ * the latest published version (from npm).
+ *
+ * `latestNodeVersion` is passed as a separate argument because its
+ * source (npm) differs from `info`'s source (coord). When npm is
+ * unreachable, callers should NOT invoke `checkVersion` — they should
+ * skip the pre-flight check entirely (no coord fallback exists by
+ * design — see VersionInfo docblock).
  */
-export function checkVersion(local: string, info: VersionInfo): UpdateCheckResult {
+export function checkVersion(
+  local: string,
+  info: VersionInfo,
+  latestNodeVersion: string,
+): UpdateCheckResult {
   const current = valid(local) ?? '0.0.0';
   const min = valid(info.minNodeVersion) ?? '0.0.0';
-  const latest = valid(info.latestNodeVersion) ?? current;
+  const latest = valid(latestNodeVersion) ?? current;
 
   if (lt(current, min)) {
     return { status: UpdateStatus.UPDATE_REQUIRED, currentVersion: current, latestVersion: latest, minVersion: min };
@@ -76,54 +112,50 @@ export function checkVersion(local: string, info: VersionInfo): UpdateCheckResul
 /**
  * Pre-flight version check. Called before connecting to the coordinator.
  *
- * Latest version comes from the npm registry (canonical source for node-only
- * releases — no coord redeploy required to publish). Falls back to coord
- * `/version` when npm is unreachable. The security floor `minNodeVersion`
- * ALWAYS comes from coord — npm is never trusted for the pin.
+ * `latestNodeVersion` comes EXCLUSIVELY from the npm registry — coord
+ * is no longer consulted as a fallback (see VersionInfo docblock for
+ * the 2026-05-17 decoupling rationale). If npm is unreachable, the
+ * pre-flight check is skipped (returns null + WARN); the security
+ * floor `minNodeVersion` still comes from coord, but the update-status
+ * decision is deferred to the next attempt rather than risking a stale
+ * coord-baked value triggering a downgrade.
  *
  * Returns the check result (caller decides whether to self-update or abort).
  */
 export async function preflightVersionCheck(coordinatorUrl: string): Promise<UpdateCheckResult | null> {
   const [npmLatest, coordInfo] = await Promise.all([fetchNpmLatest(), fetchVersionInfo(coordinatorUrl)]);
 
-  let latestVersion: string | null = null;
-  let latestSource: 'npm' | 'coord' | null = null;
-  if (npmLatest) {
-    latestVersion = npmLatest;
-    latestSource = 'npm';
-  } else if (coordInfo?.latestNodeVersion) {
-    latestVersion = coordInfo.latestNodeVersion;
-    latestSource = 'coord';
-  }
-
-  if (!latestVersion) {
-    logger.warn('[UpdateCheck] Could not reach npm registry or coordinator /version — skipping pre-flight check');
+  if (!npmLatest) {
+    logger.warn(
+      '[UpdateCheck] npm registry unreachable — skipping pre-flight check ' +
+        '(coord is not consulted as a fallback for latestNodeVersion; ' +
+        'see update-checker.ts docblock).',
+    );
     return null;
   }
 
   const minVersion = coordInfo?.minNodeVersion ?? '0.0.0';
-  const mergedInfo: VersionInfo = {
-    protocolVersion: coordInfo?.protocolVersion ?? 0,
-    minNodeVersion: minVersion,
-    latestNodeVersion: latestVersion,
-    latestNodeUiVersion: coordInfo?.latestNodeUiVersion ?? '',
-  };
+  const protocolVersion = coordInfo?.protocolVersion ?? 0;
 
-  const result = checkVersion(getNodeVersion(), mergedInfo);
+  const result = checkVersion(
+    getNodeVersion(),
+    { protocolVersion, minNodeVersion: minVersion },
+    npmLatest,
+  );
 
   switch (result.status) {
     case UpdateStatus.UP_TO_DATE:
-      logger.log(`[UpdateCheck] v${result.currentVersion} is up to date (latest from ${latestSource})`);
+      logger.log(`[UpdateCheck] v${result.currentVersion} is up to date (latest from npm)`);
       break;
     case UpdateStatus.UPDATE_AVAILABLE:
       logger.warn(
-        `[UpdateCheck] Update available: v${result.currentVersion} -> v${result.latestVersion} (latest from ${latestSource})`,
+        `[UpdateCheck] Update available: v${result.currentVersion} -> v${result.latestVersion} (latest from npm)`,
       );
       break;
     case UpdateStatus.UPDATE_REQUIRED:
       logger.error(
         `[UpdateCheck] Update REQUIRED: v${result.currentVersion} < minimum v${result.minVersion}. ` +
-          `Latest: v${result.latestVersion} (from ${latestSource})`,
+          `Latest: v${result.latestVersion} (from npm)`,
       );
       break;
   }

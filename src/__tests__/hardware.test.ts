@@ -819,16 +819,27 @@ describe('hardware (A13)', () => {
   });
 
   describe('cache + pre-flight (Windows hang fix)', () => {
-    it('detectHardware caches the result across calls (same object reference)', async () => {
+    it('detectHardware caches the STATIC slice across calls (no re-spawn of GPU probe)', async () => {
       const { detectHardware } = await import('../modules/hardware/hardware.js');
       mockExecSync.mockReturnValue('Apple M3 Max');
 
       const first = detectHardware();
+      const execCallsAfterFirst = mockExecSync.mock.calls.length;
       const second = detectHardware();
 
-      // Same reference proves the cache hit. A re-probe would build a
-      // fresh object via the object-literal at the top of detectHardware.
-      expect(second).toBe(first);
+      // Static slice (CPU/RAM/GPU) must come from cache: no additional
+      // execSync invocations beyond what the first call needed. Note:
+      // post-Slice-2 (Bug 28) we no longer assert object identity —
+      // detectHardware now composes a fresh wrapper per call from a
+      // cached static slice + dynamic probe slice, so `toBe` would
+      // always fail by design. The contract is "static values stable +
+      // probe not re-issued".
+      expect(mockExecSync.mock.calls.length).toBe(execCallsAfterFirst);
+      expect(second.cpuCores).toBe(first.cpuCores);
+      expect(second.ramGb).toBe(first.ramGb);
+      expect(second.gpuVramGb).toBe(first.gpuVramGb);
+      expect(second.hardwareClass).toBe(first.hardwareClass);
+      expect(second.gpuModel).toBe(first.gpuModel);
     });
 
     it('detectHardware re-probes after resetHardwareCache()', async () => {
@@ -838,11 +849,13 @@ describe('hardware (A13)', () => {
       mockExecSync.mockReturnValue('Apple M3 Max');
 
       const first = detectHardware();
+      const execCallsAfterFirst = mockExecSync.mock.calls.length;
       resetHardwareCache();
       const second = detectHardware();
 
-      // Distinct object identity confirms the cache was bypassed.
-      expect(second).not.toBe(first);
+      // Reset clears the static cache, so the second call MUST re-spawn
+      // the GPU probe (more execSync calls than after the first call).
+      expect(mockExecSync.mock.calls.length).toBeGreaterThan(execCallsAfterFirst);
       // Value still matches because the mock is unchanged.
       expect(second.gpuVramGb).toBe(first.gpuVramGb);
     });

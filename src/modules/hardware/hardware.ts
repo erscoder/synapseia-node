@@ -27,27 +27,83 @@ import { resolvePython } from '../../utils/python-venv';
 let hardwareLoggedOnce = false;
 
 /**
- * Process-lifetime cache for `detectHardware()` results. GPU/CPU/RAM do
- * not change between heartbeats, but `canInference()` and `canDiLoCo()`
- * call `detectHardware()` every 60s on the hot path. On a Windows host
+ * STATIC cache for `detectHardware()` results. GPU/CPU/RAM do not change
+ * between heartbeats, but `canInference()` and `canDiLoCo()` call
+ * `detectHardware()` every 60s on the hot path. On a Windows host
  * without nvidia-smi, the synchronous `execSync` invocation can hang
  * cmd.exe indefinitely (PATH lookup, antivirus interception, network
  * drive scan) and block the main event loop, killing heartbeats. Caching
- * the first probe result eliminates 99% of those spawns.
+ * the first probe result for static fields eliminates 99% of those spawns.
  *
  * Key is `${cpuOnly}|${archOverride ?? ''}` so distinct call sites with
  * different args retain independent cached values. Tests reset via
  * `resetHardwareCache()`.
+ *
+ * Bug 28 (2026-05-17): the cache used to also pin DYNAMIC fields
+ * (`hasOllama`, `hasCloudLlm`). If Ollama was DOWN at boot (still
+ * loading models, or temporarily unreachable in container start-up),
+ * the cached `hasOllama=false` never refreshed for the whole process
+ * lifetime, stripping `llm` / `inference` / `embedding` caps forever.
+ * Pod live-confirmed 2026-05-17: Ollama UP on localhost:11434 with
+ * models cached, but heartbeat advertised cpu_training/cpu_inference/
+ * gpu_training only — coord rejected RESEARCH WOs with NODE_FORBIDDEN.
+ *
+ * Dynamic fields are now re-probed at most every `DYNAMIC_PROBE_TTL_MS`
+ * (see below).
  */
-const hardwareCache: Map<string, Hardware> = new Map();
+const staticHardwareCache: Map<string, StaticHardware> = new Map();
 
 /**
- * Reset the hardware detection cache. Exposed for tests so each case
- * can re-probe with fresh mocks. Not intended for production callers.
+ * DYNAMIC fields probe cache. Re-probed every `DYNAMIC_PROBE_TTL_MS`.
+ * Separate map from `staticHardwareCache` so each has its own lifecycle.
+ */
+interface DynamicHardware {
+  hasOllama: boolean;
+  hasCloudLlm: boolean;
+  probedAt: number; // Date.now() at last probe
+}
+const dynamicHardwareCache: Map<string, DynamicHardware> = new Map();
+
+/**
+ * TTL for the dynamic probe (ms). Chosen to match the heartbeat tick
+ * (60s) so each heartbeat triggers AT MOST one Ollama probe, and any
+ * transient Ollama down→up flip is reflected within one heartbeat
+ * cycle. Probe is cheap (`curl --max-time 2 http://localhost:11434/api/tags`)
+ * so 60s is safe; setting it lower would just spam curls per `canInference()`
+ * / `canDiLoCo()` call (each heartbeat calls `detectHardware()` multiple
+ * times indirectly).
+ *
+ * The contract: dynamic field is fresh within the last 60 seconds. After
+ * 60s elapses from last probe, the NEXT call to `detectHardware()` will
+ * re-probe synchronously and update `hasOllama` / `hasCloudLlm`.
+ */
+export const DYNAMIC_PROBE_TTL_MS = 60_000;
+
+/**
+ * Static-only subset of `Hardware`. Excludes `hasOllama` / `hasCloudLlm`
+ * which are dynamic. We compose the final `Hardware` per-call from the
+ * cached static slice + a fresh-or-cached dynamic slice.
+ */
+type StaticHardware = Omit<Hardware, 'hasOllama' | 'hasCloudLlm'>;
+
+/**
+ * Reset the hardware detection caches (BOTH static and dynamic). Exposed
+ * for tests so each case can re-probe with fresh mocks. Not intended for
+ * production callers.
  */
 export function resetHardwareCache(): void {
-  hardwareCache.clear();
+  staticHardwareCache.clear();
+  dynamicHardwareCache.clear();
+  lastOllamaState = null;
+  hardwareLoggedOnce = false;
 }
+
+/**
+ * Last-known `hasOllama` value (module-scoped) used to detect UP↔down
+ * transitions and emit a WARN log when the state flips. `null` means
+ * "no prior probe" — first probe never logs a transition.
+ */
+let lastOllamaState: boolean | null = null;
 
 /**
  * Default per-spawn timeout for nvidia-smi invocations (ms). Defensive
@@ -230,107 +286,173 @@ export class HardwareHelper {
     else if (hardware.hardwareClass < 2 && hardware.gpuVramGb >= 6) hardware.hardwareClass = 1;
   }
 
-  detectHardware(cpuOnly = false, archOverride?: string): Hardware {
-    // Process-lifetime cache lookup. GPU/CPU/RAM does not change between
-    // heartbeats, so we probe once per (cpuOnly, archOverride) pair and
-    // reuse. This is the single highest-impact protection against the
-    // Windows nvidia-smi hang: re-running execSync per heartbeat is the
-    // amplifier that converted a flaky probe into a frozen process.
-    const cacheKey = `${cpuOnly}|${archOverride ?? ''}`;
-    const cached = hardwareCache.get(cacheKey);
-    if (cached) return cached;
-
-    const hardware: Hardware = {
+  /**
+   * Build the STATIC slice (CPU/RAM/GPU/hardwareClass/gpuModel). These
+   * values are immutable after process boot — no host swaps RAM mid-run
+   * — so we probe once per (cpuOnly, archOverride) pair and reuse.
+   */
+  private buildStaticHardware(cpuOnly: boolean, archOverride?: string): StaticHardware {
+    const hardware: StaticHardware = {
       cpuCores: os.cpus().length || 2,
       ramGb: Math.round(os.totalmem() / (1024 ** 3)),
       gpuVramGb: 0,
       hardwareClass: 0,
-      hasOllama: false,
     };
 
-    if (!cpuOnly) {
-      // Detect GPU
-      try {
-        const arch = archOverride || os.arch();
-        if (arch === 'arm64') {
-          const model = execSync(
-            'sysctl -n machdep.cpu.brand_string',
-            { timeout: NVIDIA_SMI_TIMEOUT_MS },
-          ).toString().trim();
-          this.detectAppleSilicon(hardware, model);
-          hardware.gpuModel = model;
-        } else if (arch === 'x64' || arch === 'x86') {
-          // Node returns 'x64' on modern Intel/AMD; 'x86' kept for historic compat.
-          this.detectNvidiaGPU(hardware);
-          // Best-effort GPU name for telemetry. Skip the spawn entirely
-          // if nvidia-smi is not on PATH. Silent on any failure.
-          if (isExecutableOnPath('nvidia-smi')) {
-            try {
-              const name = execSync(
-                'nvidia-smi --query-gpu=name --format=csv,noheader',
-                {
-                  encoding: 'utf-8',
-                  stdio: ['ignore', 'pipe', 'ignore'],
-                  timeout: NVIDIA_SMI_TIMEOUT_MS,
-                },
-              ).split('\n')[0]?.trim();
-              if (name) hardware.gpuModel = name;
-            } catch { /* no nvidia-smi or timeout */ }
-          }
+    if (cpuOnly) return hardware;
+
+    // Detect GPU
+    try {
+      const arch = archOverride || os.arch();
+      if (arch === 'arm64') {
+        const model = execSync(
+          'sysctl -n machdep.cpu.brand_string',
+          { timeout: NVIDIA_SMI_TIMEOUT_MS },
+        ).toString().trim();
+        // Reuse mutator API which expects a Hardware shape.
+        const tmp: Hardware = { ...hardware, hasOllama: false };
+        this.detectAppleSilicon(tmp, model);
+        hardware.gpuVramGb = tmp.gpuVramGb;
+        hardware.hardwareClass = tmp.hardwareClass;
+        hardware.gpuModel = model;
+      } else if (arch === 'x64' || arch === 'x86') {
+        // Node returns 'x64' on modern Intel/AMD; 'x86' kept for historic compat.
+        const tmp: Hardware = { ...hardware, hasOllama: false };
+        this.detectNvidiaGPU(tmp);
+        hardware.gpuVramGb = tmp.gpuVramGb;
+        hardware.hardwareClass = tmp.hardwareClass;
+        // Best-effort GPU name for telemetry. Skip the spawn entirely
+        // if nvidia-smi is not on PATH. Silent on any failure.
+        if (isExecutableOnPath('nvidia-smi')) {
+          try {
+            const name = execSync(
+              'nvidia-smi --query-gpu=name --format=csv,noheader',
+              {
+                encoding: 'utf-8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+                timeout: NVIDIA_SMI_TIMEOUT_MS,
+              },
+            ).split('\n')[0]?.trim();
+            if (name) hardware.gpuModel = name;
+          } catch { /* no nvidia-smi or timeout */ }
         }
-      } catch {
-        // nvidia-smi not available or no GPU
       }
+    } catch {
+      // nvidia-smi not available or no GPU
+    }
 
-      // Check for Ollama. Honor OLLAMA_URL so containerized nodes that talk
-      // to a sibling Ollama container (e.g. http://ollama:11434) can detect
-      // the daemon. Fallback to localhost for dev-on-host setups.
-      //
-      // SECURITY: parse via WHATWG URL + invoke curl via spawnSync (array
-      // form) so OLLAMA_URL is never interpolated into a shell. Defense in
-      // depth against malformed values like `http://x;rm -rf /tmp/foo`,
-      // backticks, `&`, `?`, `$`, etc.
-      const ollamaUrl = process.env.OLLAMA_URL?.trim() || 'http://localhost:11434';
-      let probeUrl: string | null = null;
-      try {
-        const parsed = new URL(ollamaUrl);
-        probeUrl = `${parsed.origin}/api/tags`;
-      } catch {
-        // Malformed OLLAMA_URL — treat as no Ollama reachable.
-        probeUrl = null;
-      }
+    return hardware;
+  }
 
-      if (probeUrl !== null) {
-        const result = spawnSync(
-          'curl',
-          ['-s', '--max-time', '2', probeUrl],
-          { stdio: 'pipe', timeout: 2000 },
-        );
-        hardware.hasOllama = result.status === 0 && !result.error;
-      } else {
-        hardware.hasOllama = false;
-      }
+  /**
+   * Probe DYNAMIC fields (`hasOllama`, `hasCloudLlm`). Runs every call
+   * — caching/TTL is handled by `detectHardware()`. Emits a WARN log
+   * when `hasOllama` flips from the last-known value.
+   *
+   * Security: OLLAMA_URL parsed via WHATWG URL + invoked via spawnSync
+   * (array form), never interpolated into a shell. Defense in depth
+   * against `http://x;rm -rf /tmp/foo`, backticks, `&`, `?`, `$`, etc.
+   *
+   * Timeout: per-spawn 2000ms hard cap so a wedged probe cannot block
+   * the main event loop. Overridable via OLLAMA_PROBE_TIMEOUT_MS env.
+   */
+  private probeDynamicHardware(): DynamicHardware {
+    const ollamaUrl = process.env.OLLAMA_URL?.trim() || 'http://localhost:11434';
+    let probeUrl: string | null = null;
+    try {
+      const parsed = new URL(ollamaUrl);
+      probeUrl = `${parsed.origin}/api/tags`;
+    } catch {
+      // Malformed OLLAMA_URL — treat as no Ollama reachable.
+      probeUrl = null;
+    }
 
-      // Cloud LLM is configured purely via env (LLM_CLOUD_MODEL or
-      // LLM_PROVIDER=cloud). Without this, capability derivation in
-      // heartbeat omits 'inference'/'llm' caps and the coordinator filters
-      // research work-orders out of this node's pool.
-      hardware.hasCloudLlm = !!(
-        process.env.LLM_CLOUD_MODEL?.trim() ||
-        process.env.LLM_PROVIDER?.trim().toLowerCase() === 'cloud'
+    const timeoutMsRaw = parseInt(process.env.OLLAMA_PROBE_TIMEOUT_MS ?? '', 10);
+    const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0 ? timeoutMsRaw : 2000;
+    const timeoutSec = String(Math.max(1, Math.ceil(timeoutMs / 1000)));
+
+    let hasOllama = false;
+    if (probeUrl !== null) {
+      const result = spawnSync(
+        'curl',
+        ['-s', '--max-time', timeoutSec, probeUrl],
+        { stdio: 'pipe', timeout: timeoutMs },
       );
+      hasOllama = result.status === 0 && !result.error;
+    }
 
-      if (!hardwareLoggedOnce) {
-        logger.info(
-          `[hardware] hasOllama=${hardware.hasOllama} (url=${ollamaUrl}) ` +
-          `hasCloudLlm=${hardware.hasCloudLlm} ` +
-          `gpuVramGb=${hardware.gpuVramGb} hardwareClass=${hardware.hardwareClass}`,
-        );
-        hardwareLoggedOnce = true;
+    // Cloud LLM is configured purely via env (LLM_CLOUD_MODEL or
+    // LLM_PROVIDER=cloud). Re-read every probe so a runtime env swap
+    // (rare but legal — operator exports LLM_CLOUD_MODEL and restarts
+    // workflow without restarting node) is picked up within one TTL.
+    const hasCloudLlm = !!(
+      process.env.LLM_CLOUD_MODEL?.trim() ||
+      process.env.LLM_PROVIDER?.trim().toLowerCase() === 'cloud'
+    );
+
+    // Detect UP↔down transition. First probe (lastOllamaState === null)
+    // never logs a transition, just records the initial state.
+    if (lastOllamaState !== null && lastOllamaState !== hasOllama) {
+      logger.warn(
+        `[hardware] Ollama state changed: ${lastOllamaState ? 'UP' : 'DOWN'} -> ` +
+        `${hasOllama ? 'UP' : 'DOWN'} (url=${ollamaUrl}). ` +
+        `Capabilities llm/inference/embedding will ${hasOllama ? 'be re-added' : 'be stripped'} on next heartbeat.`,
+      );
+    }
+    lastOllamaState = hasOllama;
+
+    return { hasOllama, hasCloudLlm, probedAt: Date.now() };
+  }
+
+  detectHardware(cpuOnly = false, archOverride?: string): Hardware {
+    // ── STATIC slice ────────────────────────────────────────────────
+    // Process-lifetime cache. GPU/CPU/RAM does not change between
+    // heartbeats, so we probe once per (cpuOnly, archOverride) pair
+    // and reuse. Highest-impact protection against the Windows
+    // nvidia-smi hang.
+    const cacheKey = `${cpuOnly}|${archOverride ?? ''}`;
+    let staticPart = staticHardwareCache.get(cacheKey);
+    if (!staticPart) {
+      staticPart = this.buildStaticHardware(cpuOnly, archOverride);
+      staticHardwareCache.set(cacheKey, staticPart);
+    }
+
+    // ── DYNAMIC slice ───────────────────────────────────────────────
+    // Probed every call when cpuOnly=false. With cpuOnly=true, we
+    // skip the spawn entirely (the historical contract — callers
+    // passing cpuOnly explicitly do not care about Ollama state)
+    // and return the static defaults.
+    let dynamicPart: DynamicHardware;
+    if (cpuOnly) {
+      dynamicPart = { hasOllama: false, hasCloudLlm: false, probedAt: Date.now() };
+    } else {
+      const cachedDynamic = dynamicHardwareCache.get(cacheKey);
+      const now = Date.now();
+      if (cachedDynamic && (now - cachedDynamic.probedAt) < DYNAMIC_PROBE_TTL_MS) {
+        dynamicPart = cachedDynamic;
+      } else {
+        dynamicPart = this.probeDynamicHardware();
+        dynamicHardwareCache.set(cacheKey, dynamicPart);
       }
     }
 
-    hardwareCache.set(cacheKey, hardware);
+    const hardware: Hardware = {
+      ...staticPart,
+      hasOllama: dynamicPart.hasOllama,
+      hasCloudLlm: dynamicPart.hasCloudLlm,
+    };
+
+    if (!cpuOnly && !hardwareLoggedOnce) {
+      const ollamaUrl = process.env.OLLAMA_URL?.trim() || 'http://localhost:11434';
+      logger.info(
+        `[hardware] hasOllama=${hardware.hasOllama} (url=${ollamaUrl}) ` +
+        `hasCloudLlm=${hardware.hasCloudLlm} ` +
+        `gpuVramGb=${hardware.gpuVramGb} hardwareClass=${hardware.hardwareClass} ` +
+        `(dynamic TTL=${DYNAMIC_PROBE_TTL_MS}ms)`,
+      );
+      hardwareLoggedOnce = true;
+    }
+
     return hardware;
   }
 
