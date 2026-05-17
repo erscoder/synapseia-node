@@ -29,6 +29,21 @@ jest.mock('../../llm/ollama-pause', () => ({
   maybeRestartOllamaAfterDiloco: jest.fn(async () => undefined),
 }));
 
+// Bug 28 (2026-05-17): runDiLoCoInnerLoop now also runs ensureMemForDiloco
+// before the spawn. Stub it to a no-op so this spec (which only cares about
+// spawn semantics) doesn't trip the cgroup-free-mem gate on hosts that
+// genuinely have <18 GB free at test time (CI runners are typically 4-7 GB).
+// The preflight logic itself is covered by diloco-preflight.spec.ts.
+jest.mock('../diloco-preflight', () => ({
+  ensureMemForDiloco: jest.fn(async () => undefined),
+  InsufficientMemoryError: class InsufficientMemoryError extends Error {
+    constructor(msg: string, public readonly freeMB: number, public readonly requiredMB: number) {
+      super(msg);
+      this.name = 'InsufficientMemoryError';
+    }
+  },
+}));
+
 import { DiLoCoTrainerHelper, type SpawnFn } from '../diloco-trainer';
 
 type AnyFn = (...args: any[]) => any;

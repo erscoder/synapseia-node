@@ -12,6 +12,7 @@ import {
   maybePauseOllamaForDiloco,
   maybeRestartOllamaAfterDiloco,
 } from '../llm/ollama-pause';
+import { ensureMemForDiloco, InsufficientMemoryError } from './diloco-preflight';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -89,6 +90,16 @@ export class DiLoCoTrainerHelper {
    * default) Ollama is SIGTERM'd before the spawn and restarted in a
    * `finally` block regardless of success/failure. See
    * `modules/llm/ollama-pause.ts` for the full invariant and tradeoffs.
+   *
+   * Bug 28 (2026-05-17): AFTER Ollama is paused and BEFORE the python
+   * spawn, run `ensureMemForDiloco()` — a controlled gate that drops
+   * FS page-cache + forces V8 GC and re-probes cgroup free memory.
+   * If still insufficient, an `InsufficientMemoryError` is thrown and
+   * propagates to `executeDiLoCoWorkOrder` which converts it into
+   * `{ success: false }`. This prevents the SIGKILL loop observed
+   * live on pod A40 (cgroup 46.6 GB). The `finally` block still
+   * restarts Ollama so a preflight failure does not leak the daemon
+   * in the paused state.
    */
   async runDiLoCoInnerLoop(
     config: DiLoCoConfig,
@@ -98,6 +109,7 @@ export class DiLoCoTrainerHelper {
   ): Promise<DiLoCoResult> {
     const ollamaHandle = await maybePauseOllamaForDiloco();
     try {
+      await ensureMemForDiloco();
       return await this._spawnDiLoCoTrain(config, onProgress, spawnFn, statFn);
     } finally {
       await maybeRestartOllamaAfterDiloco(ollamaHandle);

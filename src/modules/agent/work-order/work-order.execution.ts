@@ -16,6 +16,7 @@ import { runLoraValidation, LoraValidationError } from '../../lora/lora_validato
 import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
+import { InsufficientMemoryError } from '../../model/diloco-preflight';
 import { downloadAdapter } from '../../model/model-downloader';
 import { safeLoss } from './safe-loss';
 import type { AgentBrain } from '../agent-brain';
@@ -419,6 +420,15 @@ Abstract: ${payload.abstract}`;
     try {
       dilocoResult = await runDiLoCoInnerLoop({ modelId: payload.modelId, adapterPath: localAdapterPath, datasetPath, innerSteps: payload.innerSteps, hyperparams: payload.hyperparams, hardware: hardware as 'cpu' | 'mps' | 'cuda', testMode: process.env.NODE_ENV === 'test' });
     } catch (err) {
+      // Bug 28 (2026-05-17): preflight memory gate trips when container
+      // headroom is insufficient. Treated as controlled skip — the WO
+      // returns success:false and the coord ACCEPTED-TTL expiry handles
+      // re-routing. Do NOT client-side re-queue (reviewer-lesson P21:
+      // re-queue would reset receivedAt → starvation).
+      if (err instanceof InsufficientMemoryError) {
+        logger.warn(`[DiLoCo] skipped: ${err.message}`);
+        return { result: `DiLoCo skipped: ${err.message}`, success: false };
+      }
       // Same rationale as executeMicroTrainingWorkOrder: WO returns
       // success:false and the coordinator handles re-routing — warn is the
       // right signal level for a recoverable per-WO failure.
