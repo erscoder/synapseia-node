@@ -53,6 +53,106 @@ import { getNodeVersion } from '../../utils/version';
 let lastAnnouncedCapabilities: string[] | null = null;
 
 /**
+ * Bug 12 v3 (2026-05-17) — cap oscillation under steady-state memory pressure.
+ *
+ * Live coord log on POD1 (8 GB free fluctuating ±300 MB around the LoRA
+ * floor of 8192 MB):
+ *
+ *   10:27:39Z removed=[gpu_training,lora_training]
+ *   10:28:43Z added=[gpu_training]            ← lora still missing
+ *   10:32:11Z added=[lora_training]
+ *   10:33:54Z removed=[lora_training]
+ *   ...
+ *
+ * Coord drift detector PERSISTS every flip (UPDATE nodes.capabilities),
+ * dashboard re-renders, scheduler re-evaluates eligible peers per WO
+ * dispatch — operational noise out of all proportion to the underlying
+ * memory state. Every 60s tick reads `os.freemem()` + macOS vm_stat,
+ * compares against a single hard floor per cap, and flips state with
+ * NO hysteresis and NO cooldown.
+ *
+ * Fix: hysteresis (separate strip vs restore thresholds) + per-cap
+ * cooldown (minimum wall-time between flips for the SAME cap). The
+ * filter still strips immediately when memory crashes hard (well below
+ * floor), but a cap that just got restored cannot strip again for
+ * `CAP_FLIP_COOLDOWN_MS` even if memory dips back. This is the
+ * standard pattern from sensor debouncing — accept one extra heartbeat
+ * of stale "advertised" caps to prevent N flips per hour from a sensor
+ * jittering across a single threshold.
+ *
+ * Thresholds:
+ *   strip   = floor          (unchanged — if free RAM is below the floor,
+ *                             we MUST strip immediately to prevent OOM
+ *                             acceptance — no hysteresis on the down-side)
+ *   restore = floor * 1.15   (15% above floor — must comfortably clear
+ *                             the floor before re-advertising)
+ *   cooldown = 5 minutes     (~5 heartbeat cycles at 60s — long enough
+ *                             to confirm steady recovery, short enough
+ *                             that a genuinely-recovered host gets caps
+ *                             back without operator intervention)
+ *
+ * Per-cap flip timestamps: keyed by cap name, value = last flip wall-time
+ * (Date.now). Module-private and reset by the test hook below.
+ */
+const capLastFlipAt: Map<string, number> = new Map();
+// LOW-1 (reviewer round 2): module constants are env-overridable for ops
+// tuning per `feedback_prod_surgical_discipline` — shadow-mode tuning
+// shouldn't require a redeploy. Defaults match the production design
+// (5-min cooldown, 1.15× restore hysteresis). Parsing is defensive: any
+// unparseable / non-positive value falls back to the default.
+function parseEnvInt(name: string, defaultMs: number): number {
+  const raw = process.env[name];
+  if (!raw) return defaultMs;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
+}
+function parseEnvFloat(name: string, defaultV: number, min: number): number {
+  const raw = process.env[name];
+  if (!raw) return defaultV;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n >= min ? n : defaultV;
+}
+const CAP_FLIP_COOLDOWN_MS = parseEnvInt('HEARTBEAT_CAP_FLIP_COOLDOWN_MS', 5 * 60 * 1000);
+// Restore hysteresis MUST be >= 1.0 — values below 1 would mean restore
+// triggers BELOW the strip floor (nonsense). Clamp at the parse boundary.
+const RESTORE_HYSTERESIS_FACTOR = parseEnvFloat('HEARTBEAT_RESTORE_HYSTERESIS', 1.15, 1.0);
+
+/**
+ * BLOCKER-1 (reviewer round 2): per-tick cache so HTTP and P2P branches
+ * of the same heartbeat tick observe the SAME filter result.
+ *
+ * The fix the reviewer hoist-equivalent — instead of threading the
+ * filtered list through the call graph (would require new signatures
+ * for `_sendHeartbeat` / `publishHeartbeat`), the filter itself memoizes
+ * the most recent invocation by (rawCapsKey, freeMB). A second call
+ * within the same tick with the same inputs returns the cached result
+ * WITHOUT re-running the strip/restore decision and WITHOUT mutating
+ * `lastAnnouncedCapabilities` or `capLastFlipAt`.
+ *
+ * Why this design:
+ *   - The HTTP branch at `_sendHeartbeat:671` calls the filter first
+ *     and stamps `lastAnnouncedCapabilities = filtered`.
+ *   - The P2P branch at `tick():1292` calls the filter again. Pre-fix
+ *     it observed `previousSet = filtered` (just-updated) instead of
+ *     the pre-tick snapshot — so a cap that just got stripped looked
+ *     `wasAdvertised=false` on the P2P call, then the restore branch
+ *     ran against the same freemem reading. If freemem jittered into
+ *     the restore band between the two calls, P2P would advertise the
+ *     cap while HTTP advertised it stripped → divergent channels.
+ *   - Cache key includes raw caps + freeMB (rounded to int — same as
+ *     the filter's input). Wall-clock guard (≤1.5s) prevents stale
+ *     cache surviving a slow tick into the next interval.
+ */
+interface TickCache {
+  ts: number;
+  rawKey: string;
+  freeMB: number;
+  result: string[];
+}
+let tickFilterCache: TickCache | null = null;
+const TICK_CACHE_TTL_MS = 1500;
+
+/**
  * Estimate memory headroom in MB available to a NEW heavy allocation
  * (e.g. spawning a training model). This signal MUST account for memory
  * held by OTHER processes on the host — the previous `totalmem - rss`
@@ -173,6 +273,8 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
  */
 export function __resetCapabilitySnapshotForTests(): void {
   lastAnnouncedCapabilities = null;
+  capLastFlipAt.clear();
+  tickFilterCache = null;
   loraStackCache = null;
   loraStackLastError = null;
   loraStackForcedFalseForTest = false;
@@ -862,24 +964,172 @@ export class HeartbeatHelper {
    * spy on the `os` / `process` modules — `jest.spyOn` fails under
    * ESM-mode jest because the imported namespaces are frozen.
    */
-  applyMemoryPressureFilter(capabilities: string[], freeMBOverride?: number): string[] {
-    const freeMB = freeMBOverride ?? readAvailableMemMB();
+  applyMemoryPressureFilter(
+    capabilities: string[],
+    freeMBOverride?: number,
+    nowMsOverride?: number,
+  ): string[] {
+    const nowMs = nowMsOverride ?? Date.now();
 
-    // Per-cap stripping: each training cap is gated by its own floor.
-    // Non-training caps (no entry in TRAINING_FLOORS_MB) pass untouched.
+    // HIGH-2 (reviewer round 2): fail-CLOSED on unusable memory probes.
+    // `readAvailableMemMB` is bounded ≥0 by its own guard, but defence
+    // in depth: any NaN/Infinity/negative reading (or a bogus override
+    // injected by tests/code path) MUST strip every floored cap — the
+    // safest answer to "I can't measure RAM" is "don't advertise heavy
+    // capabilities". Returning the raw list (fail-open) would let the
+    // coord route OOM-bound WOs to a host we can't characterise.
+    let rawFreeMB: number;
+    try {
+      rawFreeMB = freeMBOverride ?? readAvailableMemMB();
+    } catch (err) {
+      logger.warn(
+        `[Heartbeat] memory probe threw (${(err as Error).message}) — fail-CLOSED, stripping all floored caps`,
+      );
+      rawFreeMB = NaN;
+    }
+    const probeUsable = Number.isFinite(rawFreeMB) && rawFreeMB >= 0;
+    const freeMB = probeUsable ? rawFreeMB : 0; // 0 strips every floored cap
+
+    // BLOCKER-1 (reviewer round 2): tick cache short-circuit. The HTTP
+    // and P2P branches of the same heartbeat tick MUST observe the same
+    // filter result. See TickCache docs above. Cache key = raw caps
+    // (order-insensitive sorted join) + freeMB. We deliberately exclude
+    // `nowMs` from the key — within a single tick the wall-clock advances
+    // by microseconds, the filter decision is identical, and the TTL
+    // guards against stale state across tick boundaries.
+    const rawKey = [...capabilities].sort().join('|');
+    if (
+      tickFilterCache !== null &&
+      nowMs - tickFilterCache.ts < TICK_CACHE_TTL_MS &&
+      tickFilterCache.rawKey === rawKey &&
+      tickFilterCache.freeMB === freeMB
+    ) {
+      // Return a fresh copy so callers can't mutate the cache by
+      // mutating the array.
+      return [...tickFilterCache.result];
+    }
+
+    const previousSet = new Set(lastAnnouncedCapabilities ?? []);
+    // HIGH-3 (reviewer round 2): primer detection. `isPrimer` is true
+    // only when `lastAnnouncedCapabilities === null` — which happens
+    // (a) at first heartbeat after process boot and (b) after
+    // `__resetCapabilitySnapshotForTests()` (test-only). A supervisor
+    // restart of the node process re-enters case (a) deliberately:
+    // ground truth wins on boot so the host can't carry stale state
+    // across crashes. There's no in-process "soft reset" path that
+    // would hit case (a) — production code never calls the test hook.
+    const isPrimer = lastAnnouncedCapabilities === null;
+
+    // Per-cap decision with HYSTERESIS + COOLDOWN (Bug 12 v3 fix; the
+    // historical name "Bug 20" appeared in earlier drafts and has been
+    // unified with the user/reviewer pipeline tracker — memory #230).
+    // The single-threshold filter caused live oscillation on POD1
+    // because free RAM jittered ±300 MB across the LoRA floor every
+    // minute, producing N flips per hour that the coord drift detector
+    // turned into N UPDATE nodes.capabilities + N dashboard re-renders
+    // + N scheduler re-evals — all for memory state that was steady.
+    //
+    // Decision per cap:
+    //   was advertised previously + freeMB >= floor              → keep
+    //   was advertised previously + freeMB <  floor              → STRIP
+    //     (no hysteresis on the down-side: if we'd OOM accepting a WO,
+    //      we MUST stop advertising. The accept path on this node does
+    //      NOT independently gate on memory — verified 2026-05-17 via
+    //      grep of FLOOR_MB / freemem / readAvailableMem across
+    //      backpressure.service / work-order.coordinator / accept-wo —
+    //      so the advertised set IS the safety net. MEDIUM-1 below.)
+    //   was NOT advertised + freeMB >= floor * RESTORE_HYSTERESIS → RESTORE
+    //   was NOT advertised + freeMB in [floor, restoreFloor)     → DEAD-ZONE
+    //     (HIGH-1: explicit fall-through to "keep current state". With
+    //      `meetsStripGate = freeMB < floor` being strict, the band
+    //      [floor, restoreFloor) is the hysteresis dead-zone — neither
+    //      condition fires, the existing state holds. If a future
+    //      refactor changes `<` to `<=`, the dead-zone collapses; add
+    //      an explicit assertion in this branch instead.)
+    //   was NOT advertised + freeMB <  floor                    → keep stripped
+    //
+    // Plus a per-cap cooldown: MEDIUM-1 (reviewer round 2) — cooldown
+    // is stamped on STRIP transitions ONLY, never on RESTORE. Reason:
+    // accept path has NO memory gate (confirmed above), so a "restored
+    // then immediately re-stripped" sequence is the safe answer when
+    // memory dips after a restore. Stamping cooldown on restore would
+    // block subsequent strips for 5 min and could OOM the host. The
+    // tradeoff: a strip→restore→strip ping-pong is theoretically
+    // possible if memory swings hard across the dead-zone within
+    // seconds, but in practice the strip side has the harder gate
+    // (must drop below the bare floor, not just into the dead-zone)
+    // so genuine oscillation requires actual memory chaos that
+    // operators need to see.
+    //
+    // The primer cycle (no previous snapshot) ignores cooldown and
+    // decides purely on current memory — a freshly-booted node must
+    // reflect ground truth without inherited stale state.
     const filtered = capabilities.filter(cap => {
       const floor = TRAINING_FLOORS_MB[cap];
-      if (floor === undefined) return true;
-      return freeMB >= floor;
+      if (floor === undefined) return true; // unfloored caps pass through
+
+      const wasAdvertised = previousSet.has(cap);
+      // NIT-1 (reviewer round 2): Math.ceil (was Math.floor) — restore
+      // needs MORE headroom than the bare floor, so round the
+      // hysteresis-adjusted threshold UP. 8192 × 1.15 = 9420.8 →
+      // restoreFloor = 9421 (was 9420). At freeMB=9420 we want the
+      // cap to STAY stripped, not restore. Spec mirrors via Math.ceil.
+      const restoreFloor = Math.ceil(floor * RESTORE_HYSTERESIS_FACTOR);
+      const meetsStripGate = freeMB < floor;          // strip condition (strict <)
+      const meetsRestoreGate = freeMB >= restoreFloor; // restore condition
+
+      // Primer cycle: ignore cooldown, decide purely on current memory.
+      if (isPrimer) {
+        return freeMB >= floor;
+      }
+
+      // Cooldown check — only blocks state CHANGES, never blocks the
+      // continuation of the existing state.
+      const lastFlipAt = capLastFlipAt.get(cap) ?? 0;
+      const cooldownActive = nowMs - lastFlipAt < CAP_FLIP_COOLDOWN_MS;
+
+      if (wasAdvertised) {
+        // Currently advertised. Strip only if we drop below the floor
+        // AND no cooldown is gating the flip. If cooldown is active,
+        // keep advertising — operator action (or memory recovery)
+        // is needed to break out of churn.
+        if (meetsStripGate) {
+          if (cooldownActive) {
+            // Log the cooldown decision once per cap-flip-window so
+            // operators can see WHY caps stayed advertised despite
+            // memory pressure. Debug level — not actionable.
+            logger.debug(
+              `[Heartbeat] ${cap} below floor (free=${freeMB}MB < ${floor}MB) but flip-cooldown active (${Math.ceil((CAP_FLIP_COOLDOWN_MS - (nowMs - lastFlipAt)) / 1000)}s remaining) — keeping advertised`,
+            );
+            return true;
+          }
+          return false; // strip
+        }
+        // freeMB >= floor → keep advertising (no flip).
+        return true;
+      } else {
+        // Currently stripped. Restore only if we clear the hysteresis
+        // floor (15% above the strip floor) AND no cooldown is gating.
+        if (meetsRestoreGate) {
+          if (cooldownActive) {
+            logger.debug(
+              `[Heartbeat] ${cap} above restore-floor (free=${freeMB}MB >= ${restoreFloor}MB) but flip-cooldown active (${Math.ceil((CAP_FLIP_COOLDOWN_MS - (nowMs - lastFlipAt)) / 1000)}s remaining) — staying stripped`,
+            );
+            return false;
+          }
+          return true; // restore
+        }
+        // HIGH-1: explicit dead-zone branch. freeMB in [floor, restoreFloor)
+        // — keep current state (= stripped). Documented so a future refactor
+        // changing the strip/restore predicates doesn't silently collapse
+        // the dead-zone.
+        return false;
+      }
     });
 
-    const previous = lastAnnouncedCapabilities;
-    if (previous) {
-      // Detect per-cap transitions vs the previous cycle. Logs fire only
-      // when a specific training cap's state flips (suppressed/restored)
-      // — keeps the heartbeat quiet under sustained pressure while still
-      // surfacing which cap was dropped or recovered.
-      const previousSet = new Set(previous);
+    // Flip-detection + cooldown stamp + transition logging. MEDIUM-1
+    // applies here too: only the STRIP branch stamps `capLastFlipAt`.
+    if (lastAnnouncedCapabilities !== null) {
       const filteredSet = new Set(filtered);
       for (const cap of Object.keys(TRAINING_FLOORS_MB)) {
         const floor = TRAINING_FLOORS_MB[cap]!;
@@ -887,18 +1137,33 @@ export class HeartbeatHelper {
         const nowAnnounced = filteredSet.has(cap);
         const offeredThisCycle = capabilities.includes(cap);
         if (wasAnnounced && !nowAnnounced && offeredThisCycle) {
+          // STRIP — stamp cooldown (debounces immediate re-flip back to
+          // advertised under a marginal memory recovery).
+          capLastFlipAt.set(cap, nowMs);
           logger.info(
             `[Heartbeat] ${cap} suppressed (free=${freeMB}MB < floor=${floor}MB)`,
           );
         } else if (!wasAnnounced && nowAnnounced) {
+          // RESTORE — DO NOT stamp cooldown (MEDIUM-1). A strip needs to
+          // be able to fire immediately if memory regresses after a
+          // restore — accept path has no independent memory gate.
+          const restoreFloor = Math.ceil(floor * RESTORE_HYSTERESIS_FACTOR);
           logger.info(
-            `[Heartbeat] ${cap} restored (free=${freeMB}MB >= floor=${floor}MB)`,
+            `[Heartbeat] ${cap} restored (free=${freeMB}MB >= restore-floor=${restoreFloor}MB)`,
           );
         }
       }
     }
 
     lastAnnouncedCapabilities = filtered;
+    // Update tick cache so the sibling channel (P2P after HTTP, or
+    // vice versa) sees the same result without re-running the decision.
+    tickFilterCache = {
+      ts: nowMs,
+      rawKey,
+      freeMB,
+      result: [...filtered],
+    };
     return filtered;
   }
 
@@ -1150,7 +1415,26 @@ export class HeartbeatHelper {
         // Also publish via P2P if available
         if (p2pNode && p2pNode.isRunning()) {
           try {
-            const capabilities = await this.determineCapabilitiesAsync(hardware);
+            // Bug 12 v3 fix: the P2P branch MUST go through the SAME
+            // memory-pressure filter as the HTTP branch. Pre-fix it
+            // called `determineCapabilitiesAsync` directly and
+            // skipped `applyMemoryPressureFilter` — so under pressure
+            // the HTTP heartbeat advertised the stripped set while
+            // the P2P heartbeat advertised the raw set, and the
+            // coord drift detector flipped state every time it
+            // received whichever channel arrived last.
+            //
+            // BLOCKER-1 reviewer round 2: idempotency within a tick is
+            // NOT a property of running the same logic twice — the HTTP
+            // call mutates `lastAnnouncedCapabilities`, so the P2P call
+            // would see the just-updated snapshot as "previous" and
+            // could diverge if memory jittered between the two calls.
+            // The fix lives in `applyMemoryPressureFilter` itself:
+            // a per-tick cache (rawCaps + freeMB key, 1.5s TTL) returns
+            // the same result and skips snapshot mutation on the
+            // sibling-channel call. See `tickFilterCache`.
+            const rawCaps = await this.determineCapabilitiesAsync(hardware);
+            const capabilities = this.applyMemoryPressureFilter(rawCaps);
             // Do NOT include `publicKey` in the payload we pass in —
             // `p2pNode.publishHeartbeat` canonicalises + signs the
             // payload THEN tacks `publicKey` on post-signing. Leaving

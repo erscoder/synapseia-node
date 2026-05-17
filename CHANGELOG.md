@@ -1,5 +1,39 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(heartbeat): caps oscillation hysteresis + cooldown + tick cache — 0.8.67
+
+**Bug 12 v3** — Live evidence on coord HTTP heartbeat log showed peer
+`be06bff46d0f` flipping `gpu_training` / `gpu_inference` every 1-6
+min: removed at T → re-added at T+90s. Memory #230 documented same
+oscillation pattern overnight.
+
+Root cause: `applyMemoryPressureFilter()` re-evaluated free RAM each
+60s tick against single hard floor. Free RAM jitters ±300MB around
+LoRA floor (8192MB) → cap stripped → restored → stripped, every
+tick. Second bug: P2P heartbeat path bypassed the filter, so HTTP
+and P2P advertised divergent cap sets per tick.
+
+Fix:
+- **Hysteresis** — restore requires `freeMB >= ceil(floor * 1.15)`;
+  strip threshold unchanged (strict `<`, immediate to prevent OOM).
+- **Per-cap flip cooldown** — `Map<cap, lastFlipAt>` + 5min cooldown
+  ONLY on STRIP transition. Restore never stamps (allows fast strip
+  during recovery dip). First heartbeat bypasses cooldown.
+- **Tick cache** — `TickCache` (1.5s TTL, keyed on `rawCaps + freeMB`)
+  short-circuits second filter call within same tick. Eliminates
+  HTTP+P2P snapshot divergence.
+- **P2P unification** — both paths now consume the cached filter
+  result.
+- **Fail-closed on memory probe failure** — NaN/Infinity/negative
+  freeMB defaults to 0, strips all gated caps (P2 reviewer-lesson).
+- **Env overrides** — `HEARTBEAT_CAP_FLIP_COOLDOWN_MS` +
+  `HEARTBEAT_RESTORE_HYSTERESIS` for ops tuning without redeploy.
+
+Tests: 1813/1813 pass (up from ~1810). Memory-pressure suite:
+41/41. New tests cover HTTP+P2P cache (3), hysteresis dead-zone
+boundaries (3), fail-closed (3), restore-no-stamp (1), primer
+detection (1).
+
 ## [2026-05-17] chore(release): 0.8.66 lockstep (2eb074e8)
 
 Bundles three sub-releases since 0.8.65:
