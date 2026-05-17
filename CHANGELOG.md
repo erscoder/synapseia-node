@@ -1,5 +1,26 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(rewards): claim_rewards instruction missing pause_state slot (e18b15bc)
+
+`rewards-vault-cli.ts` built the `claim_rewards` instruction with 7 accounts
+while the on-chain `syn_rewards_vault` program declares 8 — slot 1 = `pause_state`
+was missing. Anchor mapped `reward_account` into the `pause_state` slot and
+rejected the tx with `AccountDiscriminatorMismatch` (error 3002 / 0xbba) at
+runtime, so no operator could claim work-order rewards from the CLI.
+
+Fix:
+- Add `derivePauseStatePDA(programId)` helper (seeds=`[b"pause_state"]`).
+- Extract `buildClaimRewardsInstruction()` pure helper so the 8-account
+  ordering can be unit-tested without RPC or wallet.
+- Insert `pause_state` (read-only, non-signer) as slot 1 between `vault_state`
+  and `reward_account`. Comment block rewritten to list all 8 slots.
+- New `rewards-vault-cli.spec.ts` asserts: 8 keys, pause_state at slot 1,
+  reward_account at slot 2, TOKEN_PROGRAM_ID at slot 7, plus per-slot
+  signer/writable flags — regression guard against future re-shifts.
+
+Dashboard `useRewardsVault.ts` was already correct; only the CLI path was
+broken.
+
 ## [2026-05-17] fix(diloco): surface signal + HF_TOKEN passthrough + retry — 0.8.64 (b4d325af)
 
 **Bug 18 v2** — `diloco_train.py exited with code null` mid-weight-load.
