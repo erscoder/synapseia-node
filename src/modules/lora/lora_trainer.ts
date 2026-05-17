@@ -33,6 +33,7 @@ import {
   ensureMemForHeavyTraining,
   LORA_REQUIRED_FREE_MB,
 } from '../model/heavy-training-preflight';
+import { startMemorySampler } from '../model/memory-sampler';
 import type {
   LoraSubmissionPayload,
   LoraValMetrics,
@@ -205,6 +206,17 @@ function runPython(bin: string, script: string, payload: object, timeoutMs: numb
         OMP_NUM_THREADS: process.env.OMP_NUM_THREADS ?? '4',
       },
     });
+
+    // Slice 10b (Plan B, 2026-05-17): continuous memory sampler
+    // alongside the python proc. Emits a single summary line on stop
+    // (freeMB peak/min + rssMB peak + sample count) so LORA_REQUIRED_FREE_MB
+    // can be tuned from observed peak distributions. Sampler is started
+    // only when the spawn produced a pid; stop is idempotent and runs in
+    // BOTH the close and error listeners below plus the timeout path.
+    const sampler = proc.pid !== undefined
+      ? startMemorySampler('LoRA', proc.pid)
+      : { stop: () => { /* no pid — sampler not started */ } };
+
     let stderr = '';
     proc.stdout?.on('data', (d: Buffer) => {
       // Forward python progress lines to the node logger. The script is
@@ -219,12 +231,14 @@ function runPython(bin: string, script: string, payload: object, timeoutMs: numb
 
     const timer = setTimeout(() => {
       try { proc.kill('SIGTERM'); } catch { /* noop */ }
+      sampler.stop();
       reject(new LoraError(`LoRA trainer timed out after ${timeoutMs}ms`, 'timeout'));
     }, timeoutMs);
 
-    proc.on('error', err => { clearTimeout(timer); reject(new LoraError(err.message, 'spawn')); });
+    proc.on('error', err => { clearTimeout(timer); sampler.stop(); reject(new LoraError(err.message, 'spawn')); });
     proc.on('close', code => {
       clearTimeout(timer);
+      sampler.stop();
       if (code === 0) {
         resolve();
         return;

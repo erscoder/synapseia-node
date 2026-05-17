@@ -35,8 +35,12 @@ export class AcceptWorkOrderNode {
       return { accepted: false };
     }
 
-    // Acquire backpressure slot before accepting
-    if (!this.backpressure.acquire(selectedWorkOrder.id)) {
+    // Acquire backpressure slot before accepting.
+    // Slice 9 (Plan B, 2026-05-17) — pass the WO type so the per-class
+    // bucket (HEAVY for TRAINING / DILOCO_TRAINING / LORA_TRAINING;
+    // LIGHT for everything else) is selected. HEAVY full does not block
+    // LIGHT acceptance and vice versa.
+    if (!this.backpressure.acquire(selectedWorkOrder.id, selectedWorkOrder.type)) {
       logger.warn(`[Backpressure] Cannot acquire slot for WO ${selectedWorkOrder.id} — rejecting`);
       return { accepted: false };
     }

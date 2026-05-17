@@ -11,6 +11,7 @@ Supports testMode=True to use a tiny model (GPT-2) for CI/testing.
 import sys
 import json
 import os
+import gc
 import tempfile
 import time
 import math
@@ -273,6 +274,18 @@ def run_full_mode(config: dict) -> None:
     elif hardware == "cuda" and torch.cuda.is_available():
         device = "cuda"
 
+    # Slice 11 (Plan B, 2026-05-17) — OOM mitigation
+    # --------------------------------------------
+    # Try `low_cpu_mem_usage=True` (accelerate-backed lazy weight
+    # loading via `init_empty_weights`). When supported it reduces
+    # the load-time fp16 weight materialization peak by avoiding the
+    # double-copy that the default loader does (load to CPU → cast →
+    # move). Wrap in a fallback: older transformers without accelerate
+    # raise TypeError / ValueError, in which case retry without the
+    # kwarg. Worth attempting on both CUDA and non-CUDA paths.
+    base_load_kwargs = dict(load_kwargs_extra)
+    base_load_kwargs["low_cpu_mem_usage"] = True
+
     # 4-bit quantization config (only for CUDA)
     if device == "cuda":
         bnb_config = BitsAndBytesConfig(
@@ -281,13 +294,23 @@ def run_full_mode(config: dict) -> None:
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
-        base_model = _load_with_retry(
-            lambda: AutoModelForCausalLM.from_pretrained(
-                pretrained_name, quantization_config=bnb_config, device_map="auto",
-                **load_kwargs_extra,
-            ),
-            what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit)",
-        )
+        try:
+            base_model = _load_with_retry(
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    pretrained_name, quantization_config=bnb_config, device_map="auto",
+                    **base_load_kwargs,
+                ),
+                what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit, low_cpu_mem)",
+            )
+        except (TypeError, ValueError) as exc:
+            log({"warn": f"low_cpu_mem_usage unsupported on this transformers/accelerate; retrying without it: {exc}"})
+            base_model = _load_with_retry(
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    pretrained_name, quantization_config=bnb_config, device_map="auto",
+                    **load_kwargs_extra,
+                ),
+                what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit)",
+            )
     else:
         # transformers 5.x renamed `torch_dtype` → `dtype` (deprecation
         # since 4.43, hard-removed in 5.0). Pods upgraded to 5.8.1 and the
@@ -295,12 +318,21 @@ def run_full_mode(config: dict) -> None:
         # exit code null → every DiLoCo WO crashed pre-train. Use `dtype`
         # going forward; install-deps pins transformers>=4.43 to guarantee
         # the keyword is recognized on older venvs too. See Bug 14.
-        base_model = _load_with_retry(
-            lambda: AutoModelForCausalLM.from_pretrained(
-                pretrained_name, dtype=torch.float32, **load_kwargs_extra,
-            ),
-            what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, fp32)",
-        )
+        try:
+            base_model = _load_with_retry(
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    pretrained_name, dtype=torch.float32, **base_load_kwargs,
+                ),
+                what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, fp32, low_cpu_mem)",
+            )
+        except (TypeError, ValueError) as exc:
+            log({"warn": f"low_cpu_mem_usage unsupported on this transformers/accelerate; retrying without it: {exc}"})
+            base_model = _load_with_retry(
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    pretrained_name, dtype=torch.float32, **load_kwargs_extra,
+                ),
+                what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, fp32)",
+            )
         base_model = base_model.to(device)
 
     # Load or create LoRA adapter
@@ -354,11 +386,26 @@ def run_full_mode(config: dict) -> None:
             return {k: v[idx] for k, v in self.encodings.items()}
 
     dataset = TextDataset(dataset_path, tokenizer)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    # Slice 11 (Plan B, 2026-05-17): pin_memory=False to avoid the
+    # CUDA pinned-memory pool that DataLoader allocates by default.
+    # Each pinned page is held outside the cgroup-reclaimable set so
+    # it stacks with the model weights and inflates the OOM headroom
+    # required by `DILOCO_REQUIRED_FREE_MB`. With batch_size=4 the
+    # H2D copy is fast enough that pinning is a luxury, not a need.
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=False)
 
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad], lr=lr
     )
+
+    # Slice 11 (Plan B, 2026-05-17): drop transient quantization / load
+    # buffers before training starts. `from_pretrained` leaves cudaMalloc
+    # / MPS staging fragments that empty_cache() returns to the allocator,
+    # and CPU-side temporary fp32 buffers that gc.collect() reclaims.
+    # Cheap (10-50 ms) and meaningful on the load-peak headroom.
+    gc.collect()
+    if device == "cuda" and torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     model.train()
     step = 0
@@ -385,6 +432,18 @@ def run_full_mode(config: dict) -> None:
 
         step += 1
         total_loss = float(loss.item())
+
+        # Slice 11 (Plan B, 2026-05-17): periodic empty_cache + gc to
+        # contain transient activation buffers between micro-steps.
+        # Every 10 steps is a safe cadence — empty_cache on CUDA is
+        # ~1 ms; gc.collect on python heap with model loaded is ~10
+        # ms; combined cost per 10 steps is below the cost of a single
+        # backward pass on a 7B model, so the throughput hit is in
+        # the noise.
+        if step % 10 == 0:
+            gc.collect()
+            if device == "cuda" and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         if step % max(1, inner_steps // 10) == 0 or step == inner_steps:
             log({"step": step, "loss": round(total_loss, 4), "lr": lr})

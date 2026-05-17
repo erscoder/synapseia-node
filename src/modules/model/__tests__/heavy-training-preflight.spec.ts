@@ -229,11 +229,14 @@ describe('ensureMemForHeavyTraining', () => {
   // ── Slice 8 parity tests ────────────────────────────────────────────
 
   it('8. LoRA threshold — same liberation flow, lower target → pass after reclaim', async () => {
-    // LoRA threshold (14336) is lower than DiLoCo (18432); same envelope
-    // shape but the gate trips at a different number. Exercise the full
+    // LoRA threshold is strictly lower than DiLoCo (post-Slice-10
+    // 24 GB vs 36 GB; pre-Slice-10 14 GB vs 18 GB — relative ordering
+    // is the invariant, exact numbers track DILOCO_REQUIRED_FREE_MB /
+    // LORA_REQUIRED_FREE_MB and are not hard-coded here). Same
+    // envelope shape, different trip point. Exercise the full
     // liberation path with the lower threshold to confirm parity.
-    const before = LORA_REQUIRED_FREE_MB - 1024;  // 13312
-    const after = LORA_REQUIRED_FREE_MB + 512;    // 14848
+    const before = LORA_REQUIRED_FREE_MB - 1024;
+    const after = LORA_REQUIRED_FREE_MB + 512;
 
     const getFreeMemMB = jest.fn<() => Promise<number>>()
       .mockResolvedValueOnce(before)

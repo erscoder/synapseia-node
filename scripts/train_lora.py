@@ -42,6 +42,7 @@ import json
 import os
 import sys
 import math
+import gc
 from pathlib import Path
 from typing import Any, Dict
 
@@ -134,13 +135,43 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    if subtype == "LORA_CLASSIFICATION":
-        model = AutoModelForSequenceClassification.from_pretrained(base_model_name, num_labels=2)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(base_model_name)
+    # Slice 11 (Plan B, 2026-05-17) — OOM mitigation
+    # --------------------------------------------
+    # Try `low_cpu_mem_usage=True` (accelerate-backed lazy weight
+    # loading via `init_empty_weights`). When supported it reduces
+    # the load-time fp16 weight materialization peak — meaningful
+    # because LoRA loads a 7B-class base unquantized. Wrap in a
+    # fallback: older transformers without accelerate raise
+    # TypeError / ValueError, in which case retry without the kwarg.
+    def _load_base():
+        try:
+            if subtype == "LORA_CLASSIFICATION":
+                return AutoModelForSequenceClassification.from_pretrained(
+                    base_model_name, num_labels=2, low_cpu_mem_usage=True
+                )
+            return AutoModelForCausalLM.from_pretrained(
+                base_model_name, low_cpu_mem_usage=True
+            )
+        except (TypeError, ValueError) as exc:
+            _emit_progress(
+                "warn",
+                {"msg": f"low_cpu_mem_usage unsupported; retrying without it: {exc}"},
+            )
+            if subtype == "LORA_CLASSIFICATION":
+                return AutoModelForSequenceClassification.from_pretrained(base_model_name, num_labels=2)
+            return AutoModelForCausalLM.from_pretrained(base_model_name)
 
+    model = _load_base()
     model = get_peft_model(model, lora_cfg)
     model.to(device)
+
+    # Slice 11 (Plan B, 2026-05-17): drop transient load buffers
+    # before training starts. `from_pretrained` leaves cudaMalloc /
+    # MPS staging fragments that empty_cache() returns to the allocator,
+    # and CPU-side temporary buffers that gc.collect() reclaims.
+    gc.collect()
+    if device == "cuda" and torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     train_ds = _load_dataset(payload["trainingDatasetUri"])
     val_ds = _load_dataset(payload["validationDatasetUri"])
@@ -162,6 +193,13 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
         logging_steps=50,
         seed=int(payload.get("seed", 42)),
         report_to=[],
+        # Slice 11 (Plan B, 2026-05-17): disable DataLoader pinned-
+        # memory pool. Each pinned page lives outside the cgroup
+        # reclaimable set so it stacks with the base model and inflates
+        # the OOM headroom required by `LORA_REQUIRED_FREE_MB`. The
+        # H2D copy on batch_size=8 is fast enough that pinning is a
+        # luxury, not a need.
+        dataloader_pin_memory=False,
     )
 
     trainer = Trainer(

@@ -16,6 +16,7 @@ import {
   ensureMemForHeavyTraining,
   DILOCO_REQUIRED_FREE_MB,
 } from './heavy-training-preflight';
+import { startMemorySampler } from './memory-sampler';
 
 /**
  * Directory of THIS bundled module. `__dirname` is provided in all three
@@ -165,9 +166,22 @@ export class DiLoCoTrainerHelper {
       let finalResult: DiLoCoResult | null = null;
       let timedOut = false;
 
+      // Slice 10b (Plan B, 2026-05-17): continuous memory sampler
+      // running alongside the python proc. Emits a single summary line
+      // on stop (freeMB peak/min + rssMB peak + sample count) so we
+      // can tune DILOCO_REQUIRED_FREE_MB from observed peak
+      // distributions instead of back-of-napkin estimates.
+      // Started only when the spawn produced a pid (test mocks may
+      // not). Stop is idempotent and runs in BOTH the close and
+      // error listeners below.
+      const sampler = (proc as { pid?: number }).pid
+        ? startMemorySampler('DiLoCo', (proc as { pid: number }).pid)
+        : { stop: () => { /* no pid — sampler not started */ } };
+
       const timeoutHandle = setTimeout(() => {
         timedOut = true;
         proc.kill?.('SIGTERM');
+        sampler.stop();
         reject(new Error(`DiLoCo training timed out after ${DILOCO_TIMEOUT_MS / 1000}s`));
       }, DILOCO_TIMEOUT_MS);
 
@@ -216,6 +230,7 @@ export class DiLoCoTrainerHelper {
       // is unexpected; the hint mentions disk/IPC rather than network.
       proc.on('close', (code, signal) => {
         clearTimeout(timeoutHandle);
+        sampler.stop();
         if (timedOut) return;
         if (code === null && signal) {
           const hint = signal === 'SIGKILL' ? 'likely OOM-killer or container memory limit'
@@ -231,7 +246,7 @@ export class DiLoCoTrainerHelper {
         res(finalResult);
       });
 
-      proc.on('error', (err) => { clearTimeout(timeoutHandle); reject(new Error(`Failed to spawn diloco_train.py: ${err.message}`)); });
+      proc.on('error', (err) => { clearTimeout(timeoutHandle); sampler.stop(); reject(new Error(`Failed to spawn diloco_train.py: ${err.message}`)); });
     });
   }
 }

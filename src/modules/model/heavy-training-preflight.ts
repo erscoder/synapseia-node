@@ -62,37 +62,77 @@ import { freemem } from 'os';
 import logger from '../../utils/logger';
 
 /**
- * Peak load for Qwen2.5-7B fp16 on the current `diloco_train.py`
- * code path is ~14 GB observed (weights ~14 GB + activations + Adam
- * state in CPU fp32 mirror for AdamW). 18 GB = 14 GB peak + ~4 GB
- * margin for the Python interpreter + transformers/torch heap + the
- * window between probe and actual peak. Tuned empirically against
- * the 2026-05-17 pod-A40 incident.
+ * Slice 10 (Plan B, 2026-05-17) — BUMPED from 18432 to 36864 (36 GB).
+ *
+ * Rationale for the bump
+ * ----------------------
+ * The original 18 GB headroom (Bug 28) was computed as
+ * "14 GB load peak + 4 GB margin". Empirically this is INSUFFICIENT
+ * on pod A40 (cgroup 46.6 GB, swap=0, oom_kill=10 verified
+ * 2026-05-17 20:19 UTC): preflight passed at
+ * `free=40896MB >= required=18432MB` and DiLoCo STILL got SIGKILL'd
+ * 2 minutes later at the ~100% weight load line.
+ *
+ * What we missed in the 18 GB estimate
+ * ------------------------------------
+ * The "100% loaded" HF safetensors progress line marks the network
+ * download / mmap setup finishing, NOT the full RSS materialization.
+ * After that line several costs stack BEFORE training equilibrium:
+ *   - safetensors lazy mmap pages actually fault into RSS as tensors
+ *     are referenced;
+ *   - first backward pass activations (Qwen2.5-7B + batch_size=4
+ *     fp32 ~5-8 GB additional);
+ *   - quantization temp buffers (cudaMalloc / MPS staging) for the
+ *     CUDA path;
+ *   - CUDA pinned memory pool (DataLoader transfer buffers — note
+ *     Slice 11 sets pin_memory=False to mitigate this specifically);
+ *   - kernel page cache for the snapshot files (not reclaimable
+ *     under WO-level memory pressure because the trainer is still
+ *     reading them);
+ *   - Python interpreter heap + transformers/torch graph metadata.
+ *
+ * Combined peak: well over 30 GB on a 7B class model even with
+ * `low_cpu_mem_usage=True` (Slice 11). Without swap (swap.max=0 on
+ * the affected pod) any spike past the cgroup limit is an instant
+ * SIGKILL — no grace, no swap-out.
+ *
+ * 36 GB is a SAFER margin until `predictedPeakDuringTraining` is
+ * properly modeled (future Plan B slice — concrete numbers come from
+ * the continuous memory sampler added in Slice 10b). It is NOT a
+ * permanent target: as the sampler produces real distributions
+ * across the fleet we expect this to drop again (probably to
+ * ~28-30 GB), but only with evidence.
+ *
+ * Knock-on effect: this gate over-skips on memory-light pods. That
+ * is BY DESIGN — the alternative is the SIGKILL loop where coord
+ * keeps re-routing to the same crashing node every accept TTL.
+ * Bug 21's container-class cap-gate already prevents acceptance on
+ * pods that obviously cannot fit a heavy WO; this is a second line.
  */
-export const DILOCO_REQUIRED_FREE_MB = 18432;
+export const DILOCO_REQUIRED_FREE_MB = 36864;
 
 /**
- * Peak load for LoRA training (`train_lora.py`) on a 7B-class base
- * model. The base is loaded with `AutoModelForCausalLM.from_pretrained`
- * WITHOUT quantization (Slice 8 audit 2026-05-17,
- * `scripts/train_lora.py:138-140`), so the load-time fp16 footprint
- * matches DiLoCo's ~14 GB. UNLIKE DiLoCo, LoRA does not keep:
- *   - a full fp32 Adam mirror (only adapter params, ~MB scale, are
- *     optimized);
- *   - a separate gradient buffer for the full backbone (gradients flow
- *     to adapter params only).
- * Steady-state RSS during training is therefore ~base + small overhead,
- * not base + Adam + gradients. We allocate the same load-time peak
- * floor (14 GB) WITHOUT the +4 GB Adam-mirror margin DiLoCo carries —
- * the load step is the actual peak for LoRA. 14336 MB chosen over a
- * looser 8 GB or 6 GB number because empirically `from_pretrained`
- * with fp16 on a 7B already exceeds 8 GB during the safetensors
- * memory-map + cudaMalloc/MPS-equivalent peer-resident copy phase.
- * If a future LoRA base ships below 7B (e.g. 1B / 3B) this gate is
- * still safe — it only over-skips on tiny pods, where Bug 21's
- * container-class gate already prevents acceptance anyway.
+ * Slice 10 (Plan B, 2026-05-17) — BUMPED from 14336 to 24576 (24 GB).
+ *
+ * LoRA peak is smaller than DiLoCo because the optimizer state lives
+ * on adapter parameters only (~MB scale) and gradients flow only to
+ * the adapter. BUT the load-time fp16 footprint + safetensors mmap +
+ * page cache + CUDA pinned memory pool penalty stacks identically to
+ * DiLoCo's load phase (see DILOCO_REQUIRED_FREE_MB docblock for the
+ * full breakdown). Empirically the difference is "no separate Adam
+ * mirror, no full backbone gradient buffer" — call it ~10-12 GB
+ * less peak than DiLoCo's 36 GB headroom.
+ *
+ * 24 GB headroom is therefore tuned as
+ *   DiLoCo (36) − Adam mirror (≈8) − full-backbone grad buffer (≈4)
+ *
+ * Same caveats as DiLoCo: provisional until the Slice 10b sampler
+ * produces real distributions. If a future LoRA base ships below
+ * 7B (1B / 3B), this gate over-skips on tiny pods — Bug 21's
+ * container-class cap-gate already prevents acceptance there, so
+ * the over-skip is harmless.
  */
-export const LORA_REQUIRED_FREE_MB = 14336;
+export const LORA_REQUIRED_FREE_MB = 24576;
 
 /**
  * After GC + drop_caches the kernel needs a tick to actually reclaim
