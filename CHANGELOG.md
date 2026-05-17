@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] feat(node): CUDA-aware preflight threshold — 0.8.82 (145e02d1)
+
+Slice 17. Slice 16 fixed install-deps for NVIDIA torch+cu121; Slice 17
+uses that to pick preflight thresholds dynamically:
+- CUDA 4-bit available → DiLoCo 8 GB / LoRA 6 GB
+- fp32 fallback → DiLoCo 36 GB / LoRA 24 GB (current)
+
+Before Slice 17: hardcoded 36 GB threshold meant DiLoCo never spawned
+on 46.6 GB containers even after Slice 16 enabled 4-bit (which only
+needs ~8 GB peak).
+
+`detectQuantSupport()` subprocess probe at first preflight call,
+cached process-lifetime. Fail-CLOSED on error (safer FP32 threshold).
+Boot log emits which path is active.
+
+Operator action: none. Auto-detects.
+
+23 new tests in heavy-training-preflight spec. 59 total tests pass.
+
 ## [2026-05-17] fix(install-deps): auto-detect NVIDIA + torch+cu121 wheel — 0.8.81 (a3833e2a)
 
 **ROOT CAUSE FOUND for DiLoCo OOM on NVIDIA pods.**
