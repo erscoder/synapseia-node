@@ -1,5 +1,26 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-17] fix(node): derive python hardware mode from gpuVramGb — 0.8.83 (602c9d0f)
+
+ROOT CAUSE #2 for DiLoCo OOM. After Slices 16/17 (cu121 wheel +
+CUDA-aware threshold) pod STILL OOM'd because Node was sending
+`hardware='cpu'` to diloco_train.py.
+
+`work-order.execution.ts:417` used `capabilities.includes('cuda')`.
+Pod caps never include literal 'cuda' (they have 'gpu_training' etc).
+→ hardware='cpu' always → Python else branch → no BitsAndBytesConfig
+→ fp32 load → 47 GB peak → SIGKILL.
+
+Fix: new `deriveTrainingRuntimeMode({ gpuVramGb, platform })` helper:
+- Linux + gpuVramGb>0 → 'cuda'
+- macOS + gpuVramGb>0 → 'mps'
+- else → 'cpu'
+
+After ship, pods send hardware='cuda' → Python takes
+BitsAndBytesConfig 4-bit branch → expected RSS peak ~6-8 GB.
+
+8 new runtime-mode tests.
+
 ## [2026-05-17] feat(node): CUDA-aware preflight threshold — 0.8.82 (145e02d1)
 
 Slice 17. Slice 16 fixed install-deps for NVIDIA torch+cu121; Slice 17
