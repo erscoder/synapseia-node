@@ -1,5 +1,36 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(diloco): 0.8.87 Bug 30 sign gradients with file hash (a7625f36)
+
+`uploadGradients` now pre-computes `sha256(gradientBuffer).hex`,
+sends it as a multipart text field `gradientsHash` AND a header
+`X-Gradients-Sha256`, and signs the canonical body `{peerId,
+gradientsHash}`. Previously the function signed only `{peerId}`
+which let coord `NodeSignatureGuard` fail body-hash verification
+on the multipart route since `req.body` was empty or asymmetric
+at guard execution time (FileInterceptor runs after guards).
+
+The break was silent value loss: pod completed DiLoCo inner
+loop, the 92 MB gradient payload was dropped at coord with 403
+Invalid Ed25519 signature, but the subsequent `/work-orders/<id>
+/complete` POST succeeded and the pod still received the 6000
+SYN reward. WO re-entered distribution and the cycle repeated
+with diverging `valLoss` (0.6747 -> 1.0432 across iterations)
+because no gradient ever reached the aggregator.
+
+Pairs with coord 0.8.70 (b4ed4fc4). Wire-protocol break: node
+0.8.87 talking to coord 0.8.69 still 403s, and node 0.8.86
+talking to coord 0.8.70 also 403s. Both must ship together.
+
+3 new tests prove the new sig over `{peerId, gradientsHash}`
+verifies and that the old `{peerId}`-only sig does NOT
+(regression guard against re-introducing Bug 30).
+
+Per the new decoupling rule (2026-05-18, derogates "node and
+node-ui always same version"), node-ui is NOT version-bumped
+this release. The node-ui binary downloads the latest npm
+node on each launch, so no rebuild needed.
+
 ## [2026-05-18] fix(diloco): 0.8.86 Slice 18 v3 runtime OOM mitigations (552b2c51)
 
 Bug 28. After 0.8.85 closed the load-time OOM, DiLoCo continued to
