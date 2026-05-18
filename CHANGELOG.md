@@ -1,5 +1,64 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): 0.8.90 BLOCKER quality gate scope to RESEARCH only + M1/L1/L2/L3/L4 cleanup (2e3db646)
+
+**BLOCKER hotfix** — 0.8.89 quality gate misfired on non-RESEARCH
+WO types live on pod 213 (19:01-19:14Z). Root cause: 0.8.89
+`submit-result.ts` called `isResearchWorkOrder(wo)` whose fallback
+`extractResearchPayload() !== null` returns truthy for any WO with
+title+description (i.e. ALL WOs). Live impact: TRAINING +
+DILOCO_TRAINING `/complete` ACKs skipped with
+`reason=empty_payload, all fields empty`. For DILOCO the gradient
+still landed via `/diloco/medical/gradients` (data layer OK) but
+WO completion ACK skipped → coord re-dispatch loops. For TRAINING
+`/complete` POST never sent → reward distribution broken.
+
+Fix: strict literal type check at `submit-result.ts:99-100`
+replacing the helper call:
+
+```ts
+const woTypeUpper = (selectedWorkOrder.type ?? '').toString().toUpperCase();
+if (woTypeUpper === 'RESEARCH') {
+  const gate = validateResearchResultJsonString(executionResult.result);
+  if (!gate.ok) { /* skip POST */ }
+}
+```
+
+Canonical `WorkOrderType` casing is UPPERCASE
+(`work-order.types.ts:45`). One lowercase alias `'diloco_training'`
+handled by `.toUpperCase()`. P2 fail-open for non-RESEARCH or
+unknown type — coord gate is source of truth; client gate is
+bandwidth optimization only.
+
+**Bundled secondary fixes** (0.8.89 reviewer-deferred, P19 no
+defer):
+
+- **M1** `wo-failure-counts.ts` env=0 disables (`cap=0` →
+  `shouldSkip` always false; `ttlMs=0` → no pruning, entries
+  retained). Counter increments for diagnostics.
+- **L1** `synthesizer-node.ts:313-329` trim stale 16-line comment
+  → 5 lines reflecting actual post-fix behaviour (P10 truthful).
+- **L2** `submit-result-stale.spec.ts:56` defensive
+  `isDockingWorkOrder` + `markFailedTimeout` mocks.
+- **L3** `docker.ts resolveRdkitScriptPath` deterministic
+  `__dirname/../scripts/...` first-guess + walk-up 6→8 hops for
+  Tauri bundle layouts.
+- **L4** `docking_rdkit_fallback.py` + spawn use `--` separator
+  before SMILES (argparse safety).
+
+Tests: jest 2048/0 (153 suites, 1 pre-existing skip). New spec
+`submit-result-quality-gate-scope.spec.ts` (12 tests) exercises all
+7 non-RESEARCH enum members + reproduces the buggy helper shape
+(P29 — mock returns true for any WO with title+description). 5 new
+env-clamp tests in `wo-failure-counts.spec.ts`.
+
+Reviewer SHIP-AS-IS. P2/P6/P10/P19/P22/P26/P27/P29/P30/P31 all
+PASS. 1 LOW informational (`quality-gate.ts:27` cross-site latent
+foot-gun — non-live, follow-up cleanup).
+
+Per the decoupling rule, node-only release. coord 0.8.73 stays.
+node-ui NOT bumped.
+
 ## [2026-05-18] fix(node): 0.8.89 Bug 31 research empty-summary parse-fail + Bug 20 v3 per-WO timeout cooldown + RDKit tier-3 docking fallback (24919b13)
 
 **Bug 31 MEDIUM** — Research pipeline produced 1-char `{`
