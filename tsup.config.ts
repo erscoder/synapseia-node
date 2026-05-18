@@ -1,5 +1,5 @@
 import { defineConfig, type Options } from 'tsup';
-import { copyFileSync, mkdirSync, readdirSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 /**
@@ -124,7 +124,12 @@ export default defineConfig([
         const dstDir = join(process.cwd(), 'dist', 'scripts');
         mkdirSync(dstDir, { recursive: true });
         for (const f of readdirSync(srcDir)) {
-          copyFileSync(join(srcDir, f), join(dstDir, f));
+          // Skip directories (e.g. `__tests__` introduced by D-py-1)
+          // — they are not part of the runtime payload and copyFileSync
+          // throws ENOTSUP on them.
+          const srcPath = join(srcDir, f);
+          if (statSync(srcPath).isDirectory()) continue;
+          copyFileSync(srcPath, join(dstDir, f));
         }
         console.log('[tsup] Copied scripts/ → dist/scripts/');
       } catch (e) {

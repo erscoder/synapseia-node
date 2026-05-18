@@ -64,7 +64,16 @@ export class SubmitResultNode {
     );
 
     if (completed) {
-      logger.log(` Result submitted! Potential reward: ${selectedWorkOrder.rewardAmount} SYN`);
+      // Bug 34 (2026-05-18) — honest log. The previous form printed
+      // `Potential reward: ${rewardAmount} SYN` which was the *round
+      // pool* (e.g. 6000), not the per-peer payout. Actual settlement
+      // splits 60/25/15 among top-3 (3600/1500/900 SYN) with 0 for
+      // everyone else — the round-listener's post-settlement log is
+      // the only honest source for what this peer earned. We keep
+      // useful context (WO type, iteration) and drop the misleading
+      // SYN amount entirely. P10 reviewer-lesson: no lying logs.
+      const woType = selectedWorkOrder.type ?? 'UNKNOWN';
+      logger.log(`[WO complete] id=${selectedWorkOrder.id} type=${woType} iter=${state.iteration} submitted=true`);
       // Arm per-WO cooldowns so the next poll doesn't immediately re-accept
       // the same WO. markCompleted branches by type (RESEARCH long cooldown,
       // TRAINING short cooldown, everything else permanent). Without this
@@ -77,7 +86,8 @@ export class SubmitResultNode {
       // The coordinator extracts summary/insights/proposal from the result JSON automatically.
       void researchResult; // kept in state for brain/memory
     } else {
-      logger.log(' Failed to report completion');
+      const woType = selectedWorkOrder.type ?? 'UNKNOWN';
+      logger.log(`[WO complete] id=${selectedWorkOrder.id} type=${woType} iter=${state.iteration} submitted=false`);
     }
 
     return { submitted: completed, completedWorkOrderIds: updatedIds };
