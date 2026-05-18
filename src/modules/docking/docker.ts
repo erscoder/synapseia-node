@@ -90,6 +90,24 @@ export interface RunDockingOptions {
    * set in production code. See gen3d-retry.spec.ts.
    */
   __runChildForTests?: (bin: string, args: string[], opts: RunChildOpts) => Promise<{ stdout: string; stderr: string }>;
+  /**
+   * Bug 20 v3 (2026-05-18) — RDKit tier-3 fallback timeout. Defaults to
+   * 60s (RDKit ETKDGv3 typically finishes in <5s but pathological
+   * ligands can take longer).
+   */
+  rdkitTimeoutMs?: number;
+  /**
+   * Bug 20 v3 (2026-05-18) — override path to the RDKit Python helper.
+   * Default resolves from the package scripts/ dir. Tests inject a
+   * stub script to avoid needing real RDKit.
+   */
+  rdkitScriptPath?: string;
+  /**
+   * Bug 20 v3 (2026-05-18) — override the python binary. Default
+   * `python3` (override via PYTHON_BIN env). Tests inject `node` or a
+   * shell stub.
+   */
+  pythonBin?: string;
 }
 
 export interface RunDockingInput {
@@ -215,8 +233,17 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   // conformer quality, slowest); fallback --gen3d fast on timeout (lower
   // quality but ~5x faster, still acceptable for Vina docking).
   // Total wall budget unchanged from Bug 20 (600s default).
+  // Bug 20 v3 (2026-05-18): if BOTH obabel tiers time out, attempt the
+  // RDKit ETKDGv3 fallback (Python helper at scripts/docking_rdkit_fallback.py).
+  // RDKit's experimental-torsion-knowledge embedding completes in seconds
+  // for the same drug-like ligands that defeat obabel's brute-force
+  // conformer search. If RDKit is absent or fails, we rethrow the
+  // original fast-tier timeout so the WO marks failed and the per-WO
+  // failure counter increments. Total wall budget remains the same
+  // (no new minutes spent on top of the obabel tiers).
   const obabelBin = opts.obabelBin ?? DEFAULT_OBABEL_BIN;
   const spawn = opts.__runChildForTests ?? runChild;
+  logger.info(`[Docking] ligand-prep WO smiles_len=${smiles.length} tier=obabel-med timeoutMs=${perTierMs}`);
   try {
     await spawn(obabelBin, [
       ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'med', '-h',
@@ -224,20 +251,143 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
       timeoutMs: perTierMs,
       timeoutContext: { step: 'ligand-gen3d-med', input: smiles },
     });
+    return ligandPdbqtPath;
   } catch (err) {
     const isTimeout = err instanceof Error && /timed out/i.test(err.message);
     if (!isTimeout) throw err;
     // Med tier timed out — fall back to fast. Remove any partial output
     // file from the failed first attempt before retry.
+    logger.warn(`[Docking] obabel --gen3d med timed out after ${perTierMs}ms — retrying with fast tier`);
     await fs.promises.rm(ligandPdbqtPath, { force: true });
+  }
+  try {
     await spawn(obabelBin, [
       ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
     ], {
       timeoutMs: perTierMs,
       timeoutContext: { step: 'ligand-gen3d-fast-retry', input: smiles },
     });
+    return ligandPdbqtPath;
+  } catch (err) {
+    const isTimeout = err instanceof Error && /timed out/i.test(err.message);
+    if (!isTimeout) throw err;
+    // Both obabel tiers timed out — attempt RDKit tier-3 fallback.
+    logger.warn(`[Docking] obabel --gen3d fast timed out after ${perTierMs}ms — attempting RDKit tier-3 fallback`);
+    await fs.promises.rm(ligandPdbqtPath, { force: true });
+    const rdkitOk = await tryRdkitFallback({
+      smiles,
+      workDir,
+      ligandPdbqtPath,
+      obabelBin,
+      spawn,
+      rdkitTimeoutMs: opts.rdkitTimeoutMs ?? 60_000,
+      rdkitScriptPath: opts.rdkitScriptPath,
+      pythonBin: opts.pythonBin,
+      formatConvertTimeoutMs: 10_000,
+    });
+    if (rdkitOk) {
+      logger.info(`[Docking] RDKit tier-3 fallback succeeded for WO smiles_len=${smiles.length}`);
+      return ligandPdbqtPath;
+    }
+    // RDKit unavailable or failed — rethrow the fast-tier timeout so the
+    // WO is marked failed. Per-WO failure counter increments downstream;
+    // after the cap, the WO is locally skipped (Bug 20 v3).
+    logger.warn('[Docking] RDKit tier-3 fallback unavailable or failed — propagating obabel timeout');
+    throw err;
   }
-  return ligandPdbqtPath;
+}
+
+/**
+ * Bug 20 v3 (2026-05-18) — tier-3 RDKit ETKDGv3 ligand 3D conformer
+ * generation. Returns true on success (ligand.pdbqt written), false on
+ * any failure (RDKit not installed, embedding failure, format-convert
+ * failure). NEVER throws — caller handles the fail-path by rethrowing
+ * the upstream obabel timeout.
+ *
+ * Strategy:
+ *   1. Run `python3 docking_rdkit_fallback.py <smiles> <work>/rdkit.pdb`.
+ *      Exit code 4 = RDKit not installed; we log warn + return false.
+ *      Exit codes 1-3 = invalid SMILES / embed / opt failure; we log
+ *      warn + return false.
+ *   2. Run `obabel rdkit.pdb -O ligand.pdbqt` (NO `--gen3d`, just
+ *      format-convert). Completes in <1s. 10s budget.
+ *
+ * `rdkitScriptPath` defaults to the helper shipped with the node
+ * package (scripts/docking_rdkit_fallback.py relative to this file's
+ * dist location). Override for tests.
+ */
+async function tryRdkitFallback(args: {
+  smiles: string;
+  workDir: string;
+  ligandPdbqtPath: string;
+  obabelBin: string;
+  spawn: (bin: string, argv: string[], opts: RunChildOpts) => Promise<{ stdout: string; stderr: string }>;
+  rdkitTimeoutMs: number;
+  rdkitScriptPath?: string;
+  pythonBin?: string;
+  formatConvertTimeoutMs: number;
+}): Promise<boolean> {
+  const pdbOut = path.join(args.workDir, 'rdkit.pdb');
+  const python = args.pythonBin ?? process.env.PYTHON_BIN ?? 'python3';
+  const scriptPath = args.rdkitScriptPath ?? resolveRdkitScriptPath();
+  try {
+    const { stderr } = await args.spawn(
+      python,
+      [scriptPath, args.smiles, pdbOut],
+      {
+        timeoutMs: args.rdkitTimeoutMs,
+        timeoutContext: { step: 'ligand-rdkit-etkdg', input: args.smiles },
+      },
+    );
+    if (stderr && stderr.trim()) {
+      // Non-fatal stderr (RDKit prints warnings to stderr even on
+      // success). Log info — the success/failure decision is on exit
+      // code, surfaced by runChild rejecting on non-zero.
+      logger.info(`[Docking] RDKit stderr: ${stderr.slice(0, 200)}`);
+    }
+  } catch (err) {
+    logger.warn(`[Docking] RDKit ETKDGv3 step failed: ${(err as Error).message.slice(0, 200)}`);
+    return false;
+  }
+  try {
+    await args.spawn(
+      args.obabelBin,
+      [pdbOut, '-O', args.ligandPdbqtPath],
+      {
+        timeoutMs: args.formatConvertTimeoutMs,
+        timeoutContext: { step: 'ligand-pdb-to-pdbqt', input: pdbOut },
+      },
+    );
+  } catch (err) {
+    logger.warn(`[Docking] RDKit fallback format-convert (obabel pdb→pdbqt) failed: ${(err as Error).message.slice(0, 200)}`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Resolve the path to `docking_rdkit_fallback.py`.
+ *
+ * The published package layout is:
+ *   <pkg>/dist/index.js  (compiled, current __dirname)
+ *   <pkg>/scripts/docking_rdkit_fallback.py
+ *
+ * In dev (`tsc --watch`), __dirname is `<pkg>/dist/.../docker.js`. In
+ * production npm install, __dirname is `<pkg>/dist/index.js`. Walk up
+ * from __dirname until we find a `scripts/` sibling. Falls back to a
+ * cwd-relative path if walking fails so test environments work.
+ */
+function resolveRdkitScriptPath(): string {
+  // Walk up from this module's directory looking for a `scripts` sibling.
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, 'scripts', 'docking_rdkit_fallback.py');
+    if (existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.join(process.cwd(), 'scripts', 'docking_rdkit_fallback.py');
 }
 
 /**

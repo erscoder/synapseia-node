@@ -9,6 +9,7 @@ import { getCurrentCapabilities } from '../../../heartbeat/heartbeat';
 import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
 import { isChatInferenceActive } from '../../../inference/chat-inference-state';
+import { getWoFailureCountStore, WoFailureCountStore } from '../../../../shared/wo-failure-counts';
 
 const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10);
 // Training WOs (CPU/GPU/DiLoCo) are multi-submission: the coordinator ranks by
@@ -29,6 +30,26 @@ export class FetchWorkOrdersNode {
   private readonly researchCooldowns = new Map<string, number>();
   private readonly trainingCooldowns = new Map<string, number>();
   private readonly completedWorkOrderIds = new Set<string>();
+  /**
+   * Bug 20 v3 (2026-05-18) — consecutive-timeout counter store. Injectable
+   * for tests via the `failureStore` setter; production uses the
+   * singleton backed by `~/.synapseia/wo-failure-counts.json`.
+   */
+  private failureStore: WoFailureCountStore = getWoFailureCountStore();
+  /** Test-only injection point — reset cache between tests. */
+  __setFailureStoreForTests(store: WoFailureCountStore): void {
+    this.failureStore = store;
+  }
+
+  /**
+   * Bug 20 v3 (2026-05-18) — public so SubmitResultNode (and any other
+   * post-execution caller) can mark a WO as timed-out. Increments the
+   * persistent counter; after the cap, `shouldSkip` returns true and the
+   * pre-fetch filter rejects this WO on subsequent polls.
+   */
+  markFailedTimeout(workOrderId: string, reason: string): { count: number; cappedNow: boolean } {
+    return this.failureStore.markFailedTimeout(workOrderId, reason);
+  }
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
     // Backpressure: if at capacity, skip polling entirely. Expected steady-
@@ -114,6 +135,19 @@ export class FetchWorkOrdersNode {
         logger.log(` WO "${wo.title}" rejected by economics — skipping`);
         return false;
       }
+      // Bug 20 v3 (2026-05-18) — consecutive-timeout skip. After N
+      // timeouts on the same WO id (default 2), block locally. Coord may
+      // keep redispatching; this pod stops burning slots on a WO whose
+      // ligand is intrinsically too expensive for our obabel+RDKit
+      // toolchain. P30 reviewer-lesson — TTL (default 24h) prunes the
+      // entry so a fixed pod (RDKit installed, obabel upgraded)
+      // re-acquires the WO on its own without manual reset.
+      if (this.failureStore.shouldSkip(wo.id)) {
+        logger.info(
+          `[WoLocalSkip] WO "${wo.title}" (id=${wo.id}) skipped: consecutive_timeouts reached cap`,
+        );
+        return false;
+      }
       if (this.execution.isResearchWorkOrder(wo)) {
         const cooldownUntil = this.researchCooldowns.get(wo.id);
         if (cooldownUntil && now < cooldownUntil) {
@@ -163,6 +197,12 @@ export class FetchWorkOrdersNode {
     //  - TRAINING / DILOCO_TRAINING: short cooldown (60s default) — nodes
     //    retry with fresh mutations; ranker takes MAX score per peer.
     //  - everything else (inference, etc.): permanent exclusion.
+    // Bug 20 v3 (2026-05-18) — a successful completion clears the
+    // timeout-failure counter for this WO so a flapping ligand whose
+    // first attempt timed out (med tier) but second succeeded (fast or
+    // RDKit fallback) doesn't carry penalty across runs. P30
+    // reviewer-lesson: don't strand transient state forever.
+    this.failureStore.clear(workOrder.id);
     if (this.execution.isResearchWorkOrder(workOrder)) {
       this.researchCooldowns.set(workOrder.id, Date.now() + RESEARCH_COOLDOWN_MS);
       return;

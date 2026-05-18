@@ -219,10 +219,14 @@ describe('QualityGateNode', () => {
 
 describe('SubmitResultNode', () => {
   let node: SubmitResultNode;
+  // Bug 31 (2026-05-18) — local quality gate added; existing tests are
+  // exempted by stubbing isResearchWorkOrder=false. Gate behaviour covered
+  // in submit-result-quality-gate.spec.ts.
+  const execStub = { isResearchWorkOrder: jest.fn().mockReturnValue(false) } as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    node = new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any);
+    node = new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any, execStub);
   });
 
   it('returns submitted=false when no work order', async () => {
@@ -258,7 +262,7 @@ describe('SubmitResultNode', () => {
       submitWorkOrderResult: (jest.fn() as any).mockRejectedValue(new Error('Coordinator error')),
       completeWorkOrder: (jest.fn() as any).mockResolvedValue(false),
     };
-    const failingNode = new SubmitResultNode(failingCoordinator as any, { markCompleted: jest.fn() } as any);
+    const failingNode = new SubmitResultNode(failingCoordinator as any, { markCompleted: jest.fn() } as any, execStub);
     const result = await failingNode.execute(makeState({
       selectedWorkOrder: { ...makeResearchWO(), id: `wo_err_${Date.now()}` },
       executionResult: { result: 'result', success: true },

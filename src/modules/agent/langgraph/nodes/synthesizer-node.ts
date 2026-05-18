@@ -258,11 +258,32 @@ export class SynthesizerNode {
    */
   private fallbackResult(state: AgentState): Partial<AgentState> {
     const parsed = this.parseResearchResult(state.researcherOutput || '');
-    const summary = parsed.summary || 'No summary generated';
+    // Bug 31 (2026-05-18) — when the researcher output is also unparseable
+    // (parseLlmJson recovered nothing → summary empty) the fallback used to
+    // synthesize the placeholder string "No summary generated" / "No proposal
+    // generated" and ship `success: true`. Both strings are in the coord's
+    // `PLACEHOLDER_PATTERNS` list (submission-quality.ts) so submission
+    // would have been rejected at the coord anyway — wasting a POST. Mark
+    // the execution failed locally instead so SubmitResultNode skips the
+    // POST entirely. The cooldown still arms via markCompleted.
+    const summary = parsed.summary.trim();
     const proposalFromResearcher =
       parsed.discoveryType && parsed.structuredData
         ? `Proposed discovery: ${parsed.discoveryType}. ${summary} ${JSON.stringify({ discoveryType: parsed.discoveryType, structuredData: parsed.structuredData })}`
-        : parsed.proposal || 'No proposal generated';
+        : parsed.proposal;
+    if (!summary || !proposalFromResearcher) {
+      logger.warn(
+        '[SynthesizerNode] fallbackResult: researcher output yielded no usable summary/proposal — failing locally',
+      );
+      return {
+        researchResult: { summary: '', keyInsights: parsed.keyInsights, proposal: '' },
+        executionResult: {
+          success: false,
+          result: 'researcher_output_unparseable',
+        },
+        qualityScore: 0,
+      };
+    }
     const researchResult = {
       summary,
       keyInsights: parsed.keyInsights,
@@ -290,7 +311,22 @@ export class SynthesizerNode {
       structuredData?: unknown;
     }>(raw);
     if (!result.ok || !result.value) {
-      return { summary: raw.slice(0, 200), keyInsights: [], proposal: '' };
+      // Bug 31 (2026-05-18) — when parseLlmJson cannot recover a JSON
+      // structure, the previous fallback returned `summary: raw.slice(0, 200)`.
+      // For a raw payload of a single `{` char (observed live 2026-05-18 on
+      // wo_1779113721582_cb5db91b: ollama llama3.1:8b emitted output_len=208
+      // beginning with bare `{` then prose), the slice produced `summary="{"`.
+      // That was non-empty enough to bypass the `isPoisonOutput` short-circuit
+      // in execute() AND non-empty enough to carry into fallbackResult(),
+      // ultimately being shipped to coord which rejected with
+      // `hypothesis_too_short detail=1 chars < 30 min`. Returning an empty
+      // summary now lets `isPoisonOutput` fire on the first attempt and the
+      // SubmitResultNode hard-guard skips the POST. The raw payload is still
+      // available to the caller via the wider state for debug — losing the
+      // 200-char preview here only affects the fallback summary path, which
+      // can never produce a coord-admissible result (P10 reviewer-lesson:
+      // truthful behaviour over cosmetic preservation).
+      return { summary: '', keyInsights: [], proposal: '' };
     }
     const p = result.value;
     return {

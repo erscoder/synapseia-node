@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
+import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { FetchWorkOrdersNode } from './fetch-work-orders';
+import { validateResearchResultJsonString } from '../../../../shared/node-side-submission-quality';
 import type { AgentState } from '../state';
 import logger from '../../../../utils/logger';
 
@@ -9,6 +11,7 @@ export class SubmitResultNode {
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly fetchNode: FetchWorkOrdersNode,
+    private readonly execution: WorkOrderExecutionHelper,
   ) {}
 
 
@@ -26,8 +29,58 @@ export class SubmitResultNode {
         ` Skipping submission: execution failed for WO ${selectedWorkOrder.id} — ` +
         `${executionResult.result.slice(0, 120)}`,
       );
+      // Bug 20 v3 (2026-05-18) — when a docking WO fails with a timeout
+      // (obabel --gen3d in either tier OR vina), increment the per-WO
+      // failure counter. After the cap (default 2), FetchWorkOrdersNode's
+      // pre-fetch filter skips this WO on subsequent polls, avoiding the
+      // observed 4-consecutive-failures pattern on
+      // wo_docking_dp_5542e258-9c6_a_1779120600222_dbf771. Detection is
+      // regex-based on the result string because `runDocking` wraps the
+      // child-process error before bubbling. Non-timeout failures (Vina
+      // exit non-zero, parse error) do NOT increment — they have
+      // different root causes and shouldn't trigger the same skip.
+      if (this.execution.isDockingWorkOrder(selectedWorkOrder)) {
+        const resultStr = executionResult.result;
+        const isTimeout = /timed out/i.test(resultStr);
+        if (isTimeout) {
+          // Disambiguate the timeout source for telemetry: obabel
+          // `--gen3d` (med/fast/retry) vs Vina vs other obabel steps.
+          // The error message embeds the binary name + flags via
+          // `buildObabelTimeoutMessage`, so a substring scan suffices.
+          const isObabelGen3d = /--gen3d/i.test(resultStr) || /gen3d/i.test(resultStr);
+          const reason = isObabelGen3d ? 'obabel-gen3d-timeout' : 'docking-timeout';
+          this.fetchNode.markFailedTimeout(selectedWorkOrder.id, reason);
+        }
+      }
       this.fetchNode.markCompleted(selectedWorkOrder);
       return { submitted: false };
+    }
+
+    // Bug 31 (2026-05-18) — client-side quality gate for RESEARCH WOs.
+    // Mirrors the coord's `application/work-orders/submission-quality.ts`
+    // contract so we reject obviously-malformed submissions locally and
+    // save the POST + a coord-side `WOSubmit reject` log line. Observed
+    // live 2026-05-18 on wo_1779113721582_cb5db91b: pod shipped a
+    // 1-char `summary="{"`, coord rejected with
+    // `hypothesis_too_short detail=1 chars < 30 min`.
+    //
+    // Belt-and-suspenders for the synthesizer-node empty-summary fix:
+    // even if a future regression re-introduces the bare-`{` path or
+    // any other unparseable-output path, this gate stops it before the
+    // POST. Non-RESEARCH WOs (TRAINING/DOCKING/INFERENCE) ship
+    // shape-incompatible payloads and are exempt from this check —
+    // their quality is verified by the coord's domain-specific
+    // validators (DockingSubmissionService, LoRA validation, etc.).
+    if (this.execution.isResearchWorkOrder(selectedWorkOrder)) {
+      const gate = validateResearchResultJsonString(executionResult.result);
+      if (!gate.ok) {
+        logger.warn(
+          `[SubmitResult] Local quality gate rejected WO ${selectedWorkOrder.id} ` +
+          `(reason=${gate.reason}, ${gate.detail}) — skipping POST`,
+        );
+        this.fetchNode.markCompleted(selectedWorkOrder);
+        return { submitted: false };
+      }
     }
 
     const completedIds = new Set<string>(state.completedWorkOrderIds ?? []);

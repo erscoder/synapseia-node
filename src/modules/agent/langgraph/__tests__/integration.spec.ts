@@ -102,7 +102,11 @@ function buildService(): AgentGraphService {
     new (require('../nodes/execute-lora-validation').ExecuteLoraValidationNode)(execution),
     new (require('../nodes/unknown-type').UnknownTypeNode)(),
     new QualityGateNode(execution, evaluation),
-    new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any),
+    // Bug 31 (2026-05-18) — SubmitResultNode now takes execution helper
+    // for the local research-WO quality gate. Integration test passes the
+    // real `execution` mock used by other nodes; its
+    // `isResearchWorkOrder` is shape-driven and matches the live contract.
+    new SubmitResultNode(coordinator, { markCompleted: jest.fn() } as any, execution),
     new UpdateMemoryNode(execution, agentBrain),
     new RetrieveMemoryNode(),
     new PlanExecutionNode(mockLlmService as any, execution),
