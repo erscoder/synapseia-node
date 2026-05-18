@@ -8,6 +8,7 @@
  */
 
 import { Injectable, OnModuleInit, Inject, Optional } from '@nestjs/common';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -398,17 +399,34 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
 
   async uploadGradients(coordinatorUrl: string, domain: string, peerId: string, gradientBuffer: Buffer): Promise<boolean> {
     try {
+      // Bug 30 — the previous version signed `{ peerId }` only; the
+      // coord guard hashes `req.body`, which is empty at guard-time
+      // for multipart routes (FileInterceptor runs AFTER guards). The
+      // sig therefore mismatched 100% of the time and the 92 MB
+      // gradient payload was silently dropped (pod completed, reward
+      // was paid, network got no contribution).
+      //
+      // Fix: compute sha256(gradientBuffer) BEFORE composing the
+      // FormData, include it both as a multipart field
+      // (`gradientsHash`, for application-level cross-check) AND in
+      // the `X-Gradients-Sha256` header (which the guard reads as the
+      // canonical body), and sign `{ peerId, gradientsHash }`.
+      const gradientsHash = createHash('sha256').update(gradientBuffer).digest('hex');
+
       const formData = new FormData();
       formData.append('peerId', peerId);
+      formData.append('gradientsHash', gradientsHash);
       formData.append('gradients', new Blob([gradientBuffer], { type: 'application/octet-stream' }), 'gradients.pt');
 
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        'X-Gradients-Sha256': gradientsHash,
+      };
       if (this._keypair && this._publicKey && this._peerId) {
         const path = `/diloco/${domain}/gradients`;
         const auth = await buildAuthHeaders({
           method: 'POST',
           path,
-          body: { peerId },
+          body: { peerId, gradientsHash },
           privateKey: this._keypair,
           publicKey: this._publicKey,
           peerId: this._peerId,
@@ -418,6 +436,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
 
       const response = await fetch(`${coordinatorUrl}/diloco/${domain}/gradients`, { method: 'POST', headers, body: formData });
       if (!response.ok) { logger.warn(`[DiLoCo] Failed to upload gradients: ${await response.text()}`); return false; }
+      logger.log(`[DiLoCo] Gradients uploaded domain=${domain} sha256=${gradientsHash.slice(0, 12)}… size=${gradientBuffer.length}B`);
       return true;
     } catch (err) {
       logger.warn(`[DiLoCo] Upload error: ${(err as Error).message}`);
