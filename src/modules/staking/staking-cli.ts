@@ -54,6 +54,9 @@ function getSolanaRpcUrl(): string {
 // for in-cluster coord developers — every other operator saw `fetch failed`
 // on the coordinator-authority lookup in stakeTokens() and the tx never
 // got built. Env var still wins so devs override locally.
+// Bug 40 closed in 0.8.91 — all remaining inline `?? 'http://localhost:3701'`
+// callers (a2a knowledge-query handler, active-model-subscriber, solana-balance
+// helpers) were migrated to the getCoordinatorUrl() helper for consistency.
 const COORDINATOR_URL = process.env.COORDINATOR_URL || OFFICIAL_COORDINATOR_URL;
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 

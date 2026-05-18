@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { Connection, PublicKey } from '@solana/web3.js';
+import { getCoordinatorUrl } from '../../constants/coordinator';
 
 // SYN token mint on devnet (from coordinator .env)
 const SYN_TOKEN_MINT = process.env.SYN_TOKEN_MINT || 'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8';
@@ -51,8 +52,11 @@ export class SolanaBalanceHelper {
    * Get staked SYN amount for a wallet via coordinator API
    */
   async getStakedAmount(
+    // Bug 40 (0.8.91) — default param evaluated at call time, returns
+    // OFFICIAL_COORDINATOR_URL when COORDINATOR_URL env is unset instead
+    // of the dev-only localhost:3701 fallback.
     walletAddress: string,
-    coordinatorUrl: string = 'http://localhost:3701',
+    coordinatorUrl: string = getCoordinatorUrl(),
   ): Promise<number> {
     try {
       const res = await fetch(`${coordinatorUrl}/stake/staker/${encodeURIComponent(walletAddress)}`);
@@ -68,9 +72,10 @@ export class SolanaBalanceHelper {
    * Stake SYN tokens via coordinator API
    */
   async stakeTokens(
+    // Bug 40 (0.8.91) — see getStakedAmount note above.
     walletAddress: string,
     amount: string,
-    coordinatorUrl: string = 'http://localhost:3701',
+    coordinatorUrl: string = getCoordinatorUrl(),
   ): Promise<{ success: boolean; txSignature?: string; stakeAddress?: string; error?: string }> {
     try {
       const res = await fetch(`${coordinatorUrl}/stake`, {

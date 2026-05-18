@@ -426,12 +426,15 @@ describe('ActiveModelSubscriber — hardening', () => {
     expect(String(called)).toBe('http://override.internal:4444/models/active');
   });
 
-  it('tick() uses default host http://localhost:3701 when env is unset', async () => {
+  it('tick() uses official coordinator host when env is unset (Bug 40 — getCoordinatorUrl())', async () => {
     delete process.env.COORDINATOR_URL;
     (global.fetch as any).mockResolvedValueOnce(failResp(500));
     await new ActiveModelSubscriber(makeServing()).tick();
     const called = (global.fetch as any).mock.calls[0][0];
-    expect(String(called)).toBe('http://localhost:3701/models/active');
+    // Pre-0.8.91 the fallback was http://localhost:3701 — only resolved for
+    // in-cluster coord developers. Bug 40 closed by migrating to
+    // getCoordinatorUrl() helper which returns OFFICIAL_COORDINATOR_URL.
+    expect(String(called)).toBe('https://api.synapseia.network/models/active');
   });
 
   it('tick() sends an AbortSignal to fetch (kills the "drop options" object mutant)', async () => {

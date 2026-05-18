@@ -8,6 +8,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { WorkOrderCoordinatorHelper } from '../../agent/work-order/work-order.coordinator';
+import { getCoordinatorUrl } from '../../../constants/coordinator';
 
 export interface KnowledgeQueryPayload {
   topic: string;
@@ -31,8 +32,10 @@ export class KnowledgeQueryHandler {
       throw new Error('knowledge_query payload requires topic (string)');
     }
 
-    // Default coordinator URL — in A2A context, use the configured coordinator
-    const coordinatorUrl = process.env.COORDINATOR_URL ?? 'http://localhost:3701';
+    // Default coordinator URL — uses COORDINATOR_URL env or the official coordinator.
+    // Bug 40 closed in 0.8.91 — migrated from inline `?? 'http://localhost:3701'` to
+    // the central getCoordinatorUrl() helper.
+    const coordinatorUrl = getCoordinatorUrl();
 
     try {
       const context = await this.coordinatorHelper.fetchKGraphContext(

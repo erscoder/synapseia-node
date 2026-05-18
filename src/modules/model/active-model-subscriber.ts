@@ -25,6 +25,7 @@ import * as path from 'path';
 import { createHash, createPublicKey, verify as cryptoVerify } from 'crypto';
 import logger from '../../utils/logger';
 import { SynapseiaServingClient } from '../llm/synapseia-serving-client';
+import { getCoordinatorUrl } from '../../constants/coordinator';
 
 interface ActiveModelResponse {
   modelId: string;
@@ -117,7 +118,10 @@ export class ActiveModelSubscriber implements OnModuleDestroy {
   }
 
   async tick(): Promise<'no-active' | 'unchanged' | 'swapped' | 'download-failed' | 'verify-failed'> {
-    const coordUrl = process.env.COORDINATOR_URL ?? 'http://localhost:3701';
+    // Bug 40 closed in 0.8.91 — migrated to getCoordinatorUrl() helper so a
+    // fresh install without COORDINATOR_URL exported still hits the official
+    // coordinator instead of a dev-only localhost:3701 fallback.
+    const coordUrl = getCoordinatorUrl();
     let active: ActiveModelResponse | null = null;
     try {
       const res = await fetch(`${coordUrl}/models/active`, {
