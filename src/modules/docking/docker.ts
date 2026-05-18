@@ -62,6 +62,12 @@ function parseObabelTimeoutEnv(): number {
 }
 const DEFAULT_OBABEL_TIMEOUT_MS = parseObabelTimeoutEnv();
 
+interface RunChildOpts {
+  timeoutMs: number;
+  /** Diagnostic context surfaced when the timeout fires. */
+  timeoutContext?: { step?: string; input?: string };
+}
+
 export interface RunDockingOptions {
   /** Override binary names (mostly for tests). */
   vinaBin?: string;
@@ -78,6 +84,12 @@ export interface RunDockingOptions {
   workDir?: string;
   /** Override hardware reporting (mostly for tests). */
   hardwareReporter?: () => Promise<{ cpu: string; ramMb: number }>;
+  /**
+   * Test-only: stub for `runChild`. Allows unit tests to assert the
+   * two-tier --gen3d retry path without spawning real obabel. NEVER
+   * set in production code. See gen3d-retry.spec.ts.
+   */
+  __runChildForTests?: (bin: string, args: string[], opts: RunChildOpts) => Promise<{ stdout: string; stderr: string }>;
 }
 
 export interface RunDockingInput {
@@ -196,19 +208,50 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   const ligandSmiPath = path.join(workDir, 'ligand.smi');
   const ligandPdbqtPath = path.join(workDir, 'ligand.pdbqt');
   await fs.promises.writeFile(ligandSmiPath, smiles + '\n', 'utf8');
-  // --gen3d builds a 3D conformer from SMILES; -h adds explicit hydrogens.
-  // 600s default (Bug 20, 2026-05-17): drug-like ligands like Indinavir
-  // (HIV-1 Protease) and Imatinib (BCR-ABL) with many rotatable bonds
-  // can take 5-10 min on a CPU under load. Operators can raise via
-  // DOCKING_OBABEL_TIMEOUT_MS for even more complex molecules.
-  const timeoutMs = opts.obabelTimeoutMs ?? DEFAULT_OBABEL_TIMEOUT_MS;
-  await runChild(opts.obabelBin ?? DEFAULT_OBABEL_BIN, [
-    ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', '-h',
-  ], {
-    timeoutMs,
-    timeoutContext: { step: 'ligand-gen3d', input: smiles },
-  });
+  const totalBudgetMs = opts.obabelTimeoutMs ?? DEFAULT_OBABEL_TIMEOUT_MS;
+  const perTierMs = Math.floor(totalBudgetMs / 2);
+
+  // Bug 20 v2 (2026-05-18): two-tier retry. Primary --gen3d med (best
+  // conformer quality, slowest); fallback --gen3d fast on timeout (lower
+  // quality but ~5x faster, still acceptable for Vina docking).
+  // Total wall budget unchanged from Bug 20 (600s default).
+  const obabelBin = opts.obabelBin ?? DEFAULT_OBABEL_BIN;
+  const spawn = opts.__runChildForTests ?? runChild;
+  try {
+    await spawn(obabelBin, [
+      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'med', '-h',
+    ], {
+      timeoutMs: perTierMs,
+      timeoutContext: { step: 'ligand-gen3d-med', input: smiles },
+    });
+  } catch (err) {
+    const isTimeout = err instanceof Error && /timed out/i.test(err.message);
+    if (!isTimeout) throw err;
+    // Med tier timed out — fall back to fast. Remove any partial output
+    // file from the failed first attempt before retry.
+    await fs.promises.rm(ligandPdbqtPath, { force: true });
+    await spawn(obabelBin, [
+      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
+    ], {
+      timeoutMs: perTierMs,
+      timeoutContext: { step: 'ligand-gen3d-fast-retry', input: smiles },
+    });
+  }
   return ligandPdbqtPath;
+}
+
+/**
+ * Test-only: exposes `prepLigandPdbqt` for unit-testing the two-tier
+ * --gen3d retry path (Bug 20 v2, 2026-05-18). Production code uses the
+ * module-private function via `runDocking`. NEVER call from outside
+ * tests.
+ */
+export async function __prepLigandPdbqtForTests(
+  smiles: string,
+  workDir: string,
+  opts: RunDockingOptions,
+): Promise<string> {
+  return prepLigandPdbqt(smiles, workDir, opts);
 }
 
 // ── Vina invocation ─────────────────────────────────────────────────────────
@@ -361,12 +404,6 @@ export function buildObabelTimeoutMessage(args: {
     '  hint: raise DOCKING_OBABEL_TIMEOUT_MS for complex drug-like ligands (Indinavir, Imatinib, etc.).',
   );
   return lines.join('\n');
-}
-
-interface RunChildOpts {
-  timeoutMs: number;
-  /** Diagnostic context surfaced when the timeout fires. */
-  timeoutContext?: { step?: string; input?: string };
 }
 
 function runChild(bin: string, args: string[], opts: RunChildOpts): Promise<{ stdout: string; stderr: string }> {

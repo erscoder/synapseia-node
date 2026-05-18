@@ -288,16 +288,39 @@ def run_full_mode(config: dict) -> None:
 
     # 4-bit quantization config (only for CUDA)
     if device == "cuda":
+        # Slice 18 residual SIGKILL fix (2026-05-18)
+        # ------------------------------------------
+        # Pod A40 (48GB VRAM) SIGKILLed at 96%/339 shards during nf4 load.
+        # Three mitigations:
+        #   1. bnb_4bit_quant_storage=uint8 → packs 4-bit weights into uint8
+        #      storage, halves the intermediate materialization buffer.
+        #   2. device_map={"":0} → pin all layers to GPU 0. Valid ONLY when
+        #      the quantized model fits a single GPU; gated above by the
+        #      total_vram_gb >= 12 check. Fail-closed on under-resourced
+        #      pods (P2) — silent CPU-offload would mask training failures.
+        #   3. Hard VRAM gate: refuses to load if heartbeat misclassified
+        #      the pod. Heartbeat should never advertise diloco_training on
+        #      <12GB cards; this is a defense-in-depth backstop.
+        total_vram_gb = int(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3))
+        if total_vram_gb < 12:
+            raise RuntimeError(
+                f"DiLoCo 4-bit training requires >=12GB VRAM (detected {total_vram_gb}GB). "
+                f"Pod is misclassified - heartbeat should not have advertised diloco_training cap. "
+                f"Refusing to proceed to avoid silent CPU-offload."
+            )
+        log({"info": f"diloco_load_budget gpu_total_gb={total_vram_gb} strategy=pin-gpu-0"})
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
+            bnb_4bit_quant_storage=torch.uint8,
         )
         try:
             base_model = _load_with_retry(
                 lambda: AutoModelForCausalLM.from_pretrained(
-                    pretrained_name, quantization_config=bnb_config, device_map="auto",
+                    pretrained_name, quantization_config=bnb_config,
+                    device_map={"": 0},
                     **base_load_kwargs,
                 ),
                 what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit, low_cpu_mem)",
@@ -306,7 +329,8 @@ def run_full_mode(config: dict) -> None:
             log({"warn": f"low_cpu_mem_usage unsupported on this transformers/accelerate; retrying without it: {exc}"})
             base_model = _load_with_retry(
                 lambda: AutoModelForCausalLM.from_pretrained(
-                    pretrained_name, quantization_config=bnb_config, device_map="auto",
+                    pretrained_name, quantization_config=bnb_config,
+                    device_map={"": 0},
                     **load_kwargs_extra,
                 ),
                 what=f"AutoModelForCausalLM.from_pretrained({pretrained_name}, 4bit)",

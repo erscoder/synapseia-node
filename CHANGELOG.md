@@ -1,5 +1,37 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): DiLoCo CUDA load OOM + obabel gen3d two-tier retry — 0.8.85
+
+Two residual fixes after 0.8.84 shipped Slice 19:
+
+**Slice 18 v2 — DiLoCo CUDA load SIGKILL (3-mitigation fix)**
+
+`diloco_train.py` base-model load was SIGKILLed on A40 pods during nf4
+quant load. Three combined mitigations:
+
+  - `bnb_4bit_quant_storage=torch.uint8` — packs 4-bit weights into
+    uint8 storage, halves intermediate materialization buffer during
+    nf4 load.
+  - `device_map={"":0}` — pin all weights to GPU 0 to avoid CPU
+    staging that doubles peak RSS during the load window.
+  - Hard VRAM<12GB gate (P2 fail-closed) — refuse DiLoCo on pods that
+    silently fall back to CPU-offload after a heartbeat
+    misclassification. Reserve 8GiB GPU headroom.
+
+**Bug 20 v2 — obabel `--gen3d` two-tier retry**
+
+`obabel --gen3d med` timed out on drug-like ligands with many
+rotatable bonds even after the 600s bump. Switched to structural
+retry:
+
+  - Tier 1: `--gen3d med` with 300s budget.
+  - Tier 2 (only on tier 1 timeout): `--gen3d fast` with 300s budget.
+
+Total wall budget preserved at 600s; non-timeout failures bail
+immediately without retry. 5 unit tests cover happy path, tier-1
+timeout → tier-2 success, both tiers timeout, tier-1 non-timeout
+fail (no retry), and the wall budget contract.
+
 ## [2026-05-18] fix(node): TRAINING WO hardware probe (parallel of Slice 18) — 0.8.84
 
 Slice 19. ROOT CAUSE #3 for OOM on micro-training WO. Slice 18 fixed
