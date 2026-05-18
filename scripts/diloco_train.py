@@ -11,6 +11,18 @@ Supports testMode=True to use a tiny model (GPT-2) for CI/testing.
 import sys
 import json
 import os
+
+# Bug 28 / Slice 18 v3 — DiLoCo runtime OOM mitigation
+# ----------------------------------------------------
+# `expandable_segments:True` lets the CUDA caching allocator grow its
+# pre-reserved blocks instead of fragmenting into fixed-size segments,
+# which is the typical failure mode during the backward pass of a
+# quantized 7B model with LoRA on a 24 GB card. Must be set BEFORE
+# `import torch` runs anywhere in the process — torch reads this env
+# only at allocator init. `setdefault` so an externally provided env
+# (e.g. a more aggressive operator override) still wins.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import gc
 import tempfile
 import time
@@ -255,7 +267,17 @@ def run_full_mode(config: dict) -> None:
     hyperparams = config.get("hyperparams", {})
     hardware = config.get("hardware", "cpu")
     lr = hyperparams.get("learningRate", 2e-4)
-    batch_size = hyperparams.get("batchSize", 4)
+    # Bug 28 / Slice 18 v3: default lowered 4 → 1 to keep peak activation
+    # memory inside the 24 GB envelope on an RTX A5000 during the backward
+    # pass of a quantized 7B base with LoRA adapters. TS caller may still
+    # override via hyperparams.batchSize when running on bigger GPUs.
+    # P31: clamp to [1, 1024] to fail-closed on negative / oversized inputs
+    # that would silently OOM mid-run.
+    try:
+        batch_size = int(hyperparams.get("batchSize", 1))
+    except (TypeError, ValueError):
+        batch_size = 1
+    batch_size = max(1, min(1024, batch_size))
 
     # Bug 18 v3: DiLoCo runtime is LOCAL-ONLY. The install-deps phase
     # pre-downloads the foundation model once and writes a marker; here
@@ -373,6 +395,29 @@ def run_full_mode(config: dict) -> None:
         )
         model = get_peft_model(base_model, lora_config)
 
+    # Bug 28 / Slice 18 v3: gradient checkpointing trades compute for VRAM
+    # by recomputing activations during backward instead of caching them.
+    # `use_reentrant=False` is the modern, autograd-graph-clean path.
+    # `enable_input_require_grads()` is REQUIRED when checkpointing a
+    # quantized base model with LoRA adapters — the frozen nf4 weights
+    # break the gradient path unless we explicitly mark the embedding
+    # output as requiring grad, otherwise the checkpoint reentry sees a
+    # detached graph and grads never reach the LoRA adapters.
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+    # `use_cache=True` caches past KV pairs in the forward pass, which is
+    # incompatible with gradient checkpointing (HF emits a warning + disables
+    # checkpointing silently). Force it off on the underlying config if present.
+    if hasattr(model, "config") and getattr(model.config, "use_cache", False):
+        model.config.use_cache = False
+    base_cfg = getattr(getattr(model, "base_model", None), "config", None)
+    if base_cfg is not None and getattr(base_cfg, "use_cache", False):
+        base_cfg.use_cache = False
+
     tokenizer = _load_with_retry(
         lambda: AutoTokenizer.from_pretrained(pretrained_name, **load_kwargs_extra),
         what=f"AutoTokenizer.from_pretrained({pretrained_name})",
@@ -414,8 +459,8 @@ def run_full_mode(config: dict) -> None:
     # CUDA pinned-memory pool that DataLoader allocates by default.
     # Each pinned page is held outside the cgroup-reclaimable set so
     # it stacks with the model weights and inflates the OOM headroom
-    # required by `DILOCO_REQUIRED_FREE_MB`. With batch_size=4 the
-    # H2D copy is fast enough that pinning is a luxury, not a need.
+    # required by `DILOCO_REQUIRED_FREE_MB`. At the v3 batch_size=1
+    # default the H2D copy is trivial; pinning is a luxury, not a need.
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=False)
 
     optimizer = torch.optim.AdamW(
