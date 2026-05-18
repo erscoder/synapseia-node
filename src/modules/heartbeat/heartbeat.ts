@@ -1549,9 +1549,19 @@ export class HeartbeatHelper {
             // payload THEN tacks `publicKey` on post-signing. Leaving
             // publicKey out of the signed payload keeps the two
             // canonicals (node + coord) aligned.
+            // Bug 41 fix (v0.8.92): mirror HTTP heartbeat shape — `peerId`
+            // is the Ed25519 hex form (canonical identity used by the coord
+            // peers table), and `p2pPeerId` is the libp2p form used only
+            // for gossip routing. Pre-fix the two were inverted here, so
+            // the P2P branch advertised the libp2p form as `peerId` while
+            // the HTTP branch advertised the Ed25519 hex, and the coord
+            // happily wrote two distinct Redis hashes per physical node
+            // (one per channel). P9 fail-closed fallback: if
+            // `p2pNode.getPeerId()` is somehow undefined, fall back to
+            // `identity.peerId` so we never publish `undefined`.
             await p2pNode.publishHeartbeat({
-              peerId: p2pNode.getPeerId(),
-              p2pPeerId: identity.peerId,
+              peerId: identity.peerId,
+              p2pPeerId: p2pNode.getPeerId() ?? identity.peerId,
               name: identity.name,
               walletAddress: walletAddress ?? null,
               hardwareClass: hardware.hardwareClass,
