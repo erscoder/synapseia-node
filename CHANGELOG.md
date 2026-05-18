@@ -1,5 +1,54 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] feat(node): 0.8.88 Bug 34 honest WO log + Bug 35 per-peer cosine aggregator (53f3b642)
+
+Bug 34 — Pod reward log lied. `submit-result.ts` emitted
+`Result submitted! Potential reward: 6000 SYN` on every WO
+complete where 6000 was the round POOL, not the per-peer payout.
+Actual settlement splits 60/25/15 among top 3 (3600/1500/900 SYN)
+with 0 for everyone else. Operators saw 6000 every time and
+assumed the pod was earning that — wrong expectation.
+
+Fix: drop the SYN amount from the post-submission log. New form
+`[WO complete] id=<id> type=<woType> iter=<n> submitted=true|false`.
+The honest per-peer payout still surfaces in
+`round-listener.ts:181` (`Reward: ${formatRewardSyn(rewardAmount)}
+SYN`) which fires only after coord finalizes the round split.
+Spec asserts the new log contains no SYN amount and no numeric
+reward pattern.
+
+Bug 35 — DiLoCo aggregator now emits per-peer cosine similarity.
+New `scripts/diloco_aggregate.py` implements weighted-mean
+gradient aggregation with per-peer cosine similarity vs the
+aggregate emitted as `perPeerCosine: { peerId: float }` in the
+result JSON. Zero-magnitude peers serialize as the JSON string
+`"NaN"` (bare `NaN` is not JSON-safe). Supports raw `{name:
+Tensor}` and SVD-compressed `{name: {U,S,V,shape}}` gradient
+bundles. CLI reads stdin JSON `{peers, outputPath?}` and prints
+result JSON to stdout. Coord 0.8.72 will read `perPeerCosine`
+and apply a cosine threshold (env
+`DILOCO_COSINE_REJECT_THRESHOLD`, default 0.3) to feed peer
+misbehavior records — paired in this slice but ships in coord.
+
+11 pytest cases cover identical-gradients → ~1,
+opposite-direction → ~-1, zero-magnitude → NaN (no crash, P22),
+count parity, output-path persistence, layout mismatch raises,
+CLI end-to-end.
+
+`tsup.config.ts`: `scripts/` copy loop now skips directories
+(`statSync + isDirectory` continue) so the new
+`scripts/__tests__/` folder does not crash the build with
+`ENOTSUP` via `copyFileSync`.
+
+Reviewer-lessons walked: P10 truthful logs, P22 NaN does not
+abort, P26 no untrusted prompt interpolation, P27 N/A (no DI
+change), P29 wire-format end-to-end (Python emits string
+`"NaN"`, spec parses raw stdout).
+
+Per the decoupling rule (2026-05-18), node and node-ui release
+independently. node-ui is NOT version-bumped this release — the
+node-ui binary downloads the latest npm node on each launch.
+
 ## [2026-05-18] fix(diloco): 0.8.87 Bug 30 sign gradients with file hash (a7625f36)
 
 `uploadGradients` now pre-computes `sha256(gradientBuffer).hex`,
