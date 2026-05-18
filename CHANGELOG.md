@@ -1,5 +1,41 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(diloco): 0.8.86 Slice 18 v3 runtime OOM mitigations (552b2c51)
+
+Bug 28. After 0.8.85 closed the load-time OOM, DiLoCo continued to
+OOM inside the training inner loop on 24 GB RTX A5000 pods (PyTorch
+held 21.39 GiB while trying to allocate another 1.16 GiB). Root
+cause is runtime activation memory: Qwen2.5-7B nf4 base + LoRA
+adapters, sequence length 512, batch 4, retained across 28
+transformer layers for backward ~= 13 GB GPU on top of weights and
+gradients.
+
+Three mitigations applied in `packages/node/scripts/diloco_train.py`:
+
+  - `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` set via
+    `os.environ.setdefault` BEFORE `import torch`. The CUDA caching
+    allocator can now grow and coalesce free segments instead of
+    raising OOM on transient peaks.
+  - Default `per_device_train_batch_size` lowered from 4 to 1. The
+    TS caller (`DiLoCoHyperparams.batchSize`) can still override on
+    bigger GPUs. P31 hardening: `int(...)` coerce plus `[1, 1024]`
+    clamp so a negative or oversized value fails closed instead of
+    silently OOMing mid-run.
+  - `model.gradient_checkpointing_enable(use_reentrant=False)` plus
+    `enable_input_require_grads()` after `get_peft_model`.
+    Activations are recomputed during backward instead of cached
+    across the full depth, cutting retained activation memory by
+    roughly 60 percent at a 20 to 30 percent step-time cost.
+    `use_cache=False` is also forced on both `model.config` and
+    `model.base_model.config` so HF does not silently disable
+    checkpointing.
+
+Combined runtime envelope drops from roughly 22 GB to 6 to 8 GB on
+the same workload. The 0.8.85 load-time gate (VRAM >= 12 GB) and
+`bnb_4bit_quant_storage=torch.uint8` remain untouched. Optimizer
+stays `torch.optim.AdamW`; `paged_adamw_8bit` is a v4 candidate, not
+v3.
+
 ## [2026-05-18] fix(node): DiLoCo CUDA load OOM + obabel gen3d two-tier retry — 0.8.85
 
 Two residual fixes after 0.8.84 shipped Slice 19:
