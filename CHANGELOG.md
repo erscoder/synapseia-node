@@ -1,5 +1,67 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): 0.8.89 Bug 31 research empty-summary parse-fail + Bug 20 v3 per-WO timeout cooldown + RDKit tier-3 docking fallback (24919b13)
+
+**Bug 31 MEDIUM** — Research pipeline produced 1-char `{`
+submissions reaching coord rejected as `hypothesis_too_short`.
+Root cause: `parseResearchResult` returned `summary: raw.slice(0, 200)`
+on `parseLlmJson` failure, preserving bare `{` as truthy 1-char
+summary that bypassed the `isPoisonOutput` short-circuit.
+`fallbackResult` then synthesized a placeholder proposal + shipped
+`success: true` with `summary='{'`. Coord scored `hypothesis='{'`
+(1 char) → reject `hypothesis_too_short detail=1 chars < 30 min`.
+
+Fix: `parseResearchResult` now returns empty `summary` on
+parse-fail (both `!result.ok` and `result.ok && undefined-fields`
+paths) so the poison-output guard at `synthesizer-node.ts:111-128`
+fires. `fallbackResult` emits `success: false` when researcher
+output yields no usable summary/proposal — propagates to
+`submit-result.ts`'s guard which skips the POST `/complete`.
+
+Plus client-side pre-submission quality gate
+`node-side-submission-quality.ts` mirrors coord's 30-char hypothesis
+floor + placeholder/error-marker regex check. Applied in
+`submit-result.ts` BEFORE the `completeWorkOrder` POST, saving
+tokens + bandwidth on guaranteed coord rejects.
+
+**Bug 20 v3 LOW** — obabel `--gen3d fast` 300s timeout recurrente.
+Same docking WO `dp_5542e258` timed out 4× consecutively. Coord
+redispatches infinito, pod re-fails, HEAVY slot wasted.
+
+Fix (a): per-WO consecutive-failure counter `wo-failure-counts.ts`
+with atomic write (POSIX `writeFileSync tmp + renameSync`, P3
+race-free) to `~/.synapseia/wo-failure-counts.json`. 24h TTL prune
+on load (P30). `WO_TIMEOUT_FAILURE_CAP` env override (default 2).
+`fetch-work-orders.ts` pre-fetch filter calls
+`failureStore.shouldSkip()` BEFORE the accept POST — slot not
+wasted. `markCompleted` clears counter on success.
+
+Fix (b): tier-3 RDKit ETKDGv3 fallback. New
+`packages/node/scripts/docking_rdkit_fallback.py` uses
+`AllChem.EmbedMolecule(mol, AllChem.ETKDGv3())` +
+`MMFFOptimizeMolecule` + `MolToPDBFile`, then `obabel rdkit.pdb
+-O ligand.pdbqt` (no `--gen3d`, just format-convert). Invoked
+from `docking/docker.ts` after BOTH obabel `--gen3d` tiers
+(med 300s + fast 300s) time out. 60s budget RDKit + 10s convert.
+Worst-case docking budget ~670s, well under coord's
+`ACCEPTED_STALE_MS` 2h TTL. RDKit absent (exit 4) → rethrow
+original obabel timeout → counter increments (P19 fail-closed,
+P22 single bad WO doesn't crash loop).
+
+Tests: jest 2032/0 (152 suites), pytest 4/0 (3 skipped without
+RDKit installed in dev). tsup build success;
+`dist/scripts/docking_rdkit_fallback.py` shipped.
+
+Reviewer SHIP-AS-IS. P2/P3/P6/P10/P19/P22/P26/P27/P29/P30/P31
+walked, all PASS. Deferred to 0.8.90 follow-up: M1 env-clamp `0`
+treats as default 2 instead of disabled (P31 edge); L1 stale
+comment trim; L2 defensive mock; L3 walk-up limit; L4 SMILES
+leading `-` argparse safety.
+
+Per the decoupling rule, node-only release. coord 0.8.73 stays.
+node-ui NOT bumped — node-ui binary downloads latest npm node on
+each launch.
+
 ## [2026-05-18] feat(node): 0.8.88 Bug 34 honest WO log + Bug 35 per-peer cosine aggregator (53f3b642)
 
 Bug 34 — Pod reward log lied. `submit-result.ts` emitted
