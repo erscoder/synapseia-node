@@ -67,11 +67,37 @@ export class SubmitResultNode {
     // Belt-and-suspenders for the synthesizer-node empty-summary fix:
     // even if a future regression re-introduces the bare-`{` path or
     // any other unparseable-output path, this gate stops it before the
-    // POST. Non-RESEARCH WOs (TRAINING/DOCKING/INFERENCE) ship
-    // shape-incompatible payloads and are exempt from this check —
-    // their quality is verified by the coord's domain-specific
-    // validators (DockingSubmissionService, LoRA validation, etc.).
-    if (this.execution.isResearchWorkOrder(selectedWorkOrder)) {
+    // POST. Non-RESEARCH WOs (TRAINING/DILOCO_TRAINING/LORA_TRAINING/
+    // MOLECULAR_DOCKING/CPU_INFERENCE/GPU_INFERENCE) ship
+    // shape-incompatible payloads (numeric metrics, gradient binaries,
+    // docking scores) and are exempt from this check — their quality is
+    // verified by the coord's domain-specific validators
+    // (DockingSubmissionService, LoRA validation, training loss checks).
+    //
+    // Bug 0.8.90 (2026-05-18) — SCOPE STRICTLY to `type === 'RESEARCH'`.
+    // The 0.8.89 implementation used `this.execution.isResearchWorkOrder`,
+    // which falls back to `extractResearchPayload(workOrder) !== null` —
+    // and that helper returns truthy for any WO with `title` + `description`
+    // (i.e. effectively all WOs). Result: TRAINING + DILOCO_TRAINING
+    // submissions were incorrectly gated and their `/complete` ACKs were
+    // skipped on pod 213 (verified live 2026-05-18 19:01-19:14Z on
+    // wo_training_1779109561108_fc0e5f62 and
+    // wo_diloco_1779126050262_57df2e77). DILOCO gradients still landed via
+    // the separate `/diloco/medical/gradients` route, but the WO-completion
+    // ACK was skipped so coord may re-dispatch and reward distribution
+    // breaks. TRAINING/DOCKING only have the `/complete` path so impact
+    // is worse there. P10 reviewer-lesson: comments must match real
+    // behaviour; gate scope must match its stated intent. Uppercase
+    // compare is defensive against any future case-variant wire format
+    // ("diloco_training" alias seen in `work-order.execution.ts:65`).
+    // P22: undefined `wo.type` fails CLOSED for RESEARCH-vs-unknown
+    // intent — but here we fail OPEN (skip the gate) because the gate
+    // only catches the RESEARCH-shaped failure mode; gating an unknown
+    // type with research-shaped checks recreates the very bug we are
+    // fixing. The coord's domain validator is the authoritative gate
+    // for everything else.
+    const woTypeUpper = (selectedWorkOrder.type ?? '').toString().toUpperCase();
+    if (woTypeUpper === 'RESEARCH') {
       const gate = validateResearchResultJsonString(executionResult.result);
       if (!gate.ok) {
         logger.warn(

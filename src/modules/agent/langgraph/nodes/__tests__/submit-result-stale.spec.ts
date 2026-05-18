@@ -48,12 +48,19 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
       getWorkOrder: jest.fn(),
       completeWorkOrder: jest.fn(),
     };
-    fetchNode = { markCompleted: jest.fn() };
+    fetchNode = { markCompleted: jest.fn(), markFailedTimeout: jest.fn() };
     // Bug 31 (2026-05-18) — SubmitResultNode now takes WorkOrderExecutionHelper
     // as a third dep for the client-side research-WO quality gate. Stub
     // `isResearchWorkOrder` to false here so the stale-WO test (TRAINING
     // shape) bypasses the gate; gate behaviour is covered separately.
-    const execution = { isResearchWorkOrder: jest.fn().mockReturnValue(false) };
+    // Bug 0.8.90 L2 (P22 reviewer-lesson): also stub `isDockingWorkOrder`
+    // so any future `success: false` test in this file doesn't crash with
+    // "is not a function" when the failed-exec path probes the docking
+    // type for timeout-counter increment.
+    const execution = {
+      isResearchWorkOrder: jest.fn().mockReturnValue(false),
+      isDockingWorkOrder: jest.fn().mockReturnValue(false),
+    };
     node = new SubmitResultNode(coordinator as any, fetchNode as any, execution as any);
     infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     logSpy = jest.spyOn(logger, 'log').mockImplementation(() => undefined);

@@ -311,21 +311,11 @@ export class SynthesizerNode {
       structuredData?: unknown;
     }>(raw);
     if (!result.ok || !result.value) {
-      // Bug 31 (2026-05-18) — when parseLlmJson cannot recover a JSON
-      // structure, the previous fallback returned `summary: raw.slice(0, 200)`.
-      // For a raw payload of a single `{` char (observed live 2026-05-18 on
-      // wo_1779113721582_cb5db91b: ollama llama3.1:8b emitted output_len=208
-      // beginning with bare `{` then prose), the slice produced `summary="{"`.
-      // That was non-empty enough to bypass the `isPoisonOutput` short-circuit
-      // in execute() AND non-empty enough to carry into fallbackResult(),
-      // ultimately being shipped to coord which rejected with
-      // `hypothesis_too_short detail=1 chars < 30 min`. Returning an empty
-      // summary now lets `isPoisonOutput` fire on the first attempt and the
-      // SubmitResultNode hard-guard skips the POST. The raw payload is still
-      // available to the caller via the wider state for debug — losing the
-      // 200-char preview here only affects the fallback summary path, which
-      // can never produce a coord-admissible result (P10 reviewer-lesson:
-      // truthful behaviour over cosmetic preservation).
+      // Bug 31 (2026-05-18) — return empty summary on parse-fail so
+      // `isPoisonOutput` short-circuits execute() and SubmitResultNode
+      // skips the POST. Non-empty fallbacks (`raw.slice(0, 200)`) shipped
+      // 1-char summaries that coord rejected with `hypothesis_too_short`.
+      // P10 reviewer-lesson — truthful behaviour over cosmetic preservation.
       return { summary: '', keyInsights: [], proposal: '' };
     }
     const p = result.value;

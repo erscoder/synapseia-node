@@ -33,6 +33,10 @@ Exit codes:
   4 — RDKit not installed in the active venv
 
 Usage:
+  # Recommended (Bug 0.8.90 L4): explicit `--` separator before SMILES so a
+  # hypothetical leading-dash SMILES never gets parsed as an option flag.
+  docking_rdkit_fallback.py [--seed N] -- <SMILES> <OUT_PDB_PATH>
+  # Back-compat positional form (no leading-dash SMILES supported):
   docking_rdkit_fallback.py <SMILES> <OUT_PDB_PATH> [--seed N]
 
 P10 reviewer-lesson — comments describe ACTUAL behaviour. The

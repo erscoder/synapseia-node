@@ -43,12 +43,27 @@ const DEFAULT_PATH = path.join(os.homedir(), '.synapseia', 'wo-failure-counts.js
  * After this many consecutive timeouts for the SAME WO id, the WO is
  * locally skipped. Coord may keep dispatching; the pod's pre-fetch
  * filter blocks accept. Operator override via WO_TIMEOUT_FAILURE_CAP.
+ *
+ * Env semantics (Bug 0.8.90 M1, P31 reviewer-lesson — env clamp):
+ *   - unset / empty / whitespace        → default (2)
+ *   - "0"                                → DISABLED (`shouldSkip` always
+ *                                          returns false; counter still
+ *                                          increments for diagnostics)
+ *   - negative / non-numeric / NaN       → default (2)
+ *   - valid positive integer             → that value
+ *
+ * The 0.8.89 implementation coerced `0` to the default, which made the
+ * feature impossible to disable from the environment without a code
+ * change. 0.8.90 honours `0` as the explicit kill-switch.
  */
 function parseTimeoutCapEnv(): number {
   const raw = process.env.WO_TIMEOUT_FAILURE_CAP;
-  if (!raw) return 2;
+  if (!raw || raw.trim() === '') return 2;
   const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
+  if (!Number.isFinite(parsed)) return 2;
+  if (parsed < 0) return 2;
+  // parsed === 0 → disabled. parsed > 0 → use the override.
+  return parsed;
 }
 
 /**
@@ -56,12 +71,24 @@ function parseTimeoutCapEnv(): number {
  * typical operator-intervention window — if a node-side fix lands
  * (RDKit install, obabel upgrade), counters reset within a day.
  * Override via WO_FAILURE_TTL_MS.
+ *
+ * Env semantics (Bug 0.8.90 M1, P31 reviewer-lesson — env clamp):
+ *   - unset / empty / whitespace        → default (24h)
+ *   - "0"                                → DISABLED (entries NEVER prune;
+ *                                          equivalent to TTL=Infinity).
+ *                                          Pairs with `cap=0` for "no
+ *                                          local skipping" semantics.
+ *   - negative / non-numeric / NaN       → default (24h)
+ *   - valid positive integer             → that many ms
  */
 function parseEntryTtlEnv(): number {
   const raw = process.env.WO_FAILURE_TTL_MS;
-  if (!raw) return 24 * 60 * 60 * 1000;
+  if (!raw || raw.trim() === '') return 24 * 60 * 60 * 1000;
   const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 24 * 60 * 60 * 1000;
+  if (!Number.isFinite(parsed)) return 24 * 60 * 60 * 1000;
+  if (parsed < 0) return 24 * 60 * 60 * 1000;
+  // parsed === 0 → disabled (no pruning). parsed > 0 → use the override.
+  return parsed;
 }
 
 interface FailureEntry {
@@ -98,6 +125,9 @@ export class WoFailureCountStore {
 
   constructor(opts: WoFailureCountStoreOptions = {}) {
     this.filePath = opts.path ?? DEFAULT_PATH;
+    // Bug 0.8.90 M1: explicit `cap: 0` / `ttlMs: 0` are honoured here
+    // (test injection point). `??` operator is correct vs `||` because
+    // `0` is the explicit kill-switch value, not "missing".
     this.cap = opts.cap ?? parseTimeoutCapEnv();
     this.ttlMs = opts.ttlMs ?? parseEntryTtlEnv();
     this.now = opts.now ?? Date.now;
@@ -132,7 +162,14 @@ export class WoFailureCountStore {
       return this.cache;
     }
 
-    // Prune expired entries.
+    // Prune expired entries. Bug 0.8.90 M1: ttlMs === 0 means TTL is
+    // disabled — entries persist until explicitly cleared. This pairs
+    // with the same env=0 semantics on the cap (P31 reviewer-lesson —
+    // env clamp consistency across the feature).
+    if (this.ttlMs === 0) {
+      this.cache = { version: 1, entries: parsed.entries };
+      return this.cache;
+    }
     const cutoff = this.now() - this.ttlMs;
     const pruned: Record<string, FailureEntry> = {};
     let prunedCount = 0;
@@ -188,8 +225,14 @@ export class WoFailureCountStore {
    * Returns true if this WO has hit the failure cap and should be locally
    * skipped. The pre-fetch filter in FetchWorkOrdersNode calls this on
    * every WO before accepting.
+   *
+   * Bug 0.8.90 M1 (P31 reviewer-lesson — env clamp): `cap === 0` is the
+   * explicit "feature disabled" signal — never skip regardless of how
+   * many failures the WO has accumulated. Counter still increments so
+   * operators can inspect the file for diagnostics.
    */
   shouldSkip(workOrderId: string): boolean {
+    if (this.cap === 0) return false;
     return this.getCount(workOrderId) >= this.cap;
   }
 

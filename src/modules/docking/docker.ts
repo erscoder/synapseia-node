@@ -331,9 +331,13 @@ async function tryRdkitFallback(args: {
   const python = args.pythonBin ?? process.env.PYTHON_BIN ?? 'python3';
   const scriptPath = args.rdkitScriptPath ?? resolveRdkitScriptPath();
   try {
+    // Bug 0.8.90 L4 — pass `--` separator before SMILES so a hypothetical
+    // leading-dash SMILES never gets parsed as an argparse option flag.
+    // Real SMILES start with element letters / digits / `[`; this is a
+    // defensive cheap guard, not a known live failure.
     const { stderr } = await args.spawn(
       python,
-      [scriptPath, args.smiles, pdbOut],
+      [scriptPath, '--', args.smiles, pdbOut],
       {
         timeoutMs: args.rdkitTimeoutMs,
         timeoutContext: { step: 'ligand-rdkit-etkdg', input: args.smiles },
@@ -378,9 +382,21 @@ async function tryRdkitFallback(args: {
  * cwd-relative path if walking fails so test environments work.
  */
 function resolveRdkitScriptPath(): string {
+  // Bug 0.8.90 L3 — deterministic first attempt for the common
+  // npm-install layout: `<pkg>/dist/index.js` → `<pkg>/scripts/...`.
+  // The compiled bundle lives at `<pkg>/dist/index.js`, so the script
+  // is one `..` up from `__dirname`. This handles the published-package
+  // case in O(1) before falling back to the walk-up search, which
+  // covers nested monorepo + Tauri symlink layouts.
+  const directGuess = path.join(__dirname, '..', 'scripts', 'docking_rdkit_fallback.py');
+  if (existsSync(directGuess)) return directGuess;
+
   // Walk up from this module's directory looking for a `scripts` sibling.
+  // 8 hops handles deep monorepo + symlinked workspaces (was 6 in 0.8.89,
+  // bumped to 8 for Tauri sidecar layouts where the dist sits under
+  // `src-tauri/binaries/<target-triple>/node/dist/...`).
   let dir = __dirname;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     const candidate = path.join(dir, 'scripts', 'docking_rdkit_fallback.py');
     if (existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);

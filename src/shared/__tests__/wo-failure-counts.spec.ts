@@ -127,4 +127,118 @@ describe('WoFailureCountStore', () => {
     store.markFailedTimeout('wo-f', 'r');
     expect(store.shouldSkip('wo-f')).toBe(true);
   });
+
+  /**
+   * Bug 0.8.90 M1 (P31 reviewer-lesson — env clamp).
+   *
+   * Env semantics:
+   *   - unset / empty / whitespace     → default
+   *   - "0"                             → DISABLED (shouldSkip always false)
+   *   - negative / non-numeric / NaN    → default
+   *   - valid positive integer          → that value
+   *
+   * The 0.8.89 implementation coerced `0` to the default, which made the
+   * feature impossible to disable from env. 0.8.90 honours `0` as
+   * explicit kill-switch (cap=0 → no skipping; ttlMs=0 → no pruning).
+   */
+  describe('Bug 0.8.90 M1 — env-clamp semantics for cap=0 / ttlMs=0', () => {
+    it('cap=0 → shouldSkip always false (feature disabled)', () => {
+      const store = new WoFailureCountStore({ path: filePath, cap: 0 });
+      store.markFailedTimeout('wo-disabled', 'r');
+      store.markFailedTimeout('wo-disabled', 'r');
+      store.markFailedTimeout('wo-disabled', 'r');
+      // Count still increments for diagnostics.
+      expect(store.getCount('wo-disabled')).toBe(3);
+      // But shouldSkip never trips.
+      expect(store.shouldSkip('wo-disabled')).toBe(false);
+    });
+
+    it('cap=0 — markFailedTimeout never reports cappedNow=true', () => {
+      const store = new WoFailureCountStore({ path: filePath, cap: 0 });
+      const r1 = store.markFailedTimeout('wo-a', 'r');
+      expect(r1.cappedNow).toBe(false);
+      // Spec contract: `cappedNow === newCount === cap`. With cap=0 and
+      // newCount always ≥ 1, this is provably never true.
+      const r2 = store.markFailedTimeout('wo-a', 'r');
+      expect(r2.cappedNow).toBe(false);
+    });
+
+    it('ttlMs=0 → entries never prune (TTL disabled)', () => {
+      let clock = 1_000_000_000_000;
+      const s1 = new WoFailureCountStore({
+        path: filePath,
+        cap: 2,
+        ttlMs: 0,
+        now: () => clock,
+      });
+      s1.markFailedTimeout('wo-eternal', 'r');
+      expect(s1.getCount('wo-eternal')).toBe(1);
+
+      // Advance clock arbitrarily far (10 years) — should NOT prune.
+      clock += 365 * 10 * 24 * 60 * 60 * 1000;
+      const s2 = new WoFailureCountStore({
+        path: filePath,
+        cap: 2,
+        ttlMs: 0,
+        now: () => clock,
+      });
+      expect(s2.getCount('wo-eternal')).toBe(1);
+    });
+
+    it('parseTimeoutCapEnv env semantics (negative / NaN / 0 / positive)', async () => {
+      const origCap = process.env.WO_TIMEOUT_FAILURE_CAP;
+      const origTtl = process.env.WO_FAILURE_TTL_MS;
+      try {
+        // Negative — default (cap=2, so 2 failures trigger skip).
+        process.env.WO_TIMEOUT_FAILURE_CAP = '-5';
+        const sNeg = new WoFailureCountStore({ path: filePath });
+        sNeg.markFailedTimeout('wo-neg', 'r');
+        sNeg.markFailedTimeout('wo-neg', 'r');
+        expect(sNeg.shouldSkip('wo-neg')).toBe(true);
+
+        // Non-numeric — default.
+        fs.rmSync(filePath, { force: true });
+        process.env.WO_TIMEOUT_FAILURE_CAP = 'NaN';
+        const sNan = new WoFailureCountStore({ path: filePath });
+        sNan.markFailedTimeout('wo-nan', 'r');
+        sNan.markFailedTimeout('wo-nan', 'r');
+        expect(sNan.shouldSkip('wo-nan')).toBe(true);
+
+        // "0" — disabled.
+        fs.rmSync(filePath, { force: true });
+        process.env.WO_TIMEOUT_FAILURE_CAP = '0';
+        const sZero = new WoFailureCountStore({ path: filePath });
+        for (let i = 0; i < 5; i++) sZero.markFailedTimeout('wo-zero', 'r');
+        expect(sZero.shouldSkip('wo-zero')).toBe(false);
+
+        // Positive valid.
+        fs.rmSync(filePath, { force: true });
+        process.env.WO_TIMEOUT_FAILURE_CAP = '4';
+        const sPos = new WoFailureCountStore({ path: filePath });
+        for (let i = 0; i < 3; i++) sPos.markFailedTimeout('wo-pos', 'r');
+        expect(sPos.shouldSkip('wo-pos')).toBe(false);
+        sPos.markFailedTimeout('wo-pos', 'r');
+        expect(sPos.shouldSkip('wo-pos')).toBe(true);
+      } finally {
+        if (origCap === undefined) delete process.env.WO_TIMEOUT_FAILURE_CAP;
+        else process.env.WO_TIMEOUT_FAILURE_CAP = origCap;
+        if (origTtl === undefined) delete process.env.WO_FAILURE_TTL_MS;
+        else process.env.WO_FAILURE_TTL_MS = origTtl;
+      }
+    });
+
+    it('whitespace-only env → default', () => {
+      const orig = process.env.WO_TIMEOUT_FAILURE_CAP;
+      try {
+        process.env.WO_TIMEOUT_FAILURE_CAP = '   ';
+        const store = new WoFailureCountStore({ path: filePath });
+        store.markFailedTimeout('wo-ws', 'r');
+        store.markFailedTimeout('wo-ws', 'r');
+        expect(store.shouldSkip('wo-ws')).toBe(true); // default cap=2
+      } finally {
+        if (orig === undefined) delete process.env.WO_TIMEOUT_FAILURE_CAP;
+        else process.env.WO_TIMEOUT_FAILURE_CAP = orig;
+      }
+    });
+  });
 });

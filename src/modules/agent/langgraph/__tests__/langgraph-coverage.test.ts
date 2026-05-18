@@ -246,10 +246,26 @@ describe('SubmitResultNode', () => {
     (fetchSpy as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     (fetchSpy as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
+    // Bug 0.8.90 (2026-05-18) — the local research quality gate now does
+    // a strict `wo.type === 'RESEARCH'` check at the gate site (decoupled
+    // from `execution.isResearchWorkOrder` which had a buggy fallback).
+    // Previously this test passed because `execStub.isResearchWorkOrder`
+    // returned false; with the literal check the RESEARCH WO triggers the
+    // gate, and a 4-char `summary` fails the >=30 char hypothesis rule.
+    // Use an admissible payload that mirrors the coord's contract.
+    const admissibleSummary =
+      'BRCA1 pathogenic variants increase breast cancer risk approximately five-fold across three independent cohorts.';
     const result = await node.execute(makeState({
       selectedWorkOrder: makeResearchWO(),
-      executionResult: { result: '{"summary":"test"}', success: true },
-      researchResult: { summary: 'Test', keyInsights: ['i1'], proposal: 'p1' },
+      executionResult: {
+        result: JSON.stringify({
+          summary: admissibleSummary,
+          keyInsights: ['5x risk increase replicated across 3 cohorts'],
+          proposal: 'Screen premenopausal BRCA1 carriers annually starting age 25.',
+        }),
+        success: true,
+      },
+      researchResult: { summary: admissibleSummary, keyInsights: ['i1'], proposal: 'p1' },
     }));
     expect(result.submitted).toBe(true);
   });
