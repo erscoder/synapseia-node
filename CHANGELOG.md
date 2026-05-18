@@ -1,5 +1,41 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): 0.8.92 Bug 41 BLOCKER — P2P publishHeartbeat field inversion swap (8b0e68d4)
+
+**Bug 41 BLOCKER** — P2P `publishHeartbeat` path inverted
+`peerId` / `p2pPeerId` fields vs HTTP heartbeat. Each physical
+node created TWO Redis hash records coord-side: one keyed by
+libp2p form (`12D3KooW…`), one by Ed25519 hex (`be06bff…`).
+
+Cascade impact: cron DiLoCo round assigns 2 phantom peers,
+expects 2 gradients, only 1 arrives (real Ed25519 submitter),
+quorum fails, round FAILED, `submittedNodes` wiped, metrics never
+written. User reported `diloco_rounds` all rows status=FAILED with
+empty submitter snapshots.
+
+Root cause `heartbeat.ts:1552-1561`:
+```ts
+// WRONG
+peerId: p2pNode.getPeerId(),  // libp2p
+p2pPeerId: identity.peerId,    // Ed25519
+// RIGHT (matches HTTP path 849-851)
+peerId: identity.peerId,                                  // Ed25519
+p2pPeerId: this.p2pNode?.getPeerId() ?? identity.peerId,  // libp2p
+```
+
+P9 fallback retained for `getPeerId() === undefined`. Field reorder
+safe for sig verification (`P2PHeartbeatBridge` canonical uses
+`Object.keys.sort()` alphabetical, deterministic; publicKey
+appended post-sign, untouched).
+
+3 new tests `heartbeat-p2p-publish.spec.ts` (P29 real flow): shape
+invariant + HTTP-mirror parity + P9 fail-closed.
+
+Pairs with coord 0.8.75 (cascade defense + write-path fixes B1-B5
++ LoRA flag off). Per decoupling rule, node-only release.
+
+Reviewer SHIP-AS-IS.
+
 ## [2026-05-18] fix(node): 0.8.91 Bug 40 — 4 inline localhost:3701 fallbacks migrated to getCoordinatorUrl() helper (fca37750)
 
 **Bug 40 LOW** — 4 production source sites had inline
