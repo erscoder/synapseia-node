@@ -1,5 +1,40 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-18] fix(node): 0.8.91 Bug 40 — 4 inline localhost:3701 fallbacks migrated to getCoordinatorUrl() helper (fca37750)
+
+**Bug 40 LOW** — 4 production source sites had inline
+`process.env.COORDINATOR_URL ?? 'http://localhost:3701'` patterns
+that bypassed the central `getCoordinatorUrl()` helper. Latent
+bug: daemons launched without `COORDINATOR_URL` env var AND
+without `syn config` wizard prerun would default to the localhost
+dev coord instead of `OFFICIAL_COORDINATOR_URL=https://api.synapseia.network`.
+
+Pre-0.8.50 global default was `localhost:3701`. 0.8.50 refactor
+migrated most callers to `getCoordinatorUrl()` (env > OFFICIAL).
+Four sites were missed.
+
+Surfaced live 2026-05-18 on Mac node-kike CLI launch without
+`syn config` prerun. Pod 213 + node-ui app escape because their
+setup flows set env or proper state.
+
+Sites migrated to `getCoordinatorUrl()`:
+1. `a2a/handlers/knowledge-query.handler.ts:35`
+2. `model/active-model-subscriber.ts:120`
+3. `wallet/solana-balance.ts:55` (`getStakedAmount` default param)
+4. `wallet/solana-balance.ts:73` (`stakeTokens` default param)
+
+P6 grep verified: zero executable `localhost:3701` fallbacks
+remain in production code. Only doc comments + test files.
+
+New spec `bug-40-coordinator-url-helper.spec.ts` (11 tests)
+exercises each site with real class instantiation + env-override
+regression + back-compat tests. P29 real-flow exercise.
+
+Reviewer SHIP-AS-IS. P6/P10/P19/P22/P28/P29 all PASS. Tests
+2057/2057 pass.
+
+Per decoupling rule, node-only release. coord 0.8.73 stays.
+
 ## [2026-05-18] fix(node): 0.8.90 BLOCKER quality gate scope to RESEARCH only + M1/L1/L2/L3/L4 cleanup (2e3db646)
 
 **BLOCKER hotfix** — 0.8.89 quality gate misfired on non-RESEARCH
