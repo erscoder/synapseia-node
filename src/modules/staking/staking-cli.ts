@@ -183,34 +183,57 @@ async function getTreasuryTokenAccount(connection: Connection): Promise<PublicKe
 // Wallet encryption constants
 const WALLET_DIR = () => process.env.SYNAPSEIA_HOME || path.join(os.homedir(), '.synapseia');
 const WALLET_FILE = () => path.join(WALLET_DIR(), 'wallet.json');
-const PBKDF2_ITERATIONS = 100000;
+// F-node-009 (MED): bumped 100k → 600k OWASP-2024 baseline. Legacy
+// constant kept under V1 name for back-compat decrypt of v1 keystores.
+const PBKDF2_ITERATIONS_V1 = 100_000;
+const PBKDF2_ITERATIONS_V2 = 600_000;
 const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const SALT_LENGTH = 32;
 const AUTH_TAG_LENGTH = 16;
 
-// Derive encryption key from password
-function deriveKey(password: string, salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
+// Derive encryption key from password.
+// `iterations` is REQUIRED — caller passes the keystore's recorded iter
+// count (legacy wallet.json may be v1 100k or v2 600k).
+function deriveKey(password: string, salt: Buffer, iterations: number): Buffer {
+  return crypto.pbkdf2Sync(password, salt, iterations, KEY_LENGTH, 'sha256');
 }
 
-// Decrypt wallet
-function decryptWallet(encryptedData: string, password: string): Uint8Array {
-  const combined = Buffer.from(encryptedData, 'base64');
+// Decrypt wallet. `walletData` is the raw JSON parsed from wallet.json;
+// we look at its `kdfIterations` / `version` fields to pick the iter count
+// rather than assuming 100k (which broke v2 wallets written by the new
+// wallet.ts encryptor).
+function decryptWallet(walletData: { encryptedData: string; kdfIterations?: number; version?: number }, password: string): Uint8Array {
+  const combined = Buffer.from(walletData.encryptedData, 'base64');
   const salt = combined.subarray(0, SALT_LENGTH);
   const iv = combined.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
   const authTag = combined.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
   const ciphertext = combined.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
-  
-  const key = deriveKey(password, salt);
+
+  let iterations: number;
+  if (typeof walletData.kdfIterations === 'number' && walletData.kdfIterations > 0) {
+    iterations = walletData.kdfIterations;
+  } else if (walletData.version === 1) {
+    iterations = PBKDF2_ITERATIONS_V1;
+  } else if (walletData.version === 2) {
+    iterations = PBKDF2_ITERATIONS_V2;
+  } else {
+    // Pre-versioned legacy wallets (no `version`/`kdfIterations` field).
+    // Default to V1 — that's what this file historically wrote — so the
+    // operator still gets a chance to decrypt + re-encrypt under the
+    // hardened keystore via `syn start`.
+    iterations = PBKDF2_ITERATIONS_V1;
+  }
+
+  const key = deriveKey(password, salt, iterations);
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(authTag);
-  
+
   const decrypted = Buffer.concat([
     decipher.update(ciphertext),
     decipher.final()
   ]);
-  
+
   return new Uint8Array(decrypted);
 }
 
@@ -334,7 +357,7 @@ export async function loadWalletWithPassword(): Promise<Keypair> {
     ? envPassword
     : await password({ message: 'Enter legacy wallet password:', mask: '*' });
   try {
-    const secretKey = decryptWallet(walletData.encryptedData, walletPassword);
+    const secretKey = decryptWallet(walletData, walletPassword);
     return Keypair.fromSecretKey(secretKey);
   } catch (e) {
     throw new Error('Invalid password or corrupted wallet file');

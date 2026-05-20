@@ -23,7 +23,16 @@ export interface WalletWithStatus {
 }
 
 export interface EncryptedWallet {
-  version: 1;
+  /**
+   * Keystore format version.
+   *   - v1: PBKDF2 100_000 iterations (legacy, decrypt-only).
+   *   - v2: PBKDF2 600_000 iterations (F-node-009, OWASP 2024+ baseline).
+   * New keystores written by this module are ALWAYS v2. v1 is accepted on
+   * read for back-compat so existing wallets keep decrypting; the field
+   * `kdfIterations` is the authoritative iteration count (the version
+   * is just a coarse generation tag).
+   */
+  version: 1 | 2;
   publicKey: string;     // Public key (not encrypted, needed for display)
   encryptedData: string; // base64( salt + iv + authTag + ciphertext )
   salt: string;          // base64 salt for PBKDF2
@@ -38,18 +47,32 @@ const WALLET_DIR = getWalletDir();
 const WALLET_FILE = path.join(WALLET_DIR, 'wallet.json');
 const BACKUP_FILE = path.join(WALLET_DIR, 'wallet-backup.json');
 
-// Encryption constants
-const PBKDF2_ITERATIONS = 100000;
+// Encryption constants.
+//
+// F-node-009 (MED): bumped PBKDF2 iter count 100_000 → 600_000 to match
+// OWASP 2024+ baseline for PBKDF2-HMAC-SHA256. The legacy 100_000 value
+// stays available as `PBKDF2_ITERATIONS_V1` so v1 keystores written by
+// previous node releases continue to decrypt — readers detect the
+// version + iter count from the keystore JSON and feed it back into
+// `deriveKey`. New encrypts ALWAYS use V2.
+export const PBKDF2_ITERATIONS_V1 = 100_000;
+export const PBKDF2_ITERATIONS_V2 = 600_000;
 const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const SALT_LENGTH = 32;
 const AUTH_TAG_LENGTH = 16;
 
 /**
- * Derive encryption key from password using PBKDF2
+ * Derive encryption key from password using PBKDF2.
+ *
+ * `iterations` is REQUIRED — callers MUST pass the keystore's recorded
+ * iter count when decrypting (back-compat with v1) or `PBKDF2_ITERATIONS_V2`
+ * when encrypting fresh. We removed the default to make the back-compat
+ * path explicit; a missing iter count is a programming error, not a
+ * silent fallback to the old weak value.
  */
-function deriveKey(password: string, salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
+function deriveKey(password: string, salt: Buffer, iterations: number): Buffer {
+  return crypto.pbkdf2Sync(password, salt, iterations, KEY_LENGTH, 'sha256');
 }
 
 /**
@@ -60,8 +83,10 @@ function encryptWallet(wallet: SolanaWallet, password: string): EncryptedWallet 
   const salt = crypto.randomBytes(SALT_LENGTH);
   const iv = crypto.randomBytes(IV_LENGTH);
 
+  // F-node-009: new keystores always use v2 (600k PBKDF2 iterations).
+  const iterations = PBKDF2_ITERATIONS_V2;
   // Derive key from password
-  const key = deriveKey(password, salt);
+  const key = deriveKey(password, salt, iterations);
 
   // Create cipher
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -80,12 +105,12 @@ function encryptWallet(wallet: SolanaWallet, password: string): EncryptedWallet 
   const combined = Buffer.concat([salt, iv, authTag, encrypted]);
 
   return {
-    version: 1,
+    version: 2,
     publicKey: wallet.publicKey,
     encryptedData: combined.toString('base64'),
     salt: salt.toString('base64'),
     kdf: 'pbkdf2-sha256',
-    kdfIterations: PBKDF2_ITERATIONS,
+    kdfIterations: iterations,
     createdAt: wallet.createdAt,
   };
 }
@@ -103,8 +128,23 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
   const authTag = combined.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
   const encrypted = combined.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
 
+  // F-node-009: honor the iter count stored in the keystore so v1
+  // wallets (100k iterations) still decrypt under the v2 baseline
+  // (600k). Fail-closed if the field is missing AND the version tag
+  // doesn't tell us which generation to use — never silently fall back
+  // to either constant.
+  let iterations: number;
+  if (typeof encryptedWallet.kdfIterations === 'number' && encryptedWallet.kdfIterations > 0) {
+    iterations = encryptedWallet.kdfIterations;
+  } else if (encryptedWallet.version === 1) {
+    iterations = PBKDF2_ITERATIONS_V1;
+  } else if (encryptedWallet.version === 2) {
+    iterations = PBKDF2_ITERATIONS_V2;
+  } else {
+    throw new Error('Invalid wallet keystore: missing kdfIterations and unknown version');
+  }
   // Derive key from password
-  const key = deriveKey(password, salt);
+  const key = deriveKey(password, salt, iterations);
 
   // Create decipher
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);

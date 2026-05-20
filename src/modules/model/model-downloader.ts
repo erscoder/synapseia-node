@@ -7,11 +7,51 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from 'child_process';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
 
 export type ExecSyncFn = (cmd: string, options?: Record<string, unknown>) => void;
+
+/**
+ * F-node-010 (MED): shell-injection seam for `ensureBaseModel`. Replaces the
+ * legacy `execSync(string)` invocation that interpolated `modelId` and
+ * `cacheDir` directly into a shell command. The new path is `spawnSync` with
+ * an argv array — even if the coordinator pushes a hostile `modelId`, no
+ * shell parses the value. We still validate `modelId` via a strict regex
+ * for defense-in-depth (rejects shell metas before they ever reach python).
+ *
+ * `SpawnSyncFn` is the injection seam used by tests; production wires it to
+ * `spawnSync` from `child_process`.
+ */
+export type SpawnSyncFn = (
+  cmd: string,
+  args: ReadonlyArray<string>,
+  options: SpawnSyncOptionsWithStringEncoding & { input?: string },
+) => SpawnSyncReturns<string>;
+
+/**
+ * Hugging Face repo id allowlist. Conservative regex matching the
+ * `<org-or-user>/<repo>` form (with optional dots/dashes/underscores).
+ * Rejects shell metacharacters ($, `, ;, &, |, \n, etc.) and any
+ * non-printable. We accept a single `/` per the HF convention; legacy
+ * bare-name models (no `/`) also match.
+ */
+const MODEL_ID_ALLOWLIST = /^[A-Za-z0-9_.\-]+(?:\/[A-Za-z0-9_.\-]+)?$/;
+
+/**
+ * Python helper script for `snapshot_download`. Reads a single JSON line
+ * from stdin ({modelId, cacheDir}) so values never go through the shell
+ * nor through `-c` string interpolation. `json.loads` is the boundary
+ * that turns the bytes back into Python strings — at that point shell
+ * meta characters are just literal characters in a `str`.
+ */
+const SNAPSHOT_DOWNLOAD_SCRIPT = `
+import json, sys
+from huggingface_hub import snapshot_download
+payload = json.loads(sys.stdin.read())
+snapshot_download(payload["modelId"], local_dir=payload["cacheDir"])
+`;
 
 /**
  * F-node-005 — raised when an adapter download cannot be cryptographically
@@ -55,8 +95,29 @@ export class ModelDownloaderHelper {
     modelId: string,
     testMode = process.env.NODE_ENV === 'test',
     homeDir?: string,
-    execSyncFn: ExecSyncFn = (cmd, opts) => execSync(cmd, opts as Parameters<typeof execSync>[1]),
+    // Legacy injection seam — kept for callers that still wire `execSync`
+    // in (e.g. older specs). It is intentionally unused on the new
+    // spawn-based path (F-node-010) and only preserves positional
+    // compatibility for existing call sites.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _execSyncFn: ExecSyncFn = (cmd, opts) => execSync(cmd, opts as Parameters<typeof execSync>[1]),
+    spawnSyncFn: SpawnSyncFn = (cmd, args, opts) => spawnSync(cmd, args as string[], opts),
   ): Promise<string> {
+    // F-node-010 (MED): hard-validate `modelId` BEFORE it touches anything
+    // downstream. `modelId` flows in from coord payload — must be treated
+    // as untrusted (P2 fail-closed + P26 prompt-injection-class defense:
+    // even though the value never reaches a shell now, validation makes
+    // the contract explicit so future refactors don't accidentally
+    // reintroduce a shell path).
+    if (typeof modelId !== 'string' || modelId.length === 0 || modelId.length > 256) {
+      throw new Error('Invalid model id: must be a non-empty string ≤256 chars');
+    }
+    if (!MODEL_ID_ALLOWLIST.test(modelId)) {
+      throw new Error(
+        `Invalid model id "${modelId}": only [A-Za-z0-9_.-] and a single "/" are allowed`,
+      );
+    }
+
     const safeId = modelId.replace(/\//g, '__');
     const cacheDir = path.join(this.getModelCacheDir(homeDir), safeId);
 
@@ -79,10 +140,26 @@ export class ModelDownloaderHelper {
     fs.mkdirSync(cacheDir, { recursive: true });
 
     try {
-      execSyncFn(
-        `"${resolvePython()}" -c "from huggingface_hub import snapshot_download; snapshot_download('${modelId}', local_dir='${cacheDir}')"`,
-        { stdio: 'inherit' },
+      // F-node-010: argv-shaped spawn + stdin-fed JSON payload. The
+      // python script reads its inputs from stdin via json.loads —
+      // shell metacharacters in modelId / cacheDir are now just bytes
+      // inside a Python string literal, NOT shell tokens. There is no
+      // path through which they can be interpreted by /bin/sh.
+      const proc = spawnSyncFn(
+        resolvePython(),
+        ['-c', SNAPSHOT_DOWNLOAD_SCRIPT],
+        {
+          input: JSON.stringify({ modelId, cacheDir }),
+          stdio: ['pipe', 'inherit', 'inherit'],
+          encoding: 'utf-8',
+        },
       );
+      if (proc.error) {
+        throw proc.error;
+      }
+      if (proc.status !== 0) {
+        throw new Error(`python snapshot_download exited with status ${proc.status}`);
+      }
       logger.log(`[ModelDownloader] Model "${modelId}" downloaded to ${cacheDir}`);
     } catch (err) {
       try { fs.rmdirSync(cacheDir, { recursive: true } as Parameters<typeof fs.rmdirSync>[1]); } catch { /* */ }
@@ -195,7 +272,12 @@ export class ModelDownloaderHelper {
 const _dlInstance = new ModelDownloaderHelper();
 export const getModelCacheDir = (homeDir?: string) => _dlInstance.getModelCacheDir(homeDir);
 export const getAdapterCacheDir = (homeDir?: string) => _dlInstance.getAdapterCacheDir(homeDir);
-export const ensureBaseModel = (modelId: string, testMode?: boolean, homeDir?: string, execSyncFn?: ExecSyncFn) =>
-  _dlInstance.ensureBaseModel(modelId, testMode, homeDir, execSyncFn);
+export const ensureBaseModel = (
+  modelId: string,
+  testMode?: boolean,
+  homeDir?: string,
+  execSyncFn?: ExecSyncFn,
+  spawnSyncFn?: SpawnSyncFn,
+) => _dlInstance.ensureBaseModel(modelId, testMode, homeDir, execSyncFn, spawnSyncFn);
 export const downloadAdapter = (url: string, localPath: string, expectedSha256: string) =>
   _dlInstance.downloadAdapter(url, localPath, expectedSha256);

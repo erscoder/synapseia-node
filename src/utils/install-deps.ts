@@ -265,8 +265,29 @@ export function pickTorchWheel(opts: {
  * env override (`SYNAPSEIA_DILOCO_MODEL`) to track per-pod assignments.
  * Today every DiLoCo round uses Qwen2.5-7B so pinning here is correct.
  */
-const DEFAULT_DILOCO_MODEL_ID =
-  process.env.SYNAPSEIA_DILOCO_MODEL?.trim() || 'Qwen/Qwen2.5-7B';
+// F-node-014 (MED): the env override has historically been passed
+// straight through to the marker-write path and (pre-fix) to a
+// string-concatenated shell command. Even though the call site is now
+// spawnSync-based, we keep a strict allowlist here so a hostile marker
+// file / env value cannot drive non-printable / shell-meta bytes
+// downstream into log scrubbers, tarballs, etc. Same shape used by
+// `MODEL_ID_ALLOWLIST` in model-downloader.ts (kept inline rather than
+// imported to avoid a circular module).
+const DILOCO_MODEL_ID_ALLOWLIST = /^[A-Za-z0-9_.\-]+(?:\/[A-Za-z0-9_.\-]+)?$/;
+
+function resolveDilocoModelId(): string {
+  const raw = process.env.SYNAPSEIA_DILOCO_MODEL?.trim();
+  if (!raw) return 'Qwen/Qwen2.5-7B';
+  if (raw.length > 256 || !DILOCO_MODEL_ID_ALLOWLIST.test(raw)) {
+    logger.warn(
+      `[install-deps] SYNAPSEIA_DILOCO_MODEL="${raw}" rejected by allowlist; falling back to Qwen/Qwen2.5-7B`,
+    );
+    return 'Qwen/Qwen2.5-7B';
+  }
+  return raw;
+}
+
+const DEFAULT_DILOCO_MODEL_ID = resolveDilocoModelId();
 
 /**
  * Minimum cumulative cache size (bytes) considered "model is present".
@@ -405,33 +426,42 @@ export async function installPythonDeps(
     // when migrating so pip will overwrite the existing same-version
     // cpu wheel with the cu121 (or vice versa) wheel; without it pip
     // would see "torch==2.5.1 already installed" and no-op.
+    //
+    // F-node-014 (MED): switched from `execSync(installCmd: string)` to
+    // `spawnSync(bin, [...args])` so torchWheel.indexUrl (built from
+    // env-driven hardware detection) and TORCH_VERSION (env override)
+    // can no longer be shell-interpreted. The previous shape would have
+    // exploded on any unsanitized space/quote/semicolon in either value.
     const isMigrating = torchProbe.status === 2;
-    const indexArg = torchWheel.indexUrl ? `--index-url ${torchWheel.indexUrl}` : '';
-    const forceArg = isMigrating ? '--force-reinstall' : '';
-    const installCmd = [
-      `"${venvPip()}"`,
+    const torchInstallArgs = [
       'install',
       `torch==${TORCH_VERSION}`,
-      indexArg,
-      forceArg,
-    ].filter(Boolean).join(' ');
+      ...(torchWheel.indexUrl ? ['--index-url', torchWheel.indexUrl] : []),
+      ...(isMigrating ? ['--force-reinstall'] : []),
+    ];
+    // Human-readable hint for error logs: we keep the SHAPE of the
+    // legacy command, but every dynamic value is interpolated INTO an
+    // already-built arg list, not into a shell string. The hint string
+    // is for the operator to copy-paste; it never feeds back into
+    // spawnSync.
+    const installHint = `"${venvPip()}" ${torchInstallArgs.map((a) => a.includes(' ') ? JSON.stringify(a) : a).join(' ')}`;
 
     const runningMsg = isMigrating
       ? `Migrating PyTorch to ${torchWheel.label} wheel (was ${torchWheel.label === 'cu121' ? 'cpu' : 'cu121'}); reinstalling ${TORCH_VERSION}...`
       : `Installing PyTorch ${TORCH_VERSION} (${torchWheel.label} wheel)...`;
     emit({ phase: 'torch', status: 'running', message: runningMsg });
 
-    try {
-      execSync(installCmd, { stdio: 'inherit' });
+    const torchInstallProc = spawnSync(venvPip(), torchInstallArgs, { stdio: 'inherit' });
+    if (torchInstallProc.status === 0) {
       result.installedTorch = true;
       emit({
         phase: 'torch',
         status: 'done',
         message: `PyTorch ${TORCH_VERSION} (${torchWheel.label}) installed`,
       });
-    } catch (err) {
-      const manualHint = `Try manually: ${installCmd}`;
-      const msg = `PyTorch install failed: ${(err as Error).message}. ${manualHint}`;
+    } else {
+      const errMsg = torchInstallProc.error?.message ?? `pip exited with status ${torchInstallProc.status}`;
+      const msg = `PyTorch install failed: ${errMsg}. Try manually: ${installHint}`;
       emit({ phase: 'torch', status: 'error', message: msg });
       result.errors.push(msg);
       // Continue — LoRA install will likely fail too, but we let the next
@@ -489,7 +519,16 @@ export async function installPythonDeps(
       emit({ phase: 'lora-stack', status: 'skip', message: 'LoRA training stack already installed' });
     } else {
       emit({ phase: 'lora-stack', status: 'running', message: 'Installing LoRA training stack (~500MB)...' });
-      try {
+      // F-node-014 (MED): static arg list — no env-driven values feed
+      // into the spawn (the package names are literal in code). Still
+      // spawnSync rather than execSync to keep ONE shell-injection-free
+      // shape across the file (no per-call exception).
+      const loraInstallProc = spawnSync(
+        venvPip(),
+        ['install', 'transformers>=4.43', 'peft', 'datasets', 'safetensors', 'accelerate'],
+        { stdio: 'inherit' },
+      );
+      if (loraInstallProc.status === 0) {
         // Pin transformers floor to 4.43: that release introduced the
         // `dtype` keyword on `from_pretrained` which our DiLoCo /
         // LoRA scripts rely on. transformers 5.x hard-removed the
@@ -497,10 +536,6 @@ export async function installPythonDeps(
         // ended up on 5.8.1 and crashed every DiLoCo accept (Bug 14
         // 2026-05-17). No upper-pin: we want pods to track upstream
         // security fixes, and `dtype` is stable across 4.43→5.x.
-        execSync(
-          `"${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`,
-          { stdio: 'inherit' },
-        );
         // POST-install verify is required (not just trusted from
         // pip's exit code): pip can succeed while the install
         // produces a broken stack (torch ABI mismatch,
@@ -524,11 +559,12 @@ export async function installPythonDeps(
           emit({ phase: 'lora-stack', status: 'error', message: msg });
           result.errors.push(msg);
         }
-      } catch (err) {
+      } else {
         // pip failed outright — also remove any stale marker so
         // we don't advertise caps based on a previous run.
         deleteLoraStackMarker();
-        const msg = `LoRA stack install failed: ${(err as Error).message}. Try manually: "${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`;
+        const errMsg = loraInstallProc.error?.message ?? `pip exited with status ${loraInstallProc.status}`;
+        const msg = `LoRA stack install failed: ${errMsg}. Try manually: "${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`;
         emit({ phase: 'lora-stack', status: 'error', message: msg });
         result.errors.push(msg);
       }
@@ -583,12 +619,16 @@ export async function installPythonDeps(
       emit({ phase: 'bitsandbytes', status: 'skip', message: 'bitsandbytes already installed' });
     } else {
       emit({ phase: 'bitsandbytes', status: 'running', message: 'Installing bitsandbytes for DiLoCo full mode...' });
-      try {
-        execSync(`"${venvPip()}" install bitsandbytes`, { stdio: 'inherit' });
+      // F-node-014: spawnSync with argv — `bitsandbytes` is a literal,
+      // but we keep the same shape as the torch/lora installs so the
+      // file has no remaining execSync(string) for an installer cmd.
+      const bnbInstallProc = spawnSync(venvPip(), ['install', 'bitsandbytes'], { stdio: 'inherit' });
+      if (bnbInstallProc.status === 0) {
         result.installedBitsAndBytes = true;
         emit({ phase: 'bitsandbytes', status: 'done', message: 'bitsandbytes installed' });
-      } catch (err) {
-        const msg = `bitsandbytes install failed: ${(err as Error).message}. DiLoCo full mode requires it for 4-bit quantization. Try: "${venvPip()}" install bitsandbytes`;
+      } else {
+        const errMsg = bnbInstallProc.error?.message ?? `pip exited with status ${bnbInstallProc.status}`;
+        const msg = `bitsandbytes install failed: ${errMsg}. DiLoCo full mode requires it for 4-bit quantization. Try: "${venvPip()}" install bitsandbytes`;
         emit({ phase: 'bitsandbytes', status: 'error', message: msg });
         result.errors.push(msg);
       }

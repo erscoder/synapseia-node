@@ -95,6 +95,28 @@ export function sanitizeText(s: string | undefined, maxBytes: number): string {
   return truncateUtf8(redactSecrets(normalizePaths(s)), maxBytes);
 }
 
+/**
+ * F-node-017 (LOW): value-shape probe that catches a 64-byte uint8 array
+ * (the Solana `Keypair.secretKey` wire-shape — 32B private + 32B public)
+ * even when the surrounding field name dodges the keyword allowlist
+ * (`keypair`, `decoded`, `signer`, `derivedKey`, `bytes`, etc.). Same
+ * defensive check for a 64-byte `Buffer` shape — anywhere a node's
+ * SecretKey could land. Anything else (32B pubkey, larger Buffers, etc.)
+ * is left untouched so we don't accidentally redact innocuous fields.
+ *
+ * `looksLikeUint8Array64` helper kept here so the sanitizer remains a
+ * single-file unit — no cross-module dependency needed for telemetry.
+ */
+function looksLikeUint8Array64(v: unknown): boolean {
+  if (!Array.isArray(v)) return false;
+  if (v.length !== 64) return false;
+  for (let i = 0; i < v.length; i++) {
+    const n = v[i];
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 255) return false;
+  }
+  return true;
+}
+
 /** Recursively sanitize string leaves of an object. Returns a fresh copy. */
 export function sanitizeContext(
   value: unknown,
@@ -102,6 +124,16 @@ export function sanitizeContext(
 ): unknown {
   if (depth > 6) return '[depth-cap]';
   if (typeof value === 'string') return sanitizeText(value, 1024);
+  // F-node-017: value-based detection for 64-byte secret-shaped blobs.
+  // Runs BEFORE the Array branch so the redaction wins regardless of
+  // whether the array sits as a top-level value, a nested array, or an
+  // object property whose key dodges the keyword allowlist below.
+  if (Buffer.isBuffer(value) && value.length === 64) {
+    return '[REDACTED:Buffer(64)]';
+  }
+  if (looksLikeUint8Array64(value)) {
+    return '[REDACTED:uint8[64]]';
+  }
   if (Array.isArray(value)) {
     return value.slice(0, 50).map(v => sanitizeContext(v, depth + 1));
   }

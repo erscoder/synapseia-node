@@ -739,8 +739,21 @@ export interface HeartbeatPayload {
   vram?: number;
   /** Human-readable GPU model string (e.g. "Apple M1 Pro", "RTX 4090"). */
   gpuModel?: string;
-  /** Binary attestation: sha256(chunk + nonce) response to the previous heartbeat's challenge. */
+  /**
+   * Binary attestation: sha256(chunk || nonce || peerId || ts) response
+   * to the previous heartbeat's challenge. F-node-011 (MED): peerId and
+   * `attestationTs` are now part of the digest input so a captured
+   * attestation cannot be replayed under a different peerId or across
+   * cycles. Coord-side verify MUST mirror this digest shape.
+   */
   attestationResponse?: string;
+  /**
+   * Unix ms timestamp the node used as part of the attestation digest
+   * input. Sent alongside `attestationResponse` so the coordinator can
+   * re-derive the expected hash. Only present when `attestationResponse`
+   * is set. F-node-011.
+   */
+  attestationTs?: number;
   /** Node software version (semver). Used for version gating. */
   version?: string;
 }
@@ -829,15 +842,36 @@ export class HeartbeatHelper {
     const publicIp = await this.ipifyService.resolvePublicIp();
 
     // Attestation: respond to the pending challenge from the PREVIOUS heartbeat.
+    //
+    // F-node-011 (MED, 2026-05-20): the response digest now binds the
+    // chunk + nonce to BOTH `peerId` and a fresh millisecond timestamp.
+    // The previous shape `sha256(chunk || nonce)` was replayable across
+    // peers: an attacker capturing a valid attestation from peer A
+    // could resubmit it under peer B (same nonce window) because the
+    // coordinator only verified the chunk+nonce pair without a peerId
+    // binding. Adding peerId locks the response to the identity that
+    // produced it; the timestamp adds a freshness anchor that lets the
+    // coordinator detect cross-cycle replay even from the same peerId.
+    //
+    // Wire shape: the timestamp is sent as a separate field so the
+    // coord can re-derive the digest. NOTE: coord-side verify (in
+    // `coordinator/src/.../attestation-verify.ts`) MUST be updated
+    // symmetrically — flagged as follow-up in the audit.
     let attestationResponse: string | undefined;
+    let attestationTs: number | undefined;
     if (this.pendingChallenge) {
       try {
         const bundle = this.loadOwnBundle();
         if (bundle) {
           const { nonce, offset, length } = this.pendingChallenge;
           const chunk = bundle.subarray(offset, offset + length);
+          attestationTs = Date.now();
+          // ASCII-encode peerId + ts so the digest input is unambiguous
+          // (Buffer.concat needs Buffers, not strings).
+          const peerIdBuf = Buffer.from(identity.peerId, 'utf-8');
+          const tsBuf = Buffer.from(String(attestationTs), 'utf-8');
           attestationResponse = createHash('sha256')
-            .update(Buffer.concat([chunk, Buffer.from(nonce)]))
+            .update(Buffer.concat([chunk, Buffer.from(nonce), peerIdBuf, tsBuf]))
             .digest('hex');
         }
       } catch (err) {
@@ -863,6 +897,7 @@ export class HeartbeatHelper {
       vram: hardware.gpuVramGb || undefined,
       gpuModel: hardware.gpuModel,
       attestationResponse,
+      attestationTs,
       version: getNodeVersion(),
     };
 
