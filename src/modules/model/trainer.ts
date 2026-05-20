@@ -9,6 +9,7 @@ import { resolve } from 'path';
 import { totalmem } from 'os';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
+import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 import type { MutationProposal } from './mutation-engine';
 
 /**
@@ -283,6 +284,11 @@ export class TrainerHelper {
     const result = await new Promise<boolean>((res) => {
       const proc = spawn(resolvePython(), ['-c', 'import torch; print(torch.__version__)'], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        // SECURITY (F-node-008 / P9): the torch probe spawn defaults to
+        // inheriting `process.env`. Pass the sanitized env explicitly so
+        // a malicious site-packages `torch/__init__.py` (supply-chain)
+        // cannot read SYNAPSEIA_WALLET_PASSWORD off the child's env.
+        env: sanitizedEnvForSubprocess(),
       });
       let settled = false;
       const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
@@ -502,14 +508,19 @@ export class TrainerHelper {
       // the spawn guarantees they're present even if the script is edited.
       const pythonProcess = spawn(resolvePython(), ['-u', pythonScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
+        // SECURITY (F-node-008 / P9): strip wallet / keystore secrets
+        // from the env passed to the python child. A poisoned wheel in
+        // torch / transformers / safetensors would otherwise have read
+        // access to SYNAPSEIA_WALLET_PASSWORD via `os.environ`. The
+        // thread-cap vars below are not secrets and are intentionally
+        // re-injected on top of the sanitized env.
+        env: sanitizedEnvForSubprocess({
           OMP_NUM_THREADS: '1',
           MKL_NUM_THREADS: '1',
           OPENBLAS_NUM_THREADS: '1',
           NUMEXPR_NUM_THREADS: '1',
           VECLIB_MAXIMUM_THREADS: '1',
-        },
+        }),
       });
 
       killProcess = () => { if (!pythonProcess.killed) pythonProcess.kill('SIGTERM'); };

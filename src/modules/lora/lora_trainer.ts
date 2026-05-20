@@ -25,6 +25,7 @@ import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
+import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 import {
   maybePauseOllamaForHeavyTraining,
   maybeRestartOllamaAfterHeavyTraining,
@@ -200,11 +201,15 @@ function runPython(bin: string, script: string, payload: object, timeoutMs: numb
   return new Promise((resolve, reject) => {
     const proc = spawn(bin, ['-u', script], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
+      // SECURITY (F-node-008 / P9): strip wallet / keystore secrets
+      // from the env passed to the python child. A poisoned wheel in
+      // transformers/peft/accelerate would otherwise be able to read
+      // SYNAPSEIA_WALLET_PASSWORD via `os.environ` and exfiltrate the
+      // operator's passphrase. See utils/subprocess-env.ts.
+      env: sanitizedEnvForSubprocess({
         // Conservative thread caps so a busy CPU node doesn't OOM.
         OMP_NUM_THREADS: process.env.OMP_NUM_THREADS ?? '4',
-      },
+      }),
     });
 
     // Slice 10b (Plan B, 2026-05-17): continuous memory sampler

@@ -127,36 +127,74 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
   }
 }
 
+// SECURITY (F-node-008 / P9): resolving wallet passphrase from env is
+// strictly opt-in. `WALLET_PASSWORD` (the original 2025 name) is GONE —
+// it was readable to any sibling process at the same UID via
+// `/proc/<pid>/environ` and was inherited by every python subprocess
+// the node spawned. The replacement env var `SYNAPSEIA_WALLET_PASSWORD`
+// is honoured ONLY when `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true`
+// is also set. The Tauri wrapper sets the flag explicitly because Tauri
+// IS a controlled in-process spawn source (the operator's own machine,
+// not arbitrary external shell env). Production deployments should use
+// `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` (mode 0600 file-mounted secret)
+// resolved via `readPassphraseFromFile()` in passphrase-helpers.ts.
+function resolveEnvPassphrase(context: 'load' | 'create'): string | null {
+  // Hard-deprecated legacy var: not even read. An operator who still
+  // exports WALLET_PASSWORD gets a clear error from the prompt path.
+  const allowFlag = process.env.SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE;
+  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD;
+  if (!envPassword) return null;
+  if (allowFlag !== 'true') {
+    // Stderr (not logger.warn which routes to file/json) so the
+    // operator sees the misconfiguration even on a CI box where the
+    // structured logger is silent.
+    process.stderr.write(
+      '[Wallet] SECURITY: ignoring SYNAPSEIA_WALLET_PASSWORD — env-var passphrase ' +
+      'is disabled by default (F-node-008). Set ' +
+      'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true to opt in, or use ' +
+      'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+    );
+    return null;
+  }
+  if (context === 'create' && envPassword.length < 8) {
+    throw new Error('SYNAPSEIA_WALLET_PASSWORD must be at least 8 characters');
+  }
+  process.stderr.write(
+    '[Wallet] WARNING: using env-var passphrase (SYNAPSEIA_WALLET_PASSWORD); ' +
+    'readable to anything at the same UID via /proc/<pid>/environ. ' +
+    'Prefer SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+  );
+  return envPassword;
+}
+
 @Injectable()
 export class WalletHelper {
   /**
-   * Get password from environment or prompt
-   * For Docker/non-interactive environments, use WALLET_PASSWORD env var
+   * Get password from environment or prompt.
+   *
+   * SECURITY (F-node-008 / P9): env-var passphrase is gated behind
+   * `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true` and only the new
+   * `SYNAPSEIA_WALLET_PASSWORD` name is read. The legacy
+   * `WALLET_PASSWORD` is no longer honoured.
    */
   async promptForPassword(message: string = 'Enter wallet password: '): Promise<string> {
-    // Check for env var first (useful for Docker)
-    const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-    if (envPassword) {
-      return envPassword;
-    }
+    const envPassword = resolveEnvPassphrase('load');
+    if (envPassword !== null) return envPassword;
 
     const { password } = await import('@inquirer/prompts');
     return password({ message });
   }
 
   /**
-   * Prompt for new password with confirmation
-   * For Docker/non-interactive environments, use WALLET_PASSWORD env var
+   * Prompt for new password with confirmation.
+   *
+   * SECURITY (F-node-008 / P9): same gating as `promptForPassword` —
+   * env-var passphrase is opt-in via
+   * `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true`.
    */
   async promptForNewPassword(): Promise<string> {
-    // Check for env var first (useful for Docker)
-    const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-    if (envPassword) {
-      if (envPassword.length < 8) {
-        throw new Error('WALLET_PASSWORD must be at least 8 characters');
-      }
-      return envPassword;
-    }
+    const envPassword = resolveEnvPassphrase('create');
+    if (envPassword !== null) return envPassword;
 
     const { password } = await import('@inquirer/prompts');
 

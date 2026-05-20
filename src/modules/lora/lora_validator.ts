@@ -48,6 +48,7 @@ import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
+import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 import { IdentityHelper } from '../identity/identity';
 import type {
   LoraSubtype,
@@ -456,10 +457,12 @@ function runPython(
   return new Promise((resolve, reject) => {
     const proc = spawn(bin, ['-u', script], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
+      // SECURITY (F-node-008 / P9): strip wallet / keystore secrets
+      // from the env passed to the python child. See lora_trainer.ts
+      // and utils/subprocess-env.ts for the threat model.
+      env: sanitizedEnvForSubprocess({
         OMP_NUM_THREADS: process.env.OMP_NUM_THREADS ?? '4',
-      },
+      }),
     });
     let stderr = '';
     proc.stdout?.on('data', (d: Buffer) => {

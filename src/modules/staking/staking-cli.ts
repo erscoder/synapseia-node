@@ -222,14 +222,38 @@ function decryptWallet(encryptedData: string, password: string): Uint8Array {
 // Passphrase resolution (high → low priority):
 //   1. `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` — file-mounted secret
 //      (Docker / systemd / fly-machines).
-//   2. `SYNAPSEIA_WALLET_PASSWORD` / `WALLET_PASSWORD` — back-compat
-//      with the legacy path. Honoured for BOTH branches so existing
-//      Tauri wrappers (which spawn `syn stake` with stdin piped to
-//      null) keep working without changes.
+//   2. `SYNAPSEIA_WALLET_PASSWORD` — back-compat with the Tauri spawn
+//      path. SECURITY (F-node-008 / P9): the legacy `WALLET_PASSWORD`
+//      name is NO LONGER read (was inheritable by any sibling at the
+//      same UID via /proc/<pid>/environ and by every python subprocess
+//      the node spawned). The new var is honoured ONLY when
+//      `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true` is also set; the
+//      Tauri wrapper sets the flag explicitly for headless boot.
 //   3. Interactive prompt — `password({ message })`.
 export async function loadWalletWithPassword(): Promise<Keypair> {
   const keystore = new EncryptedKeystore();
-  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD ?? null;
+  // Gate the env-var passphrase behind the explicit opt-in flag.
+  // Production deployments use SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE; the
+  // env var path stays alive only for the Tauri wrapper / CI runners
+  // that already control their own process tree.
+  let envPassword: string | null = null;
+  if (process.env.SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE === 'true') {
+    envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? null;
+    if (envPassword) {
+      process.stderr.write(
+        '[staking-cli] WARNING: using env-var passphrase (SYNAPSEIA_WALLET_PASSWORD); ' +
+        'readable to anything at the same UID via /proc/<pid>/environ. ' +
+        'Prefer SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+      );
+    }
+  } else if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+    process.stderr.write(
+      '[staking-cli] SECURITY: ignoring SYNAPSEIA_WALLET_PASSWORD/WALLET_PASSWORD — ' +
+      'env-var passphrase is disabled by default (F-node-008). Set ' +
+      'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true to opt in, or use ' +
+      'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+    );
+  }
 
   if (keystore.exists()) {
     // Hardened branch. File-mounted secret wins; env var honoured for

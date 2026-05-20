@@ -62,6 +62,7 @@ import { promises as fs } from 'fs';
 import { freemem } from 'os';
 import logger from '../../utils/logger';
 import { resolvePython } from '../../utils/python-venv';
+import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 
 /**
  * Slice 10 (Plan B, 2026-05-17) — BUMPED from 18432 to 36864 (36 GB).
@@ -327,7 +328,15 @@ export function detectQuantSupport(opts?: {
         '-c',
         'import torch, bitsandbytes; print("1" if torch.cuda.is_available() else "0")',
       ],
-      { stdio: 'pipe', timeout: 8000, encoding: 'utf8' },
+      {
+        stdio: 'pipe',
+        timeout: 8000,
+        encoding: 'utf8',
+        // SECURITY (F-node-008 / P9): strip wallet / keystore secrets
+        // before spawning the python quant probe — see
+        // utils/subprocess-env.ts.
+        env: sanitizedEnvForSubprocess(),
+      },
     );
     const ok = res.status === 0 && res.stdout?.trim() === '1';
     if (ok) {

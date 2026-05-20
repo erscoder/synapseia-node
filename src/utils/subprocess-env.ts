@@ -1,0 +1,84 @@
+/**
+ * Subprocess env sanitization for F-node-008 (P9 family).
+ *
+ * THREAT MODEL — why this exists
+ * ------------------------------
+ * The node process holds wallet passphrases / keystore secrets in
+ * `process.env` for the lifetime of the boot path (Tauri wrappers and
+ * CI inject `SYNAPSEIA_WALLET_PASSWORD`; legacy `WALLET_PASSWORD` is
+ * still honoured behind an explicit opt-in flag). Any child process
+ * spawned by the node — python LoRA trainer / validator, PyTorch probe,
+ * Ollama, obabel, etc. — inherits the *full* `process.env` by default,
+ * which means:
+ *
+ *   1. The passphrase becomes readable to anything inside the child
+ *      (a poisoned `transformers`/`peft`/`accelerate` wheel can call
+ *      `os.environ.get("SYNAPSEIA_WALLET_PASSWORD")` and exfiltrate it).
+ *   2. On Linux `/proc/<child-pid>/environ` is readable to the owning
+ *      UID — any sibling process at the same UID can dump the env of
+ *      the python child even if the node parent enforces stricter
+ *      `/proc` controls.
+ *
+ * The Tauri boot path is considered a TRUSTED source of the env var
+ * (the operator's own machine, an in-process spawn the operator
+ * controls). The risk is the *child* leaking it onward — so we filter
+ * at the spawn boundary, not at the receive boundary.
+ *
+ * RULE
+ * ----
+ * EVERY `spawn(...)` / `spawnSync(...)` / `execFile(...)` site that
+ * passes a python script, ollama, an external binary, or any process
+ * that does not strictly need the passphrase MUST use
+ * `sanitizedEnvForSubprocess()` instead of `process.env`. Tests that
+ * spawn child processes for the trainer / validator are exempt only
+ * when they explicitly set `env: {}` themselves.
+ */
+
+/**
+ * Env var names that contain wallet / keystore / mnemonic material and
+ * MUST NEVER cross a spawn boundary into a child process we do not
+ * fully trust. Kept as a closed allowlist of *forbidden* names (not a
+ * regex) so a new secret env var is a deliberate addition here, not an
+ * accidental allow.
+ */
+export const SENSITIVE_ENV_VARS: readonly string[] = [
+  // Wallet passphrases — historical and current names.
+  'WALLET_PASSWORD',
+  'SYNAPSEIA_WALLET_PASSWORD',
+  // Keystore passphrases.
+  'SYNAPSEIA_KEYSTORE_PASSPHRASE',
+  // The *file path* to the keystore passphrase is also stripped: the
+  // file itself is mode 0600 owned by the operator UID so a python
+  // child running at the same UID could still read it. Stripping the
+  // hint forces an attacker to enumerate `/run/secrets/` etc.
+  'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE',
+  // BIP39 mnemonic — never set by the node itself but a malicious
+  // operator harness might leak one through env; defensive strip.
+  'SYNAPSEIA_WALLET_MNEMONIC',
+  'WALLET_MNEMONIC',
+  // Opt-in flag itself — no value to the child, and leaking the name
+  // signals to a worm "this host accepts env passphrases".
+  'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE',
+  // Legacy wallet override — same reasoning.
+  'SYNAPSEIA_ALLOW_LEGACY_WALLET',
+] as const;
+
+/**
+ * Return a shallow clone of `process.env` with every sensitive key
+ * removed. Use this as the `env` field of `spawn(...)` /
+ * `spawnSync(...)` / `execFile(...)` for any child process that does
+ * not specifically need a wallet secret (which is currently NONE of
+ * the children the node spawns).
+ *
+ * `extra` is merged on top — callers typically add thread-cap vars
+ * (`OMP_NUM_THREADS=4` etc.) that have no relation to secrets.
+ */
+export function sanitizedEnvForSubprocess(
+  extra: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+  const clone: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of SENSITIVE_ENV_VARS) {
+    if (k in clone) delete clone[k];
+  }
+  return { ...clone, ...extra };
+}
