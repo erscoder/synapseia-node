@@ -5,6 +5,7 @@
  */
 
 import { renderDiscoverySchemasForPrompt } from './schemas';
+import { assertSafeForPrompt } from '../../../../../shared/prompt-safety';
 
 export interface MedicalReActParams {
   wo: { title: string; abstract: string; doi?: string };
@@ -15,6 +16,28 @@ export interface MedicalReActParams {
 }
 
 export function buildMedicalReActPrompt(p: MedicalReActParams): string {
+  // P26 prompt-safety gate (F-node-004). WO title/abstract come from the
+  // coordinator and may have been authored by an untrusted submitter;
+  // observations carry tool output that frequently includes peer-supplied
+  // text (search_corpus snippets, fetched abstracts). Run each interpolated
+  // field through assertSafeForPrompt — throws PromptSafetyError on a
+  // jailbreak / oversize / control-char violation, which the caller
+  // (execute-research node) is responsible for catching and recovering
+  // from (skip iteration, fall back to plan-only output).
+  assertSafeForPrompt(p.wo.title, 'wo.title');
+  assertSafeForPrompt(p.wo.abstract, 'wo.abstract');
+  if (p.wo.doi !== undefined) assertSafeForPrompt(p.wo.doi, 'wo.doi');
+  for (let i = 0; i < p.plan.length; i++) assertSafeForPrompt(p.plan[i], `plan[${i}]`);
+  for (let i = 0; i < p.observations.length; i++) {
+    assertSafeForPrompt(p.observations[i].tool, `observation[${i}].tool`);
+    assertSafeForPrompt(p.observations[i].result, `observation[${i}].result`);
+  }
+  if (p.relatedDois) {
+    for (let i = 0; i < p.relatedDois.length; i++) {
+      assertSafeForPrompt(p.relatedDois[i], `relatedDois[${i}]`);
+    }
+  }
+
   const obsText = p.observations.length === 0
     ? 'None yet.'
     : p.observations.map((o, i) => `[${i + 1}] ${o.tool}: ${o.result}`).join('\n');

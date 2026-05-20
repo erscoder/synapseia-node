@@ -17,6 +17,7 @@
  */
 
 import { renderDiscoverySchemasForPrompt } from './schemas';
+import { assertSafeForPrompt } from '../../../../../shared/prompt-safety';
 
 export interface MedicalSynthesizerParams {
   title: string;
@@ -38,6 +39,16 @@ function truncateTitleForPrompt(title: string): string {
 }
 
 export function buildMedicalSynthesizerPrompt(p: MedicalSynthesizerParams): string {
+  // P26 prompt-safety gate (F-node-004). `title` is peer-controlled (came
+  // from a coord-published WO whose author we don't trust). researcherJson
+  // and criticFeedback are produced by our own LLM upstream — still gated
+  // for jailbreak markers because the researcher prompt itself interpolates
+  // the peer-controlled abstract, so the researcher output can echo a
+  // crafted directive back into the synthesizer.
+  assertSafeForPrompt(p.title, 'title');
+  assertSafeForPrompt(p.researcherJson, 'researcherJson');
+  assertSafeForPrompt(p.criticFeedback, 'criticFeedback');
+
   const schemaBlock = renderDiscoverySchemasForPrompt();
   const title = truncateTitleForPrompt(p.title);
 
