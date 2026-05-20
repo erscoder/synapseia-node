@@ -60,8 +60,20 @@ const ALPHABET_MAP = (() => {
 
 function base58Decode(input: string): Uint8Array {
   if (input.length === 0) return new Uint8Array(0);
-  const bytes: number[] = [0];
-  for (let i = 0; i < input.length; i++) {
+
+  // Count leading '1' chars — in base58 each represents one leading
+  // 0x00 byte in the decoded output.
+  let leadingOnes = 0;
+  while (leadingOnes < input.length && input[leadingOnes] === '1') {
+    leadingOnes++;
+  }
+
+  // Little-endian accumulator. Starts empty — we DO NOT seed with [0]
+  // (an early version did and double-counted the sentinel against the
+  // leading-zero pad, producing N+1 zero bytes for an input of N '1's;
+  // golden-vector spec against canonical `bs58` catches that regression).
+  const bytes: number[] = [];
+  for (let i = leadingOnes; i < input.length; i++) {
     const code = input.charCodeAt(i);
     const value = code < 128 ? ALPHABET_MAP[code] : -1;
     if (value < 0) {
@@ -78,8 +90,10 @@ function base58Decode(input: string): Uint8Array {
       carry >>= 8;
     }
   }
-  // Leading '1' chars in base58 = leading 0x00 bytes.
-  for (let k = 0; k < input.length && input[k] === '1'; k++) bytes.push(0);
+
+  // Append one zero (LE → becomes leading zero after reverse) per
+  // leading '1' in the input.
+  for (let k = 0; k < leadingOnes; k++) bytes.push(0);
   return new Uint8Array(bytes.reverse());
 }
 
@@ -111,3 +125,15 @@ export function loadCoordinatorPubkey(): Uint8Array {
 
   return decoded;
 }
+
+/**
+ * Test-only export. Lets `coordinator-pubkey.spec.ts` golden-vector
+ * the inline decoder against the canonical `bs58` package without
+ * pulling `bs58` into the runtime bundle (see comment above on why
+ * `bs58` is inlined — its `base-x → safe-buffer` chain emits dynamic
+ * `require('buffer')` that tsup ESM rejects at boot).
+ *
+ * Naming convention: leading underscore + `ForTest` suffix marks this
+ * as an internal API surface — do NOT import it from runtime code.
+ */
+export const _decodeBase58ForTest = base58Decode;
