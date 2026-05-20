@@ -777,6 +777,15 @@ export class HeartbeatHelper {
   private pendingChallenge: AttestationChallenge | null = null;
   /** Own bundle content — loaded lazily on first attestation challenge. */
   private ownBundle: Buffer | null = null;
+  /**
+   * F-node-019 (PERF, LOW, P18): negative-cache marker. Once `loadOwnBundle`
+   * has walked the candidate paths unsuccessfully (e.g. unexpected tsup
+   * layout on Windows), subsequent heartbeats short-circuit instead of
+   * re-walking the filesystem every cycle. Re-probing only happens on
+   * full process restart — which is the supported path for upgrades
+   * anyway via `restartProcess()`.
+   */
+  private ownBundleAttempted = false;
   private p2pNode?: P2PNode;
 
   /**
@@ -1023,9 +1032,21 @@ export class HeartbeatHelper {
    *  - embedding     → Ollama embedding models (requires Ollama + ≥8 GB RAM).
    */
 
-  /** Lazy-load own dist bundle for binary attestation. Cached after first read. */
+  /**
+   * Lazy-load own dist bundle for binary attestation. Cached after first
+   * read.
+   *
+   * F-node-019 (PERF, LOW, P18): also negative-caches the failure path via
+   * `ownBundleAttempted` — without this, every heartbeat re-walks the
+   * candidate `dist/index.js` paths sync if the first attempt missed (e.g.
+   * unexpected tsup bundle layout on Windows). The short-circuit lists
+   * explicitly which side-paths are skipped on subsequent calls so future
+   * edits don't accidentally bury a new guard behind the early exit.
+   */
   private loadOwnBundle(): Buffer | null {
     if (this.ownBundle) return this.ownBundle;
+    if (this.ownBundleAttempted) return null;
+    this.ownBundleAttempted = true;
     try {
       // tsup bundles into dist/bootstrap.js → dist/index.js. We attest index.js.
       // Resolve our own file URL via a runtime helper that uses `import.meta`
@@ -1048,7 +1069,7 @@ export class HeartbeatHelper {
           return this.ownBundle;
         } catch { /* try next */ }
       }
-      logger.debug('[Attestation] Could not locate own dist/index.js — attestation responses will be skipped');
+      logger.debug('[Attestation] Could not locate own dist/index.js — attestation responses will be skipped for the lifetime of this process (re-probe on restart)');
       return null;
     } catch {
       return null;
