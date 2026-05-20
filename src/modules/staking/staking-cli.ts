@@ -283,7 +283,26 @@ export async function loadWalletWithPassword(): Promise<Keypair> {
   );
   const walletData = JSON.parse(fs.readFileSync(walletFile, 'utf-8'));
   if (!walletData.encryptedData) {
-    // Unencrypted wallet — load directly.
+    // SECURITY (F-node-001): plaintext `secretKey` wallet.json is REFUSED
+    // outright. An attacker dropping a crafted wallet.json with a raw
+    // 64-byte secretKey and NO encryptedData would otherwise be loaded
+    // here as a signer for stake/unstake/claim — silent key substitution.
+    // Backups must never round-trip via plaintext; require an explicit
+    // operator override gated by SYNAPSEIA_ALLOW_LEGACY_WALLET=true for
+    // dev/testing only.
+    logger.error('[staking-cli] REFUSED: legacy plaintext wallet.json detected.');
+    logger.error('Plaintext wallets are no longer supported (security regression).');
+    logger.error('Migration: run `syn start` to bootstrap an encrypted keystore,');
+    logger.error('or `syn wallet import` to re-import an existing key behind a passphrase.');
+    logger.error('To override (testing only): set SYNAPSEIA_ALLOW_LEGACY_WALLET=true');
+    if (process.env.SYNAPSEIA_ALLOW_LEGACY_WALLET !== 'true') {
+      throw new Error(
+        'Legacy plaintext wallet.json refused. Migrate to the hardened keystore or set SYNAPSEIA_ALLOW_LEGACY_WALLET=true to override.',
+      );
+    }
+    logger.warn(
+      '[staking-cli] WARNING: legacy plaintext wallet loaded via SYNAPSEIA_ALLOW_LEGACY_WALLET override — DO NOT use this in production.',
+    );
     const secretKey = new Uint8Array(walletData.secretKey);
     return Keypair.fromSecretKey(secretKey);
   }
