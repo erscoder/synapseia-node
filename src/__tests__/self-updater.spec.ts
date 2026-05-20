@@ -310,6 +310,44 @@ describe('restartProcess', () => {
     );
   });
 
+  it('emits the canonical marker with nonce / version / pid (F-node-ui-004)', async () => {
+    // The desktop UI requires a strict-shape marker so a malicious WO /
+    // log line cannot trigger a respawn. The shape is:
+    //   `[SELF_UPDATE_RESTART] nonce=<value> v<semver> pid=<digits>`
+    process.env.SYNAPSEIA_SELF_UPDATE_NONCE = 'deadbeefcafef00d';
+    try {
+      await restartProcess();
+      const markerCall = mockStdoutLog.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' && (c[0] as string).startsWith('[SELF_UPDATE_RESTART] '),
+      );
+      expect(markerCall).toBeDefined();
+      const line = markerCall![0] as string;
+      // nonce must echo the env var verbatim.
+      expect(line).toContain('nonce=deadbeefcafef00d');
+      // version token must be `v<digits>.<digits>.<digits>`.
+      expect(line).toMatch(/ v\d+\.\d+\.\d+ /);
+      // pid token must be `pid=<digits>` and equal this process pid.
+      expect(line).toContain(`pid=${process.pid}`);
+    } finally {
+      delete process.env.SYNAPSEIA_SELF_UPDATE_NONCE;
+    }
+  });
+
+  it('emits an empty nonce when SYNAPSEIA_SELF_UPDATE_NONCE is unset', async () => {
+    // Shell-invoked runs have no UI parent and no nonce. The marker still
+    // gets emitted (for human-visible log tails) but the UI parser
+    // rejects empty-nonce markers — so this cannot be abused.
+    delete process.env.SYNAPSEIA_SELF_UPDATE_NONCE;
+    await restartProcess();
+    const markerCall = mockStdoutLog.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === 'string' && (c[0] as string).startsWith('[SELF_UPDATE_RESTART] '),
+    );
+    expect(markerCall).toBeDefined();
+    expect(markerCall![0] as string).toContain('nonce= ');
+  });
+
   it('awaits stopTelemetry + stopP2p before exiting', async () => {
     const stopTelemetry = jest.fn().mockResolvedValue(undefined);
     const stopP2p = jest.fn().mockResolvedValue(undefined);

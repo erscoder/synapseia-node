@@ -589,7 +589,68 @@ export async function restartProcess(
 
   // Mirror to stdout in case logger output is suppressed by a
   // log-level filter; the desktop UI's log tail watches stdout/stderr.
+  //
+  // F-node-ui-004 (P10): the Tauri UI now requires a canonical, anchored
+  // marker `[SELF_UPDATE_RESTART] nonce=<hex>  v<semver>  pid=<digits>`
+  // where `nonce` matches `SYNAPSEIA_SELF_UPDATE_NONCE` injected at
+  // spawn time. Only the legitimate child process knows the nonce, so a
+  // malicious WO / KG ingest / web-search result whose stdout merely
+  // contains the literal substring can no longer trigger a respawn.
+  //
+  // Shell-invoked runs (no UI) have no nonce env var — we emit the
+  // marker with an empty `nonce=` value, which the UI parser
+  // (`parse_self_update_cue_with_nonce` with empty expected nonce)
+  // rejects. That is intentional: standalone-shell users were never
+  // auto-respawned anyway; they read the operator banner above and
+  // re-run `synapseia start` themselves.
+  const nonce = process.env.SYNAPSEIA_SELF_UPDATE_NONCE ?? '';
+  const version = readOwnVersion();
+  const pid = process.pid;
   // eslint-disable-next-line no-console
-  console.log('[SELF_UPDATE_RESTART] Update applied, exiting for relaunch.');
+  console.log(`[SELF_UPDATE_RESTART] nonce=${nonce} v${version} pid=${pid}`);
   process.exit(0);
+}
+
+/**
+ * Read this package's own version from the nearest `package.json`. Used
+ * by `restartProcess` to embed the version into the canonical
+ * `[SELF_UPDATE_RESTART]` marker so the desktop UI can log which build
+ * just exited (helps diagnose stuck-on-old-version reports). Falls back
+ * to `"0.0.0"` if the lookup fails — the marker still validates as
+ * semver-shaped and the UI just sees an unknown version.
+ */
+function readOwnVersion(): string {
+  try {
+    const pkgPath = findOwnPackageJson(dirname(__filename));
+    if (!pkgPath) return '0.0.0';
+    const raw = readFileSync(pkgPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    if (typeof parsed.version === 'string' && valid(parsed.version)) {
+      return parsed.version;
+    }
+  } catch { /* fall through */ }
+  return '0.0.0';
+}
+
+/**
+ * Walk up from `start` looking for a `package.json` that names this
+ * package. Bounded depth so we never wander outside the install tree.
+ */
+function findOwnPackageJson(start: string): string | null {
+  let dir = start;
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, 'package.json');
+    if (existsSync(candidate)) {
+      try {
+        const text = readFileSync(candidate, 'utf-8');
+        if (text.includes('"@synapseia-network/node"')) {
+          return candidate;
+        }
+      } catch { /* ignore unreadable */ }
+    }
+    const parent = join(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
