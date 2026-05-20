@@ -418,9 +418,29 @@ Abstract: ${payload.abstract}`;
 
     let localAdapterPath: string | undefined;
     if (payload.currentAdapterUrl) {
+      // F-node-005 (HIGH) fail-closed: refuse to download an adapter the
+      // coord didn't commit to via sha256. A poisoned aggregate adapter
+      // (or pickle-style payload) propagates across the federated cohort
+      // and is an RCE candidate under older transformers/peft. P21:
+      // success:false on reject — no client-side re-queue, coord
+      // ACCEPTED-TTL handles re-routing.
+      if (!payload.adapterSha256 || typeof payload.adapterSha256 !== 'string' || payload.adapterSha256.trim() === '') {
+        logger.warn(
+          `[DiLoCo] Rejecting WO ${workOrder.id}: currentAdapterUrl present but adapterSha256 missing (F-node-005 fail-closed)`,
+        );
+        return { result: 'DiLoCo rejected: adapter integrity hash (adapterSha256) missing from payload', success: false };
+      }
       localAdapterPath = path.join(os.homedir(), '.synapseia', 'adapters', payload.domain, `round_${payload.outerRound - 1}`);
-      try { await downloadAdapter(payload.currentAdapterUrl, localAdapterPath); logger.log(`[DiLoCo] Downloaded adapter to ${localAdapterPath}`); }
-      catch (err) { logger.warn(`[DiLoCo] Could not download adapter: ${(err as Error).message}`); localAdapterPath = undefined; }
+      try {
+        await downloadAdapter(payload.currentAdapterUrl, localAdapterPath, payload.adapterSha256);
+        logger.log(`[DiLoCo] Downloaded + verified adapter to ${localAdapterPath}`);
+      } catch (err) {
+        // sha256 mismatch / missing-hash / malformed-hash / network = HARD reject.
+        // Do NOT silently fall back to "train without adapter" — that would
+        // diverge this node from the cohort's aggregate gradient state.
+        logger.warn(`[DiLoCo] Rejecting WO ${workOrder.id}: adapter integrity check failed: ${(err as Error).message}`);
+        return { result: `DiLoCo rejected: adapter integrity check failed: ${(err as Error).message}`, success: false };
+      }
     }
 
     let datasetPath = payload.datasetId;

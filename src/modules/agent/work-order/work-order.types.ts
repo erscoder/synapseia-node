@@ -111,6 +111,21 @@ export interface DiLoCoWorkOrderPayload {
   innerSteps: number;
   datasetId: string;
   currentAdapterUrl?: string;
+  /**
+   * F-node-005 (HIGH): sha256 of the current aggregate adapter at
+   * `currentAdapterUrl`. The node MUST refuse to load the adapter when
+   * this is missing or doesn't match the downloaded bytes (poisoning /
+   * pickle-RCE candidate). Encoded as raw lowercase hex (64 chars), with
+   * optional `sha256:` prefix accepted. Coordinator computes it on upload
+   * (`packages/coordinator/.../work-order.coordinator.ts` post-upload hash)
+   * and MUST populate this field in every DiLoCo WO description.
+   *
+   * Operator follow-up: coord-side wiring lives in a separate slice (see
+   * audit F-node-005). When `currentAdapterUrl` is set but
+   * `adapterSha256` is unset, the WO is rejected fail-closed — no
+   * silent fallback.
+   */
+  adapterSha256?: string;
   hyperparams: {
     learningRate?: number;
     batchSize?: number;

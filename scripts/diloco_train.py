@@ -287,7 +287,14 @@ def run_full_mode(config: dict) -> None:
     # entirely. Cache miss fails fast with an operator-actionable hint
     # (P2 fail-closed; no silent download).
     pretrained_name = _resolve_local_snapshot(model_id)
-    load_kwargs_extra = {"local_files_only": True}
+    # F-node-005 (HIGH): pin `use_safetensors=True` on every from_pretrained
+    # call. Refuses pickled checkpoints (.bin / pytorch_model.bin) which
+    # `torch.load`-via-transformers can deserialize → arbitrary code
+    # execution on the trainer process. Combined with the sha256
+    # commitment + verify in TS land (model-downloader.ts), this closes
+    # the model-poisoning + RCE path for the aggregate adapter and the
+    # base model alike.
+    load_kwargs_extra = {"local_files_only": True, "use_safetensors": True}
     log({"info": f"diloco_model_source=local snapshot={pretrained_name}"})
 
     device = "cpu"
@@ -383,7 +390,16 @@ def run_full_mode(config: dict) -> None:
 
     # Load or create LoRA adapter
     if adapter_path and os.path.exists(adapter_path):
-        model = PeftModel.from_pretrained(base_model, adapter_path, is_trainable=True)
+        # F-node-005: pin safetensors-only for the adapter weights too.
+        # The TS side (model-downloader.ts) writes the verified bytes to
+        # `adapter_weights.safetensors`; peft must refuse to fall back to
+        # a `.bin` pickled adapter sitting next to it.
+        model = PeftModel.from_pretrained(
+            base_model,
+            adapter_path,
+            is_trainable=True,
+            use_safetensors=True,
+        )
     else:
         lora_config = LoraConfig(
             r=16,
