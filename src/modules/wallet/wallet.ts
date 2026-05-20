@@ -167,59 +167,63 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
   }
 }
 
-// SECURITY (F-node-008 / P9): resolving wallet passphrase from env is
-// strictly opt-in. `WALLET_PASSWORD` (the original 2025 name) is GONE —
-// it was readable to any sibling process at the same UID via
-// `/proc/<pid>/environ` and was inherited by every python subprocess
-// the node spawned. The replacement env var `SYNAPSEIA_WALLET_PASSWORD`
-// is honoured ONLY when `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true`
-// is also set. The Tauri wrapper sets the flag explicitly because Tauri
-// IS a controlled in-process spawn source (the operator's own machine,
-// not arbitrary external shell env). Production deployments should use
-// `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` (mode 0600 file-mounted secret)
-// resolved via `readPassphraseFromFile()` in passphrase-helpers.ts.
-function resolveEnvPassphrase(context: 'load' | 'create'): string | null {
-  // Hard-deprecated legacy var: not even read. An operator who still
-  // exports WALLET_PASSWORD gets a clear error from the prompt path.
-  const allowFlag = process.env.SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE;
-  const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD;
-  if (!envPassword) return null;
-  if (allowFlag !== 'true') {
-    // Stderr (not logger.warn which routes to file/json) so the
-    // operator sees the misconfiguration even on a CI box where the
-    // structured logger is silent.
-    process.stderr.write(
-      '[Wallet] SECURITY: ignoring SYNAPSEIA_WALLET_PASSWORD — env-var passphrase ' +
-      'is disabled by default (F-node-008). Set ' +
-      'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true to opt in, or use ' +
-      'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
-    );
-    return null;
+// SECURITY (F-node-008 / P9): env-var passphrases are PERMANENTLY
+// BLACKHOLED. Both `SYNAPSEIA_WALLET_PASSWORD` and the legacy
+// `WALLET_PASSWORD` are unreadable to this module no matter what other
+// flags are set: they were inheritable to any sibling at the same UID
+// via `/proc/<pid>/environ` and to every python subprocess the node
+// spawned, so the opt-in escape hatch (the historical
+// `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE` flag) has been removed.
+//
+// Valid passphrase sources downstream of this helper:
+//   1. `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` — mode 0600 file-mounted
+//      secret (Docker secret / systemd LoadCredential / k8s mount),
+//      resolved via `readPassphraseFromFile()` in passphrase-helpers.ts.
+//   2. Interactive TTY prompt (`@inquirer/prompts` `password`).
+//   3. Tauri IPC argument piped through child stdin (the desktop UI
+//      writes the typed password to the spawned CLI's stdin in
+//      non-interactive mode — never via env).
+//
+// This helper exists only to detect the FORBIDDEN env vars and emit a
+// loud stderr warning so an operator who still exports them sees the
+// misconfiguration immediately (the structured logger may be silent on
+// CI / container stdout).
+function warnIfEnvPassphraseSet(): void {
+  const offending: string[] = [];
+  if (typeof process.env.SYNAPSEIA_WALLET_PASSWORD === 'string'
+      && process.env.SYNAPSEIA_WALLET_PASSWORD.length > 0) {
+    offending.push('SYNAPSEIA_WALLET_PASSWORD');
   }
-  if (context === 'create' && envPassword.length < 8) {
-    throw new Error('SYNAPSEIA_WALLET_PASSWORD must be at least 8 characters');
+  if (typeof process.env.WALLET_PASSWORD === 'string'
+      && process.env.WALLET_PASSWORD.length > 0) {
+    offending.push('WALLET_PASSWORD');
   }
+  if (offending.length === 0) return;
   process.stderr.write(
-    '[Wallet] WARNING: using env-var passphrase (SYNAPSEIA_WALLET_PASSWORD); ' +
-    'readable to anything at the same UID via /proc/<pid>/environ. ' +
-    'Prefer SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+    `[Wallet] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+    'is NEVER honoured (F-node-008 max-security mode, no opt-in). Use ' +
+    'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE (mode 0600 file-mounted secret) ' +
+    'or an interactive TTY prompt instead. Unset the env var to silence ' +
+    'this warning.\n',
   );
-  return envPassword;
 }
 
 @Injectable()
 export class WalletHelper {
   /**
-   * Get password from environment or prompt.
+   * Get password from interactive prompt.
    *
-   * SECURITY (F-node-008 / P9): env-var passphrase is gated behind
-   * `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true` and only the new
-   * `SYNAPSEIA_WALLET_PASSWORD` name is read. The legacy
-   * `WALLET_PASSWORD` is no longer honoured.
+   * SECURITY (F-node-008 / P9): env-var passphrase is PERMANENTLY
+   * disabled. `SYNAPSEIA_WALLET_PASSWORD` / `WALLET_PASSWORD` are
+   * never honoured — they were inheritable to any sibling at the same
+   * UID via `/proc/<pid>/environ` and to every python subprocess. The
+   * Tauri desktop UI now pipes the typed passphrase over child stdin
+   * instead of env (see `SYNAPSEIA_PASSPHRASE_FROM_STDIN` in the CLI
+   * boot path). Headless servers MUST use
+   * `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`.
    */
   async promptForPassword(message: string = 'Enter wallet password: '): Promise<string> {
-    const envPassword = resolveEnvPassphrase('load');
-    if (envPassword !== null) return envPassword;
+    warnIfEnvPassphraseSet();
 
     const { password } = await import('@inquirer/prompts');
     return password({ message });
@@ -228,13 +232,11 @@ export class WalletHelper {
   /**
    * Prompt for new password with confirmation.
    *
-   * SECURITY (F-node-008 / P9): same gating as `promptForPassword` —
-   * env-var passphrase is opt-in via
-   * `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true`.
+   * SECURITY (F-node-008 / P9): same hardening as `promptForPassword` —
+   * env-var passphrase is never accepted, no opt-in path remains.
    */
   async promptForNewPassword(): Promise<string> {
-    const envPassword = resolveEnvPassphrase('create');
-    if (envPassword !== null) return envPassword;
+    warnIfEnvPassphraseSet();
 
     const { password } = await import('@inquirer/prompts');
 

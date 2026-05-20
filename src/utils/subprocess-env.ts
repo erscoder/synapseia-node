@@ -3,13 +3,17 @@
  *
  * THREAT MODEL — why this exists
  * ------------------------------
- * The node process holds wallet passphrases / keystore secrets in
- * `process.env` for the lifetime of the boot path (Tauri wrappers and
- * CI inject `SYNAPSEIA_WALLET_PASSWORD`; legacy `WALLET_PASSWORD` is
- * still honoured behind an explicit opt-in flag). Any child process
- * spawned by the node — python LoRA trainer / validator, PyTorch probe,
- * Ollama, obabel, etc. — inherits the *full* `process.env` by default,
- * which means:
+ * The node process historically held wallet passphrases in
+ * `process.env` (`SYNAPSEIA_WALLET_PASSWORD`, legacy `WALLET_PASSWORD`).
+ * F-node-008 max-security removed every code path that READS those
+ * vars — the Tauri wrapper now pipes the typed passphrase over the
+ * spawned CLI's stdin instead, and headless deployments use
+ * `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` exclusively. This sanitiser is
+ * still essential defence-in-depth: if a CI runner or stale `.env` is
+ * misconfigured and exports the deprecated env var anyway, we must NOT
+ * let it leak into python / ollama / external subprocesses spawned by
+ * the node. Any child process inherits the *full* `process.env` by
+ * default, which means:
  *
  *   1. The passphrase becomes readable to anything inside the child
  *      (a poisoned `transformers`/`peft`/`accelerate` wheel can call
@@ -56,9 +60,17 @@ export const SENSITIVE_ENV_VARS: readonly string[] = [
   // operator harness might leak one through env; defensive strip.
   'SYNAPSEIA_WALLET_MNEMONIC',
   'WALLET_MNEMONIC',
-  // Opt-in flag itself — no value to the child, and leaking the name
-  // signals to a worm "this host accepts env passphrases".
+  // Historical opt-in flag — kept in the strip list for defence in
+  // depth even though the code path that read it is gone (F-node-008
+  // max-security). Leaking the name signals to a worm "this host
+  // *used to* accept env passphrases".
   'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE',
+  // Stdin-passphrase signal — the parent already consumed the
+  // passphrase off its own stdin before spawning the child, so this
+  // flag would falsely advertise "stdin has a passphrase" to the
+  // subprocess. Strip to avoid downstream confusion + supply-chain
+  // recon hints.
+  'SYNAPSEIA_PASSPHRASE_FROM_STDIN',
   // Legacy wallet override — same reasoning.
   'SYNAPSEIA_ALLOW_LEGACY_WALLET',
 ] as const;

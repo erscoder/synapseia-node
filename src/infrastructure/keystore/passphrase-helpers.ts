@@ -9,10 +9,18 @@
  *   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE — file-mounted secret
  *      (Docker secret / systemd LoadCredential / k8s mount). Read by
  *      `readPassphraseFromFile()` below.
- *   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD — back-compat env
- *      vars honoured by the legacy `wallet.json` path. Callers handle
- *      this branch directly because it is shared with the legacy flow.
- *   3. Interactive prompt — `password({ message })` at the call site.
+ *   2. SYNAPSEIA_PASSPHRASE_FROM_STDIN=true — first line of stdin
+ *      (used by the Tauri desktop UI which pipes the typed password to
+ *      the spawned CLI; replaces the historical
+ *      `SYNAPSEIA_WALLET_PASSWORD` env var which was inheritable to
+ *      every child process at the same UID). Read by
+ *      `readPassphraseFromStdin()` below.
+ *   3. Interactive TTY prompt — `password({ message })` at the call site.
+ *
+ * NOTE: env-var passphrases (`SYNAPSEIA_WALLET_PASSWORD`,
+ * `WALLET_PASSWORD`) are PERMANENTLY DISABLED (F-node-008 max-security
+ * mode). Detection of either var triggers a stderr warning in the
+ * wallet module; no opt-in path remains.
  */
 
 import { existsSync, statSync } from 'fs';
@@ -70,6 +78,81 @@ export async function readPassphraseFromFile(
     return trimmed;
   } catch (err) {
     log.warn(`[Keystore] could not read passphrase file ${filePath}: ${(err as Error).message}; falling back to interactive prompt`);
+    return undefined;
+  }
+}
+
+/**
+ * Read the keystore passphrase from the first line of stdin. Gated by
+ * `SYNAPSEIA_PASSPHRASE_FROM_STDIN=true` so a TTY-attached operator
+ * never has their interactive shell hijacked by a sibling that wrote
+ * to the node's stdin by accident.
+ *
+ * This is the F-node-008 replacement for the deprecated
+ * `SYNAPSEIA_WALLET_PASSWORD` env-var channel: the Tauri desktop UI
+ * spawns the node CLI with the flag set, writes `password + "\n"` to
+ * the child's stdin, then closes the pipe. The passphrase therefore
+ * never crosses any filesystem or env-var boundary — it lives only in
+ * the parent's `Zeroizing<String>` and the child's resolved string for
+ * the lifetime of the unlock call.
+ *
+ * Returns the passphrase (without the trailing `\n`) on success, or
+ * `undefined` when:
+ *   - the env flag is not set to exactly "true",
+ *   - stdin is a TTY (operator will be prompted interactively instead),
+ *   - stdin EOFs before producing any data (treated as missing input).
+ *
+ * The function consumes only the first line; anything else on stdin is
+ * left in the buffer for the rest of the process to handle.
+ */
+export async function readPassphraseFromStdin(
+  log: PassphraseLogger,
+): Promise<string | undefined> {
+  if (process.env.SYNAPSEIA_PASSPHRASE_FROM_STDIN !== 'true') return undefined;
+  // Defensive: never consume an interactive TTY — the operator types
+  // their password at the inquirer prompt downstream.
+  if (process.stdin.isTTY) {
+    log.warn('[Keystore] SYNAPSEIA_PASSPHRASE_FROM_STDIN=true but stdin is a TTY; ignoring (use interactive prompt)');
+    return undefined;
+  }
+  try {
+    return await new Promise<string | undefined>((resolve) => {
+      let buf = '';
+      let resolved = false;
+      const finish = (val: string | undefined) => {
+        if (resolved) return;
+        resolved = true;
+        process.stdin.removeListener('data', onData);
+        process.stdin.removeListener('end', onEnd);
+        process.stdin.removeListener('error', onError);
+        resolve(val);
+      };
+      const onData = (chunk: Buffer | string) => {
+        buf += chunk.toString('utf8');
+        const nl = buf.indexOf('\n');
+        if (nl >= 0) {
+          const line = buf.slice(0, nl).replace(/\r$/, '');
+          finish(line.length === 0 ? undefined : line);
+        }
+      };
+      const onEnd = () => {
+        const line = buf.replace(/\r?\n$/, '');
+        finish(line.length === 0 ? undefined : line);
+      };
+      const onError = (err: Error) => {
+        log.warn(`[Keystore] failed to read passphrase from stdin: ${err.message}`);
+        finish(undefined);
+      };
+      process.stdin.on('data', onData);
+      process.stdin.on('end', onEnd);
+      process.stdin.on('error', onError);
+      // Resume in case stdin was paused (default state when piped).
+      if (typeof (process.stdin as NodeJS.ReadStream).resume === 'function') {
+        (process.stdin as NodeJS.ReadStream).resume();
+      }
+    });
+  } catch (err) {
+    log.warn(`[Keystore] failed to read passphrase from stdin: ${(err as Error).message}; falling back to interactive prompt`);
     return undefined;
   }
 }

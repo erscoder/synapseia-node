@@ -182,7 +182,7 @@ async function safePrompt<T>(fn: () => Promise<T>): Promise<T | null> {
 // Passphrase resolution helper extracted to a shared module so subcommand
 // CLIs (modules/staking/staking-cli.ts) can reuse the same F9-hardened
 // file-mounted-secret rules without duplicating logic.
-import { readPassphraseFromFile } from '../infrastructure/keystore/passphrase-helpers';
+import { readPassphraseFromFile, readPassphraseFromStdin } from '../infrastructure/keystore/passphrase-helpers';
 
 // ASCII-only banner. The previous box-drawing + heavy-block art rendered
 // fine in a terminal but turned into mojibake squares in the node-ui log
@@ -467,21 +467,29 @@ async function bootstrap() {
           // (further down) does not fire on the same boot.
           keystoreActive = true;
         } else if (keystoreActive) {
-          // Hardened branch — passphrase resolution chain:
+          // Hardened branch — passphrase resolution chain (F-node-008
+          // max-security: env-var passphrase is permanently disabled):
           //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE  (file-mounted secret)
-          //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD  (env var,
-          //      mirrors what node-ui Tauri's start_node passes when
-          //      spawning the CLI — operators don't get a TTY in that
-          //      flow and would otherwise hang on the prompt below)
-          //   3. interactive prompt (3-attempt retry)
+          //   2. SYNAPSEIA_PASSPHRASE_FROM_STDIN=true  (first line of
+          //      stdin — Tauri desktop UI pipes the typed password here)
+          //   3. interactive TTY prompt (3-attempt retry)
           const { password: passwordPrompt } = await import('@inquirer/prompts');
           const filePass = await readPassphraseFromFile(
             process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
             logger,
           );
-          const envPassRaw = process.env.SYNAPSEIA_WALLET_PASSWORD?.trim()
-            || process.env.WALLET_PASSWORD?.trim();
-          let envPass = filePass ?? (envPassRaw && envPassRaw.length > 0 ? envPassRaw : null);
+          if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+            const offending: string[] = [];
+            if (process.env.SYNAPSEIA_WALLET_PASSWORD) offending.push('SYNAPSEIA_WALLET_PASSWORD');
+            if (process.env.WALLET_PASSWORD) offending.push('WALLET_PASSWORD');
+            process.stderr.write(
+              `[Keystore] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+              'is NEVER honoured (F-node-008 max-security, no opt-in). Use ' +
+              'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or the interactive prompt instead.\n',
+            );
+          }
+          const stdinPass = filePass ? undefined : await readPassphraseFromStdin(logger);
+          let envPass: string | null | undefined = filePass ?? stdinPass ?? null;
           let attempts = 0;
           const maxAttempts = 3;
           // eslint-disable-next-line no-constant-condition
@@ -509,7 +517,7 @@ async function bootstrap() {
           }
           // Reconstruct wallet for downstream banner / activation usage.
           // We avoid touching walletService entirely to make sure no
-          // legacy SYNAPSEIA_WALLET_PASSWORD env read can happen.
+          // legacy env-var passphrase read can happen.
           const { Keypair: KeypairCtor } = await import('@solana/web3.js');
           const kp = KeypairCtor.fromSecretKey(secretKeyBytes);
           wallet = {
@@ -699,7 +707,7 @@ async function bootstrap() {
               } else {
                 await keystore.encrypt(secretKeyBytes, pass1);
                 logger.log(`[Keystore] wallet encrypted at ${keystore.getPath()} (mode 0600)`);
-                logger.warn('[Keystore] you can now remove SYNAPSEIA_WALLET_PASSWORD from your .env and delete legacy wallet.json once you have verified the new keystore unlocks correctly.');
+                logger.warn('[Keystore] env-var passphrase (SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD) is no longer honoured — unset it in your .env and delete the legacy wallet.json once you have verified the new keystore unlocks correctly.');
               }
             }
           } catch (err) {
@@ -1106,23 +1114,32 @@ async function bootstrap() {
 
       // Hardened branch: keystore-backed wallets (node-ui installs, and
       // any CLI install since the keystore migration). Mirrors the
-      // passphrase-resolution chain in `start`:
+      // passphrase-resolution chain in `start` (F-node-008 max-security:
+      // env-var passphrase is permanently disabled):
       //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE (file-mounted secret)
-      //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD (back-compat)
-      //   3. interactive prompt
+      //   2. SYNAPSEIA_PASSPHRASE_FROM_STDIN=true (stdin pipe)
+      //   3. interactive TTY prompt
       if (hasKeystore) {
         try {
           const filePass = await readPassphraseFromFile(
             process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
             logger,
           );
-          const envPassRaw = process.env.SYNAPSEIA_WALLET_PASSWORD?.trim()
-            || process.env.WALLET_PASSWORD?.trim();
+          if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+            const offending: string[] = [];
+            if (process.env.SYNAPSEIA_WALLET_PASSWORD) offending.push('SYNAPSEIA_WALLET_PASSWORD');
+            if (process.env.WALLET_PASSWORD) offending.push('WALLET_PASSWORD');
+            process.stderr.write(
+              `[Keystore] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+              'is NEVER honoured (F-node-008 max-security, no opt-in).\n',
+            );
+          }
+          const stdinPass = filePass ? undefined : await readPassphraseFromStdin(logger);
           let pass: string;
           if (filePass != null) {
             pass = filePass;
-          } else if (envPassRaw && envPassRaw.length > 0) {
-            pass = envPassRaw;
+          } else if (stdinPass != null) {
+            pass = stdinPass;
           } else {
             const { password } = await import('@inquirer/prompts');
             pass = await password({
@@ -1160,10 +1177,23 @@ async function bootstrap() {
       }
 
       // Legacy fallback: operators who never migrated off wallet.json.
+      // Same hardening as the keystore branch — env-var passphrase is
+      // permanently disabled (F-node-008).
+      const legacyFilePass = await readPassphraseFromFile(
+        process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+        logger,
+      );
+      if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+        process.stderr.write(
+          '[Wallet] SECURITY: ignoring SYNAPSEIA_WALLET_PASSWORD/WALLET_PASSWORD — env-var passphrase is NEVER honoured (F-node-008 max-security, no opt-in).\n',
+        );
+      }
+      const legacyStdinPass = legacyFilePass ? undefined : await readPassphraseFromStdin(logger);
       let pwd: string;
-      const envPwd = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-      if (envPwd) {
-        pwd = envPwd;
+      if (legacyFilePass != null) {
+        pwd = legacyFilePass;
+      } else if (legacyStdinPass != null) {
+        pwd = legacyStdinPass;
       } else {
         const { password } = await import('@inquirer/prompts');
         pwd = await password({
@@ -1536,11 +1566,14 @@ async function bootstrap() {
   // passphrase, 2 on missing passphrase, 3 when neither keystore nor legacy
   // wallet are on disk, 4 on any other load error.
   //
-  // Passphrase resolution order (matches the boot path semantics):
+  // Passphrase resolution order (matches the boot path semantics —
+  // F-node-008 max-security: env-var passphrase is permanently
+  // disabled, no opt-in path remains):
   //   1. SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE (mounted secret, file-based)
-  //   2. SYNAPSEIA_WALLET_PASSWORD / WALLET_PASSWORD (env, back-compat with
-  //      the desktop UI `unlock_wallet` Tauri command which still passes the
-  //      typed password through SYNAPSEIA_WALLET_PASSWORD).
+  //   2. SYNAPSEIA_PASSPHRASE_FROM_STDIN=true (first line of stdin —
+  //      the desktop UI `unlock_wallet` Tauri command pipes the typed
+  //      password to the spawned CLI's stdin instead of exporting it
+  //      as an env var).
   //
   // Stdout/stderr markers (`__WALLET_OK__ <pubkey>` and `INVALID_PASSWORD`)
   // are part of the contract with `packages/node-ui/src-tauri/src/commands.rs::unlock_wallet`
@@ -1549,14 +1582,25 @@ async function bootstrap() {
     .command('wallet-verify')
     .description('Validate wallet passphrase against keystore (or legacy wallet.json fallback)')
     .action(async () => {
+      if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+        const offending: string[] = [];
+        if (process.env.SYNAPSEIA_WALLET_PASSWORD) offending.push('SYNAPSEIA_WALLET_PASSWORD');
+        if (process.env.WALLET_PASSWORD) offending.push('WALLET_PASSWORD');
+        process.stderr.write(
+          `[wallet-verify] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+          'is NEVER honoured (F-node-008 max-security, no opt-in).\n',
+        );
+      }
       const filePassphrase = await readPassphraseFromFile(
         process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
         logger,
       );
-      const envPassphrase = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-      const passphrase = filePassphrase ?? envPassphrase;
+      const stdinPassphrase = filePassphrase
+        ? undefined
+        : await readPassphraseFromStdin(logger);
+      const passphrase = filePassphrase ?? stdinPassphrase;
       if (!passphrase) {
-        logger.error('SYNAPSEIA_WALLET_PASSWORD env var or SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE is required for wallet-verify');
+        logger.error('SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or SYNAPSEIA_PASSPHRASE_FROM_STDIN=true (with passphrase piped on stdin) is required for wallet-verify');
         process.exit(2);
       }
 
@@ -1617,10 +1661,16 @@ async function bootstrap() {
     });
 
   // ── wallet-create ──────────────────────────────────────────────────────────
-  // Non-interactive: creates a fresh wallet encrypted with
-  // SYNAPSEIA_WALLET_PASSWORD and writes node config in one atomic call.
-  // Used by the desktop UI during first-time setup. Refuses to overwrite an
-  // existing wallet — user must delete it explicitly to re-initialise.
+  // Non-interactive: creates a fresh wallet encrypted with the
+  // passphrase piped via stdin (or a file-mounted secret) and writes
+  // node config in one atomic call. Used by the desktop UI during
+  // first-time setup. Refuses to overwrite an existing wallet — user
+  // must delete it explicitly to re-initialise.
+  //
+  // SECURITY (F-node-008 max-security): env-var passphrase is NEVER
+  // honoured. The Tauri wrapper now pipes the typed password to this
+  // command's stdin (with SYNAPSEIA_PASSPHRASE_FROM_STDIN=true);
+  // headless installs use SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE.
   program
     .command('wallet-create')
     .description('Create a new encrypted wallet + base config (non-interactive)')
@@ -1634,12 +1684,28 @@ async function bootstrap() {
       llmUrl?: string;
       llmKey?: string;
     }) => {
-      const envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? process.env.WALLET_PASSWORD;
-      if (!envPassword) {
-        logger.error('SYNAPSEIA_WALLET_PASSWORD env var is required for wallet-create');
+      if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+        const offending: string[] = [];
+        if (process.env.SYNAPSEIA_WALLET_PASSWORD) offending.push('SYNAPSEIA_WALLET_PASSWORD');
+        if (process.env.WALLET_PASSWORD) offending.push('WALLET_PASSWORD');
+        process.stderr.write(
+          `[wallet-create] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+          'is NEVER honoured (F-node-008 max-security, no opt-in).\n',
+        );
+      }
+      const filePassphrase = await readPassphraseFromFile(
+        process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+        logger,
+      );
+      const stdinPassphrase = filePassphrase
+        ? undefined
+        : await readPassphraseFromStdin(logger);
+      const newPassword = filePassphrase ?? stdinPassphrase;
+      if (!newPassword) {
+        logger.error('SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or SYNAPSEIA_PASSPHRASE_FROM_STDIN=true (with passphrase piped on stdin) is required for wallet-create');
         process.exit(2);
       }
-      if (envPassword.length < 8) {
+      if (newPassword.length < 8) {
         logger.error('PASSWORD_TOO_SHORT: password must be at least 8 characters');
         process.exit(2);
       }
@@ -1651,7 +1717,7 @@ async function bootstrap() {
       }
       try {
         // Create the wallet directory + encrypted wallet.json in one call
-        const { wallet } = await walletService.generate(nodeHome, envPassword);
+        const { wallet } = await walletService.generate(nodeHome, newPassword);
 
         // Persist the base config atomically (no partial state)
         const cfgService = app.get(NodeConfigService);

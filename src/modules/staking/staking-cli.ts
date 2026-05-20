@@ -20,7 +20,7 @@ import * as crypto from 'crypto';
 import { input, password } from '@inquirer/prompts';
 import { NodeConfigHelper, resolveSolanaRpcUrl } from '../config/config';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../../infrastructure/keystore/EncryptedKeystore';
-import { readPassphraseFromFile } from '../../infrastructure/keystore/passphrase-helpers';
+import { readPassphraseFromFile, readPassphraseFromStdin } from '../../infrastructure/keystore/passphrase-helpers';
 import { OFFICIAL_COORDINATOR_URL } from '../../constants/coordinator';
 import {
   getStakingProgramId as resolveStakingProgramId,
@@ -243,49 +243,42 @@ function decryptWallet(walletData: { encryptedData: string; kdfIterations?: numb
 // have not run a keystore-aware boot yet.
 //
 // Passphrase resolution (high → low priority):
-//   1. `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` — file-mounted secret
-//      (Docker / systemd / fly-machines).
-//   2. `SYNAPSEIA_WALLET_PASSWORD` — back-compat with the Tauri spawn
-//      path. SECURITY (F-node-008 / P9): the legacy `WALLET_PASSWORD`
-//      name is NO LONGER read (was inheritable by any sibling at the
-//      same UID via /proc/<pid>/environ and by every python subprocess
-//      the node spawned). The new var is honoured ONLY when
-//      `SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true` is also set; the
-//      Tauri wrapper sets the flag explicitly for headless boot.
-//   3. Interactive prompt — `password({ message })`.
+//   1. `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE` — mode 0600 file-mounted
+//      secret (Docker / systemd / fly-machines).
+//   2. `SYNAPSEIA_PASSPHRASE_FROM_STDIN=true` — first line of stdin
+//      (Tauri desktop UI pipes the typed password here).
+//   3. Interactive TTY prompt — `password({ message })`.
+//
+// SECURITY (F-node-008 / P9): `SYNAPSEIA_WALLET_PASSWORD` and the
+// legacy `WALLET_PASSWORD` are NEVER honoured (no opt-in path remains).
+// Both were inheritable to any sibling at the same UID via
+// `/proc/<pid>/environ` and to every python subprocess the node
+// spawned, so they're black-holed here. Detection of either triggers
+// a loud stderr warning to surface the misconfiguration.
 export async function loadWalletWithPassword(): Promise<Keypair> {
   const keystore = new EncryptedKeystore();
-  // Gate the env-var passphrase behind the explicit opt-in flag.
-  // Production deployments use SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE; the
-  // env var path stays alive only for the Tauri wrapper / CI runners
-  // that already control their own process tree.
-  let envPassword: string | null = null;
-  if (process.env.SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE === 'true') {
-    envPassword = process.env.SYNAPSEIA_WALLET_PASSWORD ?? null;
-    if (envPassword) {
-      process.stderr.write(
-        '[staking-cli] WARNING: using env-var passphrase (SYNAPSEIA_WALLET_PASSWORD); ' +
-        'readable to anything at the same UID via /proc/<pid>/environ. ' +
-        'Prefer SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
-      );
-    }
-  } else if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+  // Stderr warning if a forbidden env var is still set — we never read
+  // it, but the operator should know it's a no-op and unset it.
+  if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
+    const offending: string[] = [];
+    if (process.env.SYNAPSEIA_WALLET_PASSWORD) offending.push('SYNAPSEIA_WALLET_PASSWORD');
+    if (process.env.WALLET_PASSWORD) offending.push('WALLET_PASSWORD');
     process.stderr.write(
-      '[staking-cli] SECURITY: ignoring SYNAPSEIA_WALLET_PASSWORD/WALLET_PASSWORD — ' +
-      'env-var passphrase is disabled by default (F-node-008). Set ' +
-      'SYNAPSEIA_ALLOW_INSECURE_ENV_PASSPHRASE=true to opt in, or use ' +
-      'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE for production.\n',
+      `[staking-cli] SECURITY: ignoring ${offending.join('/')} — env-var passphrase ` +
+      'is NEVER honoured (F-node-008 max-security mode, no opt-in). Use ' +
+      'SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or interactive TTY prompt instead.\n',
     );
   }
 
   if (keystore.exists()) {
-    // Hardened branch. File-mounted secret wins; env var honoured for
-    // back-compat with Tauri/non-TTY callers; interactive prompt last.
+    // Hardened branch. File-mounted secret wins; stdin pipe next
+    // (Tauri-spawn channel); interactive prompt last.
     const filePass = await readPassphraseFromFile(
       process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
       logger,
     );
-    let initialPass: string | null = filePass ?? envPassword;
+    const stdinPass = filePass ? undefined : await readPassphraseFromStdin(logger);
+    let initialPass: string | null = filePass ?? stdinPass ?? null;
     let attempts = 0;
     const maxAttempts = 3;
     // eslint-disable-next-line no-constant-condition
@@ -316,9 +309,8 @@ export async function loadWalletWithPassword(): Promise<Keypair> {
 
   // Legacy fallback — same behaviour as before the keystore migration.
   // Operators that have not run `syn start` on a keystore-aware version
-  // still hit this path; we keep the env-var shortcut so existing
-  // Tauri/CI wrappers continue to work, but log a one-line warning so
-  // ops know to migrate.
+  // still hit this path. Env-var passphrases are NOT accepted here
+  // either; the resolution chain is file → stdin → prompt.
   const walletFile = WALLET_FILE();
   if (!fs.existsSync(walletFile)) {
     throw new Error(
@@ -353,9 +345,17 @@ export async function loadWalletWithPassword(): Promise<Keypair> {
     const secretKey = new Uint8Array(walletData.secretKey);
     return Keypair.fromSecretKey(secretKey);
   }
-  const walletPassword = envPassword
-    ? envPassword
-    : await password({ message: 'Enter legacy wallet password:', mask: '*' });
+  // Legacy wallet.json passphrase resolution mirrors the hardened
+  // keystore branch: file-mounted secret → stdin pipe → interactive
+  // prompt. Env-var passphrase is permanently disabled.
+  const legacyFilePass = await readPassphraseFromFile(
+    process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
+    logger,
+  );
+  const legacyStdinPass = legacyFilePass ? undefined : await readPassphraseFromStdin(logger);
+  const walletPassword = legacyFilePass
+    ?? legacyStdinPass
+    ?? (await password({ message: 'Enter legacy wallet password:', mask: '*' }));
   try {
     const secretKey = decryptWallet(walletData, walletPassword);
     return Keypair.fromSecretKey(secretKey);
