@@ -1,8 +1,14 @@
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
+import { valid } from 'semver';
 import logger from './logger';
+import {
+  loadCoordinatorPubkey,
+} from '../p2p/protocols/coordinator-pubkey';
+import { verifyEd25519 } from '../p2p/protocols/verify-ed25519';
 
 // `__filename` is a CJS global in jest and a tsup-injected shim in the
 // production ESM bundle (`shims: true` in tsup.config.ts). Both paths
@@ -74,6 +80,27 @@ export interface SelfUpdateResult {
 }
 
 /**
+ * Signed release manifest fetched from coord `/release/latest`.
+ *
+ * Wire shape:
+ *   {
+ *     "version":   "0.8.94",
+ *     "sha256":    "<hex of @synapseia-network/node tarball>",
+ *     "signature": "<base64 Ed25519 sig over canonicalized {version,sha256,signedAt}>",
+ *     "signedAt":  <unix-ms>
+ *   }
+ *
+ * Verified against the hardcoded `COORDINATOR_PUBKEY_BASE58` trust anchor
+ * already used for gossipsub envelopes.
+ */
+export interface SignedReleaseManifest {
+  version: string;
+  sha256: string;
+  signature: string;
+  signedAt: number;
+}
+
+/**
  * Resolve the npm prefix the CURRENT binary was installed into. Looks
  * for `/lib/node_modules/@synapseia-network/node` in this module's
  * dirname and returns the parent of `lib/`. Returns null when the
@@ -96,18 +123,285 @@ function getRunningInstallPrefix(): string | null {
   return null;
 }
 
+/** Max manifest age accepted before the node refuses the update (replay
+ *  defense). 24h — releases are infrequent but routine restarts within a
+ *  day are common. Tunable; if a release is older than this, coord just
+ *  re-signs on a refresh cycle. */
+const MANIFEST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Tarball size cap. Real node tarball ~3-10 MB; cap well below the
+ *  cliff where a malicious manifest could point us at a multi-GB tarball
+ *  to DoS the disk. */
+const TARBALL_MAX_BYTES = 80 * 1024 * 1024;
+
+/**
+ * Fetch + verify the signed release manifest from coord.
+ *
+ * Returns null on ANY failure (network, missing endpoint, malformed
+ * body, bad signature, stale manifest). Callers MUST fail-closed —
+ * refuse to install — rather than fall back to `@latest`.
+ */
+export async function fetchSignedReleaseManifest(
+  coordinatorUrl: string,
+): Promise<SignedReleaseManifest | null> {
+  let resp: Response;
+  try {
+    resp = await fetch(`${coordinatorUrl}/release/latest`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    logger.warn(`[SelfUpdate] /release/latest unreachable: ${(err as Error).message}`);
+    return null;
+  }
+  if (!resp.ok) {
+    logger.warn(`[SelfUpdate] /release/latest returned HTTP ${resp.status}`);
+    return null;
+  }
+
+  let raw: unknown;
+  try {
+    raw = await resp.json();
+  } catch {
+    logger.warn('[SelfUpdate] /release/latest body is not JSON');
+    return null;
+  }
+
+  if (!isSignedReleaseManifestShape(raw)) {
+    logger.warn('[SelfUpdate] /release/latest payload missing required fields');
+    return null;
+  }
+
+  // Validate shape values BEFORE crypto work. semver + lowercase hex
+  // sha256 are cheap pre-conditions.
+  if (!valid(raw.version)) {
+    logger.warn(`[SelfUpdate] manifest version "${raw.version}" is not valid semver`);
+    return null;
+  }
+  if (!/^[a-f0-9]{64}$/.test(raw.sha256)) {
+    logger.warn('[SelfUpdate] manifest sha256 is not a 64-char lowercase hex string');
+    return null;
+  }
+  if (typeof raw.signedAt !== 'number' || raw.signedAt <= 0) {
+    logger.warn('[SelfUpdate] manifest signedAt missing or non-positive');
+    return null;
+  }
+
+  const ageMs = Date.now() - raw.signedAt;
+  if (ageMs > MANIFEST_MAX_AGE_MS) {
+    logger.warn(
+      `[SelfUpdate] manifest is stale (age=${Math.round(ageMs / 1000)}s, ` +
+        `max=${MANIFEST_MAX_AGE_MS / 1000}s). Refusing install.`,
+    );
+    return null;
+  }
+  // Small future skew window (clock drift). Reject if > 5 min in the future.
+  if (ageMs < -5 * 60 * 1000) {
+    logger.warn('[SelfUpdate] manifest signedAt is in the future — clock skew? Refusing install.');
+    return null;
+  }
+
+  // Canonicalize the signed payload. MUST match the coord-side signer
+  // byte-for-byte: keys in fixed order, no whitespace, no trailing
+  // newline. JSON.stringify on an object literal with a fixed key order
+  // is sufficient because Node preserves insertion order for string keys.
+  const signedPayload = JSON.stringify({
+    version: raw.version,
+    sha256: raw.sha256,
+    signedAt: raw.signedAt,
+  });
+
+  let signatureBytes: Uint8Array;
+  try {
+    signatureBytes = Buffer.from(raw.signature, 'base64');
+  } catch {
+    logger.warn('[SelfUpdate] manifest signature is not valid base64');
+    return null;
+  }
+  if (signatureBytes.length !== 64) {
+    logger.warn(
+      `[SelfUpdate] manifest signature must decode to 64 bytes; got ${signatureBytes.length}`,
+    );
+    return null;
+  }
+
+  let publicKeyBytes: Uint8Array;
+  try {
+    publicKeyBytes = loadCoordinatorPubkey();
+  } catch (err) {
+    logger.error(
+      `[SelfUpdate] failed to load coordinator pubkey: ${(err as Error).message}`,
+    );
+    return null;
+  }
+
+  const sigValid = verifyEd25519({
+    publicKeyBytes,
+    signatureBytes,
+    messageBytes: Buffer.from(signedPayload, 'utf-8'),
+  });
+  if (!sigValid) {
+    logger.error(
+      '[SelfUpdate] manifest Ed25519 signature failed verification. Refusing install.',
+    );
+    return null;
+  }
+
+  return raw;
+}
+
+function isSignedReleaseManifestShape(value: unknown): value is SignedReleaseManifest {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.version === 'string' &&
+    typeof v.sha256 === 'string' &&
+    typeof v.signature === 'string' &&
+    typeof v.signedAt === 'number'
+  );
+}
+
+/**
+ * Download the pinned tarball via `npm pack` into a tmp dir. Returns
+ * the absolute path to the downloaded `.tgz`. Uses `--ignore-scripts`
+ * so npm itself does NOT execute any package lifecycle scripts during
+ * pack (npm normally runs `prepare` on the *publisher* side; pack on a
+ * registry tarball should be inert, but we belt-and-suspenders it).
+ *
+ * Throws on any failure — caller treats throw as install-blocked.
+ */
+function npmPackPinnedTarball(version: string, destDir: string): string {
+  mkdirSync(destDir, { recursive: true });
+  // `npm pack <spec> --pack-destination=<dir> --json` writes the tarball
+  // to `<dir>/<sanitized-name>-<version>.tgz` and prints a JSON array
+  // describing what was packed. We rely on the deterministic filename
+  // instead of parsing the JSON to keep the surface area small.
+  const out = execSync(
+    `npm pack @synapseia-network/node@${version} --pack-destination=${shellQuote(destDir)} --ignore-scripts --silent`,
+    {
+      encoding: 'utf-8',
+      timeout: 120_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  ).trim();
+  // npm pack prints the filename (basename) on stdout. Compose the abs
+  // path from destDir + that basename — robust to any future npm
+  // sanitization change.
+  const basename = out.split(/\r?\n/).pop()?.trim();
+  if (!basename) {
+    throw new Error('npm pack produced no output');
+  }
+  const tarballPath = join(destDir, basename);
+  if (!existsSync(tarballPath)) {
+    throw new Error(`npm pack reported "${basename}" but ${tarballPath} does not exist`);
+  }
+  return tarballPath;
+}
+
+/** Defensive shell-quote for paths we pass through `execSync` string
+ *  form. We control the value (tmp dir under $HOME) but the rule is
+ *  "every external string is hostile" — quoting cheap, audit-friendly. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Compute the sha256 of a file on disk and return it as lowercase hex.
+ */
+function sha256File(path: string): string {
+  const hash = createHash('sha256');
+  hash.update(readFileSync(path));
+  return hash.digest('hex');
+}
+
 /**
  * Attempt to self-update the node CLI.
- * Only npm global installs can be updated automatically.
- * Git clone and binary installs require manual intervention.
+ *
+ * Supply-chain hardened (F-node-003, 2026-05-20):
+ *   1. Fetch + verify Ed25519-signed manifest from coord `/release/latest`.
+ *   2. `npm pack` the pinned version into a tmp dir (no install yet).
+ *   3. sha256-verify the on-disk tarball against the signed manifest.
+ *   4. `npm install -g <tarball-path> --ignore-scripts` so no `preinstall`
+ *      / `postinstall` / `prepare` lifecycle scripts can execute.
+ *
+ * Fail-closed at every step. A missing `/release/latest` endpoint
+ * (older coord deployments) REFUSES the update rather than falling
+ * back to unverified `@latest`. The operator follow-up is to add the
+ * signed-manifest endpoint to coord.
+ *
+ * Git-clone and binary installs still require manual intervention.
  */
-export function attemptSelfUpdate(): SelfUpdateResult {
+export async function attemptSelfUpdate(coordinatorUrl: string): Promise<SelfUpdateResult> {
   const installType = detectInstallType();
 
   switch (installType) {
     case InstallType.NPM_GLOBAL: {
+      // ── 1. Fetch + verify signed manifest ──────────────────────────
+      const manifest = await fetchSignedReleaseManifest(coordinatorUrl);
+      if (!manifest) {
+        return {
+          success: false,
+          installType,
+          message:
+            'Refusing self-update: coord /release/latest did not return a valid Ed25519-' +
+            'signed manifest. Update aborted to avoid unverified supply-chain install. ' +
+            'Operator follow-up: ensure coord exposes /release/latest with the signed ' +
+            'manifest shape {version, sha256, signature, signedAt} signed by ' +
+            'COORDINATOR_PRIVKEY_BASE58. Falling back to `npm install -g @latest` is ' +
+            'NOT supported by this version.',
+        };
+      }
+
+      const tmpDir = join(homedir(), '.synapseia', 'self-update', String(Date.now()));
+      let tarballPath: string;
       try {
-        logger.log('[SelfUpdate] Updating via npm...');
+        // ── 2. npm pack pinned version into tmp dir ─────────────────
+        logger.log(`[SelfUpdate] Packing @synapseia-network/node@${manifest.version} (signed manifest verified)...`);
+        tarballPath = npmPackPinnedTarball(manifest.version, tmpDir);
+      } catch (err) {
+        return {
+          success: false,
+          installType,
+          message: `npm pack of pinned version ${manifest.version} failed: ${(err as Error).message}`,
+        };
+      }
+
+      // ── 3. sha256-verify the downloaded tarball ────────────────────
+      let actualSha: string;
+      try {
+        const stats = require('fs').statSync(tarballPath);
+        if (stats.size > TARBALL_MAX_BYTES) {
+          return {
+            success: false,
+            installType,
+            message:
+              `Packed tarball exceeds ${TARBALL_MAX_BYTES} bytes (got ${stats.size}). Refusing install.`,
+          };
+        }
+        actualSha = sha256File(tarballPath);
+      } catch (err) {
+        return {
+          success: false,
+          installType,
+          message: `Failed to read packed tarball: ${(err as Error).message}`,
+        };
+      }
+      if (actualSha !== manifest.sha256) {
+        logger.error(
+          `[SelfUpdate] tarball sha256 mismatch. expected=${manifest.sha256} actual=${actualSha}`,
+        );
+        return {
+          success: false,
+          installType,
+          message:
+            `Tarball sha256 mismatch (expected ${manifest.sha256}, got ${actualSha}). ` +
+            `Refusing install — possible registry compromise or stale manifest.`,
+        };
+      }
+      logger.log(`[SelfUpdate] tarball sha256 verified against signed manifest.`);
+
+      // ── 4. npm install -g <tarball> --ignore-scripts ───────────────
+      try {
+        logger.log('[SelfUpdate] Installing verified tarball with --ignore-scripts...');
         // Target the SAME prefix the running binary was loaded from
         // — otherwise the update lands in a different prefix and the
         // operator's PATH still resolves to the stale binary, kicking
@@ -122,19 +416,22 @@ export function attemptSelfUpdate(): SelfUpdateResult {
         mkdirSync(targetPrefix, { recursive: true });
         logger.log(`[SelfUpdate] target prefix: ${targetPrefix}`);
 
-        execSync('npm install -g @synapseia-network/node@latest', {
-          encoding: 'utf-8',
-          timeout: 120_000,
-          stdio: 'pipe',
-          env: {
-            ...process.env,
-            NPM_CONFIG_PREFIX: targetPrefix,
+        execSync(
+          `npm install -g ${shellQuote(tarballPath)} --ignore-scripts`,
+          {
+            encoding: 'utf-8',
+            timeout: 120_000,
+            stdio: 'pipe',
+            env: {
+              ...process.env,
+              NPM_CONFIG_PREFIX: targetPrefix,
+            },
           },
-        });
+        );
         return {
           success: true,
           installType,
-          message: 'Updated via npm. Restarting...',
+          message: `Updated to v${manifest.version} (signed + sha256-verified, --ignore-scripts). Restarting...`,
         };
       } catch (err) {
         const msg = (err as Error).message ?? String(err);
@@ -154,7 +451,7 @@ export function attemptSelfUpdate(): SelfUpdateResult {
         return {
           success: false,
           installType,
-          message: `npm update failed: ${msg}`,
+          message: `npm install of verified tarball failed: ${msg}`,
         };
       }
     }
