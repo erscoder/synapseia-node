@@ -15,6 +15,9 @@ import { ToolRegistry } from '../tools/tool-registry';
 import { ToolRunnerService } from '../tools/tool-runner.service';
 import { LangGraphLlmService } from '../llm.service';
 import { buildMedicalReActPrompt } from '../prompts/medical/medical-react';
+import { SearchCorpusTool } from '../tools/search-corpus.tool';
+import { QueryKgTool } from '../tools/query-kg.tool';
+import { GenerateEmbeddingTool } from '../tools/generate-embedding.tool';
 import logger from '../../../../utils/logger';
 
 @Injectable()
@@ -25,6 +28,9 @@ export class ExecuteResearchNode {
     private readonly toolRunner: ToolRunnerService,
     private readonly toolRegistry: ToolRegistry,
     private readonly llmService: LangGraphLlmService,
+    private readonly searchCorpusTool: SearchCorpusTool,
+    private readonly queryKgTool: QueryKgTool,
+    private readonly generateEmbeddingTool: GenerateEmbeddingTool,
   ) {}
 
 
@@ -135,16 +141,19 @@ export class ExecuteResearchNode {
   }
 
   private registerTools(): void {
-    // Import tools to get their definitions
-    const { SearchCorpusTool } = require('../tools/search-corpus.tool');
-    const { QueryKgTool } = require('../tools/query-kg.tool');
-    const { GenerateEmbeddingTool } = require('../tools/generate-embedding.tool');
-
+    // Tools resolved through Nest DI (injected via constructor). Previously
+    // this method used `require()` to side-load the tool classes inside an
+    // ESM bundle — that worked only via tsup's `cjs-shim` banner, bypassed
+    // the static dependency graph, risked tree-shaking, and crucially
+    // instantiated `new SearchCorpusTool()` / `new QueryKgTool()` without
+    // their required `WorkOrderCoordinatorHelper` ctor arg (latent runtime
+    // crash hidden because TypeScript never saw the call sites).
+    //
     // Only register if not already registered
     if (this.toolRegistry.getAll().length === 0) {
-      this.toolRegistry.register(new SearchCorpusTool().def);
-      this.toolRegistry.register(new QueryKgTool().def);
-      this.toolRegistry.register(new GenerateEmbeddingTool().def);
+      this.toolRegistry.register(this.searchCorpusTool.def);
+      this.toolRegistry.register(this.queryKgTool.def);
+      this.toolRegistry.register(this.generateEmbeddingTool.def);
     }
   }
 
