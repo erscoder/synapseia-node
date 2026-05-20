@@ -343,3 +343,50 @@ export function makeWorkOrderFailedEvent(
     hwFingerprint: hw,
   };
 }
+
+/**
+ * Per-drain-cycle audit counters for `WorkOrderPushQueue`. F-node-012
+ * (P22 reviewer-lesson — "drain-consume-all without re-queue/discard
+ * accounting"). Caller emits ONE event per drain pass with:
+ *  - drained: total entries removed from the queue this pass.
+ *  - requeued: entries re-inserted via `requeue()` (preserved receivedAt).
+ *  - accepted: entries forwarded for processing.
+ *  - rejectedByCooldown: entries dropped because of WO-type cooldown.
+ *  - rejectedByCap: entries dropped because the node was already at
+ *    capacity / backpressure said no.
+ *
+ * Routed through `subsystem.warning` (severity=info) so the coord-side
+ * union does not need a new discriminator — the audit signal is the
+ * `context` payload. Subsystem `other` keeps grafana dashboards from
+ * misclassifying drain churn as a training/inference issue.
+ */
+export interface WorkOrderQueueAuditContext {
+  drained: number;
+  requeued: number;
+  accepted: number;
+  rejectedByCooldown: number;
+  rejectedByCap: number;
+}
+
+export function makeWorkOrderQueueAuditEvent(
+  hw: HwFingerprint,
+  ctx: WorkOrderQueueAuditContext,
+): TelemetryEventInput {
+  const { drained, requeued, accepted, rejectedByCooldown, rejectedByCap } = ctx;
+  return {
+    clientEventId: newId(),
+    eventAt: now(),
+    eventType: 'subsystem.warning',
+    severity: 'info',
+    subsystem: 'other',
+    message:
+      `[WorkOrderPushQueue] drained=${drained} accepted=${accepted} ` +
+      `requeued=${requeued} rejected_cooldown=${rejectedByCooldown} ` +
+      `rejected_cap=${rejectedByCap}`,
+    context: {
+      kind: 'work-order.queue.audit',
+      ...ctx,
+    },
+    hwFingerprint: hw,
+  };
+}

@@ -512,7 +512,38 @@ function findGitRoot(start: string): string | null {
  * line to stdout before exiting so a human in the shell sees the cue
  * and the desktop UI's log tail picks it up.
  */
-export function restartProcess(): never {
+/**
+ * F-node-013 (P30 reviewer-lesson) — graceful shutdown handles surfaced
+ * by the caller so we can flush the telemetry ring buffer and stop the
+ * libp2p node BEFORE `process.exit(0)`. Previously this function exited
+ * immediately, dropping up to 1000 in-memory telemetry events plus any
+ * "update applied" / in-flight error context.
+ *
+ * Each handle is optional: pre-flight callers (which run BEFORE p2p +
+ * telemetry are constructed) pass nothing and behave exactly like the
+ * pre-fix call site. Steady-state callers from node-runtime pass both.
+ *
+ * Mirrors the SIGTERM shutdown sequence in node-runtime.ts: emit a
+ * shutdown event, drain the ring with a bounded budget, stop p2p.
+ */
+export interface RestartShutdownHandles {
+  /**
+   * Stop the telemetry client and flush its ring + spool head with a
+   * bounded budget. Implementations should call `drainAll(timeoutMs)`
+   * then `stop()`. Errors are swallowed by `restartProcess`.
+   */
+  stopTelemetry?: (timeoutMs: number) => Promise<void>;
+  /**
+   * Stop the libp2p node. Errors are swallowed by `restartProcess`.
+   */
+  stopP2p?: () => Promise<void>;
+}
+
+const SHUTDOWN_BUDGET_MS = 5_000;
+
+export async function restartProcess(
+  handles: RestartShutdownHandles = {},
+): Promise<never> {
   // Operator-facing banner. The first line is the actionable instruction
   // — keep it loud and unambiguous so a human reading the log tail in the
   // desktop UI does not just see "exited" and assume the node crashed.
@@ -527,7 +558,35 @@ export function restartProcess(): never {
   logger.log('  Wallet, identity, and persisted config are unchanged.');
   logger.log('============================================================');
   logger.log('');
-  logger.log('[SelfUpdate] Update applied. Exiting so the host can relaunch with the new code.');
+  logger.log('[SelfUpdate] Update applied. Flushing telemetry + stopping p2p before exit.');
+
+  // Bounded graceful shutdown. We split the 5s budget between telemetry
+  // and p2p — telemetry first so the "update applied" log line (just
+  // emitted via logger.log → tap → ring) reaches the coord before the
+  // process dies. Each step is timeout-guarded so a hung handle cannot
+  // block the relaunch.
+  const half = Math.floor(SHUTDOWN_BUDGET_MS / 2);
+  if (handles.stopTelemetry) {
+    try {
+      await Promise.race([
+        handles.stopTelemetry(half),
+        new Promise<void>((resolve) => setTimeout(resolve, half + 250)),
+      ]);
+    } catch {
+      /* best effort — don't block relaunch on telemetry */
+    }
+  }
+  if (handles.stopP2p) {
+    try {
+      await Promise.race([
+        handles.stopP2p(),
+        new Promise<void>((resolve) => setTimeout(resolve, half)),
+      ]);
+    } catch {
+      /* best effort — don't block relaunch on p2p */
+    }
+  }
+
   // Mirror to stdout in case logger output is suppressed by a
   // log-level filter; the desktop UI's log tail watches stdout/stderr.
   // eslint-disable-next-line no-console

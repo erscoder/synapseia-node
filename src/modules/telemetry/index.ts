@@ -25,6 +25,7 @@ export {
   makeUncaughtExceptionEvent,
   makeUnhandledRejectionEvent,
   makeWorkOrderFailedEvent,
+  makeWorkOrderQueueAuditEvent,
   joinLogArgs,
 } from './event-builder';
 export type {
@@ -36,4 +37,5 @@ export type {
   NodeBootContext,
   GpuSmokeContext,
   WorkOrderFailedContext,
+  WorkOrderQueueAuditContext,
 } from './event-builder';

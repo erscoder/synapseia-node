@@ -282,6 +282,10 @@ describe('restartProcess', () => {
   // child process. Restart now just exits 0 and lets the host
   // orchestrator (Tauri shell, systemd, the user's terminal) relaunch
   // the binary with the updated code. The tests assert that contract.
+  //
+  // F-node-013 (P30) — restartProcess is now async and accepts optional
+  // {stopTelemetry, stopP2p} handles so steady-state callers can flush
+  // the in-memory telemetry ring (up to 1000 events) before exit.
   const mockExit = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   const mockStdoutLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
@@ -294,15 +298,41 @@ describe('restartProcess', () => {
     mockStdoutLog.mockRestore();
   });
 
-  it('exits with code 0 so the host can relaunch', () => {
-    restartProcess();
+  it('exits with code 0 so the host can relaunch', async () => {
+    await restartProcess();
     expect(mockExit).toHaveBeenCalledWith(0);
   });
 
-  it('emits the SELF_UPDATE_RESTART cue to stdout', () => {
-    restartProcess();
+  it('emits the SELF_UPDATE_RESTART cue to stdout', async () => {
+    await restartProcess();
     expect(mockStdoutLog).toHaveBeenCalledWith(
       expect.stringContaining('[SELF_UPDATE_RESTART]'),
     );
   });
+
+  it('awaits stopTelemetry + stopP2p before exiting', async () => {
+    const stopTelemetry = jest.fn().mockResolvedValue(undefined);
+    const stopP2p = jest.fn().mockResolvedValue(undefined);
+    await restartProcess({ stopTelemetry, stopP2p });
+    expect(stopTelemetry).toHaveBeenCalledTimes(1);
+    expect(stopP2p).toHaveBeenCalledTimes(1);
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('swallows handle errors and still exits cleanly', async () => {
+    const stopTelemetry = jest.fn().mockRejectedValue(new Error('flush failed'));
+    const stopP2p = jest.fn().mockRejectedValue(new Error('p2p stop failed'));
+    await restartProcess({ stopTelemetry, stopP2p });
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('does not block exit past the 5s budget if telemetry hangs', async () => {
+    // Hanging promise that never resolves — restartProcess must still
+    // call process.exit within ~5s. Use a budget assertion <6000ms.
+    const start = Date.now();
+    const hang = (): Promise<void> => new Promise<void>(() => undefined);
+    await restartProcess({ stopTelemetry: hang, stopP2p: hang });
+    expect(Date.now() - start).toBeLessThan(6_000);
+    expect(mockExit).toHaveBeenCalledWith(0);
+  }, 7_000);
 });

@@ -10,6 +10,11 @@ import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
 import { isChatInferenceActive } from '../../../inference/chat-inference-state';
 import { getWoFailureCountStore, WoFailureCountStore } from '../../../../shared/wo-failure-counts';
+import {
+  getGlobalTelemetryClient,
+  makeWorkOrderQueueAuditEvent,
+  type HwFingerprint,
+} from '../../../telemetry';
 
 const RESEARCH_COOLDOWN_MS = parseInt(process.env.RESEARCH_COOLDOWN_MS ?? String(5 * 60 * 1000), 10);
 // Training WOs (CPU/GPU/DiLoCo) are multi-submission: the coordinator ranks by
@@ -52,12 +57,22 @@ export class FetchWorkOrdersNode {
   }
 
   async execute(state: AgentState): Promise<Partial<AgentState>> {
+    // F-node-012 (P22) — drain-cycle audit counters. Emitted via
+    // `makeWorkOrderQueueAuditEvent` at the end of every execute() pass
+    // (including early-return branches) so the coord-side telemetry sink
+    // can detect silent discard / starvation. See P22 reviewer-lesson.
+    let rejectedByCooldown = 0;
+    let rejectedByCap = 0;
+    let accepted = 0;
+    let drained = 0;
+
     // Backpressure: if at capacity, skip polling entirely. Expected steady-
     // state behaviour for a busy node — log at info, not warn.
     if (!this.backpressure.canAccept()) {
       logger.info(
         `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping poll`,
       );
+      this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap: 1 });
       return { availableWorkOrders: [] };
     }
 
@@ -65,8 +80,10 @@ export class FetchWorkOrdersNode {
     logger.log(' Polling for available work orders...');
 
     const workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    drained = workOrders.length;
     if (workOrders.length === 0) {
       logger.log(' No work orders available');
+      this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap });
       return { availableWorkOrders: [] };
     }
 
@@ -153,6 +170,7 @@ export class FetchWorkOrdersNode {
         if (cooldownUntil && now < cooldownUntil) {
           const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
           logger.log(` Research WO "${wo.title}" on cooldown — ${remainingSec}s remaining`);
+          rejectedByCooldown++;
           return false;
         }
         return true;
@@ -163,6 +181,7 @@ export class FetchWorkOrdersNode {
         // LLM and push chat past the coordinator's stream timeout.
         if (isChatInferenceActive()) {
           logger.log(` Training WO "${wo.title}" deferred — chat inference in progress`);
+          rejectedByCap++;
           return false;
         }
         // Training WOs are retry-friendly: ranking uses best score per peer,
@@ -172,6 +191,7 @@ export class FetchWorkOrdersNode {
         if (cooldownUntil && now < cooldownUntil) {
           const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
           logger.log(` Training WO "${wo.title}" on cooldown — ${remainingSec}s remaining`);
+          rejectedByCooldown++;
           return false;
         }
         return true;
@@ -179,15 +199,43 @@ export class FetchWorkOrdersNode {
       return !this.completedWorkOrderIds.has(wo.id);
     });
 
+    accepted = pending.length;
     if (pending.length < workOrders.length) {
       logger.log(` Skipping ${workOrders.length - pending.length} WO(s) — ${pending.length} remaining`);
     }
     if (pending.length === 0) {
       logger.log(' All work orders skipped (completed / cooldown / rejected by economics) — waiting');
+      this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap });
       return { availableWorkOrders: [] };
     }
 
+    this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap });
     return { availableWorkOrders: pending };
+  }
+
+  /**
+   * F-node-012 (P22) — emit per-execute() drain audit. Best-effort:
+   * any failure in the telemetry pipeline (no global client yet, missing
+   * hwFingerprint, ring overflow) must never derail WO polling.
+   */
+  private emitQueueAudit(counts: {
+    drained: number;
+    requeued: number;
+    accepted: number;
+    rejectedByCooldown: number;
+    rejectedByCap: number;
+  }): void {
+    try {
+      const client = getGlobalTelemetryClient();
+      if (!client) return;
+      const hw: HwFingerprint = {
+        os: process.platform,
+        arch: process.arch,
+      };
+      client.emit(makeWorkOrderQueueAuditEvent(hw, counts));
+    } catch {
+      /* telemetry must never throw past the fetch-WO node */
+    }
   }
 
   markCompleted(workOrder: WorkOrder): void {

@@ -8,6 +8,7 @@ import {
   makeUncaughtExceptionEvent,
   makeUnhandledRejectionEvent,
   makeWorkOrderFailedEvent,
+  makeWorkOrderQueueAuditEvent,
 } from '../event-builder';
 
 const HW = { os: 'darwin', arch: 'arm64', appVersion: '0.7.3' };
@@ -186,5 +187,45 @@ describe('makeWorkOrderFailedEvent', () => {
     expect(ev.subsystem).toBe('training');
     expect((ev.context as { workOrderId: string }).workOrderId).toBe('wo_1');
     expect(ev.errorName).toBe('Error');
+  });
+});
+
+describe('makeWorkOrderQueueAuditEvent', () => {
+  it('produces a subsystem.warning event with audit counters in context', () => {
+    const ev = makeWorkOrderQueueAuditEvent(HW, {
+      drained: 5,
+      requeued: 1,
+      accepted: 3,
+      rejectedByCooldown: 1,
+      rejectedByCap: 0,
+    });
+    expect(ev.eventType).toBe('subsystem.warning');
+    expect(ev.severity).toBe('info');
+    expect(ev.subsystem).toBe('other');
+    expect(ev.message).toContain('drained=5');
+    expect(ev.message).toContain('accepted=3');
+    expect(ev.message).toContain('requeued=1');
+    expect(ev.message).toContain('rejected_cooldown=1');
+    expect(ev.message).toContain('rejected_cap=0');
+    const ctx = ev.context as Record<string, unknown>;
+    expect(ctx.kind).toBe('work-order.queue.audit');
+    expect(ctx.drained).toBe(5);
+    expect(ctx.requeued).toBe(1);
+    expect(ctx.accepted).toBe(3);
+    expect(ctx.rejectedByCooldown).toBe(1);
+    expect(ctx.rejectedByCap).toBe(0);
+  });
+
+  it('encodes zero counters without losing fields', () => {
+    const ev = makeWorkOrderQueueAuditEvent(HW, {
+      drained: 0,
+      requeued: 0,
+      accepted: 0,
+      rejectedByCooldown: 0,
+      rejectedByCap: 0,
+    });
+    const ctx = ev.context as Record<string, unknown>;
+    expect(ctx.drained).toBe(0);
+    expect(ctx.accepted).toBe(0);
   });
 });
