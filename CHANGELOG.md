@@ -1,5 +1,20 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] fix(node): sign GET /work-orders/available — P1 auth regression (ae75a4dc)
+
+`fetchAvailableWorkOrders` polled the coordinator unsigned, but the coord's
+`@Get('available')` is now behind `NodeSignatureGuard` (audit F-coord-sec-010).
+Every poll got 401 `Missing required auth headers` → nodes reported "No work
+orders available" while real PENDING work orders sat in the queue, starving the
+HTTP pull path (DiLoCo/LoRA/research never picked up). `signedFetch` now has a
+GET/HEAD-safe branch (signs `body: undefined`, no body, no `Content-Type`)
+matching the guard's `sha256('')` canonicalization; query params dropped so the
+signed path equals the requested path. Fixed the stale `getWorkOrder` comment
+(P10). Test asserts the four Ed25519 headers verify and a `'{}'` body is
+rejected. Known follow-up: `inference-server.ts notifyCoordinatorInferenceRequest`
+has the same unsigned-call bug (needs keypair threading) — separate release.
+node-only release (decoupled from node-ui).
+
 ## [2026-05-21] release: node 0.8.95 (da65ceed)
 
 Ships the post-contract-upgrade node changes: `initialize_stake` account
