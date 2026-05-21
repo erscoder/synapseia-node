@@ -1,5 +1,25 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] fix(di): export tool providers from ToolsModule (P27 boot crash) (ec0cd0aa)
+
+**BLOCKER (P27)** node boot crash. `node dist/bootstrap.js --help` threw
+`UnknownDependenciesException` at Nest DI init: `ExecuteResearchNode` could
+not resolve `SearchCorpusTool` (index 5). The DI refactor `8b1fe166` switched
+`ExecuteResearchNode` from `new SearchCorpusTool()` to constructor injection
+of `SearchCorpusTool` / `QueryKgTool` / `GenerateEmbeddingTool`, but
+`ToolsModule.exports` still listed only `[ToolRegistry, ToolRunnerService]`,
+so `NodesModule` (which imports `ToolsModule`) could not inject them.
+
+Fix: export the three tool providers from `ToolsModule`. Build (`tsup`) does
+not check the DI graph, and existing specs constructed nodes with manual
+`new`, so the crash never surfaced in CI. Introduced after `node-v0.8.92`,
+so released builds are unaffected.
+
+Tests: new `nodes-module-di.spec.ts` compiles `NodesModule` via real Nest DI
+(verified red/green). Fixed stale `react-executor.spec.ts` where the
+`new ExecuteResearchNode(...)` passed 5 of 8 ctor args, silently dropping
+every ReAct test into the legacy fallback. Full node suite: 2167 passed.
+
 ## [2026-05-18] fix(node): 0.8.92 Bug 41 BLOCKER — P2P publishHeartbeat field inversion swap (8b0e68d4)
 
 **Bug 41 BLOCKER** — P2P `publishHeartbeat` path inverted
