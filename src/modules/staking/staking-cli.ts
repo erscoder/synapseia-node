@@ -93,6 +93,17 @@ function getStakingPoolPDA(): [PublicKey, number] {
   );
 }
 
+// Derive the owner-keyed BanHistory PDA — REQUIRED by initialize_stake in
+// the current syn_staking contract (seeds = [b"ban_history", owner], see
+// target/idl/syn_staking.json). The contract `init`s this PDA on first
+// stake so ban escalation survives a close+reopen cycle (F-contracts-010).
+function getBanHistoryPDA(owner: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('ban_history'), owner.toBuffer()],
+    STAKING_PROGRAM_ID(),
+  );
+}
+
 /**
  * Returns true when a Solana error indicates the tx already landed on-chain.
  * Happens when the same signed tx is resubmitted within the ~60s blockhash
@@ -256,7 +267,15 @@ function decryptWallet(walletData: { encryptedData: string; kdfIterations?: numb
 // spawned, so they're black-holed here. Detection of either triggers
 // a loud stderr warning to surface the misconfiguration.
 export async function loadWalletWithPassword(): Promise<Keypair> {
-  const keystore = new EncryptedKeystore();
+  // Resolve the keystore from SYNAPSEIA_HOME so the staking commands honour
+  // the same data-dir override as the rest of the CLI (e.g. `wallet-verify`,
+  // which builds `path.join(nodeHome, 'wallet.keystore.json')`). Without this
+  // the hardened branch always read `~/.synapseia/wallet.keystore.json`,
+  // ignoring SYNAPSEIA_HOME — so pointing the node at a backup wallet folder
+  // only worked for the legacy `wallet.json` path. Defaults to `~/.synapseia`
+  // when SYNAPSEIA_HOME is unset, preserving prior behaviour.
+  const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
+  const keystore = new EncryptedKeystore(path.join(nodeHome, 'wallet.keystore.json'));
   // Stderr warning if a forbidden env var is still set — we never read
   // it, but the operator should know it's a no-op and unset it.
   if (process.env.SYNAPSEIA_WALLET_PASSWORD || process.env.WALLET_PASSWORD) {
@@ -424,6 +443,18 @@ export async function stakeTokens(amount: number): Promise<string> {
     if (!coordInfoRes.ok) throw new Error(`Failed to get coordinator authority: ${coordInfoRes.status}`);
     const { coordinatorAuthority } = await coordInfoRes.json() as { coordinatorAuthority: string };
 
+    // InitializeStake context (target/idl/syn_staking.json — 6 accounts):
+    //   0. stake_account        (signer, writable)
+    //   1. owner                (signer, writable)
+    //   2. coordinator_authority(read-only, stored not signed)
+    //   3. staking_pool         (PDA [b"staking_pool"]) — read by the handler
+    //      to seed coordinator_authority + accrual state. Added with the V3
+    //      contract upgrade; omitting it now reverts with NotEnoughAccountKeys.
+    //   4. ban_history          (PDA [b"ban_history", owner], writable) — the
+    //      handler `init`s it so ban escalation survives close+reopen.
+    //   5. system_program
+    const [stakingPoolForInit] = getStakingPoolPDA();
+    const [banHistory] = getBanHistoryPDA(wallet.publicKey);
     const initIx = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID(),
       data: createInitializeStakeInstructionData(1), // tier 1 = minimum valid (contract requires 1-5)
@@ -431,6 +462,8 @@ export async function stakeTokens(amount: number): Promise<string> {
         { pubkey: stakeAccount.publicKey, isSigner: true, isWritable: true },
         { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
         { pubkey: new PublicKey(coordinatorAuthority), isSigner: false, isWritable: false },
+        { pubkey: stakingPoolForInit, isSigner: false, isWritable: false },
+        { pubkey: banHistory, isSigner: false, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ]
     });
