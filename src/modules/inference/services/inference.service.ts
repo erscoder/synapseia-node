@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   type InferenceServerConfig,
+  type InferenceSigningIdentity,
   type ChatCompletionRequest,
   type ChatCompletionResponse,
   type OllamaChatResponse,
@@ -35,8 +36,9 @@ export class InferenceService {
     res: http.ServerResponse,
     peerId: string,
     coordinatorUrl?: string,
+    signingIdentity?: InferenceSigningIdentity,
   ): Promise<void> {
-    return this.inferenceServerHelper.handleChatCompletions(req, res, peerId, coordinatorUrl);
+    return this.inferenceServerHelper.handleChatCompletions(req, res, peerId, coordinatorUrl, signingIdentity);
   }
 
   handleState(

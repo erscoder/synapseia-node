@@ -10,6 +10,8 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
 import * as http from 'http';
+import * as crypto from 'crypto';
+import { sha256 } from '@noble/hashes/sha2.js';
 import {
   parseBody,
   forwardToOllama,
@@ -59,6 +61,22 @@ class FakeRes {
 }
 
 function parseJson(b: string): any { return JSON.parse(b); }
+
+// ── Ed25519 helpers (verify real signatures with Node crypto; @noble is
+//    mocked in jest.config.js but buildAuthHeaders still produces real sigs) ─
+function freshKeypair(): { privateKey: Uint8Array; publicKey: Uint8Array } {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  const priv = (privateKey.export({ format: 'der', type: 'pkcs8' }) as Buffer).subarray(-32);
+  const pub = (publicKey.export({ format: 'der', type: 'spki' }) as Buffer).subarray(-32);
+  return { privateKey: new Uint8Array(priv), publicKey: new Uint8Array(pub) };
+}
+
+const SPKI_HEADER = Buffer.from('302a300506032b6570032100', 'hex');
+function verifyEd25519Sig(signature: Uint8Array, message: Uint8Array, pubKey: Uint8Array): boolean {
+  const spki = Buffer.concat([SPKI_HEADER, Buffer.from(pubKey)]);
+  const key = crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
+  return crypto.verify(null, Buffer.from(message), key, Buffer.from(signature));
+}
 
 // ── fetch mock ────────────────────────────────────────────────────────────
 const originalFetch = global.fetch;
@@ -248,13 +266,16 @@ describe('handleChatCompletions', () => {
     expect(body.model).toBe('m');
   });
 
-  it('notifies coordinator fire-and-forget when coordinatorUrl is set', async () => {
+  it('notifies coordinator fire-and-forget when coordinatorUrl + signing identity are set', async () => {
     (global.fetch as any).mockResolvedValueOnce(ok({
       message: { role: 'assistant', content: 'p' }, done: true, model: 'm', created_at: 'x',
     })).mockResolvedValueOnce(ok({}));
+    const { privateKey, publicKey } = freshKeypair();
     const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
     const res = new FakeRes();
-    const p = handleChatCompletions(req as any, res as any, 'peer-42', 'http://coord');
+    const p = handleChatCompletions(req as any, res as any, 'peer-42', 'http://coord', {
+      privateKey, publicKey, peerId: 'peer-42',
+    });
     req.feed(JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'ping' }] }));
     await p;
     // Give fire-and-forget microtask a chance to run.
@@ -262,6 +283,73 @@ describe('handleChatCompletions', () => {
     const notifyCall = (global.fetch as any).mock.calls.find((c: any[]) =>
       String(c[0]).includes('/peers/peer-42/inference-request'));
     expect(notifyCall).toBeDefined();
+  });
+
+  // F-coord-sec-009 — the inference-request notify hits a NodeSignatureGuard'd
+  // route. Pre-fix it sent a plain unsigned POST → 401. Assert the four signed
+  // headers are present and the signature verifies against the guard's exact
+  // contract: message `${peerId}:${ts}:${path}:${bodyHash}`, body `{ peerId }`.
+  it('signs the inference-request notify with the four NodeSignatureGuard headers', async () => {
+    (global.fetch as any).mockResolvedValueOnce(ok({
+      message: { role: 'assistant', content: 'p' }, done: true, model: 'm', created_at: 'x',
+    })).mockResolvedValueOnce(ok({}));
+    const { privateKey, publicKey } = freshKeypair();
+    const peerId = 'peer-sec-9';
+    const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+    const res = new FakeRes();
+    const p = handleChatCompletions(req as any, res as any, peerId, 'http://coord', {
+      privateKey, publicKey, peerId,
+    });
+    req.feed(JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'ping' }] }));
+    await p;
+    await new Promise((r) => setImmediate(r));
+
+    const notifyCall = (global.fetch as any).mock.calls.find((c: any[]) =>
+      String(c[0]).includes(`/peers/${peerId}/inference-request`));
+    expect(notifyCall).toBeDefined();
+    const [calledUrl, init] = notifyCall as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+
+    // (1) Method + body present (route hashes req.body).
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ peerId }));
+    expect(headers['Content-Type']).toBe('application/json');
+
+    // (2) All four signed headers present and well-formed.
+    expect(headers['X-Peer-Id']).toBe(peerId);
+    expect(Buffer.from(headers['X-Public-Key'], 'base64').length).toBe(32);
+    expect(headers['X-Timestamp']).toMatch(/^\d+$/);
+    expect(Buffer.from(headers['X-Signature'], 'base64').length).toBe(64);
+
+    // (3) Signature verifies against ${peerId}:${ts}:${path}:${bodyHash}.
+    const path = `/peers/${peerId}/inference-request`;
+    expect(calledUrl).toBe(`http://coord${path}`);
+    const ts = headers['X-Timestamp'];
+    const bodyHash = Buffer.from(sha256(new TextEncoder().encode(JSON.stringify({ peerId })))).toString('base64');
+    const expectedMessage = `${peerId}:${ts}:${path}:${bodyHash}`;
+    const sigOk = verifyEd25519Sig(
+      new Uint8Array(Buffer.from(headers['X-Signature'], 'base64')),
+      new TextEncoder().encode(expectedMessage),
+      publicKey,
+    );
+    expect(sigOk).toBe(true);
+  });
+
+  // P2 fail-closed — without a signing identity we must NOT send an unsigned
+  // POST that is guaranteed to 401; the notify is simply skipped.
+  it('skips the unsigned notify when no signing identity is threaded', async () => {
+    (global.fetch as any).mockResolvedValueOnce(ok({
+      message: { role: 'assistant', content: 'p' }, done: true, model: 'm', created_at: 'x',
+    }));
+    const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+    const res = new FakeRes();
+    const p = handleChatCompletions(req as any, res as any, 'peer-x', 'http://coord');
+    req.feed(JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'ping' }] }));
+    await p;
+    await new Promise((r) => setImmediate(r));
+    const notifyCall = (global.fetch as any).mock.calls.find((c: any[]) =>
+      String(c[0]).includes('/inference-request'));
+    expect(notifyCall).toBeUndefined();
   });
 
   it('returns 500 on ollama forward failure', async () => {

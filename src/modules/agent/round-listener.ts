@@ -90,8 +90,8 @@ export class RoundListenerHelper {
     // (re)connection attempt, so the timestamp is fresh and never trips
     // the 5-minute TIMESTAMP_TOLERANCE_MS window on reconnect (a static
     // payload would get bounced after 5 minutes and the client would
-    // give up reconnecting). Falls back to anonymous when the identity
-    // helper isn't available (test stubs).
+    // give up reconnecting). No identity helper (test stubs) → anonymous,
+    // which the coord rejects; that's expected only in tests.
     const identityHelper = this.identityHelper;
     const authProvider = identityHelper
       ? (cb: (data: object) => void): void => {
@@ -104,7 +104,14 @@ export class RoundListenerHelper {
             });
             cb(payload);
           } catch (err) {
-            logger.warn(`[RoundListener] Failed to sign WS handshake: ${(err as Error).message} — connecting anonymously`);
+            // P2 fail-closed: a sign failure must NOT silently connect
+            // anonymously — the coord's NODE handshake check rejects an
+            // empty `auth` and disconnects immediately ("io server
+            // disconnect"), so connecting anonymously just produces a
+            // confusing reject loop. Send no usable auth (the coord
+            // bounces it) and log loudly so the signing fault is visible
+            // instead of masquerading as a generic disconnect.
+            logger.error(`[RoundListener] Failed to sign WS handshake — refusing to connect anonymously (coord requires a signed node handshake). Cause: ${(err as Error).message}`);
             cb({});
           }
         }

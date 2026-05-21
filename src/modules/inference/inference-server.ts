@@ -12,6 +12,20 @@ import * as crypto from 'crypto';
 import logger from '../../utils/logger';
 import { priceUsdFromEnv } from './QueryCostCalculator';
 import { beginChatInference, endChatInference } from './chat-inference-state';
+import { buildAuthHeaders } from '../../utils/node-auth';
+
+/**
+ * Ed25519 signing identity for coordinator notifications. Threaded from the
+ * node bootstrap (node-runtime.ts) using the SAME hex keypair the heartbeat
+ * and WorkOrderCoordinatorHelper sign with. Keys are hex strings on disk
+ * (identity.json); buildAuthHeaders slices the raw 32 bytes if a DER blob is
+ * passed, but here we pass the raw hex-decoded buffers directly.
+ */
+export interface InferenceSigningIdentity {
+  privateKey: Uint8Array;
+  publicKey: Uint8Array;
+  peerId: string;
+}
 
 export interface InferenceServerConfig {
   port?: number;
@@ -19,6 +33,13 @@ export interface InferenceServerConfig {
   hardwareClass: number;
   models: string[];
   coordinatorUrl?: string;
+  /**
+   * Ed25519 identity for signing the coordinator notify POST. The route
+   * `POST /peers/:peerId/inference-request` is behind NodeSignatureGuard;
+   * without these the notify 401s ("Missing required auth headers").
+   * Optional so test bootstraps that don't exercise the notify can omit it.
+   */
+  signingIdentity?: InferenceSigningIdentity;
 }
 
 export interface ChatCompletionRequest {
@@ -147,13 +168,48 @@ export function transformToOpenAI(ollamaResponse: OllamaChatResponse, model: str
 }
 
 /**
- * Notify coordinator of a successful inference request (fire-and-forget)
+ * Notify coordinator of a successful inference request (fire-and-forget).
+ *
+ * The coord route `POST /peers/:peerId/inference-request` is guarded by
+ * NodeSignatureGuard, so the POST MUST carry the four signed headers
+ * (X-Peer-Id, X-Public-Key, X-Timestamp, X-Signature). The guard verifies
+ * the Ed25519 signature over `${peerId}:${ts}:${path}:${bodyHash}` where
+ * `path` is the request pathname (no query) and `bodyHash` is the base64
+ * sha256 of the deterministically key-sorted JSON body. We sign exactly
+ * that: body `{ peerId }`, path `/peers/<encoded>/inference-request`.
+ *
+ * P2 fail-closed: if no signing identity is threaded we do NOT send an
+ * unsigned POST (it would 401) — we skip the notify and log once at debug
+ * so the guaranteed-reject request never hits the wire.
  */
-async function notifyCoordinatorInferenceRequest(coordinatorUrl: string, peerId: string): Promise<void> {
+async function notifyCoordinatorInferenceRequest(
+  coordinatorUrl: string,
+  peerId: string,
+  signingIdentity?: InferenceSigningIdentity,
+): Promise<void> {
+  if (!signingIdentity) {
+    logger.debug(
+      '[InferenceServer] inference-request notify skipped — no signing identity threaded (route is guarded by NodeSignatureGuard).',
+    );
+    return;
+  }
   try {
-    await fetch(`${coordinatorUrl}/peers/${encodeURIComponent(peerId)}/inference-request`, {
+    const path = `/peers/${encodeURIComponent(peerId)}/inference-request`;
+    // Sign the SAME peerId the route is scoped to. The guard cross-checks
+    // X-Peer-Id against the registered key; the signed body binds it too.
+    const body = { peerId: signingIdentity.peerId };
+    const authHeaders = await buildAuthHeaders({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      path,
+      body,
+      privateKey: signingIdentity.privateKey,
+      publicKey: signingIdentity.publicKey,
+      peerId: signingIdentity.peerId,
+    });
+    await fetch(`${coordinatorUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(body),
     });
   } catch {
     // Fire-and-forget: do not fail inference if coordinator is unreachable
@@ -169,6 +225,7 @@ export async function handleChatCompletions(
   res: http.ServerResponse,
   peerId: string,
   coordinatorUrl?: string,
+  signingIdentity?: InferenceSigningIdentity,
 ): Promise<void> {
   try {
     const body = await parseBody(req) as ChatCompletionRequest;
@@ -202,7 +259,7 @@ export async function handleChatCompletions(
 
     // Notify coordinator (fire-and-forget) after successful inference
     if (coordinatorUrl) {
-      void notifyCoordinatorInferenceRequest(coordinatorUrl, peerId);
+      void notifyCoordinatorInferenceRequest(coordinatorUrl, peerId, signingIdentity);
     }
   } catch (error: any) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -300,7 +357,7 @@ export function startInferenceServer(config: InferenceServerConfig): { close: ()
 
     try {
       if (req.method === 'POST' && url === '/v1/chat/completions') {
-        await handleChatCompletions(req, res, config.peerId, config.coordinatorUrl);
+        await handleChatCompletions(req, res, config.peerId, config.coordinatorUrl, config.signingIdentity);
       } else if (req.method === 'POST' && url === '/inference/quote') {
         await handleQuote(req, res);
       } else if (req.method === 'GET' && url === '/api/v1/state') {
@@ -357,8 +414,9 @@ export class InferenceServerHelper {
     res: http.ServerResponse,
     peerId: string,
     coordinatorUrl?: string,
+    signingIdentity?: InferenceSigningIdentity,
   ): Promise<void> {
-    return handleChatCompletions(req, res, peerId, coordinatorUrl);
+    return handleChatCompletions(req, res, peerId, coordinatorUrl, signingIdentity);
   }
 
   handleState(

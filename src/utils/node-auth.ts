@@ -85,10 +85,19 @@ function rawEd25519Key(buf: Uint8Array): Uint8Array {
 
 /**
  * Build the auth payload for the coordinator's Socket.IO handshake.
- * The coord-side `verifyWsHandshake` (presentation/websocket/ws-auth.guard.ts)
- * expects: `peerId`, `publicKey` (hex), `timestamp` (ms), `signature` (hex)
- * over the message `${timestamp}:websocket:handshake`. Pass the result
- * straight into `io(url, { auth: ... })`.
+ * The coord-side `WsAuthService.verifyNode` (presentation/websocket/
+ * ws-auth.guard.ts) reads `client.handshake.auth` and expects:
+ * `peerId`, `publicKey` (hex, 32 bytes), `timestamp` (ms), `signature`
+ * (hex, 64 bytes) over the message `${timestamp}:${peerId}:websocket:handshake`.
+ *
+ * F-coord-sec-002: the peerId is bound INTO the signed message so a
+ * captured handshake signature can't be rebound to a different identity
+ * (mirrors NodeSignatureGuard's `${peerId}:${ts}:...` HTTP format). The
+ * pre-fix signer omitted `:${peerId}:` and signed the legacy
+ * `${timestamp}:websocket:handshake`, so every node connection failed
+ * Ed25519 verification → coord `client.disconnect(true)` →
+ * "io server disconnect". Pass the result straight into
+ * `io(url, { auth: ... })`.
  */
 export function buildWsHandshakeAuth(params: {
   privateKey: Uint8Array;
@@ -99,7 +108,7 @@ export function buildWsHandshakeAuth(params: {
   const privateKeyRaw = rawEd25519Key(params.privateKey);
   const publicKeyRaw = rawEd25519Key(params.publicKey);
   const timestamp = Date.now();
-  const message = `${timestamp}:websocket:handshake`;
+  const message = `${timestamp}:${peerId}:websocket:handshake`;
   const messageBytes = new TextEncoder().encode(message);
   const signature = sign(messageBytes, privateKeyRaw);
   return {
