@@ -5,7 +5,7 @@
  */
 
 import { renderDiscoverySchemasForPrompt } from './schemas';
-import { assertSafeForPrompt } from '../../../../../shared/prompt-safety';
+import { sanitizeForPrompt } from '../../../../../shared/prompt-safety';
 
 export interface MedicalReActParams {
   wo: { title: string; abstract: string; doi?: string };
@@ -20,41 +20,41 @@ export function buildMedicalReActPrompt(p: MedicalReActParams): string {
   // coordinator and may have been authored by an untrusted submitter;
   // observations carry tool output that frequently includes peer-supplied
   // text (search_corpus snippets, fetched abstracts). Run each interpolated
-  // field through assertSafeForPrompt — throws PromptSafetyError on a
-  // jailbreak / oversize / control-char violation, which the caller
-  // (execute-research node) is responsible for catching and recovering
-  // from (skip iteration, fall back to plan-only output).
-  assertSafeForPrompt(p.wo.title, 'wo.title');
-  assertSafeForPrompt(p.wo.abstract, 'wo.abstract');
-  if (p.wo.doi !== undefined) assertSafeForPrompt(p.wo.doi, 'wo.doi');
-  for (let i = 0; i < p.plan.length; i++) assertSafeForPrompt(p.plan[i], `plan[${i}]`);
-  for (let i = 0; i < p.observations.length; i++) {
-    assertSafeForPrompt(p.observations[i].tool, `observation[${i}].tool`);
-    assertSafeForPrompt(p.observations[i].result, `observation[${i}].result`);
-  }
-  if (p.relatedDois) {
-    for (let i = 0; i < p.relatedDois.length; i++) {
-      assertSafeForPrompt(p.relatedDois[i], `relatedDois[${i}]`);
-    }
-  }
+  // field through sanitizeForPrompt: jailbreak markers are HARD-rejected
+  // (throws PromptSafetyError) while length is TRUNCATED in place. We must
+  // NOT throw on mere length here — a throw makes execute-research fall back
+  // to the legacy executor whose prompt builders interpolate the SAME
+  // untrusted text, and which (pre-fix) did so unguarded (the truncation
+  // attack was a bypass primitive). Use the sanitized return values below.
+  const safeTitle = sanitizeForPrompt(p.wo.title, 'wo.title');
+  const safeAbstract = sanitizeForPrompt(p.wo.abstract, 'wo.abstract');
+  const safeDoi = p.wo.doi !== undefined ? sanitizeForPrompt(p.wo.doi, 'wo.doi') : undefined;
+  const safePlan = p.plan.map((s, i) => sanitizeForPrompt(s, `plan[${i}]`));
+  const safeObservations = p.observations.map((o, i) => ({
+    tool: sanitizeForPrompt(o.tool, `observation[${i}].tool`),
+    result: sanitizeForPrompt(o.result, `observation[${i}].result`),
+  }));
+  const safeRelatedDois = p.relatedDois?.map((d, i) =>
+    sanitizeForPrompt(d, `relatedDois[${i}]`),
+  );
 
-  const obsText = p.observations.length === 0
+  const obsText = safeObservations.length === 0
     ? 'None yet.'
-    : p.observations.map((o, i) => `[${i + 1}] ${o.tool}: ${o.result}`).join('\n');
+    : safeObservations.map((o, i) => `[${i + 1}] ${o.tool}: ${o.result}`).join('\n');
 
   const schemaBlock = renderDiscoverySchemasForPrompt();
-  const doiLine = p.wo.doi ? `\nDOI: ${p.wo.doi}` : '';
-  const related = p.relatedDois?.length
-    ? `\n\nRelated paper DOIs available for supporting_dois:\n${p.relatedDois.map((d) => `  - ${d}`).join('\n')}`
+  const doiLine = safeDoi ? `\nDOI: ${safeDoi}` : '';
+  const related = safeRelatedDois?.length
+    ? `\n\nRelated paper DOIs available for supporting_dois:\n${safeRelatedDois.map((d) => `  - ${d}`).join('\n')}`
     : '';
 
   return `You are a biomedical research agent analyzing a paper.
 
-Work Order: ${p.wo.title}
-Abstract: ${p.wo.abstract}${doiLine}${related}
+Work Order: ${safeTitle}
+Abstract: ${safeAbstract}${doiLine}${related}
 
 Execution Plan:
-${p.plan.join('\n')}
+${safePlan.join('\n')}
 
 Available Tools:
 ${p.availableTools}

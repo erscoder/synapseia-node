@@ -180,3 +180,51 @@ export function checkSafeForPrompt(
     return err as PromptSafetyError;
   }
 }
+
+/**
+ * Sanitize a string for safe interpolation into an LLM prompt, splitting
+ * {@link assertSafeForPrompt}'s two concerns by severity (P26):
+ *
+ *   - LENGTH  → TRUNCATE to {@link MAX_PROMPT_FIELD_LEN} (degrade gracefully).
+ *               An over-long but otherwise-benign field (e.g. a long paper
+ *               abstract) must NOT hard-fail the prompt build. The old
+ *               assert-on-length behaviour caused the medical ReAct path to
+ *               throw and fall back to the LEGACY executor whose prompt
+ *               builders interpolate the same untrusted text WITHOUT any
+ *               guard — i.e. the truncation attack was a bypass primitive.
+ *   - CONTROL → STRIP disallowed C0/C1 control chars (terminal/log hijack).
+ *   - JAILBREAK → HARD REJECT (throws PromptSafetyError, reason 'jailbreak').
+ *               Fail-closed: a crafted directive is a deliberate attack and
+ *               must never reach the model on ANY path.
+ *
+ * Use this at the prompt-build boundary for fields that come from untrusted
+ * peers (WO title/abstract, tool observations, related DOIs). Use
+ * {@link assertSafeForPrompt} only for callers that genuinely want to reject
+ * an over-long field rather than truncate it.
+ *
+ * @throws {PromptSafetyError} reason 'jailbreak' or 'not_string'. Length and
+ *         control-char violations never throw — they are repaired in place.
+ */
+export function sanitizeForPrompt(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new PromptSafetyError(fieldName, 'not_string');
+  }
+  // Strip control chars first so terminal-hijack / log-injection bytes never
+  // survive (and so a marker can't hide behind a control char).
+  let out = value.replace(new RegExp(CONTROL_CHAR_RE.source, 'g'), '');
+  // Jailbreak markers stay fail-closed — scan the FULL control-stripped text
+  // BEFORE truncation. Truncating first would slice away any marker beyond
+  // MAX_PROMPT_FIELD_LEN, letting a long benign prefix carry a jailbreak past
+  // the budget undetected (truncate-through bypass).
+  for (const re of JAILBREAK_PATTERNS) {
+    const m = re.exec(out);
+    if (m) {
+      throw new PromptSafetyError(fieldName, 'jailbreak', m[0].slice(0, 80));
+    }
+  }
+  // Length is a non-throwing repair: truncate the now-cleared text to budget.
+  if (out.length > MAX_PROMPT_FIELD_LEN) {
+    out = out.slice(0, MAX_PROMPT_FIELD_LEN);
+  }
+  return out;
+}

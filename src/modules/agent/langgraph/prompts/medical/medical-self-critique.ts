@@ -37,6 +37,7 @@
  */
 
 import type { SelfCritiquePromptParams, SelfCritiqueResponse } from '../self-critique';
+import { sanitizeForPrompt } from '../../../../../shared/prompt-safety';
 
 export interface MedicalSelfCritiquePromptParams extends SelfCritiquePromptParams {
   /** The proposal string as submitted. Usually carries the {discoveryType, structuredData} JSON block. */
@@ -51,18 +52,32 @@ export interface MedicalSelfCritiqueResponse extends SelfCritiqueResponse {
 }
 
 export function buildMedicalSelfCritiquePrompt(p: MedicalSelfCritiquePromptParams): string {
-  const grounding = p.groundingSources
-    ? `\n\nGrounding sources available to the researcher:\n${p.groundingSources}`
+  // P26 prompt-safety gate (F-node-004). `title` and `groundingSources` are
+  // peer-controlled (groundingSources embeds the WO abstract, see
+  // self-critique node). summary/keyInsights/proposal are our own LLM output
+  // but echo the peer abstract, so a crafted directive could be reflected
+  // back here — gate them all. Jailbreak markers are hard-rejected; length
+  // is truncated so a long abstract in groundingSources degrades gracefully.
+  const safeTitle = sanitizeForPrompt(p.title, 'title');
+  const safeSummary = sanitizeForPrompt(p.summary, 'summary');
+  const safeKeyInsights = sanitizeForPrompt(p.keyInsights, 'keyInsights');
+  const safeProposal = sanitizeForPrompt(p.proposal, 'proposal');
+  const safeGroundingSources = p.groundingSources !== undefined
+    ? sanitizeForPrompt(p.groundingSources, 'groundingSources')
+    : undefined;
+
+  const grounding = safeGroundingSources
+    ? `\n\nGrounding sources available to the researcher:\n${safeGroundingSources}`
     : '';
 
   return `You are reviewing your own biomedical research analysis. Score honestly.
 
-Title: ${p.title}
+Title: ${safeTitle}
 
 Your analysis:
-- Summary: ${p.summary}
-- Key insights: ${p.keyInsights}
-- Proposal (may contain an embedded {discoveryType, structuredData} JSON block): ${p.proposal}${grounding}
+- Summary: ${safeSummary}
+- Key insights: ${safeKeyInsights}
+- Proposal (may contain an embedded {discoveryType, structuredData} JSON block): ${safeProposal}${grounding}
 
 Score each dimension 0-10:
 - accuracy: Are claims factually supported by the abstract?

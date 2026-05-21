@@ -35,6 +35,7 @@ import type {
 import { EMBEDDING_MODEL as EMBED_MODEL, GPU_INFERENCE_MODEL } from './work-order.types';
 import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
 import { WorkOrderEvaluationHelper } from './work-order.evaluation';
+import { sanitizeForPrompt } from '../../../shared/prompt-safety';
 
 const OLLAMA_EMBEDDING_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
@@ -142,6 +143,15 @@ export class WorkOrderExecutionHelper {
   // ── Research ──────────────────────────────────────────────────────────────
 
   buildResearchPrompt(payload: ResearchPayload, knowledgeGraphContext?: string, referenceContext?: string): string {
+    // P26 prompt-safety gate (F-node-004). This is the LEGACY single-pass
+    // research prompt the ExecuteResearchNode ReAct path falls back to. The
+    // title/abstract are peer-controlled (coord republishes WO text verbatim),
+    // so they MUST pass the same guard the medical ReAct path applies —
+    // otherwise a crafted abstract that trips the ReAct guard simply lands
+    // here unguarded. sanitizeForPrompt truncates over-long text and
+    // hard-rejects jailbreak markers.
+    const safeTitle = sanitizeForPrompt(payload.title, 'payload.title');
+    const safeAbstract = sanitizeForPrompt(payload.abstract, 'payload.abstract');
     const kgSection = knowledgeGraphContext ? `\n\nResearch context from the knowledge graph:\n${knowledgeGraphContext}\n` : '';
     const refSection = referenceContext
       ? `\n\nYou have access to previous discoveries from the network on this topic:\n\n${referenceContext}\n\nBuild upon these findings. Don't repeat what's already known. Focus on NEW insights and gaps in the existing research that this paper addresses.\n`
@@ -164,8 +174,8 @@ Critical evaluation standards:
 Output format (replace values):
 {"summary":"...","keyInsights":["...","...","...","...","..."],"proposal":"..."}
 
-Title: ${payload.title}
-Abstract: ${payload.abstract}`;
+Title: ${safeTitle}
+Abstract: ${safeAbstract}`;
   }
 
   private parseDirectResult(raw: string): ResearchResult {

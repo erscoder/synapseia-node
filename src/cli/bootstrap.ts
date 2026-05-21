@@ -18,6 +18,12 @@
  *   emitted by the subsequent module graph are caught by the
  *   already-registered filters.
  */
+// Layer 0: install runtime polyfills (e.g. `Promise.withResolvers` on
+// Node 20) BEFORE any other import. ES module side-effect imports run in
+// source order at parse time, so this must be the FIRST import — it executes
+// before the bigint filter and well before the dynamic `import('./index.js')`
+// that loads the libp2p graph whose deps call `Promise.withResolvers()`.
+import './polyfills.js';
 import {
     muteBigintBindingConsoleWarn,
     muteBigintBindingStderrWrite,

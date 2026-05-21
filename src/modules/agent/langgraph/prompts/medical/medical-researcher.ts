@@ -16,6 +16,7 @@
  */
 
 import { renderDiscoverySchemasForPrompt } from './schemas';
+import { sanitizeForPrompt } from '../../../../../shared/prompt-safety';
 
 export interface MedicalResearcherParams {
   title: string;
@@ -47,14 +48,31 @@ function truncateTitleForPrompt(title: string): string {
 }
 
 export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string {
+  // P26 prompt-safety gate (F-node-004). This builder runs in the
+  // multi-agent graph (ResearcherNode), independent of the medical ReAct
+  // path. title/abstract/doi are peer-controlled (coord republishes WO text
+  // verbatim). Sanitize them at this boundary so every downstream consumer
+  // (the researcher's own output flows into the synthesizer) receives
+  // already-safe text. Jailbreak markers are hard-rejected; length is
+  // truncated. The dedicated 120-char title cap below still applies on top.
+  const safeTitleFull = sanitizeForPrompt(p.title, 'title');
+  const safeAbstract = sanitizeForPrompt(p.abstract, 'abstract');
+  const safeDoi = p.doi !== undefined ? sanitizeForPrompt(p.doi, 'doi') : undefined;
+  // relatedDois are peer-controlled (drawn from wo.metadata['relatedDois']).
+  // Sanitize each entry on this researcher path too — the medical ReAct path
+  // already does (medical-react.ts safeRelatedDois). Mirror it here.
+  const safeRelatedDois = p.relatedDois?.map((d, i) =>
+    sanitizeForPrompt(d, `relatedDois[${i}]`),
+  );
+
   const schemaBlock = renderDiscoverySchemasForPrompt();
 
-  const title = truncateTitleForPrompt(p.title);
-  const doiLine = p.doi ? `\nDOI of this paper: ${p.doi}` : '';
+  const title = truncateTitleForPrompt(safeTitleFull);
+  const doiLine = safeDoi ? `\nDOI of this paper: ${safeDoi}` : '';
   const kg = p.kgContext ? `\n\nKnowledge-graph context:\n${p.kgContext}` : '';
   const ref = p.referenceContext ? `\n\nReference corpus context:\n${p.referenceContext}` : '';
-  const related = p.relatedDois?.length
-    ? `\n\nRelated paper DOIs (draw supporting_dois from this list plus the source paper):\n${p.relatedDois.map((d) => `  - ${d}`).join('\n')}`
+  const related = safeRelatedDois?.length
+    ? `\n\nRelated paper DOIs (draw supporting_dois from this list plus the source paper):\n${safeRelatedDois.map((d) => `  - ${d}`).join('\n')}`
     : '';
   const mission = p.missionContext && p.missionContext.length > 0
     ? `\n\n${p.missionContext}\n\nIf the paper genuinely supports an active mission, foreground that connection in your summary and pick the discoveryType that best advances the mission. If none of the active missions apply, still emit a discovery — but note in the summary that the paper is off-mission.`
@@ -63,7 +81,7 @@ export function buildMedicalResearcherPrompt(p: MedicalResearcherParams): string
   return `You are a biomedical research analyst. Read the paper and propose exactly ONE structured discovery.${mission}
 
 Paper: ${title}
-Abstract: ${p.abstract}${doiLine}${kg}${ref}${related}
+Abstract: ${safeAbstract}${doiLine}${kg}${ref}${related}
 
 Pick the ONE discoveryType that best fits the paper's main claim:
 ${schemaBlock}

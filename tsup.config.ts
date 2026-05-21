@@ -141,14 +141,14 @@ export default defineConfig([
   // `bundle: false` makes tsup transpile only — the dynamic
   // `import('./index.js')` in bootstrap.ts is left untouched and
   // resolves against the sibling bundled module at runtime. The
-  // `bigint-warning-filter.ts` helper is shipped as its own
-  // `dist/bigint-warning-filter.js` so bootstrap can statically import
-  // it without dragging the full CLI bundle along (defeats the whole
-  // point of keeping bootstrap tiny).
+  // `bigint-warning-filter.ts` and `polyfills.ts` helpers are shipped as
+  // their own `dist/bigint-warning-filter.js` / `dist/polyfills.js` so
+  // bootstrap can statically import them without dragging the full CLI
+  // bundle along (defeats the whole point of keeping bootstrap tiny).
   // `clean: false` so we don't wipe build #1's output.
   {
     ...sharedOptions,
-    entry: ['src/cli/bootstrap.ts', 'src/cli/bigint-warning-filter.ts'],
+    entry: ['src/cli/bootstrap.ts', 'src/cli/bigint-warning-filter.ts', 'src/cli/polyfills.ts'],
     clean: false,
     bundle: false,
   },
