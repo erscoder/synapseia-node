@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] release: node 0.8.95 (da65ceed)
+
+Ships the post-contract-upgrade node changes: `initialize_stake` account
+context fix (+staking_pool +ban_history) for the upgraded syn_staking IDL, the
+P27 DI boot-crash fix (ToolsModule tool exports), and the env-passphrase
+hardening. The node's WS handshake (`${ts}:websocket:handshake`) is intact for
+the upgraded coord gateway. node-only release (decoupled from node-ui).
+
 ## [2026-05-21] fix(node): initialize_stake account context for upgraded IDL (4503723b)
 
 The contract upgrade added `staking_pool` + `ban_history` (PDA
