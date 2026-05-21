@@ -70,6 +70,9 @@ describe('ExecuteResearchNode', () => {
   let mockLlmService: any;
   let mockExecution: any;
   let mockEvaluation: any;
+  let mockSearchCorpusTool: any;
+  let mockQueryKgTool: any;
+  let mockGenerateEmbeddingTool: any;
 
   const createMockState = (overrides: Partial<AgentState> = {}): AgentState => ({
     availableWorkOrders: [],
@@ -153,7 +156,23 @@ describe('ExecuteResearchNode', () => {
     mockExecution = new WorkOrderExecutionHelper();
     mockEvaluation = new WorkOrderEvaluationHelper();
 
-    node = new ExecuteResearchNode(mockExecution, mockEvaluation, mockToolRunner, mockToolRegistry, mockLlmService);
+    // Tool classes are injected via Nest DI (commit 8b1fe166). registerTools()
+    // reads each tool's `.def`, so the mock only needs that field — toolRegistry.register
+    // is itself a jest.fn and ignores the value's contents.
+    mockSearchCorpusTool = { def: { name: 'search_reference_corpus' } };
+    mockQueryKgTool = { def: { name: 'query_knowledge_graph' } };
+    mockGenerateEmbeddingTool = { def: { name: 'generate_embedding' } };
+
+    node = new ExecuteResearchNode(
+      mockExecution,
+      mockEvaluation,
+      mockToolRunner,
+      mockToolRegistry,
+      mockLlmService,
+      mockSearchCorpusTool,
+      mockQueryKgTool,
+      mockGenerateEmbeddingTool,
+    );
   });
 
   describe('execute - no work order selected', () => {

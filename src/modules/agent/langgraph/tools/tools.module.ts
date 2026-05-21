@@ -31,6 +31,17 @@ import { WorkOrderCoordinatorModule } from '../../work-order/work-order-coordina
     ToolRegistry,
     ToolRunnerService,
   ],
-  exports: [ToolRegistry, ToolRunnerService],
+  // ToolRegistry + ToolRunnerService are the public façade, but
+  // ExecuteResearchNode (in NodesModule) injects these three tool classes
+  // directly via its constructor. They must be exported, otherwise Nest
+  // cannot resolve them at boot — see the DI refactor in execute-research.ts
+  // that replaced `new SearchCorpusTool()` with constructor injection.
+  exports: [
+    ToolRegistry,
+    ToolRunnerService,
+    SearchCorpusTool,
+    QueryKgTool,
+    GenerateEmbeddingTool,
+  ],
 })
 export class ToolsModule {}
