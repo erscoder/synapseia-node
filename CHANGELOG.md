@@ -1,5 +1,23 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(node): close remaining P26 prompt-injection gaps (8ef4fbcc)
+
+Full P26 audit of every LLM-prompt construction site in the node, classified by
+data provenance. Sanitized the remaining untrusted-external interpolations via
+`sanitizeForPrompt`:
+- `buildPlanningPrompt` — WO `title`/`abstract` (`memories` left, node-local).
+- `critic-node` — `payload.title` + the researcher-echoed `summary`/`keyInsights`/
+  `proposal` (which echo the peer abstract); jailbreak → no LLM call.
+- `buildWorkOrderPrompt` — generic WO `title`/`description`.
+`plan-execution` falls closed to the default plan on a `PromptSafetyError`.
+
+Verified-and-left-unguarded (correct provenance): paid-inference passthrough
+(`chat-stream` + CPU/GPU `payload.input` — the user's own payload, no privileged
+directive to subvert), `mutation-engine` (node-local experiment/loss/caps),
+`a2a` agent-card (`peerId` never feeds an LLM), and dead builders
+(`buildSelfCritiquePrompt`/`buildReActPrompt`, zero production callers).
+`assertSafeForPrompt`/`sanitizeForPrompt` unchanged. Reviewer SHIP AS-IS. node-only.
+
 ## [2026-05-21] fix(node): centralize prompt-safety on research paths + Node 20 polyfill (933ad53c)
 
 - **P26 prompt-injection gap** — `medical-react` gated `wo.abstract` with
