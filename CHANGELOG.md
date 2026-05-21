@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] fix(node): initialize_stake account context for upgraded IDL (4503723b)
+
+The contract upgrade added `staking_pool` + `ban_history` (PDA
+[b"ban_history", owner]) accounts to `initialize_stake`. The node built only 4
+accounts; added both via getBanHistoryPDA. claim_rewards/stake/unstake already
+matched the new IDL. loadWalletWithPassword now honors SYNAPSEIA_HOME for an
+alternate keystore dir. Build + staking jest green.
+
 ## [2026-05-21] fix(di): export tool providers from ToolsModule (P27 boot crash) (ec0cd0aa)
 
 **BLOCKER (P27)** node boot crash. `node dist/bootstrap.js --help` threw
