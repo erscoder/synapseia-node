@@ -66,21 +66,41 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
   /**
    * Build signed fetch options if identity is configured.
    * Falls back to unsigned if no identity is set.
+   *
+   * GET-safe canonicalisation (F-coord-sec-010 fix): a GET carries no
+   * request body. The coord's `NodeSignatureGuard._hashBody(req.body)`
+   * sees `req.body === undefined` for a bodyless GET sent WITHOUT a
+   * `Content-Type: application/json` header (verified: express.json()
+   * skips parsing and leaves req.body undefined), which canonicalises
+   * to the empty string → sha256(''). To make the signature verify we
+   * MUST mirror that exactly: sign `body: undefined` (node-auth's
+   * buildAuthHeaders treats any non-object as `String(body ?? '')` = ''),
+   * send NO request body, and emit NO Content-Type header. Attaching a
+   * JSON body or Content-Type on a GET would either flip the guard's
+   * canonical body to `'{}'` or trigger a 400 from fetch — both break
+   * verification.
    */
   private async signedFetch(
     url: string,
     method: string,
     body: unknown,
   ): Promise<{ url: string; init: RequestInit }> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // A request has a body only when the caller passed one AND the
+    // method is not a body-less verb. For GET/HEAD we never send a body.
+    const isBodyless = method.toUpperCase() === 'GET' || method.toUpperCase() === 'HEAD';
+    const headers: Record<string, string> = isBodyless
+      ? {}
+      : { 'Content-Type': 'application/json' };
 
     if (this._keypair && this._publicKey && this._peerId) {
       const parsedUrl = new URL(url);
       const pathStr = parsedUrl.pathname + parsedUrl.search;
       const auth = await buildAuthHeaders({
         method,
+        // For body-less requests sign `undefined` so the canonical body
+        // matches the guard's `_hashBody(undefined)` = sha256('').
         path: pathStr,
-        body,
+        body: isBodyless ? undefined : body,
         privateKey: this._keypair,
         publicKey: this._publicKey,
         peerId: this._peerId,
@@ -88,14 +108,12 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       Object.assign(headers, auth);
     }
 
-    return {
-      url,
-      init: {
-        method,
-        headers,
-        body: typeof body === 'string' ? body : JSON.stringify(body),
-      },
-    };
+    const init: RequestInit = { method, headers };
+    if (!isBodyless) {
+      init.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    return { url, init };
   }
   /**
    * Parse structured error response from coordinator.
@@ -123,8 +141,10 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
    * reassigned (which today returns `WORK_ORDER_NOT_ACCEPTABLE` and bumps
    * the warn-level error count for no actionable reason).
    *
-   * Mirrors the unsigned fetch shape of `fetchAvailableWorkOrders` — this
-   * is a read-only probe and the coordinator does not require auth for it.
+   * The coordinator route `GET /work-orders/:id` (WorkOrderController.getById)
+   * is NOT behind NodeSignatureGuard — it is a public read-only lookup —
+   * so this probe is intentionally unsigned. (Only `available`, `:id/accept`
+   * and `:id/complete` on that controller require an Ed25519 signature.)
    */
   async getWorkOrder(coordinatorUrl: string, workOrderId: string): Promise<WorkOrder | null> {
     try {
@@ -142,11 +162,23 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     }
   }
 
-  async fetchAvailableWorkOrders(coordinatorUrl: string, peerId: string, capabilities: string[]): Promise<WorkOrder[]> {
+  /**
+   * Fetch the assignable work orders for THIS node.
+   *
+   * F-coord-sec-010 (audit 2026-05): `GET /work-orders/available` is now
+   * behind NodeSignatureGuard. The coordinator derives the peerId from
+   * the verified signature and reads capabilities from the persistent
+   * peer record — the legacy `?peerId=` / `?capabilities=` query params
+   * are IGNORED server-side, so we drop them entirely (sending them would
+   * also change the signed `path` for no benefit). The `peerId` /
+   * `capabilities` parameters remain in the signature for source-compat
+   * with existing callers but are no longer placed on the wire.
+   */
+  async fetchAvailableWorkOrders(coordinatorUrl: string, _peerId: string, _capabilities: string[]): Promise<WorkOrder[]> {
     try {
-      const capabilitiesParam = capabilities.join(',');
-      const url = `${coordinatorUrl}/work-orders/available?peerId=${peerId}&capabilities=${capabilitiesParam}`;
-      const response = await fetch(url);
+      const url = `${coordinatorUrl}/work-orders/available`;
+      const { url: fetchUrl, init } = await this.signedFetch(url, 'GET', undefined);
+      const response = await fetch(fetchUrl, init);
       if (!response.ok) {
         if (response.status === 404) return [];
         const err = await this.parseErrorResponse(response);
