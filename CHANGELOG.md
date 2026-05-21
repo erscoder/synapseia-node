@@ -1,5 +1,27 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] fix(node): align WS handshake + sign inference-request notify (80ce8c1d)
+
+Two more P1 audit regressions where the coordinator was hardened but the node
+client lagged:
+
+- **WS handshake** — the node signed `${ts}:websocket:handshake`, but the coord's
+  `WsAuthService.verifyNode` now reconstructs `${ts}:${peerId}:websocket:handshake`
+  (F-coord-sec-002 binds the peerId). Ed25519 verification failed on every WS
+  connect → gateway `client.disconnect(true)` → the node logged "Disconnected from
+  coordinator WS: io server disconnect" immediately after connecting. Fixed
+  `buildWsHandshakeAuth`; `round-listener` now fails closed on a signing error
+  instead of silently connecting anonymously into a guaranteed reject (P2).
+- **inference notify** — `notifyCoordinatorInferenceRequest` POSTed the guarded
+  route `/peers/:peerId/inference-request` unsigned → 401. Threaded the node
+  signing identity (already in scope at `node-runtime`) into the inference server
+  and signed the POST with `buildAuthHeaders`, matching `NodeSignatureGuard`. The
+  notify is skipped entirely when no identity is present (P2). Mirrored in
+  `inference.service`.
+
+Reviewer-verified byte-for-byte against the coordinator; `buildAuthHeaders`
+(WO-poll / heartbeat) untouched. 65 affected tests pass. node-only release.
+
 ## [2026-05-21] fix(node): sign GET /work-orders/available — P1 auth regression (ae75a4dc)
 
 `fetchAvailableWorkOrders` polled the coordinator unsigned, but the coord's
