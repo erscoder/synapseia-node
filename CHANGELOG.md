@@ -1,5 +1,27 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-21] fix(node): centralize prompt-safety on research paths + Node 20 polyfill (933ad53c)
+
+- **P26 prompt-injection gap** — `medical-react` gated `wo.abstract` with
+  `assertSafeForPrompt` (which threw on length > 4096), so an over-long abstract
+  fell through to a *legacy* executor whose prompt builders (`buildResearchPrompt`,
+  `medical-researcher`, `medical-self-critique`) interpolated the same
+  peer-controlled `abstract`/`title`/`relatedDois` UNGUARDED. New
+  `sanitizeForPrompt` (jailbreak scan on the FULL text → hard reject; control
+  chars stripped; length truncated, not thrown) now wraps every research prompt
+  builder's untrusted fields. Length no longer routes into an unguarded fallback;
+  jailbreak still fails closed (P2). `assertSafeForPrompt` unchanged for
+  must-reject callers (review-agent, synthesizer).
+- **`Promise.withResolvers` polyfill (Node 20)** — a libp2p transitive dep calls
+  `Promise.withResolvers` (Node 22+) at module load; on Node 20 the node silently
+  fell back to HTTP-only ("P2P init failed"). Added `src/cli/polyfills.ts` (defines
+  only if missing), imported first in `bootstrap.ts` and emitted as a sibling via
+  tsup, so P2P/gossipsub works on the supported Node ≥20 floor.
+
+Reviewer caught and we fixed two defects in the first cut: a jailbreak beyond char
+4096 truncated-through (now scans full text first) and `relatedDois` left unguarded
+on the researcher path. 101 affected tests pass. node-only release.
+
 ## [2026-05-21] fix(node): align WS handshake + sign inference-request notify (80ce8c1d)
 
 Two more P1 audit regressions where the coordinator was hardened but the node
