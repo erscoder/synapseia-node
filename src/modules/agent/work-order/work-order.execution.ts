@@ -737,7 +737,16 @@ Abstract: ${safeAbstract}`;
   // ── Generic ───────────────────────────────────────────────────────────────
 
   private buildWorkOrderPrompt(workOrder: WorkOrder): string {
-    return `You are a Synapseia network node executing a work order.\n\nTask: ${workOrder.title}\nDescription: ${workOrder.description}\n\nPlease provide a detailed response to complete this task. Be thorough and accurate.\n\nResponse:`;
+    // P26 prompt-safety gate (F-node-004). This is the GENERIC fallback prompt
+    // for WOs that aren't research/inference/training. `title`/`description`
+    // are peer-controlled (the coordinator republishes the WO author's text
+    // verbatim), so they MUST pass the same guard as the research/ReAct paths.
+    // Jailbreak markers HARD-reject (throws PromptSafetyError); over-long text
+    // truncates. The sole caller (executeWorkOrder) wraps this in try/catch and
+    // returns a failed result on throw — fail-closed, the directive never runs.
+    const safeTitle = sanitizeForPrompt(workOrder.title, 'workOrder.title');
+    const safeDescription = sanitizeForPrompt(workOrder.description, 'workOrder.description');
+    return `You are a Synapseia network node executing a work order.\n\nTask: ${safeTitle}\nDescription: ${safeDescription}\n\nPlease provide a detailed response to complete this task. Be thorough and accurate.\n\nResponse:`;
   }
 
   async executeWorkOrder(workOrder: WorkOrder, llmModel: LLMModel, llmConfig?: LLMConfig): Promise<{ result: string; success: boolean }> {

@@ -10,6 +10,7 @@ import { buildPlanningPrompt, DEFAULT_EXECUTION_PLAN } from '../prompts/plan';
 import logger from '../../../../utils/logger';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { parseLlmJson } from '../../../../shared/parse-llm-json';
+import { PromptSafetyError } from '../../../../shared/prompt-safety';
 
 /**
  * Coerce an unknown model identifier into a printable string for log lines.
@@ -172,6 +173,19 @@ export class PlanExecutionNode {
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      // P26: a PromptSafetyError means buildPlanningPrompt rejected a
+      // jailbreak marker in the peer-controlled title/abstract. Emit the
+      // F-node-004 telemetry line ops alerts on, then fall through to the
+      // default plan (fail-closed — the crafted directive never reaches the
+      // model). Marker preview is already trimmed ≤80 chars in the error.
+      if (error instanceof PromptSafetyError) {
+        const wo = state.selectedWorkOrder;
+        logger.warn(
+          `[PlanExecutionNode] event=prompt_safety_violation source=plan ` +
+          `woId=${wo?.id ?? 'unknown'} field=${error.fieldName} reason=${error.reason} ` +
+          `marker=${JSON.stringify(error.markerPreview ?? '')}`,
+        );
+      }
       // Fallback to DEFAULT_EXECUTION_PLAN below recovers cleanly — the WO
       // continues with a generic plan, no work is lost. Warn keeps it
       // visible for plan-quality tracking without faking an outage.

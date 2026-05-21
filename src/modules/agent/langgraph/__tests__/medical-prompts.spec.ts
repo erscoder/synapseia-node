@@ -13,6 +13,7 @@ import { buildMedicalResearcherPrompt } from '../prompts/medical/medical-researc
 import { buildMedicalSynthesizerPrompt } from '../prompts/medical/medical-synthesizer';
 import { buildMedicalReActPrompt } from '../prompts/medical/medical-react';
 import { buildMedicalSelfCritiquePrompt } from '../prompts/medical/medical-self-critique';
+import { buildPlanningPrompt } from '../prompts/plan';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import {
   PromptSafetyError,
@@ -272,12 +273,26 @@ describe('P26 prompt-safety consistency across research prompt paths', () => {
       proposal: 'a clean proposal paragraph that is plenty long for scoring',
       groundingSources: `Abstract:\n${abstract}`,
     });
+  // P26 (this PR): the planning prompt interpolates the peer-controlled
+  // title + abstract (coord WO metadata). `memories` is internal/trusted, so
+  // the harness leaves it constant and only varies the untrusted fields.
+  const planning = (title: string, abstract: string): string =>
+    buildPlanningPrompt({ title, abstract, memories: 'None' });
+  // P26 (this PR): the generic-WO fallback prompt interpolates the
+  // peer-controlled WO title + description verbatim. Exercise it via the
+  // private builder (cast) using description as the abstract-equivalent.
+  const genericWorkOrder = (title: string, description: string): string =>
+    (exec as unknown as {
+      buildWorkOrderPrompt(wo: { title: string; description: string }): string;
+    }).buildWorkOrderPrompt({ title, description });
 
   const PATHS: Array<[string, (t: string, a: string) => string]> = [
     ['legacy buildResearchPrompt', legacy],
     ['medical ReAct', medicalReact],
     ['medical researcher (multi-agent)', medicalResearcher],
     ['medical self-critique', medicalCritique],
+    ['plan-execution buildPlanningPrompt', planning],
+    ['generic buildWorkOrderPrompt', genericWorkOrder],
   ];
 
   const EN_JAILBREAK =
