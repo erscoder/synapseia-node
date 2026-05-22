@@ -55,7 +55,9 @@ import type { Hardware } from '../modules/hardware/hardware';
  *
  * `pickTorchWheel()` now probes for NVIDIA hardware BEFORE deciding
  * which wheel to install. macOS gets the default wheel (MPS-enabled
- * via Apple Silicon). NVIDIA Linux/Windows get the cu121 wheel.
+ * via Apple Silicon). NVIDIA Linux/Windows get the cu124 wheel (the
+ * version + flavor are Python-version-aware via `selectTorchSpec` — see
+ * the matrix below; cu121 is no longer used for any supported range).
  * Everything else falls back to the cpu wheel. Phase 5 bitsandbytes
  * is now gated on the wheel choice, not the post-install torch probe,
  * so an installed-but-broken torch can't suppress bnb either.
@@ -109,31 +111,33 @@ export interface InstallDepsResult {
  *
  * ── Why this is Python-version-aware (2026-05-22) ─────────────────────
  *
- * The previous code HARD-PINNED `torch==2.5.1` + the `cu121` NVIDIA
- * index for every interpreter. That HARD-FAILS the moment a node runs
- * on Python ≥ 3.13:
- *   - The `cu121` PyTorch index stopped at cp312 / torch 2.5.1 — it
- *     carries NO cp313 wheels. pip 404s and the NVIDIA install dies.
- *   - The default / `cpu` index has no torch 2.5.1 for cp313 either.
- *     → a Linux NVIDIA node on Python 3.13 could neither install torch
- *       nor train at all.
+ * The previous code returned `torch==2.5.1` + the `cu121` NVIDIA index
+ * for every interpreter ≤ 3.12. That is now BROKEN for LoRA training:
+ * `transformers` / `peft` refuse `torch.load` on torch < 2.6 (CVE
+ * mitigation — they "now require users to upgrade torch to at least
+ * v2.6"). On every node running torch 2.5.1, `train_lora.py` fails at
+ * weight load (observed live: 28 LoRA failures on the prod 3.12 pod).
+ * The `cu121` index has NO torch 2.6 (it stopped at 2.5.1), so the fix
+ * moves cp310-cp312 to cu124 alongside cp313.
  *
- * Verified fix data (live A5000 pod, driver 570 / CUDA 12.8, Py 3.13.8):
- *   - `torch==2.6.0` from `https://download.pytorch.org/whl/cu124`
- *     → `torch.cuda.is_available() == True`, dev = NVIDIA RTX A5000,
- *       and `train_micro.py` ran on GPU to `eval-done`, TRAIN_RC=0.
- *   - `torch-2.6.0+cpu-cp313` EXISTS on the cpu index (covers the
- *     Mac/CPU cp313 path).
- *   - `cu124` carries cp310-cp313 for torch 2.5.0 / 2.5.1 / 2.6.0;
- *     `cu121` has NO cp313 wheel at all.
+ * Verified fix data (live A5000 pod, driver 570 / CUDA 12.8, Py 3.12):
+ *   - `torch==2.6.0` from `https://download.pytorch.org/whl/cu124` plus
+ *     the full LoRA stack (transformers 5.9.0, peft 0.19.1,
+ *     bitsandbytes 0.49.2) → `torch.cuda.is_available() == True`,
+ *     `torch.load(weights_only=True)` OK (the exact op 2.5.1 rejected),
+ *     `bitsandbytes` CUDA tensor OK. SMOKE_OK. torch 2.6.0 / cu124
+ *     supports the FULL stack (LoRA + DiLoCo 4-bit + micro-training).
+ *   - Wheel availability (download.pytorch.org/whl): cu124 carries
+ *     torch 2.6.0 for cp310 / cp311 / cp312 / cp313. cu124 has NO cp314.
+ *     The cpu / default index has torch 2.6.0 for cp310-cp313 (covers
+ *     the macOS / CPU path). cp314 → only torch 2.9+ exists anywhere.
  *
  * ── Version / NVIDIA-index matrix (empirically verified) ──────────────
  *
  *   Python minor | torch  | NVIDIA index | status
  *   ────────────────────────────────────────────────────────────────────
- *   ≤ 12         | 2.5.1  | cu121        | PROVEN — the live 3.12 pod.
- *                |        |              | UNCHANGED to avoid regressing it.
- *   == 13        | 2.6.0  | cu124        | VERIFIED on the A5000 pod above.
+ *   10/11/12/13  | 2.6.0  | cu124        | VERIFIED on the A5000 pod above.
+ *                |        |              | Full LoRA + DiLoCo + micro stack.
  *   ≥ 14         | 2.6.0  | cu124        | BEST-EFFORT only — no pinned cp314
  *                |        |  (attempt)   | wheel exists anywhere (torch 2.6.0
  *                |        |              | has NO cp314 wheel; the cpu index
@@ -142,15 +146,22 @@ export interface InstallDepsResult {
  *                |        |              | is NON-FATAL: the node still boots
  *                |        |              | without torch (no hard-fail).
  *
+ *   macOS (darwin) gets the default / MPS wheel at torch 2.6.0 (no cu
+ *   index) regardless of Python minor — see `pickTorchWheel`.
+ *
  * NOTE on drivers: the `cu124` wheel needs a driver that supports
- * CUDA ≥ 12.4 (driver ≥ ~550). Older drivers on a cp313 host have NO
- * `cu121` fallback (cu121 lacks cp313) — an accepted edge: such a host
- * cannot run GPU torch on Python 3.13 regardless of our pin.
+ * CUDA ≥ 12.4 (driver ≥ ~550). Since `cu121` has NO torch 2.6, there is
+ * NO cu121 fallback for 2.6 — nodes on drivers < 550 cannot run GPU
+ * torch 2.6 at all. ACCEPTED: those nodes were already broken for LoRA
+ * on torch 2.5.1 (the < 2.6 `torch.load` refusal), so this loses no
+ * working capability.
  *
  * Bumping torch is a coordinated change: an operator with a mismatched
- * wheel installed is migrated on next boot — the version + flavor probe
- * at the top of Phase 2 fails and triggers a `--force-reinstall` against
- * the correct version + index for their hardware AND Python version.
+ * wheel installed (e.g. a stale 2.5.1) is migrated on next boot — the
+ * version + flavor probe at the top of Phase 2 fails (the
+ * `assert torch.__version__.startswith('2.6.0')` rejects 2.5.1) and
+ * triggers a `--force-reinstall` against the correct version + index for
+ * their hardware AND Python version.
  */
 
 /** Minimum Python minor version (3.x). */
@@ -181,22 +192,19 @@ export interface TorchSpec {
  * See the matrix in the module comment above. Exported for unit tests.
  *
  * `pythonMinor` is the `x` in `3.x`. When detection fails we conserve
- * the proven legacy default (≤12 → 2.5.1/cu121) by passing a low minor;
- * callers should only pass a high minor when they positively detected
- * one (see `detectVenvPythonMinor`).
+ * the safe default (≤13 → 2.6.0/cu124, NOT best-effort) by passing a low
+ * minor; callers should only pass a high minor (≥14, which flips
+ * bestEffort) when they positively detected one (see
+ * `detectVenvPythonMinor`).
  */
 export function selectTorchSpec(pythonMinor: number): TorchSpec {
-  if (pythonMinor <= 12) {
-    // PROVEN on the live 3.12 pod — do NOT regress.
-    return {
-      torchVersion: '2.5.1',
-      nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu121',
-      nvidiaLabel: 'cu121',
-      bestEffort: false,
-    };
-  }
-  if (pythonMinor === 13) {
-    // VERIFIED on the A5000 pod (driver 570 / CUDA 12.8, Py 3.13.8).
+  if (pythonMinor <= 13) {
+    // 3.10 / 3.11 / 3.12 / 3.13 → torch 2.6.0 / cu124. VERIFIED on the
+    // live A5000 pod (driver 570 / CUDA 12.8, Py 3.12): the full LoRA
+    // stack (transformers 5.9.0, peft 0.19.1, bitsandbytes 0.49.2) loads
+    // and `torch.load(weights_only=True)` succeeds — the exact op that
+    // torch 2.5.1 rejected. cu124 carries cp310-cp313 wheels for 2.6.0;
+    // the old cu121 index has NO torch 2.6 at all (it stopped at 2.5.1).
     return {
       torchVersion: '2.6.0',
       nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu124',
@@ -219,7 +227,7 @@ export function selectTorchSpec(pythonMinor: number): TorchSpec {
  * Detect the venv Python minor version (`x` in `3.x`) by invoking the
  * venv interpreter. Returns the integer minor, or `null` when the venv
  * python can't be probed (absent / errored) — callers then conserve the
- * proven legacy default by treating it as ≤12.
+ * safe default by treating it as ≤13 (→ 2.6.0/cu124, not best-effort).
  *
  * `pythonBin` + `spawnFn` are injectable for deterministic tests.
  */
@@ -315,15 +323,14 @@ function defaultNvidiaProbe(): boolean {
  *
  * The torch version + NVIDIA wheel index are Python-version-aware: by
  * default `spec` is resolved from the venv Python minor version via
- * `detectVenvPythonMinor` → `selectTorchSpec` (≤12 → 2.5.1/cu121,
- * 13 → 2.6.0/cu124, ≥14 → 2.6.0/cu124 best-effort). Tests inject `spec`
- * directly.
+ * `detectVenvPythonMinor` → `selectTorchSpec` (≤13 → 2.6.0/cu124,
+ * ≥14 → 2.6.0/cu124 best-effort). Tests inject `spec` directly.
  *
- * Decision matrix (NVIDIA flavor = spec.nvidiaLabel):
+ * Decision matrix (NVIDIA flavor = spec.nvidiaLabel = cu124):
  *   - macOS (any arch)        → default wheel (MPS via Apple Silicon)
- *   - Linux + NVIDIA detected → cu121|cu124 wheel (per Python version)
+ *   - Linux + NVIDIA detected → cu124 wheel (per Python version)
  *   - Linux + no NVIDIA       → cpu wheel (current pre-slice behaviour)
- *   - Windows + NVIDIA        → cu121|cu124 wheel (per Python version)
+ *   - Windows + NVIDIA        → cu124 wheel (per Python version)
  *   - Windows + no NVIDIA     → cpu wheel
  *   - Anything else           → cpu wheel (safe default)
  *
@@ -340,7 +347,7 @@ export function pickTorchWheel(opts: {
   const platform = opts.platform ?? os.platform();
   const probeFn = opts.nvidiaProbeFn ?? defaultNvidiaProbe;
   // Default spec: detect the venv Python minor; null detection conserves
-  // the proven legacy default (treated as ≤12 → 2.5.1/cu121).
+  // the safe default (treated as ≤13 → 2.6.0/cu124, not best-effort).
   const spec = opts.spec ?? selectTorchSpec(detectVenvPythonMinor() ?? 12);
 
   // Per P24: any throw from a user-supplied (or default) probe is
@@ -449,16 +456,17 @@ const DILOCO_MODEL_MIN_SIZE_BYTES = 500 * 1024 * 1024;
  * Phases (in order):
  *   1. venv          — create ~/.synapseia/venv if absent
  *   2. torch         — pip install torch wheel selected per host AND
- *                      Python version: NVIDIA Linux/Win → cu121 (≤cp312)
- *                      or cu124 (cp313+), macOS → default (MPS),
+ *                      Python version: NVIDIA Linux/Win → cu124
+ *                      (torch 2.6.0, cp310-cp313), macOS → default (MPS),
  *                      everything else → cpu. Migrating an existing
- *                      cpu→NVIDIA install uses --force-reinstall.
+ *                      cpu→NVIDIA or stale 2.5.1 install uses
+ *                      --force-reinstall.
  *   3. lora-stack    — pip install transformers + peft + datasets + safetensors + accelerate
  *                      (only on Tier 1+ nodes with enough RAM/VRAM)
  *   4. cuda-probe    — probe torch.cuda.is_available() for telemetry
  *                      (informational; Phase 5 gates on wheel choice)
  *   5. bitsandbytes  — pip install bitsandbytes (only when an NVIDIA
- *                      wheel — cu121 or cu124 — was installed in Phase 2)
+ *                      wheel — cu124 — was installed in Phase 2)
  *   6. diloco-model  — pre-download DiLoCo foundation model (Qwen2.5-7B,
  *                      ~13 GB) into the HF cache so runtime DiLoCo WOs
  *                      never hit Hugging Face Hub (Bug 18 v3). Gated on
@@ -527,16 +535,17 @@ export async function installPythonDeps(
   // ── Phase 2: torch ──────────────────────────────────────────────────────
   // Pick the wheel BEFORE the version probe so the "already installed"
   // path can also verify the installed wheel matches the expected
-  // flavor (cu121/cu124 on NVIDIA, mps/default on macOS, cpu otherwise).
+  // flavor (cu124 on NVIDIA, mps/default on macOS, cpu otherwise).
   // Without that check, an operator who installed cpu torch under the
   // old hardcoded path would be left with a stale cpu wheel even after
   // attaching an A40 — `torch.cuda.is_available()` would still return
   // False and DiLoCo would still OOM.
   //
   // The torch VERSION + NVIDIA index are Python-version-aware (see
-  // `selectTorchSpec`): a cp313 host gets torch 2.6.0 / cu124, a ≤cp312
-  // host keeps the proven torch 2.5.1 / cu121. `pickTorchWheel` resolves
-  // the spec from `detectVenvPythonMinor()` internally.
+  // `selectTorchSpec`): every supported host (cp310-cp313) gets torch
+  // 2.6.0 / cu124. A node on a stale 2.5.1 wheel is force-reinstalled
+  // up to 2.6.0 (the version probe below rejects 2.5.1). `pickTorchWheel`
+  // resolves the spec from `detectVenvPythonMinor()` internally.
   const torchWheel = pickTorchWheel();
   const torchVersion = torchWheel.torchVersion;
   logger.log(`[install-deps] ${torchWheel.reason}`);

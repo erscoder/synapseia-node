@@ -17,10 +17,11 @@
 import { describe, it, expect } from '@jest/globals';
 import { pickTorchWheel, selectTorchSpec, type TorchSpec } from '../install-deps';
 
-// Inject a fixed spec into every legacy assertion so the wheel-CHOICE
-// branches stay deterministic (without it, pickTorchWheel would spawn the
-// real venv python to detect the Python minor version). The 3.12 spec is
-// the proven legacy default — it preserves the original cu121 assertions.
+// Inject a fixed spec into every wheel-CHOICE assertion so the branches
+// stay deterministic (without it, pickTorchWheel would spawn the real
+// venv python to detect the Python minor version). 3.12 now resolves to
+// torch 2.6.0 / cu124 — torch 2.5.1 / cu121 is obsolete: transformers /
+// peft refuse `torch.load` on torch < 2.6, breaking LoRA on every node.
 const SPEC_312: TorchSpec = selectTorchSpec(12);
 
 describe('install-deps pickTorchWheel (Slice 16)', () => {
@@ -49,14 +50,14 @@ describe('install-deps pickTorchWheel (Slice 16)', () => {
     expect(choice.hasNvidia).toBe(false);
   });
 
-  it('Linux + NVIDIA detected → cu121 wheel', () => {
+  it('Linux + NVIDIA detected → cu124 wheel', () => {
     const choice = pickTorchWheel({
       platform: 'linux',
       nvidiaProbeFn: () => true,
       spec: SPEC_312,
     });
-    expect(choice.label).toBe('cu121');
-    expect(choice.indexUrl).toBe('https://download.pytorch.org/whl/cu121');
+    expect(choice.label).toBe('cu124');
+    expect(choice.indexUrl).toBe('https://download.pytorch.org/whl/cu124');
     expect(choice.hasNvidia).toBe(true);
     expect(choice.reason).toMatch(/NVIDIA/i);
   });
@@ -72,14 +73,14 @@ describe('install-deps pickTorchWheel (Slice 16)', () => {
     expect(choice.hasNvidia).toBe(false);
   });
 
-  it('Windows + NVIDIA detected → cu121 wheel', () => {
+  it('Windows + NVIDIA detected → cu124 wheel', () => {
     const choice = pickTorchWheel({
       platform: 'win32',
       nvidiaProbeFn: () => true,
       spec: SPEC_312,
     });
-    expect(choice.label).toBe('cu121');
-    expect(choice.indexUrl).toBe('https://download.pytorch.org/whl/cu121');
+    expect(choice.label).toBe('cu124');
+    expect(choice.indexUrl).toBe('https://download.pytorch.org/whl/cu124');
     expect(choice.hasNvidia).toBe(true);
   });
 
@@ -152,8 +153,9 @@ describe('install-deps pickTorchWheel (Slice 16)', () => {
 
   // ── Python-version-aware wheel selection (2026-05-22) ───────────────
   // The torch version + NVIDIA index must follow the venv Python minor.
-  // A cp313 NVIDIA host MUST get torch 2.6.0 / cu124 (the cu121 index has
-  // no cp313 wheel → the old hard pin 404'd and bricked training).
+  // Every supported host (cp310-cp313) MUST get torch 2.6.0 / cu124:
+  // transformers / peft refuse `torch.load` on torch < 2.6, so the old
+  // 2.5.1 / cu121 pin broke LoRA on every node; cu121 has no torch 2.6.
 
   it('Python 3.13 + Linux NVIDIA → torch 2.6.0 from cu124 index', () => {
     const choice = pickTorchWheel({
@@ -205,11 +207,18 @@ describe('install-deps pickTorchWheel (Slice 16)', () => {
 });
 
 describe('install-deps selectTorchSpec (Python-version matrix, 2026-05-22)', () => {
+  // torch 2.5.1 / cu121 is obsolete for the whole supported range:
+  // transformers / peft refuse `torch.load` on torch < 2.6 (CVE
+  // mitigation), breaking LoRA on every node. All of 3.10-3.13 now
+  // resolve to torch 2.6.0 / cu124 (VERIFIED on the live A5000 pod with
+  // the full LoRA + DiLoCo + micro-training stack). cu124 carries
+  // cp310-cp313 wheels for 2.6.0; the old cu121 index has no torch 2.6.
   it.each([
-    [10, '2.5.1', 'cu121', false],
-    [11, '2.5.1', 'cu121', false],
-    [12, '2.5.1', 'cu121', false],
-  ])('Python 3.%i → torch %s / %s, not best-effort (proven legacy)', (minor, ver, label, best) => {
+    [10, '2.6.0', 'cu124', false],
+    [11, '2.6.0', 'cu124', false],
+    [12, '2.6.0', 'cu124', false],
+    [13, '2.6.0', 'cu124', false],
+  ])('Python 3.%i → torch %s / %s, not best-effort (VERIFIED full LoRA stack)', (minor, ver, label, best) => {
     const spec = selectTorchSpec(minor as number);
     expect(spec.torchVersion).toBe(ver);
     expect(spec.nvidiaLabel).toBe(label);
