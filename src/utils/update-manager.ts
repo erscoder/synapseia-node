@@ -9,9 +9,10 @@
  *   - `preflightVersionCheck` (update-checker.ts) decides UP_TO_DATE /
  *     UPDATE_AVAILABLE / UPDATE_REQUIRED. npm is the source of truth for
  *     the latest version; coord only supplies the security floor.
- *   - `attemptSelfUpdate` (self-updater.ts) fetches the Ed25519-signed
- *     manifest, sha256-verifies the pinned tarball, and installs with
- *     `--ignore-scripts` (supply-chain hardened, fail-closed).
+ *   - `attemptSelfUpdate` (self-updater.ts) installs the npm-resolved target
+ *     version directly (`npm install -g @synapseia-network/node@<target>
+ *     --ignore-scripts`), fail-closed. npm `latest` is the trust anchor;
+ *     `--ignore-scripts` is the residual supply-chain mitigation.
  *   - `restartProcess` (self-updater.ts) flushes telemetry + p2p and, for
  *     unsupervised pods/shell runs, spawns a detached replacement before
  *     exiting.
@@ -79,7 +80,8 @@ export const SELF_UPDATE_BACKOFF_BASE_MS = 60 * 1000;
 export const SELF_UPDATE_TARGET_ENV = 'SYNAPSEIA_SELF_UPDATE_TARGET';
 
 export interface UpdateManagerDeps {
-  /** Coordinator base URL (security floor + signed manifest source). */
+  /** Coordinator base URL. Used only for the security-floor check
+   *  (`minNodeVersion`); the install target comes from npm, not coord. */
   coordinatorUrl: string;
   /**
    * Number of HEAVY (training) work orders currently in flight. The node
@@ -105,8 +107,9 @@ export interface UpdateManagerDeps {
   restartHandles: Omit<RestartShutdownHandles, 'respawn'>;
   /** Injected for tests. Defaults to the real `preflightVersionCheck`. */
   checkFn?: (coordinatorUrl: string) => Promise<UpdateCheckResult | null>;
-  /** Injected for tests. Defaults to the real `attemptSelfUpdate`. */
-  selfUpdateFn?: (coordinatorUrl: string) => Promise<SelfUpdateResult>;
+  /** Injected for tests. Defaults to the real `attemptSelfUpdate`. Called
+   *  with the npm-resolved target version to install (pinned). */
+  selfUpdateFn?: (targetVersion: string) => Promise<SelfUpdateResult>;
   /** Injected for tests. Defaults to the real `restartProcess`. */
   restartFn?: (handles: RestartShutdownHandles) => Promise<never>;
   /** Injected for tests. Defaults to the real `getNodeVersion`. */
@@ -135,7 +138,7 @@ export class UpdateManager {
   private readonly setDraining: (draining: boolean) => void;
   private readonly restartHandles: Omit<RestartShutdownHandles, 'respawn'>;
   private readonly checkFn: (url: string) => Promise<UpdateCheckResult | null>;
-  private readonly selfUpdateFn: (url: string) => Promise<SelfUpdateResult>;
+  private readonly selfUpdateFn: (targetVersion: string) => Promise<SelfUpdateResult>;
   private readonly restartFn: (handles: RestartShutdownHandles) => Promise<never>;
   private readonly getCurrentVersion: () => string;
   private readonly getRestartTarget: () => string | undefined;
@@ -294,7 +297,10 @@ export class UpdateManager {
 
       let installResult: SelfUpdateResult;
       try {
-        installResult = await this.selfUpdateFn(this.coordinatorUrl);
+        // Install the EXACT npm-resolved target version (pinned), not a
+        // floating `@latest` — `result.latestVersion` is the npm dist-tags
+        // `latest` the pre-flight check decided on.
+        installResult = await this.selfUpdateFn(result.latestVersion);
       } catch (err) {
         // attemptSelfUpdate is documented fail-closed, but belt-and-
         // suspenders: a throw here must not crash the node.

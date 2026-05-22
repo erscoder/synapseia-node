@@ -778,12 +778,14 @@ async function bootstrap() {
         // ── Periodic update manager ───────────────────────────────────────
         // Non-blocking: boot check fires immediately and a 30-min timer
         // re-checks for the process lifetime. On an UPDATE_AVAILABLE /
-        // UPDATE_REQUIRED it self-updates (signed + sha256-verified) and,
-        // only when no HEAVY training WO is in flight, restarts into the new
-        // binary via a detached respawn so unsupervised pods/shell come back
-        // up. Idle-gated + attempt-capped to never interrupt training or
-        // trigger a fleet-wide restart loop. Fail-closed: any error here is
-        // logged and the node keeps running on its current version.
+        // UPDATE_REQUIRED it self-updates by installing the npm-resolved
+        // latest version directly (`npm install -g @synapseia-network/node@
+        // <target> --ignore-scripts`) and, only when no HEAVY training WO is
+        // in flight, restarts into the new binary via a detached respawn so
+        // unsupervised pods/shell come back up. Idle-gated + attempt-capped to
+        // never interrupt training or trigger a fleet-wide restart loop.
+        // Fail-closed: any error here is logged and the node keeps running on
+        // its current version.
         const updateManager = new UpdateManager({
           coordinatorUrl,
           getActiveHeavyCount: () => backpressureService.getInFlightByClass('HEAVY'),

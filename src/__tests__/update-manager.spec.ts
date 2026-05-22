@@ -143,20 +143,28 @@ describe('UpdateManager.runCycle — status routing', () => {
     expect(selfUpdate).not.toHaveBeenCalled();
   });
 
-  it('UPDATE_AVAILABLE → calls attemptSelfUpdate', async () => {
+  it('UPDATE_AVAILABLE → calls attemptSelfUpdate with the npm-latest target version', async () => {
     const { mgr, selfUpdate } = makeManager({
-      check: jest.fn().mockResolvedValue(result(UpdateStatus.UPDATE_AVAILABLE)),
+      check: jest.fn().mockResolvedValue(
+        result(UpdateStatus.UPDATE_AVAILABLE, { latestVersion: '0.8.106' }),
+      ),
     });
     await mgr.runCycle();
     expect(selfUpdate).toHaveBeenCalledTimes(1);
+    // The pinned target version (npm dist-tags `latest`) is threaded through,
+    // NOT the coordinator URL.
+    expect(selfUpdate).toHaveBeenCalledWith('0.8.106');
   });
 
-  it('UPDATE_REQUIRED → calls attemptSelfUpdate', async () => {
+  it('UPDATE_REQUIRED → calls attemptSelfUpdate with the npm-latest target version', async () => {
     const { mgr, selfUpdate } = makeManager({
-      check: jest.fn().mockResolvedValue(result(UpdateStatus.UPDATE_REQUIRED)),
+      check: jest.fn().mockResolvedValue(
+        result(UpdateStatus.UPDATE_REQUIRED, { latestVersion: '0.8.106' }),
+      ),
     });
     await mgr.runCycle();
     expect(selfUpdate).toHaveBeenCalledTimes(1);
+    expect(selfUpdate).toHaveBeenCalledWith('0.8.106');
   });
 });
 
