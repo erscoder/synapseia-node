@@ -47,6 +47,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
+import { detectCudaAvailable } from '../../utils/gpu-detect';
 import { resolvePython } from '../../utils/python-venv';
 import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 import { IdentityHelper } from '../identity/identity';
@@ -145,7 +146,7 @@ export async function runLoraValidation(
   const metric = options.metric ?? defaultMetricEmitter;
 
   // 1. Precheck. Defence-in-depth on Apple Silicon MPS for generation eval.
-  const hasHwGpu = options.forceGpu ?? hasGpu(payload.subtype);
+  const hasHwGpu = options.forceGpu ?? await hasGpu(payload.subtype);
   if (payload.subtype === 'LORA_GENERATION' && !hasHwGpu) {
     metric('rejected', { workOrderId, reason: 'no-gpu' });
     throw new LoraValidationError(
@@ -390,15 +391,21 @@ const defaultFetcher: NonNullable<RunLoraValidationOptions['fetcher']> = async (
 
 // ── Hardware / paths ─────────────────────────────────────────────────────────
 
-function hasGpu(subtype?: LoraSubtype): boolean {
-  if (process.env.SYN_FORCE_GPU === 'true') return true;
-  if (process.env.SYN_FORCE_NO_GPU === 'true') return false;
-  const platform = os.platform();
-  if (platform === 'darwin' && os.arch() === 'arm64') {
-    // Mirror trainer: MPS allowed for CLASSIFICATION only.
+/**
+ * GPU capability check — mirrors `lora_trainer.ts:hasGpu`. CUDA is
+ * auto-detected via the shared `detectCudaAvailable()` probe
+ * (utils/gpu-detect.ts), the same `torch.cuda.is_available()` probe the
+ * heartbeat uses to advertise `gpu_training` (single source of truth).
+ * Apple Silicon MPS is allowed for CLASSIFICATION only (torch.cuda is false
+ * on Mac), so darwin/arm64 is special-cased without consulting the probe.
+ */
+async function hasGpu(subtype?: LoraSubtype): Promise<boolean> {
+  if (os.platform() === 'darwin' && os.arch() === 'arm64') {
+    // Mirror trainer: MPS allowed for CLASSIFICATION only; torch.cuda false on Mac.
     return subtype !== 'LORA_GENERATION';
   }
-  return false;
+  // Linux / Windows: detect CUDA via the real torch.cuda probe.
+  return detectCudaAvailable();
 }
 
 function isSafePathSegment(seg: string): boolean {

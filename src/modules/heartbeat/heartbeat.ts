@@ -17,6 +17,11 @@ import {
   venvPython,
   writeLoraStackMarker,
 } from '../../utils/python-venv';
+import {
+  detectCudaAvailable,
+  __resetCudaCacheForTests as __resetSharedCudaCacheForTests,
+  __setCudaProbeSpawnOverrideForTests,
+} from '../../utils/gpu-detect';
 import type { Identity } from '../identity/identity';
 import type { Hardware } from '../hardware/hardware';
 import type { P2PNode } from '../p2p/p2p';
@@ -319,7 +324,7 @@ export function __resetCapabilitySnapshotForTests(): void {
   loraStackForcedFalseForTest = false;
   loraStackMarkerChecked = false;
   __resetContainerMemCacheForTests();
-  cudaCache = null;
+  __resetSharedCudaCacheForTests(); // CUDA cache now lives in utils/gpu-detect.ts
   loraStackWarnEmitted = false;
   dilocoModelCache = null;
   dilocoModelLastError = null;
@@ -373,6 +378,9 @@ export function __setProbeSpawnOverrideForTests(
   fn: ((cmd: string, args: readonly string[]) => import('node:child_process').ChildProcess) | null,
 ): void {
   probeSpawnOverrideForTest = fn;
+  // CUDA detection now lives in the shared helper — forward the override so
+  // the probe-timer specs that drive __isCudaAvailableForTests keep working.
+  __setCudaProbeSpawnOverrideForTests(fn);
 }
 
 /** Test-only: also force-reset the LoRA marker-check + venvExists short-circuit
@@ -383,9 +391,10 @@ export function __forceLoraProbeSpawnForTests(): void {
   loraStackForcedFalseForTest = false; // do not short-circuit false
 }
 
-/** Test-only: reset the CUDA cache so a fresh probe runs. */
+/** Test-only: reset the CUDA cache so a fresh probe runs. Delegates to the
+ *  shared helper (utils/gpu-detect.ts) which now owns the cache. */
 export function __resetCudaCacheForTests(): void {
-  cudaCache = null;
+  __resetSharedCudaCacheForTests();
 }
 
 /** Test-only export of the LoRA probe so the timer-leak spec can drive
@@ -644,33 +653,13 @@ function isDilocoModelAvailable(): boolean {
 }
 
 /**
- * Cached CUDA probe. Same positive-only cache strategy as the LoRA stack —
- * CUDA availability is a hardware fact stable for the process lifetime.
+ * Cached CUDA probe — delegates to the shared `detectCudaAvailable` helper
+ * (utils/gpu-detect.ts), the SINGLE SOURCE OF TRUTH also consumed by the LoRA
+ * trainer/validator `hasGpu()`. Kept as a thin local alias so the rest of this
+ * module reads unchanged.
  */
-let cudaCache: boolean | null = null;
 async function isCudaAvailable(): Promise<boolean> {
-  if (cudaCache === true) return true;
-  const spawn = probeSpawnOverrideForTest
-    ?? (await import('node:child_process')).spawn;
-  const result = await new Promise<boolean>((res) => {
-    const proc = spawn(
-      resolvePython(),
-      ['-c', 'import torch; assert torch.cuda.is_available()'],
-      { stdio: ['ignore', 'pipe', 'pipe'] } as any,
-    );
-    let settled = false;
-    const settle = (v: boolean) => { if (!settled) { settled = true; res(v); } };
-    // Bug 23 (HIGH): kill timer must be cleared in success/error paths —
-    // otherwise pins event loop until firing, delaying graceful shutdown.
-    const killTimer = setTimeout(() => {
-      try { proc.kill(); } catch { /* ignore */ }
-      settle(false);
-    }, 30_000);
-    proc.on('close', (code) => { clearTimeout(killTimer); settle(code === 0); });
-    proc.on('error', () => { clearTimeout(killTimer); settle(false); });
-  });
-  if (result) cudaCache = true;
-  return result;
+  return detectCudaAvailable();
 }
 
 /**

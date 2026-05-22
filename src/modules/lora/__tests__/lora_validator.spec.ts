@@ -7,6 +7,25 @@
  * spawn/stdin/stdout/stderr path without needing a fake child_process.
  */
 
+// CUDA detection now lives in the shared helper. Mock it so the GENERATION
+// precheck never spawns a real python `import torch` probe on CI.
+const mockDetectCuda = jest.fn(async () => false);
+jest.mock('../../../utils/gpu-detect', () => ({
+  detectCudaAvailable: () => mockDetectCuda(),
+}));
+
+// `os.platform`/`os.arch` are non-configurable native props, so spyOn fails.
+// Mock the module: keep everything real, but make platform/arch controllable
+// so we can drive the darwin-MPS vs Linux-CUDA branches of hasGpu().
+const realOs = jest.requireActual<typeof import('os')>('os');
+const mockPlatform = jest.fn(() => realOs.platform());
+const mockArch = jest.fn(() => realOs.arch());
+jest.mock('os', () => ({
+  ...jest.requireActual<typeof import('os')>('os'),
+  platform: () => mockPlatform(),
+  arch: () => mockArch(),
+}));
+
 import { runLoraValidation, LoraValidationError, __internal } from '../lora_validator';
 import { runLoraValidation as runFromIndex } from '../index';
 import type { LoraValidationWorkOrderPayload } from '../types';
@@ -49,6 +68,10 @@ describe('runLoraValidation', () => {
   beforeEach(async () => {
     tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'lora-val-test-'));
     id = makeIdentity();
+    mockDetectCuda.mockReset();
+    mockDetectCuda.mockResolvedValue(false);
+    mockPlatform.mockReset().mockReturnValue(realOs.platform());
+    mockArch.mockReset().mockReturnValue(realOs.arch());
     delete process.env.SYN_FORCE_GPU;
     delete process.env.SYN_FORCE_NO_GPU;
     delete process.env.COORD_S3_ENDPOINTS;
@@ -60,14 +83,108 @@ describe('runLoraValidation', () => {
 
   // ── Precheck ──────────────────────────────────────────────────────────────
 
-  it('refuses LORA_GENERATION on a CPU-only node (fail-closed precheck)', async () => {
-    process.env.SYN_FORCE_NO_GPU = 'true';
+  it('refuses LORA_GENERATION when detectCudaAvailable() is false (fail-closed precheck)', async () => {
+    mockDetectCuda.mockResolvedValue(false);
     const metrics: Array<{ outcome: string; ctx: Record<string, unknown> }> = [];
     await expect(runLoraValidation(
       { workOrderId: 'wo1', peerId: id.peerId, payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }) },
       { workDir: tmpDir, identity: { privateKeyHex: id.privateKeyHex, peerId: id.peerId }, metric: (o, c) => metrics.push({ outcome: o, ctx: c }) },
     )).rejects.toThrow(LoraValidationError);
     expect(metrics.some(m => m.outcome === 'rejected')).toBe(true);
+  });
+
+  it('passes the LORA_GENERATION precheck when detectCudaAvailable() is true (Linux)', async () => {
+    // Force the Linux/CUDA branch of hasGpu (suite host may be macOS).
+    mockPlatform.mockReturnValue('linux');
+    mockArch.mockReturnValue('x64');
+    mockDetectCuda.mockResolvedValue(true);
+    const adapterBytes = Buffer.from('fake-adapter');
+    const valBytes = Buffer.from('{"a":1}');
+    const scriptPath = path.join(tmpDir, 'fake_eval.py');
+    await fs.promises.writeFile(scriptPath, [
+      '#!/usr/bin/env python3',
+      'import sys, json, os',
+      'data = json.loads(sys.stdin.read())',
+      'out = data["outDir"]',
+      'open(os.path.join(out, "metrics.json"), "w").write(\'{"perplexity":12.5}\')',
+    ].join('\n'), 'utf8');
+    const fetcher = async (url: string) => ({
+      contentLength: null,
+      body: async () => (url.includes('val') ? valBytes : adapterBytes),
+    });
+    const result = await runLoraValidation(
+      {
+        workOrderId: 'wo_gen', peerId: id.peerId,
+        payload: payload({
+          subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large',
+          adapterSha256: sha256(adapterBytes), validationSetSha256: sha256(valBytes),
+        }),
+      },
+      {
+        workDir: tmpDir, scriptPath, fetcher,
+        identity: { privateKeyHex: id.privateKeyHex, peerId: id.peerId },
+        signer: async () => 'sig',
+      },
+    );
+    expect(result.observed.perplexity).toBe(12.5);
+    expect(mockDetectCuda).toHaveBeenCalled();
+  });
+
+  it('ignores SYN_FORCE_GPU / SYN_FORCE_NO_GPU env vars (no longer consulted)', async () => {
+    mockPlatform.mockReturnValue('linux');
+    mockArch.mockReturnValue('x64');
+    process.env.SYN_FORCE_GPU = 'true';   // would have forced a pass under old code
+    process.env.SYN_FORCE_NO_GPU = 'true';
+    mockDetectCuda.mockResolvedValue(false);
+    await expect(runLoraValidation(
+      { workOrderId: 'wo_env', peerId: id.peerId, payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }) },
+      { workDir: tmpDir, identity: { privateKeyHex: id.privateKeyHex, peerId: id.peerId } },
+    )).rejects.toThrow(/requires a GPU/);
+  });
+
+  it('darwin/arm64: refuses LORA_GENERATION but ALLOWS LORA_CLASSIFICATION (MPS rule, no torch.cuda)', async () => {
+    mockPlatform.mockReturnValue('darwin');
+    mockArch.mockReturnValue('arm64');
+    mockDetectCuda.mockResolvedValue(true); // MPS rule must win regardless
+
+    // GENERATION refused even though CUDA mock says true.
+    await expect(runLoraValidation(
+      { workOrderId: 'wo_mps_gen', peerId: id.peerId, payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }) },
+      { workDir: tmpDir, identity: { privateKeyHex: id.privateKeyHex, peerId: id.peerId } },
+    )).rejects.toThrow(/requires a GPU/);
+
+    // CLASSIFICATION allowed on MPS — runs the full pipeline.
+    const adapterBytes = Buffer.from('fake-adapter');
+    const valBytes = Buffer.from('{"a":1}');
+    const scriptPath = path.join(tmpDir, 'fake_eval_mps.py');
+    await fs.promises.writeFile(scriptPath, [
+      '#!/usr/bin/env python3',
+      'import sys, json, os',
+      'data = json.loads(sys.stdin.read())',
+      'out = data["outDir"]',
+      'open(os.path.join(out, "metrics.json"), "w").write(\'{"accuracy":0.9,"f1":0.85}\')',
+    ].join('\n'), 'utf8');
+    const fetcher = async (url: string) => ({
+      contentLength: null,
+      body: async () => (url.includes('val') ? valBytes : adapterBytes),
+    });
+    const result = await runLoraValidation(
+      {
+        workOrderId: 'wo_mps_cls', peerId: id.peerId,
+        payload: payload({
+          subtype: 'LORA_CLASSIFICATION', baseModel: 'PubMedBERT',
+          adapterSha256: sha256(adapterBytes), validationSetSha256: sha256(valBytes),
+        }),
+      },
+      {
+        workDir: tmpDir, scriptPath, fetcher,
+        identity: { privateKeyHex: id.privateKeyHex, peerId: id.peerId },
+        signer: async () => 'sig',
+      },
+    );
+    expect(result.observed.accuracy).toBe(0.9);
+    // CLASSIFICATION on darwin never consults torch.cuda (MPS branch returns true).
+    expect(mockDetectCuda).not.toHaveBeenCalled();
   });
 
   it('forceGpu=true overrides precheck for LORA_GENERATION', async () => {

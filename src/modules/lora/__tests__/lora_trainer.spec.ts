@@ -27,6 +27,24 @@ jest.mock('../../model/heavy-training-preflight', () => ({
     }
   },
 }));
+// CUDA detection now lives in the shared helper. Mock it so the GENERATION
+// precheck never spawns a real python `import torch` probe on CI.
+const mockDetectCuda = jest.fn(async () => false);
+jest.mock('../../../utils/gpu-detect', () => ({
+  detectCudaAvailable: () => mockDetectCuda(),
+}));
+
+// `os.platform`/`os.arch` are non-configurable native props, so spyOn fails.
+// Mock the module: keep everything real, but make platform/arch controllable
+// so we can drive the darwin-MPS vs Linux-CUDA branches of hasGpu().
+const realOs = jest.requireActual<typeof import('os')>('os');
+const mockPlatform = jest.fn(() => realOs.platform());
+const mockArch = jest.fn(() => realOs.arch());
+jest.mock('os', () => ({
+  ...jest.requireActual<typeof import('os')>('os'),
+  platform: () => mockPlatform(),
+  arch: () => mockArch(),
+}));
 
 import { runLora, LoraError } from '../lora_trainer';
 import type { LoraWorkOrderPayload } from '../types';
@@ -56,6 +74,10 @@ describe('runLora — preflight + orchestration (mocked)', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'lora-test-'));
+    mockDetectCuda.mockReset();
+    mockDetectCuda.mockResolvedValue(false);
+    mockPlatform.mockReset().mockReturnValue(realOs.platform());
+    mockArch.mockReset().mockReturnValue(realOs.arch());
     delete process.env.SYN_FORCE_GPU;
     delete process.env.SYN_FORCE_NO_GPU;
   });
@@ -64,12 +86,70 @@ describe('runLora — preflight + orchestration (mocked)', () => {
     await fs.promises.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('refuses LORA_GENERATION on a CPU-only node (loud failure)', async () => {
-    process.env.SYN_FORCE_NO_GPU = 'true';
+  it('refuses LORA_GENERATION when detectCudaAvailable() is false (loud failure)', async () => {
+    mockDetectCuda.mockResolvedValue(false);
     await expect(runLora({
       workOrderId: 'wo1', peerId: 'peer1',
       payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }),
     })).rejects.toThrow(LoraError);
+    await expect(runLora({
+      workOrderId: 'wo1', peerId: 'peer1',
+      payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }),
+    })).rejects.toThrow(/requires a GPU/);
+  });
+
+  it('passes the LORA_GENERATION precheck when detectCudaAvailable() is true (Linux)', async () => {
+    // Force the Linux/CUDA branch of hasGpu (the suite host may be macOS,
+    // where the MPS rule short-circuits GENERATION before the probe).
+    mockPlatform.mockReturnValue('linux');
+    mockArch.mockReturnValue('x64');
+    // CUDA available → precheck passes; then we control the rest of the
+    // pipeline via a stub trainer script so the spawn succeeds end-to-end.
+    mockDetectCuda.mockResolvedValue(true);
+    const scriptPath = path.join(tmpDir, 'fake_train.py');
+    await fs.promises.writeFile(scriptPath, [
+      '#!/usr/bin/env python3',
+      'import sys, json, os',
+      'data = json.loads(sys.stdin.read())',
+      'out = data["outDir"]',
+      'os.makedirs(out, exist_ok=True)',
+      'open(os.path.join(out, "adapter_model.safetensors"), "wb").write(b"x")',
+      'open(os.path.join(out, "metrics.json"), "w").write(\'{"perplexity":12.5}\')',
+    ].join('\n'), 'utf8');
+
+    const submission = await runLora(
+      {
+        workOrderId: 'wo_gen_1', peerId: 'peer1',
+        payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }),
+      },
+      { scriptPath, workDir: tmpDir, uploader: async () => undefined },
+    );
+    expect(submission.adapterId).toBe('lora_mission_x_pubmedbert_v1');
+    expect(mockDetectCuda).toHaveBeenCalled();
+  });
+
+  it('ignores SYN_FORCE_GPU / SYN_FORCE_NO_GPU env vars (no longer consulted)', async () => {
+    // Operators never configured these — detection is purely the probe now.
+    mockPlatform.mockReturnValue('linux');
+    mockArch.mockReturnValue('x64');
+    process.env.SYN_FORCE_GPU = 'true';   // would have forced a pass under old code
+    process.env.SYN_FORCE_NO_GPU = 'true';
+    mockDetectCuda.mockResolvedValue(false);
+    await expect(runLora({
+      workOrderId: 'wo_env', peerId: 'peer1',
+      payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }),
+    })).rejects.toThrow(/requires a GPU/);
+  });
+
+  it('refuses LORA_GENERATION on darwin/arm64 (MPS rule) without consulting torch.cuda', async () => {
+    mockPlatform.mockReturnValue('darwin');
+    mockArch.mockReturnValue('arm64');
+    mockDetectCuda.mockResolvedValue(true); // even if CUDA "true", MPS rule wins
+    await expect(runLora({
+      workOrderId: 'wo_mps', peerId: 'peer1',
+      payload: payload({ subtype: 'LORA_GENERATION', baseModel: 'BioGPT-Large' }),
+    })).rejects.toThrow(/requires a GPU/);
+    expect(mockDetectCuda).not.toHaveBeenCalled();
   });
 
   it('builds the submission payload from trainer outputs and uploads to S3', async () => {

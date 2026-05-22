@@ -24,6 +24,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import logger from '../../utils/logger';
+import { detectCudaAvailable } from '../../utils/gpu-detect';
 import { resolvePython } from '../../utils/python-venv';
 import { sanitizedEnvForSubprocess } from '../../utils/subprocess-env';
 import {
@@ -76,7 +77,7 @@ export class LoraError extends Error {
 
 export async function runLora(input: RunLoraInput, options: RunLoraOptions = {}): Promise<LoraSubmissionPayload> {
   const { workOrderId, peerId, payload } = input;
-  if (payload.subtype === 'LORA_GENERATION' && !(options.forceGpu ?? hasGpu(payload.subtype))) {
+  if (payload.subtype === 'LORA_GENERATION' && !(options.forceGpu ?? await hasGpu(payload.subtype))) {
     throw new LoraError(
       `LORA_GENERATION (BioGPT-Large) requires a GPU; this node has none. Refusing to run on CPU.`,
       'precheck',
@@ -145,31 +146,32 @@ export async function runLora(input: RunLoraInput, options: RunLoraOptions = {})
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Cheap GPU heuristic — true means "this node MAY be able to run a
- * LoRA training subprocess on a GPU/MPS backend". The Python script
- * runs the authoritative check via `torch.cuda.is_available()` and
- * (for MPS) `torch.backends.mps.is_available()`. NOTE: Apple Silicon
- * MPS is allowed for CLASSIFICATION only — `train_lora.py` rejects
- * GENERATION on MPS as defence in depth, but we mirror that rule
- * here so the precheck refuses GENERATION on MPS BEFORE we waste a
+ * GPU capability check — true means "this node MAY be able to run a
+ * LoRA training subprocess on a GPU/MPS backend". CUDA is auto-detected
+ * via the shared `detectCudaAvailable()` probe (utils/gpu-detect.ts), the
+ * SAME `torch.cuda.is_available()` probe the heartbeat uses to advertise
+ * `gpu_training` — a single source of truth so the two paths can never
+ * diverge again. The Python script runs the authoritative check inside the
+ * subprocess; we mirror it here so the precheck refuses BEFORE we waste a
  * model download.
  *
- * @param subtype optional — when provided, the heuristic refuses MPS
- *                for `LORA_GENERATION` (Apple Silicon BioGPT-Large
- *                doesn't fit / is unsupported by torch's MPS backend
- *                at the model sizes we ship).
+ * NOTE: Apple Silicon MPS is allowed for CLASSIFICATION only — `torch.cuda`
+ * is always false on macOS, so we special-case darwin/arm64 to permit the
+ * MPS encoder path for non-GENERATION subtypes (defence-in-depth mirroring
+ * `train_lora.py`, which rejects GENERATION on MPS).
+ *
+ * @param subtype optional — when provided, the check refuses MPS for
+ *                `LORA_GENERATION` (Apple Silicon BioGPT-Large doesn't fit /
+ *                is unsupported by torch's MPS backend at our model sizes).
  */
-function hasGpu(subtype?: 'LORA_CLASSIFICATION' | 'LORA_GENERATION'): boolean {
-  if (process.env.SYN_FORCE_GPU === 'true') return true;
-  if (process.env.SYN_FORCE_NO_GPU === 'true') return false;
-  const platform = os.platform();
-  if (platform === 'darwin' && os.arch() === 'arm64') {
-    // MPS-capable but only useful for CLASSIFICATION (encoder).
+async function hasGpu(subtype?: 'LORA_CLASSIFICATION' | 'LORA_GENERATION'): Promise<boolean> {
+  if (os.platform() === 'darwin' && os.arch() === 'arm64') {
+    // MPS-capable but only useful for CLASSIFICATION (encoder). torch.cuda is
+    // false on Mac, so do NOT consult the CUDA probe here.
     return subtype !== 'LORA_GENERATION';
   }
-  // Linux / Windows: rely on env var set by the launcher (e.g.
-  // start-node detects nvidia-smi at startup and exports SYN_FORCE_GPU=true).
-  return false;
+  // Linux / Windows: detect CUDA via the real torch.cuda probe.
+  return detectCudaAvailable();
 }
 
 function resolveTrainScript(): string {

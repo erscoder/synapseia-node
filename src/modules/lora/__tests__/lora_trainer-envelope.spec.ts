@@ -90,8 +90,6 @@ describe('runLora envelope — Slice 8 OOM mitigation', () => {
     mockPause.mockResolvedValue({ wasRunning: false, pausedAt: 0 });
     mockRestart.mockResolvedValue(undefined);
     mockEnsureMem.mockResolvedValue(undefined);
-    delete process.env.SYN_FORCE_GPU;
-    delete process.env.SYN_FORCE_NO_GPU;
   });
 
   afterEach(async () => {
