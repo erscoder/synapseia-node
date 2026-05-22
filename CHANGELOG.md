@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(node): self-update directly from npm, drop coord signed-manifest gate (67834abd)
+
+Fleet auto-update was fully blocked: `attemptSelfUpdate` verified an Ed25519
+signed manifest from coord `/release/latest` against the hardcoded
+`COORDINATOR_PUBKEY_BASE58`, but the coord's actual signing key does not match
+that pubkey in prod, so every install was refused (`manifest Ed25519 signature
+failed verification. Refusing install.`) and pods stayed pinned on their
+installed version. Per product-owner directive the npm registry is now the
+sole source of truth: `attemptSelfUpdate(targetVersion)` runs
+`npm install -g @synapseia-network/node@<targetVersion> --ignore-scripts`
+directly with the npm-latest version (triple semver-validated + shell-quoted,
+always pinned, never floating `@latest`). Removed the manifest fetch/verify,
+`npm pack`, and sha256-verify paths plus their dead helpers (−620 lines). Kept
+`--ignore-scripts` (residual supply-chain mitigation), the NPM_GLOBAL-only
+install gate, idle-gated restart, the cross-lifetime version-keyed loop brake,
+and fail-closed behaviour. `coordinatorUrl` now only supplies the
+`minNodeVersion` security floor. 61 specs green. (Coord `/release/latest`
+endpoint is now unused by nodes; left in place, can be removed later.)
+
 ## [2026-05-22] fix(diloco): delete orphaned gradient temp after upload (a961229c)
 
 DiLoCo rounds leaked `/tmp/tmp<rand>_diloco_gradients.pt` files (~89MB each,
