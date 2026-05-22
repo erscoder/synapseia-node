@@ -1,5 +1,17 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(lora): install protobuf + sentencepiece + sacremoses for BioGPT tokenizer (0e3be788)
+
+`LORA_CLASSIFICATION on BioGPT-Large` failed 100% (`train_lora.py` exit 2):
+`BioGptTokenizer` requires `protobuf` (slow->fast conversion), `sentencepiece`,
+and `sacremoses` (Moses), none of which `install-deps` installed. Reproduced
+live on a pod (`requires the protobuf library` -> `need sacremoses to use
+BioGptTokenizer` -> tokenizer + `BioGptForSequenceClassification` load OK).
+Added the three to `LORA_STACK_PIP_ARGS` (one pip install alongside
+transformers/peft), unpinned like the neighbor deps. 51 install-deps specs
+green. (Capacity note: BioGPT-Large weights are ~6.3GB and won't comfortably
+coexist with the Qwen2.5-7B DiLoCo cache on a 50GB pod — separate infra item.)
+
 ## [2026-05-22] fix(node): self-update directly from npm, drop coord signed-manifest gate (67834abd)
 
 Fleet auto-update was fully blocked: `attemptSelfUpdate` verified an Ed25519
