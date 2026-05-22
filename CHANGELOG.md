@@ -1,5 +1,21 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(node): require torch ≥ 2.6 (cu124) — LoRA was broken on 2.5.1 (0a52eee2)
+
+`transformers`/`peft` refuse `torch.load` on torch < 2.6 (CVE mitigation), so LoRA
+training (`train_lora.py`) failed on EVERY node running torch < 2.6 — 28 live
+failures on the prod pod (Python 3.12 / torch 2.5.1 / cu121). The `cu121` index has
+no torch 2.6, so the pin moves to `cu124`. `selectTorchSpec` now returns torch
+**2.6.0 / cu124** for cp310-313 (was 2.5.1/cu121 for ≤3.12 — obsolete); ≥3.14
+best-effort; macOS uses the default/MPS wheel at 2.6.0 (never cu124).
+
+Empirically verified on a live A5000 (Python 3.12, driver 570 / CUDA 12.8): torch
+2.6.0/cu124 + transformers 5.9 + peft 0.19 + bitsandbytes 0.49 → cuda_avail=True,
+`torch.load(weights_only=True)` OK, bitsandbytes CUDA OK. Existing 2.5.1 installs
+upgrade to 2.6.0 on next boot (the version assert fails → pip upgrade). cu124 needs
+an NVIDIA driver supporting CUDA ≥ 12.4 (≥ ~550); no cu121 fallback for 2.6 (those
+nodes were already LoRA-broken on 2.5.1). Reviewer SHIP AS-IS. node-only release.
+
 ## [2026-05-22] fix(node): Python-version-aware torch pin — 3.13+ support (66c6bbe1)
 
 The hard-pinned `torch==2.5.1` + `cu121` index hard-failed on Python ≥ 3.13: the
