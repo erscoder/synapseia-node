@@ -281,9 +281,113 @@ export const PREFLIGHT_RE_PROBE_DELAY_MS = 500;
 
 const CGROUP_V2_MAX = '/sys/fs/cgroup/memory.max';
 const CGROUP_V2_CURRENT = '/sys/fs/cgroup/memory.current';
+const CGROUP_V2_STAT = '/sys/fs/cgroup/memory.stat';
 const CGROUP_V1_LIMIT = '/sys/fs/cgroup/memory/memory.limit_in_bytes';
 const CGROUP_V1_USAGE = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
+const CGROUP_V1_STAT = '/sys/fs/cgroup/memory/memory.stat';
 const DROP_CACHES_PATH = '/proc/sys/vm/drop_caches';
+
+// One-time WARN guards: if memory.stat is unreadable / unparseable we
+// LOSE the reclaimable-cache bonus and fall back to the OLD bare
+// (limit-usage / max-current) figure for that branch. That base value is
+// still a valid conservative lower bound (it was the pre-fix behavior),
+// so we do NOT fail-CLOSED to 0 here — that would re-introduce the
+// over-skip this fix exists to eliminate. We only warn once per branch to
+// avoid cron spam on every heavy-training round.
+let v2ReclaimWarned = false;
+let v1ReclaimWarned = false;
+
+/**
+ * Parse the immediately-reclaimable file-cache figure (in MB) out of a
+ * cgroup `memory.stat` text body.
+ *
+ * Why this exists (the Bug NEW-2 fix, 2026-05-22)
+ * -----------------------------------------------
+ * The container `usage` (v1 `memory.usage_in_bytes`) and `current`
+ * (v2 `memory.current`) counters INCLUDE reclaimable page cache —
+ * clean, file-backed pages the kernel will evict for free under
+ * allocation pressure. The old free formula `limit - usage` (v1) /
+ * `max - current` (v2) therefore UNDER-reports available memory by the
+ * size of that cache.
+ *
+ * We cannot proactively reclaim it: `drop_caches` requires CAP_SYS_ADMIN,
+ * which RunPod and most container runtimes DENY (see `defaultDropFsCache`
+ * — the write fails EACCES/EPERM). But we do not need to: when the
+ * trainer's allocation outgrows RSS, the kernel evicts these clean file
+ * pages automatically, no privilege required. So they ARE available; the
+ * gate just was not counting them.
+ *
+ * Live evidence (pod2, cgroup v1, 2026-05-22)
+ * -------------------------------------------
+ *   limit_in_bytes     = 47683 MB
+ *   usage_in_bytes     = 44046 MB   → old free = 3637 MB → over-skip
+ *   total_rss          =   342 MB   (!) actual anonymous footprint
+ *   total_cache        = 43338 MB   evictable file cache
+ *   total_inactive_file= 17324 MB   (18166677504 bytes)
+ *   total_active_file  = 26014 MB
+ * Real available ≥ 21 GB because RSS is only 342 MB. The old gate skipped
+ * DiLoCo ("needs 8192MB free, only 3488MB") / LoRA ("needs 6144MB, only
+ * 1887MB") on a pod with tens of GB of evictable cache.
+ *
+ * Which key we read
+ * -----------------
+ * We add back `inactive_file` (v2) / `total_inactive_file` (v1) ONLY.
+ * That is the kernel's least-recently-used, immediately-reclaimable
+ * file-backed set — the most conservative "definitely free under
+ * pressure" figure. `active_file` and `slab_reclaimable` are ALSO
+ * reclaimable but require more scan work / are partly dirty, so we
+ * deliberately leave them out to keep the gate conservative (P24
+ * direction: prefer under-counting free over over-counting).
+ *
+ * @param statText raw contents of memory.stat (key/value lines, bytes).
+ * @param v 'v1' (keys prefixed `total_`) or 'v2' (bare keys).
+ * @returns reclaimable MB, or NaN if the key is absent / unparseable so
+ *          the caller can decide to fall back to the bare free figure.
+ */
+export function parseReclaimableFromMemStat(
+  statText: string,
+  v: 'v1' | 'v2',
+): number {
+  const key = v === 'v1' ? 'total_inactive_file' : 'inactive_file';
+  for (const line of statText.split('\n')) {
+    // cgroup memory.stat lines are "key value" (single space, value in
+    // bytes). Match the exact key to avoid e.g. `total_inactive_anon`
+    // sharing a prefix.
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(key + ' ')) continue;
+    const bytes = Number(trimmed.slice(key.length + 1).trim());
+    if (!Number.isFinite(bytes) || bytes < 0) return NaN;
+    return Math.floor(bytes / 1024 / 1024);
+  }
+  return NaN;
+}
+
+/**
+ * Read a cgroup memory.stat file and return the reclaimable (inactive_file)
+ * MB, or NaN on any read/parse failure. On NaN the caller adds nothing —
+ * it keeps the bare (limit-usage / max-current) free figure, which is a
+ * valid conservative lower bound (NOT fail-CLOSED-to-0; see
+ * `defaultGetContainerFreeMemMB` docblock). Invokes `onMiss` once on
+ * failure so the caller can emit a one-time WARN.
+ */
+async function readReclaimableMB(
+  statPath: string,
+  v: 'v1' | 'v2',
+  onMiss: () => void,
+): Promise<number> {
+  try {
+    const statText = await fs.readFile(statPath, 'utf8');
+    const mb = parseReclaimableFromMemStat(statText, v);
+    if (!Number.isFinite(mb)) {
+      onMiss();
+      return NaN;
+    }
+    return mb;
+  } catch {
+    onMiss();
+    return NaN;
+  }
+}
 
 /**
  * Slice 17 (Plan B, 2026-05-17) — One-shot probe at first use that
@@ -419,11 +523,38 @@ let gcUnavailableWarned = false;
  * `InsufficientMemoryError` rather than letting the python trainer
  * spawn into a container that may or may not have headroom.
  *
+ * Reclaimable page-cache add-back (Bug NEW-2 fix, 2026-05-22)
+ * ----------------------------------------------------------
+ * The cgroup `usage`/`current` counter INCLUDES reclaimable page cache —
+ * clean file-backed pages the kernel evicts for free under allocation
+ * pressure WITHOUT needing `drop_caches`/CAP_SYS_ADMIN (which RunPod
+ * denies — see `defaultDropFsCache`). The bare `limit - usage` /
+ * `max - current` formula therefore UNDER-reports free memory and the
+ * gate over-skips: pod2 reported `usage=44046MB` of a `47683MB` limit
+ * (old free=3637MB → skip) while `total_rss` was only 342MB and
+ * 43338MB was evictable file cache (17324MB of it `total_inactive_file`,
+ * 18166677504 bytes). Real available was ≥21GB. DiLoCo/LoRA were skipped
+ * with "needs 8192MB/6144MB free, only 3488MB/1887MB available".
+ *
+ * Fix: add the immediately-reclaimable file cache back into "free":
+ *   - v2: free = (max - current)  + inactive_file_MB        (memory.stat)
+ *   - v1: free = (limit - usage)  + total_inactive_file_MB   (memory.stat)
+ * We use `inactive_file` ONLY (the LRU, definitely-reclaimable set) and
+ * leave out `active_file` / `slab_reclaimable` to stay conservative
+ * (P24 direction). See `parseReclaimableFromMemStat` for the rationale.
+ *
+ * If memory.stat is missing / unparseable, we WARN once and fall back to
+ * the OLD bare figure for that branch — NOT 0. The bare value is still a
+ * valid conservative lower bound (it was the pre-fix behavior); failing
+ * CLOSED here would just re-introduce the over-skip. (The whole-probe
+ * fail-CLOSED-to-0 contract is still enforced by the caller's try/catch
+ * around this function — P24.)
+ *
  * Fallback chain:
- *   1. cgroup v2 (`memory.max` + `memory.current`) — Docker/Podman
- *      with cgroupv2 (Ubuntu 22+, RHEL 9+, RunPod 2024+).
- *   2. cgroup v1 (`memory.limit_in_bytes` + `memory.usage_in_bytes`)
- *      — older Docker hosts.
+ *   1. cgroup v2 (`memory.max` + `memory.current` + `memory.stat`) —
+ *      Docker/Podman with cgroupv2 (Ubuntu 22+, RHEL 9+, RunPod 2024+).
+ *   2. cgroup v1 (`memory.limit_in_bytes` + `memory.usage_in_bytes`
+ *      + `memory.stat`) — older Docker hosts.
  *   3. host-wide `os.freemem()` — bare-metal / no cgroup files
  *      (developer laptop). Last-resort, still gates correctly.
  *
@@ -447,7 +578,21 @@ export async function defaultGetContainerFreeMemMB(): Promise<number> {
     }
     const max = Number(maxTrim);
     if (Number.isFinite(max) && Number.isFinite(current) && max > 0) {
-      return Math.floor((max - current) / 1024 / 1024);
+      const bareFree = Math.floor((max - current) / 1024 / 1024);
+      // Add back immediately-reclaimable file cache (inactive_file).
+      // current counts it, but the kernel evicts it for free under
+      // pressure — no drop_caches/CAP_SYS_ADMIN needed.
+      const reclaim = await readReclaimableMB(CGROUP_V2_STAT, 'v2', () => {
+        if (!v2ReclaimWarned) {
+          v2ReclaimWarned = true;
+          logger.warn(
+            '[Preflight] cgroup v2 memory.stat unreadable/unparseable — ' +
+              'omitting reclaimable-cache add-back, using bare (max-current). ' +
+              'Free figure is a conservative lower bound.',
+          );
+        }
+      });
+      return Number.isFinite(reclaim) ? bareFree + reclaim : bareFree;
     }
   } catch {
     // fall through to v1
@@ -463,7 +608,22 @@ export async function defaultGetContainerFreeMemMB(): Promise<number> {
     const usage = Number(usageRaw.trim());
     // v1 reports an absurd sentinel (~9.2e18) for "no limit".
     if (Number.isFinite(limit) && Number.isFinite(usage) && limit > 0 && limit < 1e18) {
-      return Math.floor((limit - usage) / 1024 / 1024);
+      const bareFree = Math.floor((limit - usage) / 1024 / 1024);
+      // Add back immediately-reclaimable file cache (total_inactive_file).
+      // usage_in_bytes counts it, but it is evicted for free under
+      // pressure — no drop_caches/CAP_SYS_ADMIN needed. See pod2 evidence
+      // in parseReclaimableFromMemStat.
+      const reclaim = await readReclaimableMB(CGROUP_V1_STAT, 'v1', () => {
+        if (!v1ReclaimWarned) {
+          v1ReclaimWarned = true;
+          logger.warn(
+            '[Preflight] cgroup v1 memory.stat unreadable/unparseable — ' +
+              'omitting reclaimable-cache add-back, using bare (limit-usage). ' +
+              'Free figure is a conservative lower bound.',
+          );
+        }
+      });
+      return Number.isFinite(reclaim) ? bareFree + reclaim : bareFree;
     }
   } catch {
     // fall through to host

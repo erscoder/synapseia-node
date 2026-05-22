@@ -22,7 +22,8 @@
  * deltas and/or error fields, not just "didn't throw".
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { promises as fs } from 'fs';
 import {
   ensureMemForHeavyTraining,
   ensureMemForDiloco,
@@ -38,6 +39,8 @@ import {
   __resetQuantSupportCacheForTests,
   defaultForceGc,
   defaultDropFsCache,
+  defaultGetContainerFreeMemMB,
+  parseReclaimableFromMemStat,
 } from '../heavy-training-preflight';
 
 describe('ensureMemForHeavyTraining', () => {
@@ -393,5 +396,162 @@ describe('Slice 17 — detectQuantSupport + requiredMemForHeavyTraining', () => 
     // who want to handle it). Production safety is the spawnSync
     // try/catch around resolvePython + child_process.
     expect(() => detectQuantSupport({ probeFn })).toThrow('synthetic probe failure');
+  });
+});
+
+/**
+ * Bug NEW-2 (2026-05-22) — reclaimable page-cache add-back. The old free
+ * formula `limit - usage` (v1) / `max - current` (v2) under-reports free
+ * memory because the cgroup usage counter INCLUDES evictable file cache,
+ * and drop_caches is denied on RunPod (no CAP_SYS_ADMIN). These specs
+ * exercise the real memory.stat parsing (P29 — not canned mocks) using
+ * the live pod2 numbers, then drive `defaultGetContainerFreeMemMB` with a
+ * mocked fs to confirm the add-back lands in the returned free figure.
+ */
+describe('Bug NEW-2 — reclaimable page-cache add-back (parseReclaimableFromMemStat)', () => {
+  // Verbatim pod2 (cgroup v1) memory.stat excerpt, 2026-05-22.
+  // total_inactive_file 18166677504 bytes = 17324 MB.
+  const POD2_V1_STAT = [
+    'cache 45447675904',
+    'rss 358612992',
+    'rss_huge 0',
+    'shmem 0',
+    'mapped_file 1048576',
+    'dirty 0',
+    'writeback 0',
+    'pgpgin 0',
+    'pgpgout 0',
+    'inactive_anon 0',
+    'active_anon 358612992',
+    'inactive_file 18166677504',
+    'active_file 27276017664',
+    'unevictable 0',
+    'hierarchical_memory_limit 50000003072',
+    'total_cache 45447675904',
+    'total_rss 358612992',
+    'total_rss_huge 0',
+    'total_inactive_anon 0',
+    'total_active_anon 358612992',
+    'total_inactive_file 18166677504',
+    'total_active_file 27276017664',
+    'total_unevictable 0',
+    '',
+  ].join('\n');
+
+  // cgroup v2 memory.stat uses bare keys (no total_ prefix).
+  const V2_STAT = [
+    'anon 358612992',
+    'file 45447675904',
+    'kernel_stack 0',
+    'slab 12345678',
+    'inactive_anon 0',
+    'active_anon 358612992',
+    'inactive_file 18166677504',
+    'active_file 27276017664',
+    'slab_reclaimable 8000000',
+    '',
+  ].join('\n');
+
+  const INACTIVE_FILE_MB = Math.floor(18166677504 / 1024 / 1024); // 17324
+
+  it('v1: parses total_inactive_file (17324 MB) from real pod2 memory.stat', () => {
+    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(INACTIVE_FILE_MB);
+  });
+
+  it('v2: parses bare inactive_file (17324 MB), not the v1 total_ key', () => {
+    expect(parseReclaimableFromMemStat(V2_STAT, 'v2')).toBe(INACTIVE_FILE_MB);
+  });
+
+  it('v1: does NOT match total_inactive_anon (prefix collision guard)', () => {
+    // total_inactive_anon shares the "total_inactive_" prefix with the
+    // key we want; an exact-key match must pick total_inactive_file.
+    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(INACTIVE_FILE_MB);
+    // The anon value is 0 here; ensure we did NOT return 0.
+    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).not.toBe(0);
+  });
+
+  it('returns NaN when the key is absent (caller falls back to bare free)', () => {
+    const noKey = 'cache 1\nrss 2\n';
+    expect(parseReclaimableFromMemStat(noKey, 'v1')).toBeNaN();
+    expect(parseReclaimableFromMemStat(noKey, 'v2')).toBeNaN();
+  });
+
+  it('returns NaN when the value is unparseable', () => {
+    const garbage = 'total_inactive_file not-a-number\n';
+    expect(parseReclaimableFromMemStat(garbage, 'v1')).toBeNaN();
+  });
+
+  it('returns NaN on empty input', () => {
+    expect(parseReclaimableFromMemStat('', 'v1')).toBeNaN();
+    expect(parseReclaimableFromMemStat('', 'v2')).toBeNaN();
+  });
+});
+
+describe('Bug NEW-2 — defaultGetContainerFreeMemMB reclaimable add-back (mocked fs)', () => {
+  // Live pod2 (cgroup v1) byte values, 2026-05-22.
+  const LIMIT_MB = 47683;
+  const USAGE_MB = 44046;
+  const INACTIVE_FILE_BYTES = 18166677504; // 17324 MB
+  const INACTIVE_FILE_MB = Math.floor(INACTIVE_FILE_BYTES / 1024 / 1024);
+
+  const limitBytes = String(LIMIT_MB * 1024 * 1024);
+  const usageBytes = String(USAGE_MB * 1024 * 1024);
+
+  const V1_STAT = [
+    'total_cache 45447675904',
+    'total_rss 358612992',
+    `total_inactive_file ${INACTIVE_FILE_BYTES}`,
+    'total_active_file 27276017664',
+    '',
+  ].join('\n');
+
+  let readFileSpy: jest.SpiedFunction<typeof fs.readFile>;
+
+  afterEach(() => {
+    readFileSpy?.mockRestore();
+  });
+
+  // Helper: route fs.readFile by path so we exercise the real v1 branch.
+  function mockV1Reads(statText: string | Error) {
+    readFileSpy = jest
+      .spyOn(fs, 'readFile')
+      .mockImplementation(async (p: unknown) => {
+        const path = String(p);
+        // Force the v2 branch to miss so we fall through to v1.
+        if (path === '/sys/fs/cgroup/memory.max' || path === '/sys/fs/cgroup/memory.current') {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+        }
+        if (path === '/sys/fs/cgroup/memory/memory.limit_in_bytes') return limitBytes as never;
+        if (path === '/sys/fs/cgroup/memory/memory.usage_in_bytes') return usageBytes as never;
+        if (path === '/sys/fs/cgroup/memory/memory.stat') {
+          if (statText instanceof Error) throw statText;
+          return statText as never;
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+  }
+
+  it('v1: free = (limit-usage) + total_inactive_file → ~21GB, not the old 3637MB', async () => {
+    mockV1Reads(V1_STAT);
+    const free = await defaultGetContainerFreeMemMB();
+    const bare = LIMIT_MB - USAGE_MB; // 3637
+    expect(free).toBe(bare + INACTIVE_FILE_MB); // 3637 + 17324 = 20961
+    // Crucially: the new figure clears both heavy-training thresholds
+    // that the old 3637MB over-skipped.
+    expect(free).toBeGreaterThan(DILOCO_REQUIRED_FREE_MB_QUANT); // 8192
+    expect(free).toBeGreaterThan(LORA_REQUIRED_FREE_MB_QUANT); // 6144
+  });
+
+  it('v1: memory.stat unreadable → falls back to bare (limit-usage), NOT 0', async () => {
+    mockV1Reads(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+    const free = await defaultGetContainerFreeMemMB();
+    // No add-back, but we keep the conservative lower bound (no fail-CLOSED-to-0).
+    expect(free).toBe(LIMIT_MB - USAGE_MB); // 3637
+  });
+
+  it('v1: memory.stat present but key absent → bare free (NaN add-back ignored)', async () => {
+    mockV1Reads('total_cache 1\ntotal_rss 2\n');
+    const free = await defaultGetContainerFreeMemMB();
+    expect(free).toBe(LIMIT_MB - USAGE_MB); // 3637
   });
 });
