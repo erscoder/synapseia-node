@@ -92,6 +92,21 @@ export class BackpressureService {
    */
   private readonly idToClass = new Map<string, SlotClass>();
 
+  /**
+   * Drain latch. When true, `acquire`/`canAccept` refuse NEW HEAVY
+   * (training-class) work so an in-progress self-update can reach a
+   * confirmed-idle HEAVY window before it restarts the process. Set by
+   * `UpdateManager` immediately before it starts the npm install (which
+   * can take minutes), and cleared if the update aborts. LIGHT work is
+   * unaffected — only HEAVY work would be killed by a restart, and a
+   * HEAVY slot frees up far less often, so we must stop new HEAVY work
+   * from sneaking in during the install→restart window (the idle-gate
+   * race). Already-acquired HEAVY slots are NOT released here; the
+   * manager re-confirms `getInFlightByClass('HEAVY') === 0` right before
+   * exit and aborts the restart if any HEAVY WO is still active.
+   */
+  private draining = false;
+
   constructor() {
     const heavyEnv = process.env.MAX_HEAVY_WORK_ORDERS;
     const lightEnv = process.env.MAX_LIGHT_WORK_ORDERS;
@@ -149,6 +164,8 @@ export class BackpressureService {
    */
   canAccept(type?: string | null): boolean {
     const cls = classifyWorkOrderSlot(type);
+    // Drain gate: while a self-update is staging, refuse NEW HEAVY work.
+    if (this.draining && cls === 'HEAVY') return false;
     return this.inFlightByClass[cls].size < this.maxByClass[cls];
   }
 
@@ -168,6 +185,16 @@ export class BackpressureService {
       return true;
     }
     const cls = classifyWorkOrderSlot(type);
+    // Drain gate: while a self-update is staging, refuse NEW HEAVY work
+    // so the install→restart window cannot kill a training WO accepted
+    // after the idle-gate check. Idempotent re-acquire above is allowed
+    // (the WO is already in flight, not new). LIGHT is never gated.
+    if (this.draining && cls === 'HEAVY') {
+      logger.info(
+        `[Backpressure] Rejected WO ${workOrderId} (HEAVY) — node draining for self-update`,
+      );
+      return false;
+    }
     const bucket = this.inFlightByClass[cls];
     const limit = this.maxByClass[cls];
     if (bucket.size >= limit) {
@@ -212,6 +239,23 @@ export class BackpressureService {
   /** Current number of in-flight work orders of the given class. */
   getInFlightByClass(cls: SlotClass): number {
     return this.inFlightByClass[cls].size;
+  }
+
+  /**
+   * Toggle the drain latch (see the `draining` field). `UpdateManager`
+   * sets it before staging a self-update and clears it on any abort so
+   * a deferred/failed update never permanently blocks HEAVY work.
+   */
+  setDraining(draining: boolean): void {
+    this.draining = draining;
+    logger.log(
+      `[Backpressure] draining=${draining} (HEAVY acceptance ${draining ? 'paused' : 'resumed'})`,
+    );
+  }
+
+  /** Whether the node is currently draining HEAVY work for a self-update. */
+  isDraining(): boolean {
+    return this.draining;
   }
 
   /**

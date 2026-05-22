@@ -60,9 +60,11 @@ import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { CLOUD_PROVIDERS, resolveCloudApiKeyFromEnv } from '../modules/llm/providers';
 import { LangGraphWorkOrderAgentService } from '../modules/agent/services/langgraph-work-order-agent.service';
 import { WorkOrderPushQueue } from '../modules/agent/work-order/work-order-push-queue';
+import { BackpressureService } from '../modules/agent/work-order/backpressure.service';
 import { ReviewAgentHelper } from '../modules/agent/review-agent';
 import { P2pService } from '../modules/p2p/services/p2p.service';
 import { startNode } from '../node-runtime';
+import { UpdateManager } from '../utils/update-manager';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance';
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
@@ -256,6 +258,7 @@ async function bootstrap() {
   const llmService = app.get(LlmProviderHelper);
   const workOrderAgentService = app.get(LangGraphWorkOrderAgentService);
   const workOrderPushQueue = app.get(WorkOrderPushQueue);
+  const backpressureService = app.get(BackpressureService);
   const reviewAgentHelper = app.get(ReviewAgentHelper);
   const p2pService = app.get(P2pService);
   const heartbeatHelper =app.get(HeartbeatHelper)
@@ -771,12 +774,43 @@ async function bootstrap() {
           try { releaseLock(); } catch { /* best-effort */ }
         };
         process.on('exit', cleanupLock);
+
+        // ── Periodic update manager ───────────────────────────────────────
+        // Non-blocking: boot check fires immediately and a 30-min timer
+        // re-checks for the process lifetime. On an UPDATE_AVAILABLE /
+        // UPDATE_REQUIRED it self-updates (signed + sha256-verified) and,
+        // only when no HEAVY training WO is in flight, restarts into the new
+        // binary via a detached respawn so unsupervised pods/shell come back
+        // up. Idle-gated + attempt-capped to never interrupt training or
+        // trigger a fleet-wide restart loop. Fail-closed: any error here is
+        // logged and the node keeps running on its current version.
+        const updateManager = new UpdateManager({
+          coordinatorUrl,
+          getActiveHeavyCount: () => backpressureService.getInFlightByClass('HEAVY'),
+          // Drain HEAVY acceptance during the install→restart window so a
+          // training WO accepted after the idle-gate check is not killed.
+          setDraining: (draining) => backpressureService.setDraining(draining),
+          restartHandles: {
+            // `runtime.stop()` already drains the telemetry ring (in the
+            // right order: telemetry first, then p2p) and stops libp2p, so
+            // a single stopP2p handle covers the full graceful shutdown —
+            // no separate stopTelemetry needed (avoids a double-drain).
+            // Also drop the single-instance lock so the respawned child
+            // boots cleanly instead of seeing the dying parent's lock.
+            stopP2p: async () => { await runtime.stop(); },
+            releaseLock: cleanupLock,
+          },
+        });
+        updateManager.start();
+
         process.on('SIGINT', async () => {
+          updateManager.stop();
           await runtime.stop();
           cleanupLock();
           process.exit(0);
         });
         process.on('SIGTERM', async () => {
+          updateManager.stop();
           await runtime.stop();
           cleanupLock();
           process.exit(0);

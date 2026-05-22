@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { homedir } from 'os';
@@ -201,14 +201,18 @@ export async function fetchSignedReleaseManifest(
   }
 
   // Canonicalize the signed payload. MUST match the coord-side signer
-  // byte-for-byte: keys in fixed order, no whitespace, no trailing
-  // newline. JSON.stringify on an object literal with a fixed key order
-  // is sufficient because Node preserves insertion order for string keys.
-  const signedPayload = JSON.stringify({
-    version: raw.version,
-    sha256: raw.sha256,
-    signedAt: raw.signedAt,
-  });
+  // (`ReleaseManifestService.sign`) byte-for-byte. Coord signs over
+  //   JSON.stringify({ sha256, signedAt, version })
+  // with the keys in ASCENDING alphabetical order: sha256 < signedAt <
+  // version. The exact wire bytes are:
+  //   {"sha256":"<hex>","signedAt":<n>,"version":"<semver>"}
+  // We use the `replacer` array form of JSON.stringify, which BOTH
+  // selects the keys AND fixes their emission order to the array order —
+  // so the canonical form is locked to sorted keys regardless of the
+  // insertion order of the parsed `raw` object. Do NOT switch this to an
+  // object literal: that reintroduces an insertion-order dependency that
+  // can silently drift from the signer (the original bug).
+  const signedPayload = JSON.stringify(raw, ['sha256', 'signedAt', 'version']);
 
   let signatureBytes: Uint8Array;
   try {
@@ -537,9 +541,68 @@ export interface RestartShutdownHandles {
    * Stop the libp2p node. Errors are swallowed by `restartProcess`.
    */
   stopP2p?: () => Promise<void>;
+  /**
+   * Release the single-instance lock file synchronously, called right
+   * before the detached respawn so the freshly-spawned `syn start`
+   * child does not see the dying parent's lock and bail with "Another
+   * Synapseia node is already running". No-op when `respawn` is false.
+   * Errors are swallowed by `restartProcess`.
+   */
+  releaseLock?: () => void;
+  /**
+   * When true, AND the process is NOT supervised by the desktop UI
+   * (`SYNAPSEIA_LAUNCH_SOURCE !== 'ui'`), spawn a detached replacement
+   * `syn start` before exiting. Required for pods / shell runs that have
+   * no host supervisor — a plain `process.exit(0)` would leave them DOWN.
+   *
+   * Desktop-UI runs keep `respawn` effectively disabled at runtime: the
+   * UI already keeps a child-process handle and respawns on exit, so a
+   * self-spawned child would collide on the lock file (see the
+   * `restartProcess` docblock). The UI gate is enforced inside
+   * `restartProcess`, not by the caller, so a mis-set flag cannot break
+   * the UI path.
+   */
+  respawn?: boolean;
 }
 
 const SHUTDOWN_BUDGET_MS = 5_000;
+
+/**
+ * Spawn a detached replacement `syn start` that survives the parent's
+ * exit. Mirrors `.devnet/pod-update-restart.sh`:
+ *   - re-runs the SAME argv (the `start` subcommand + any flags the
+ *     operator passed, e.g. `--set-name`, `--inference`);
+ *   - inherits the full env, so `SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE`
+ *     (mounted by the pod / set by `provision-newpod.sh`) is preserved
+ *     and the child unlocks the keystore non-interactively;
+ *   - `detached: true` + `unref()` so the child is reparented to init
+ *     and keeps running after this process dies;
+ *   - `stdio: 'inherit'` so the new process writes to the same log file
+ *     the pod redirects (`>/var/log/syn.log 2>&1`).
+ *
+ * Returns true if the child was spawned, false on any failure (the
+ * caller then falls back to a plain exit — fail-closed, never throw).
+ */
+export function respawnDetached(): boolean {
+  try {
+    // process.argv === [nodeBinary, scriptPath, ...userArgs]. We re-exec
+    // the SAME node binary against the SAME bootstrap script + args so
+    // the relaunch is byte-identical to how the pod / shell invoked us,
+    // just running the freshly-installed code on disk.
+    const [, scriptPath, ...userArgs] = process.argv;
+    if (!scriptPath) return false;
+    const child = spawn(process.execPath, [scriptPath, ...userArgs], {
+      detached: true,
+      stdio: 'inherit',
+      env: process.env,
+    });
+    child.unref();
+    return true;
+  } catch (err) {
+    logger.error(`[SelfUpdate] detached respawn failed: ${(err as Error).message}`);
+    return false;
+  }
+}
 
 export async function restartProcess(
   handles: RestartShutdownHandles = {},
@@ -608,6 +671,25 @@ export async function restartProcess(
   const pid = process.pid;
   // eslint-disable-next-line no-console
   console.log(`[SELF_UPDATE_RESTART] nonce=${nonce} v${version} pid=${pid}`);
+
+  // Detached self-respawn for unsupervised runs (pods / shell). The
+  // desktop UI is excluded: it keeps its own child-process handle and
+  // respawns on exit, so a self-spawned child would collide on the lock
+  // file. We gate on the launch source here (not the caller) so a
+  // mis-set `respawn` flag can never break the UI path.
+  const uiSupervised = process.env.SYNAPSEIA_LAUNCH_SOURCE === 'ui';
+  if (handles.respawn && !uiSupervised) {
+    // Drop the lock FIRST so the child's single-instance check passes.
+    if (handles.releaseLock) {
+      try { handles.releaseLock(); } catch { /* best effort */ }
+    }
+    const spawned = respawnDetached();
+    logger.log(
+      spawned
+        ? '[SelfUpdate] spawned detached replacement process — exiting parent.'
+        : '[SelfUpdate] detached respawn unavailable — exiting; host must relaunch.',
+    );
+  }
   process.exit(0);
 }
 

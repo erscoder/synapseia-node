@@ -3,9 +3,10 @@ import {
   InstallType,
   attemptSelfUpdate,
   restartProcess,
+  respawnDetached,
   fetchSignedReleaseManifest,
 } from '../utils/self-updater';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { existsSync, statSync, readFileSync } from 'fs';
 
 jest.mock('child_process');
@@ -28,6 +29,7 @@ jest.mock('../p2p/protocols/coordinator-pubkey', () => ({
 import { verifyEd25519 } from '../p2p/protocols/verify-ed25519';
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 const mockStatSync = statSync as jest.MockedFunction<typeof statSync>;
 const mockReadFileSync = readFileSync as jest.MockedFunction<typeof readFileSync>;
@@ -146,8 +148,15 @@ describe('fetchSignedReleaseManifest', () => {
     expect(mockVerifyEd25519).toHaveBeenCalledTimes(1);
     const call = mockVerifyEd25519.mock.calls[0][0];
     const signedPayload = Buffer.from(call.messageBytes).toString('utf-8');
+    // Canonical form MUST be coord's sorted-key order (sha256 < signedAt
+    // < version) — NOT object-literal insertion order. This asserts the
+    // exact wire bytes the coord signer (`ReleaseManifestService.sign`)
+    // produces. If anyone reverts to insertion order this fails.
+    expect(signedPayload).toBe(
+      JSON.stringify({ sha256: m.sha256, signedAt: m.signedAt, version: m.version }),
+    );
     const parsed = JSON.parse(signedPayload);
-    expect(Object.keys(parsed)).toEqual(['version', 'sha256', 'signedAt']);
+    expect(Object.keys(parsed)).toEqual(['sha256', 'signedAt', 'version']);
     expect(parsed.version).toBe(m.version);
     expect(parsed.sha256).toBe(m.sha256);
     expect(parsed.signedAt).toBe(m.signedAt);
@@ -373,4 +382,192 @@ describe('restartProcess', () => {
     expect(Date.now() - start).toBeLessThan(6_000);
     expect(mockExit).toHaveBeenCalledWith(0);
   }, 7_000);
+});
+
+describe('respawnDetached', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // @ts-expect-error partial child-process mock — we only assert spawn args
+    mockSpawn.mockReturnValue({ unref: jest.fn() });
+  });
+
+  it('spawns the same node binary + argv detached, env inherited, and unrefs', () => {
+    const ok = respawnDetached();
+    expect(ok).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    const [bin, args, opts] = mockSpawn.mock.calls[0];
+    expect(bin).toBe(process.execPath);
+    // argv[1] (scriptPath) + the rest of argv (user args) re-run verbatim.
+    expect(args).toEqual([process.argv[1], ...process.argv.slice(2)]);
+    expect(opts).toMatchObject({ detached: true, stdio: 'inherit', env: process.env });
+  });
+
+  it('returns false (fail-closed) when spawn throws — never propagates', () => {
+    mockSpawn.mockImplementationOnce(() => {
+      throw new Error('ENOENT');
+    });
+    expect(respawnDetached()).toBe(false);
+  });
+});
+
+describe('restartProcess — detached respawn gating', () => {
+  let mockExit: jest.SpyInstance;
+  let mockStdoutLog: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Re-install the process.exit + console.log spies each test: a prior
+    // describe's afterAll restores the real process.exit, which would kill
+    // the jest worker when restartProcess fires for real.
+    mockExit = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    mockStdoutLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    delete process.env.SYNAPSEIA_LAUNCH_SOURCE;
+    // @ts-expect-error partial child-process mock
+    mockSpawn.mockReturnValue({ unref: jest.fn() });
+  });
+
+  afterEach(() => {
+    mockExit.mockRestore();
+    mockStdoutLog.mockRestore();
+  });
+
+  afterAll(() => {
+    delete process.env.SYNAPSEIA_LAUNCH_SOURCE;
+  });
+
+  it('respawn:true + unsupervised run → spawns a replacement and releases the lock first', async () => {
+    const releaseLock = jest.fn();
+    await restartProcess({ respawn: true, releaseLock });
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('respawn:true but UI-supervised → does NOT spawn (UI respawns itself)', async () => {
+    process.env.SYNAPSEIA_LAUNCH_SOURCE = 'ui';
+    await restartProcess({ respawn: true, releaseLock: jest.fn() });
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it('respawn omitted → never spawns (legacy clean-exit contract preserved)', async () => {
+    await restartProcess();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+});
+
+// ── REAL sign→verify round-trip (BLOCKER-2 regression guard) ─────────────────
+//
+// Every other test in this file MOCKS the crypto verdict, which is exactly
+// why the canonical key-order drift (coord signs sorted {sha256,signedAt,
+// version}; node was verifying insertion-order {version,sha256,signedAt})
+// went undetected — verify always returned `true` regardless of the bytes.
+//
+// This block exercises the node's REAL verification path end-to-end:
+//   - generate a throwaway Ed25519 keypair with node:crypto;
+//   - sign a manifest EXACTLY as coord does (ReleaseManifestService.sign):
+//       crypto.sign(null, UTF-8(JSON.stringify({sha256, signedAt, version})), priv)
+//     where the keys are in ASCENDING order;
+//   - inject the keypair's RAW 32-byte public key as the trust anchor
+//     (loadCoordinatorPubkey mock) and delegate the global verifyEd25519
+//     mock to the REAL implementation (jest.requireActual);
+//   - drive fetchSignedReleaseManifest and assert ACCEPT for a faithful
+//     manifest and REJECT for tampered version / tampered sha256 / a
+//     payload signed in the WRONG (insertion) key order.
+//
+// If anyone reintroduces a key-order or canonical-format drift between the
+// signer and the verifier, the "accepts" case here flips to null and fails.
+describe('fetchSignedReleaseManifest — REAL Ed25519 round-trip (no crypto mock)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const nodeCrypto = require('crypto') as typeof import('crypto');
+  const { loadCoordinatorPubkey: mockLoadPubkey } =
+    require('../p2p/protocols/coordinator-pubkey') as {
+      loadCoordinatorPubkey: jest.Mock;
+    };
+  // The REAL verifier — bypasses the global jest.mock for this block only.
+  const realVerifyEd25519 = jest.requireActual(
+    '../p2p/protocols/verify-ed25519',
+  ).verifyEd25519 as typeof verifyEd25519;
+
+  // ASN.1 DER prefix for an Ed25519 SPKI key — strip it to get the raw
+  // 32-byte public key (mirrors verify-ed25519.ts wrapping it back on).
+  const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
+  let rawPubkey: Uint8Array;
+  let privateKey: import('crypto').KeyObject;
+
+  /** Coord-faithful canonical form: keys sorted ASC, no whitespace. */
+  function canonicalSorted(m: { sha256: string; signedAt: number; version: string }): string {
+    return JSON.stringify({ sha256: m.sha256, signedAt: m.signedAt, version: m.version });
+  }
+
+  /** Sign canonical bytes with the test private key, base64-encoded. */
+  function signB64(canonical: string): string {
+    return nodeCrypto
+      .sign(null, Buffer.from(canonical, 'utf-8'), privateKey)
+      .toString('base64');
+  }
+
+  beforeAll(() => {
+    const kp = nodeCrypto.generateKeyPairSync('ed25519');
+    privateKey = kp.privateKey;
+    const spki = kp.publicKey.export({ format: 'der', type: 'spki' }) as Buffer;
+    // Raw key is the trailing 32 bytes after the fixed SPKI prefix.
+    rawPubkey = new Uint8Array(spki.subarray(ED25519_SPKI_PREFIX.length));
+    expect(rawPubkey.length).toBe(32);
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Trust anchor = the test keypair's raw public key.
+    mockLoadPubkey.mockReturnValue(rawPubkey);
+    // Route the (globally mocked) verifyEd25519 to the REAL implementation
+    // so the signature math actually runs against the canonical bytes.
+    mockVerifyEd25519.mockImplementation((params) => realVerifyEd25519(params));
+  });
+
+  it('ACCEPTS a manifest signed exactly as coord signs it (sorted-key canonical)', async () => {
+    const base = { version: '0.9.0', sha256: 'b'.repeat(64), signedAt: Date.now() };
+    const manifest = { ...base, signature: signB64(canonicalSorted(base)) };
+    mockFetchManifestOnce(manifest);
+
+    const result = await fetchSignedReleaseManifest(COORD_URL);
+    expect(result).toEqual(manifest); // accepted: real verify returned true
+  });
+
+  it('REJECTS a manifest whose version was tampered after signing', async () => {
+    const base = { version: '0.9.0', sha256: 'c'.repeat(64), signedAt: Date.now() };
+    const signature = signB64(canonicalSorted(base));
+    // Attacker bumps the served version but cannot re-sign.
+    mockFetchManifestOnce({ ...base, version: '9.9.9', signature });
+
+    expect(await fetchSignedReleaseManifest(COORD_URL)).toBeNull();
+  });
+
+  it('REJECTS a manifest whose sha256 was tampered after signing', async () => {
+    const base = { version: '0.9.0', sha256: 'd'.repeat(64), signedAt: Date.now() };
+    const signature = signB64(canonicalSorted(base));
+    // Attacker swaps the pinned tarball hash to point at a malicious build.
+    mockFetchManifestOnce({ ...base, sha256: 'e'.repeat(64), signature });
+
+    expect(await fetchSignedReleaseManifest(COORD_URL)).toBeNull();
+  });
+
+  it('REJECTS a manifest signed with the WRONG canonical key order (drift guard)', async () => {
+    const base = { version: '0.9.0', sha256: 'f'.repeat(64), signedAt: Date.now() };
+    // Sign the OLD buggy insertion order {version, sha256, signedAt}. The
+    // verifier canonicalizes to sorted order, so this signature is over a
+    // different byte string and MUST be rejected. This is the exact
+    // BLOCKER-1 regression: if the verifier reverts to insertion order,
+    // this signature would (wrongly) verify and this assertion would fail.
+    const wrongOrder = JSON.stringify({
+      version: base.version,
+      sha256: base.sha256,
+      signedAt: base.signedAt,
+    });
+    mockFetchManifestOnce({ ...base, signature: signB64(wrongOrder) });
+
+    expect(await fetchSignedReleaseManifest(COORD_URL)).toBeNull();
+  });
 });
