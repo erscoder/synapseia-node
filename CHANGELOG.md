@@ -1,5 +1,15 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(diloco): delete orphaned gradient temp after upload (a961229c)
+
+DiLoCo rounds leaked `/tmp/tmp<rand>_diloco_gradients.pt` files (~89MB each,
+written by `scripts/diloco_train.py` with `NamedTemporaryFile(delete=False)`)
+that Node read for the gradient upload but never removed, filling pod disk
+(pod1 reached 89%). `executeDiLoCoWorkOrder` now removes the exact
+`dilocoResult.gradientPath` in a `finally` (both success and failure paths),
+`force:true` + `.catch` so cleanup never fails the WO; deletes only the WO's
+own path, no glob (concurrent rounds use unique temp names). 33 specs green.
+
 ## [2026-05-22] feat(node): periodic npm auto-update with idle-gated self-install (9a739062)
 
 Nodes now keep themselves current from the npm registry without operator
