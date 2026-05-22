@@ -1,5 +1,19 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(lora): detect GPU via torch.cuda probe, not SYN_FORCE_GPU env (4685cec8)
+
+GPU pods (A5000, CUDA available at runtime) refused EVERY `LORA_GENERATION`
+work order with `requires a GPU; this node has none`, so zero GPU training
+reached the coordinator. Root cause: `hasGpu()` detected the GPU on Linux
+ONLY through the `SYN_FORCE_GPU`/`SYN_FORCE_NO_GPU` env vars, which the pod
+launchers never set, so it always returned `false`. Fix: extract the
+heartbeat's cached `torch.cuda` probe into one shared `detectCudaAvailable()`
+(`utils/gpu-detect.ts`) and route heartbeat capability detection AND both
+`lora_trainer`/`lora_validator` `hasGpu()` copies through it (single source,
+P6). Dropped the `SYN_FORCE_*` reads; `hasGpu()` is async; darwin/arm64 MPS
+rule preserved; probe fail-closes to `false` (positive-only cache, 30s
+timeout). 47 lora/gpu-detect specs green.
+
 ## [2026-05-22] fix(node): pin transformers < 5 — LoRA `Trainer(tokenizer=)` (7c440134)
 
 Second layer of the LoRA breakage: `install-deps` installed `transformers>=4.43`
