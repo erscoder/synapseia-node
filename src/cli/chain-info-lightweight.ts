@@ -127,17 +127,23 @@ interface StakeInfo {
  * NestJS DI. Mirrors packages/node/src/modules/staking/staking-cli.ts
  * (findStakeAccount + getStakeInfo) but bootstrap-free.
  *
- * The StakeAccount layout (after the 8-byte Anchor discriminator):
- *   [8-39]    owner            Pubkey(32)
- *   [40-71]   coord_authority  Pubkey(32)
- *   [72-79]   amount           u64   ← staked lamports
- *   [80]      tier             u8
- *   [81-88]   lm               u64
- *   [89]      ban_times        u8
- *   [90-97]   banned_until     i64
- *   [98-161]  ban_reason       bytes[64]
- *   [162-169] locked_until     i64
- *   [170-177] rewards_pending  u64   ← claimable rewards
+ * V3 StakeAccount layout (matches
+ * packages/contracts/programs/syn_staking/src/lib.rs `StakeAccount`,
+ * post F-contracts-003/004). Absolute byte ranges into `account.data`
+ * (the 8-byte Anchor discriminator occupies [0-7]); total size 227 bytes:
+ *   [8-39]    owner             Pubkey(32)
+ *   [40-71]   coord_authority   Pubkey(32)
+ *   [72-79]   amount            u64   ← staked lamports
+ *   [80]      tier              u8
+ *   [81-88]   lm                u64
+ *   [89]      ban_times         u8
+ *   [90-97]   banned_until      i64
+ *   [98-161]  ban_reason        [u8; 64]
+ *   [162-169] locked_until      i64   ← reads at absolute offset 162
+ *   [170-177] rewards_pending   u64   ← claimable rewards, absolute offset 170
+ *   [178-185] last_claim_at     i64
+ *   [186-193] last_accrual_at   i64
+ *   [194-226] pending_authority Option<Pubkey> (1 tag + 32)
  */
 async function fetchStakeInfo(
   rpcUrl: string,
@@ -157,10 +163,14 @@ async function fetchStakeInfo(
     }
 
     const data = accounts[0].account.data;
+    // V3 StakeAccount is 227 bytes (8 disc + 219 payload). Reject anything
+    // shorter than the last field we read (rewards_pending ends at byte 178)
+    // so a pre-upgrade buffer never yields garbage from stale tail bytes.
     if (data.length < 178) {
       return { exists: false, amount: 0, rewardsPending: 0, lockedUntil: 0 };
     }
 
+    // Absolute offsets into `account.data` (discriminator-relative + 8).
     const amount = Number(data.readBigUInt64LE(72)) / 1_000_000_000;
     const lockedUntil = Number(data.readBigInt64LE(162));
     const rewardsPending = Number(data.readBigUInt64LE(170)) / 1_000_000_000;
