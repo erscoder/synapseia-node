@@ -492,6 +492,16 @@ Abstract: ${safeAbstract}`;
       if (!uploaded) logger.warn('[DiLoCo] Failed to upload gradients to coordinator');
     } catch (err) {
       logger.warn(`[DiLoCo] Could not read/upload gradient file: ${(err as Error).message}`);
+    } finally {
+      // Disk leak fix (2026-05-22): the Python DiLoCo script writes the
+      // gradient tensor to a tmp file with `delete=False` (see
+      // scripts/diloco_train.py NamedTemporaryFile). Node owns its lifecycle
+      // once the buffer is read above. Remove THIS WO's exact path (never a
+      // glob — a concurrent round could be mid-write) on both success and
+      // failure so /tmp does not fill with orphaned *_diloco_gradients.pt.
+      await import('fs')
+        .then(fsm => fsm.promises.rm(dilocoResult.gradientPath, { force: true }))
+        .catch(() => { /* best-effort cleanup; never fail the WO over rm */ });
     }
 
     const dilocoValLoss = safeLoss(dilocoResult.valLoss);
