@@ -245,6 +245,57 @@ export function detectVenvPythonMinor(
   return Number.isInteger(minor) ? minor : null;
 }
 
+/**
+ * Pinned pip spec for the LoRA training stack.
+ *
+ * `transformers>=4.43,<5`: the 4.43 floor introduced the `dtype` keyword
+ * on `from_pretrained` that our DiLoCo / LoRA scripts rely on; the `<5`
+ * ceiling is mandatory because transformers 5.x REMOVED the `tokenizer=`
+ * kwarg on `Trainer.__init__` (replaced by `processing_class`).
+ * `train_lora.py` calls `Trainer(..., tokenizer=tokenizer, ...)`, so an
+ * unpinned install that resolves to 5.x (currently 5.9.0) makes every
+ * LoRA training run exit with
+ *   `TypeError: Trainer.__init__() got an unexpected keyword argument 'tokenizer'`.
+ * VERIFIED on the live A5000 (Py 3.12, torch 2.6.0/cu124): `<5` resolves
+ * to transformers 4.57.x and `Trainer(tokenizer=...)` is accepted, while
+ * 5.9.0 rejects it. peft 0.19.1 / datasets / safetensors / accelerate
+ * stay unpinned — they are compatible with transformers 4.57.
+ */
+export const LORA_STACK_PIP_ARGS: readonly string[] = [
+  'install',
+  'transformers>=4.43,<5',
+  'peft',
+  'datasets',
+  'safetensors',
+  'accelerate',
+] as const;
+
+/** Human-readable form of the LoRA stack spec, used in operator hints. */
+export const LORA_STACK_MANUAL_SPEC = 'transformers>=4.43,<5 peft datasets safetensors accelerate';
+
+/**
+ * Pure decision: given the transformers version captured by the
+ * "already installed" probe, decide whether the LoRA stack must be
+ * (re)installed to satisfy the `transformers>=4.43,<5` pin.
+ *
+ * Returns `true` (force install / downgrade) when:
+ *   - the import probe failed (no version captured), OR
+ *   - the captured version's major is ≥ 5 (e.g. the live pods on 5.9.0),
+ *     which carries the `tokenizer=`-removed `Trainer`, OR
+ *   - the version string can't be parsed into a major (fail-closed: a
+ *     stack we can't verify is treated as needing a (re)install).
+ *
+ * Returns `false` (safe to skip) only when a major in `[4, 5)` is parsed.
+ * Exported for unit tests, mirroring `selectTorchSpec` / `pickTorchWheel`.
+ */
+export function loraStackNeedsReinstall(installedVersion: string | undefined): boolean {
+  if (!installedVersion) return true;
+  // Leading numeric component is the major (e.g. "5.9.0" → 5, "4.57.6" → 4).
+  const major = parseInt(installedVersion.trim().split('.')[0] ?? '', 10);
+  if (!Number.isInteger(major)) return true; // unparseable → fail-closed.
+  return major >= 5; // ≥5 violates the `<5` pin → force a downgrade.
+}
+
 /** Result of selecting which PyTorch wheel index to install from. */
 export interface TorchWheelChoice {
   /**
@@ -683,32 +734,47 @@ export async function installPythonDeps(
       });
     };
     const loraProbe = runVerifyProbe();
-    if (loraProbe.status === 0) {
-      // Already-installed path. Write the marker NOW so the next node
-      // boot can prime its cache without re-spawning the probe.
+    // Extract the captured transformers version (last stdout line) so the
+    // skip decision can enforce the `<5` ceiling, not just presence.
+    const probedVersion = loraProbe.status === 0
+      ? ((loraProbe.stdout ?? '').toString().trim().split('\n').pop()?.trim() || undefined)
+      : undefined;
+    if (loraProbe.status === 0 && !loraStackNeedsReinstall(probedVersion)) {
+      // Already-installed path AND the installed transformers satisfies
+      // the `transformers>=4.43,<5` pin. Write the marker NOW so the next
+      // node boot can prime its cache without re-spawning the probe.
       // Without this, an operator who pre-installed deps manually
       // would never get marker coverage until they hit phase 3 install.
       writeMarkerFromProbe(loraProbe);
       emit({ phase: 'lora-stack', status: 'skip', message: 'LoRA training stack already installed' });
     } else {
-      emit({ phase: 'lora-stack', status: 'running', message: 'Installing LoRA training stack (~500MB)...' });
+      // Either the stack is absent, OR an installed transformers ≥ 5 must
+      // be downgraded: 5.x removed `Trainer(tokenizer=...)`, which
+      // `train_lora.py` passes, so the live pods on 5.9.0 stay broken
+      // unless this install forces them back under the `<5` ceiling.
+      const downgrade = loraProbe.status === 0;
+      emit({
+        phase: 'lora-stack',
+        status: 'running',
+        message: downgrade
+          ? `Reinstalling LoRA training stack to satisfy transformers<5 (found ${probedVersion ?? 'unknown'})...`
+          : 'Installing LoRA training stack (~500MB)...',
+      });
       // F-node-014 (MED): static arg list — no env-driven values feed
       // into the spawn (the package names are literal in code). Still
       // spawnSync rather than execSync to keep ONE shell-injection-free
       // shape across the file (no per-call exception).
       const loraInstallProc = spawnSync(
         venvPip(),
-        ['install', 'transformers>=4.43', 'peft', 'datasets', 'safetensors', 'accelerate'],
+        [...LORA_STACK_PIP_ARGS],
         { stdio: 'inherit' },
       );
       if (loraInstallProc.status === 0) {
-        // Pin transformers floor to 4.43: that release introduced the
-        // `dtype` keyword on `from_pretrained` which our DiLoCo /
-        // LoRA scripts rely on. transformers 5.x hard-removed the
-        // legacy `torch_dtype` kwarg → pods that installed unpinned
-        // ended up on 5.8.1 and crashed every DiLoCo accept (Bug 14
-        // 2026-05-17). No upper-pin: we want pods to track upstream
-        // security fixes, and `dtype` is stable across 4.43→5.x.
+        // Spec is `transformers>=4.43,<5` (see LORA_STACK_PIP_ARGS): the
+        // 4.43 floor gives the `dtype` keyword on `from_pretrained` our
+        // DiLoCo / LoRA scripts rely on, and the `<5` ceiling keeps the
+        // `Trainer(tokenizer=...)` kwarg that `train_lora.py` passes —
+        // 5.x removed it (→ `processing_class`), breaking every LoRA run.
         // POST-install verify is required (not just trusted from
         // pip's exit code): pip can succeed while the install
         // produces a broken stack (torch ABI mismatch,
@@ -737,7 +803,7 @@ export async function installPythonDeps(
         // we don't advertise caps based on a previous run.
         deleteLoraStackMarker();
         const errMsg = loraInstallProc.error?.message ?? `pip exited with status ${loraInstallProc.status}`;
-        const msg = `LoRA stack install failed: ${errMsg}. Try manually: "${venvPip()}" install "transformers>=4.43" peft datasets safetensors accelerate`;
+        const msg = `LoRA stack install failed: ${errMsg}. Try manually: "${venvPip()}" install "${LORA_STACK_MANUAL_SPEC}"`;
         emit({ phase: 'lora-stack', status: 'error', message: msg });
         result.errors.push(msg);
       }

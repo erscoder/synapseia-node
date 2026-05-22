@@ -30,8 +30,11 @@ describe('F-node-014 — install-deps shell-injection defense', () => {
   });
 
   it('uses spawnSync (not execSync) for the LoRA stack install', () => {
-    // Look for the argv-shaped LoRA install — must include transformers floor pin.
-    expect(source).toMatch(/spawnSync\(\s*venvPip\(\),[\s\S]*?'transformers>=4\.43'/);
+    // The argv-shaped LoRA install spreads the pinned LORA_STACK_PIP_ARGS
+    // (no shell string). The pin itself lives in that const and carries
+    // the `<5` ceiling (transformers 5.x removed Trainer(tokenizer=...)).
+    expect(source).toMatch(/spawnSync\(\s*venvPip\(\),\s*\[\s*\.\.\.LORA_STACK_PIP_ARGS/s);
+    expect(source).toMatch(/'transformers>=4\.43,<5'/);
   });
 
   it('uses spawnSync (not execSync) for the bitsandbytes install', () => {
