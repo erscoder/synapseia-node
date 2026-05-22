@@ -1,5 +1,21 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] feat(node): periodic npm auto-update with idle-gated self-install (9a739062)
+
+Nodes now keep themselves current from the npm registry without operator
+action. `UpdateManager` runs a non-blocking boot check plus a 30min periodic
+re-check that reads the latest version from npm dist-tags, and on an available
+update runs the Ed25519-signed self-update (manifest from coord
+`/release/latest`, `npm pack` + sha256 verify + `install -g --ignore-scripts`)
+then re-execs into the new binary. The restart is idle-gated by a `draining`
+latch on `BackpressureService` (refuses new HEAVY work, re-confirms zero
+active HEAVY WOs before exit) so a training run is never interrupted; LIGHT and
+inference WOs are never blocked. Loop protection: cross-lifetime version-keyed
+brake plus a per-lifetime attempt cap with backoff. Also fixed the signed
+manifest canonicalization (replacer-array sorted keys) so the node verifier
+matches the coord signer byte-for-byte; the prior insertion-order verify made
+every check fail. Added a real sign-to-verify round-trip test. 83 specs green.
+
 ## [2026-05-22] fix(lora): detect GPU via torch.cuda probe, not SYN_FORCE_GPU env (4685cec8)
 
 GPU pods (A5000, CUDA available at runtime) refused EVERY `LORA_GENERATION`
