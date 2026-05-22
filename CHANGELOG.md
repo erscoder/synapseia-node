@@ -1,5 +1,18 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(node): pin transformers < 5 — LoRA `Trainer(tokenizer=)` (7c440134)
+
+Second layer of the LoRA breakage: `install-deps` installed `transformers>=4.43`
+unbounded → pip pulled transformers **5.x**, where `Trainer`'s `tokenizer=` kwarg
+was removed (→ `processing_class`). `train_lora.py` calls `Trainer(tokenizer=...)`
+→ `TypeError` → exit 2 → LoRA training failed on every node. Empirically verified
+on a live A5000: transformers 5.9 `Trainer` rejects `tokenizer=`; `>=4.43,<5`
+(pip picks 4.57.6) accepts it; torch 2.6 is supported by transformers 4.x.
+
+Pinned `transformers>=4.43,<5`; `loraStackNeedsReinstall()` forces a DOWNGRADE when
+the installed transformers major is ≥ 5 (live pods on 5.9 reinstall to 4.57 instead
+of skipping). Reviewer SHIP AS-IS. node-only release.
+
 ## [2026-05-22] fix(node): require torch ≥ 2.6 (cu124) — LoRA was broken on 2.5.1 (0a52eee2)
 
 `transformers`/`peft` refuse `torch.load` on torch < 2.6 (CVE mitigation), so LoRA
