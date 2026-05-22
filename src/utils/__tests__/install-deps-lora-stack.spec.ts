@@ -41,11 +41,29 @@ describe('install-deps LORA_STACK_PIP_ARGS (transformers<5 pin)', () => {
       'datasets',
       'safetensors',
       'accelerate',
+      'protobuf',
+      'sentencepiece',
+      'sacremoses',
     ]);
   });
 
-  it('manual hint spec mirrors the pinned transformers ceiling', () => {
+  it('installs the BioGPT-Large tokenizer backends (protobuf/sentencepiece/sacremoses)', () => {
+    // LORA_CLASSIFICATION on BioGPT-Large needs all three or `BioGptTokenizer`
+    // fails to load → train_lora.py exits code 2. transformers does NOT pull
+    // them in transitively, so they must be in the same install command.
+    expect(LORA_STACK_PIP_ARGS).toContain('protobuf');
+    expect(LORA_STACK_PIP_ARGS).toContain('sentencepiece');
+    expect(LORA_STACK_PIP_ARGS).toContain('sacremoses');
+    // They join the existing transformers/peft install (no separate step):
+    // the array begins with the single `install` verb and no second one.
+    expect(LORA_STACK_PIP_ARGS.filter((a) => a === 'install')).toHaveLength(1);
+  });
+
+  it('manual hint spec mirrors the pinned transformers ceiling + tokenizer backends', () => {
     expect(LORA_STACK_MANUAL_SPEC).toContain('transformers>=4.43,<5');
+    expect(LORA_STACK_MANUAL_SPEC).toContain('protobuf');
+    expect(LORA_STACK_MANUAL_SPEC).toContain('sentencepiece');
+    expect(LORA_STACK_MANUAL_SPEC).toContain('sacremoses');
   });
 });
 

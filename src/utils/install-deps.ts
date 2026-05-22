@@ -260,6 +260,18 @@ export function detectVenvPythonMinor(
  * to transformers 4.57.x and `Trainer(tokenizer=...)` is accepted, while
  * 5.9.0 rejects it. peft 0.19.1 / datasets / safetensors / accelerate
  * stay unpinned — they are compatible with transformers 4.57.
+ *
+ * `protobuf` / `sentencepiece` / `sacremoses` are the tokenizer backends
+ * for LORA_CLASSIFICATION on BioGPT-Large. `BioGptTokenizer` requires all
+ * three and transformers does NOT pull them in automatically, so without
+ * them `train_lora.py` exits code 2 with one of:
+ *   - `requires the protobuf library`
+ *   - (after protobuf) sentencepiece-backed conversion still fails
+ *   - `You need to install sacremoses to use BioGptTokenizer`
+ * VERIFIED live on a pod (2026-05-22): with all three present the
+ * BioGPT-Large tokenizer + `BioGptForSequenceClassification` load
+ * successfully. LORA_GENERATION (causal) does not hit this path. They stay
+ * unpinned, consistent with the other tokenizer/runtime deps above.
  */
 export const LORA_STACK_PIP_ARGS: readonly string[] = [
   'install',
@@ -268,10 +280,13 @@ export const LORA_STACK_PIP_ARGS: readonly string[] = [
   'datasets',
   'safetensors',
   'accelerate',
+  'protobuf',
+  'sentencepiece',
+  'sacremoses',
 ] as const;
 
 /** Human-readable form of the LoRA stack spec, used in operator hints. */
-export const LORA_STACK_MANUAL_SPEC = 'transformers>=4.43,<5 peft datasets safetensors accelerate';
+export const LORA_STACK_MANUAL_SPEC = 'transformers>=4.43,<5 peft datasets safetensors accelerate protobuf sentencepiece sacremoses';
 
 /**
  * Pure decision: given the transformers version captured by the
@@ -513,6 +528,8 @@ const DILOCO_MODEL_MIN_SIZE_BYTES = 500 * 1024 * 1024;
  *                      cpu→NVIDIA or stale 2.5.1 install uses
  *                      --force-reinstall.
  *   3. lora-stack    — pip install transformers + peft + datasets + safetensors + accelerate
+ *                      + protobuf + sentencepiece + sacremoses (BioGPT-Large
+ *                      tokenizer backends for LORA_CLASSIFICATION)
  *                      (only on Tier 1+ nodes with enough RAM/VRAM)
  *   4. cuda-probe    — probe torch.cuda.is_available() for telemetry
  *                      (informational; Phase 5 gates on wheel choice)
