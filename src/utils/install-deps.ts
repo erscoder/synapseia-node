@@ -103,28 +103,139 @@ export interface InstallDepsResult {
 }
 
 /**
- * Pinned torch version — bumped to 2.5.1 (Slice 16, 2026-05-17).
+ * PyTorch version + NVIDIA CUDA wheel index, keyed on the venv Python
+ * minor version (the `3.x` in `3.13`). EMPIRICALLY VERIFIED matrix —
+ * see `selectTorchSpec` below.
  *
- * Why the change from 2.10.0 → 2.5.1:
- *   - The previous 2.10.0 pin was only ever published as a CPU wheel
- *     in the previous `whl/cpu` channel. The CUDA channel
- *     (`whl/cu121`) does NOT carry 2.10.0 wheels — pip would 404 and
- *     the install would fail for every NVIDIA operator the moment
- *     this slice flipped on.
- *   - 2.5.1 is the most recent torch that is published on BOTH the
- *     cpu and cu121 indexes (and also via the default index for
- *     macOS MPS), so the same pin works across all wheel choices.
- *   - It is the exact version verified working on the A40 pod that
- *     uncovered the DiLoCo OOM root cause (manual repro 2026-05-17).
+ * ── Why this is Python-version-aware (2026-05-22) ─────────────────────
  *
- * Bumping torch is a coordinated change: any operator with the old
- * 2.10.0 cpu wheel installed will be migrated to 2.5.1 on next boot
- * (the version probe at the top of Phase 2 will fail and trigger a
- * reinstall against the correct wheel index for their hardware).
+ * The previous code HARD-PINNED `torch==2.5.1` + the `cu121` NVIDIA
+ * index for every interpreter. That HARD-FAILS the moment a node runs
+ * on Python ≥ 3.13:
+ *   - The `cu121` PyTorch index stopped at cp312 / torch 2.5.1 — it
+ *     carries NO cp313 wheels. pip 404s and the NVIDIA install dies.
+ *   - The default / `cpu` index has no torch 2.5.1 for cp313 either.
+ *     → a Linux NVIDIA node on Python 3.13 could neither install torch
+ *       nor train at all.
+ *
+ * Verified fix data (live A5000 pod, driver 570 / CUDA 12.8, Py 3.13.8):
+ *   - `torch==2.6.0` from `https://download.pytorch.org/whl/cu124`
+ *     → `torch.cuda.is_available() == True`, dev = NVIDIA RTX A5000,
+ *       and `train_micro.py` ran on GPU to `eval-done`, TRAIN_RC=0.
+ *   - `torch-2.6.0+cpu-cp313` EXISTS on the cpu index (covers the
+ *     Mac/CPU cp313 path).
+ *   - `cu124` carries cp310-cp313 for torch 2.5.0 / 2.5.1 / 2.6.0;
+ *     `cu121` has NO cp313 wheel at all.
+ *
+ * ── Version / NVIDIA-index matrix (empirically verified) ──────────────
+ *
+ *   Python minor | torch  | NVIDIA index | status
+ *   ────────────────────────────────────────────────────────────────────
+ *   ≤ 12         | 2.5.1  | cu121        | PROVEN — the live 3.12 pod.
+ *                |        |              | UNCHANGED to avoid regressing it.
+ *   == 13        | 2.6.0  | cu124        | VERIFIED on the A5000 pod above.
+ *   ≥ 14         | 2.6.0  | cu124        | BEST-EFFORT only — no pinned cp314
+ *                |        |  (attempt)   | wheel exists anywhere (torch 2.6.0
+ *                |        |              | has NO cp314 wheel; the cpu index
+ *                |        |              | jumps to torch 2.9+ for cp314). The
+ *                |        |              | install is attempted but a failure
+ *                |        |              | is NON-FATAL: the node still boots
+ *                |        |              | without torch (no hard-fail).
+ *
+ * NOTE on drivers: the `cu124` wheel needs a driver that supports
+ * CUDA ≥ 12.4 (driver ≥ ~550). Older drivers on a cp313 host have NO
+ * `cu121` fallback (cu121 lacks cp313) — an accepted edge: such a host
+ * cannot run GPU torch on Python 3.13 regardless of our pin.
+ *
+ * Bumping torch is a coordinated change: an operator with a mismatched
+ * wheel installed is migrated on next boot — the version + flavor probe
+ * at the top of Phase 2 fails and triggers a `--force-reinstall` against
+ * the correct version + index for their hardware AND Python version.
  */
-const TORCH_VERSION = '2.5.1';
+
 /** Minimum Python minor version (3.x). */
 const REQUIRED_PYTHON_MINOR = 14;
+
+/**
+ * Resolved torch version + NVIDIA wheel index for a given Python minor.
+ * `bestEffort` flips true when no pinned wheel is known to exist for the
+ * interpreter (Python ≥ 3.14) — Phase 2 then treats an install failure
+ * as a non-fatal skip rather than a hard error, so the node still boots.
+ */
+export interface TorchSpec {
+  /** Pinned torch version string, e.g. `2.5.1` or `2.6.0`. */
+  torchVersion: string;
+  /** PyTorch CUDA wheel index used when NVIDIA hardware is detected. */
+  nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu121' | 'https://download.pytorch.org/whl/cu124';
+  /** NVIDIA wheel index human label (cu121 / cu124) for logging. */
+  nvidiaLabel: 'cu121' | 'cu124';
+  /**
+   * True when no pinned wheel is verified to exist for this interpreter
+   * (Python ≥ 3.14). Install is attempted but failure is non-fatal.
+   */
+  bestEffort: boolean;
+}
+
+/**
+ * Pure selector: map a venv Python minor version to its torch spec.
+ * See the matrix in the module comment above. Exported for unit tests.
+ *
+ * `pythonMinor` is the `x` in `3.x`. When detection fails we conserve
+ * the proven legacy default (≤12 → 2.5.1/cu121) by passing a low minor;
+ * callers should only pass a high minor when they positively detected
+ * one (see `detectVenvPythonMinor`).
+ */
+export function selectTorchSpec(pythonMinor: number): TorchSpec {
+  if (pythonMinor <= 12) {
+    // PROVEN on the live 3.12 pod — do NOT regress.
+    return {
+      torchVersion: '2.5.1',
+      nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu121',
+      nvidiaLabel: 'cu121',
+      bestEffort: false,
+    };
+  }
+  if (pythonMinor === 13) {
+    // VERIFIED on the A5000 pod (driver 570 / CUDA 12.8, Py 3.13.8).
+    return {
+      torchVersion: '2.6.0',
+      nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu124',
+      nvidiaLabel: 'cu124',
+      bestEffort: false,
+    };
+  }
+  // Python ≥ 14: no pinned cp314 wheel exists anywhere. Attempt the
+  // cp313 spec (best chance of a forward-compatible wheel) but flag
+  // bestEffort so a 404 / build failure does NOT brick node boot.
+  return {
+    torchVersion: '2.6.0',
+    nvidiaIndexUrl: 'https://download.pytorch.org/whl/cu124',
+    nvidiaLabel: 'cu124',
+    bestEffort: true,
+  };
+}
+
+/**
+ * Detect the venv Python minor version (`x` in `3.x`) by invoking the
+ * venv interpreter. Returns the integer minor, or `null` when the venv
+ * python can't be probed (absent / errored) — callers then conserve the
+ * proven legacy default by treating it as ≤12.
+ *
+ * `pythonBin` + `spawnFn` are injectable for deterministic tests.
+ */
+export function detectVenvPythonMinor(
+  pythonBin: string = venvPython(),
+  spawnFn: typeof spawnSync = spawnSync,
+): number | null {
+  const probe = spawnFn(
+    pythonBin,
+    ['-c', 'import sys; print(sys.version_info.minor)'],
+    { stdio: 'pipe', encoding: 'utf-8' },
+  );
+  if (probe.status !== 0 || probe.error) return null;
+  const minor = parseInt((probe.stdout ?? '').toString().trim(), 10);
+  return Number.isInteger(minor) ? minor : null;
+}
 
 /** Result of selecting which PyTorch wheel index to install from. */
 export interface TorchWheelChoice {
@@ -134,10 +245,21 @@ export interface TorchWheelChoice {
    * index. Used on macOS where the default wheel ships MPS support.
    */
   indexUrl: string | null;
-  /** Human label for logging + telemetry. */
-  label: 'cu121' | 'cpu' | 'mps/default';
+  /**
+   * Human label for logging + telemetry. The NVIDIA flavor (`cu121` vs
+   * `cu124`) is chosen by `selectTorchSpec` per Python minor version.
+   */
+  label: 'cu121' | 'cu124' | 'cpu' | 'mps/default';
   /** Whether NVIDIA hardware was detected on this host. */
   hasNvidia: boolean;
+  /** Pinned torch version for this host (per `selectTorchSpec`). */
+  torchVersion: string;
+  /**
+   * True when no pinned wheel is verified to exist for this interpreter
+   * (Python ≥ 3.14) — Phase 2 treats install failure as a non-fatal
+   * skip so the node still boots without torch.
+   */
+  bestEffort: boolean;
   /** One-line explanation of WHY this wheel was chosen (logged). */
   reason: string;
 }
@@ -188,14 +310,20 @@ function defaultNvidiaProbe(): boolean {
 
 /**
  * Decide which PyTorch wheel index to use for THIS host. Pure function
- * — accepts `platform` + `nvidiaProbeFn` overrides so tests can drive
- * every branch without touching real hardware.
+ * — accepts `platform`, `nvidiaProbeFn`, and `spec` overrides so tests
+ * can drive every branch without touching real hardware.
  *
- * Decision matrix:
+ * The torch version + NVIDIA wheel index are Python-version-aware: by
+ * default `spec` is resolved from the venv Python minor version via
+ * `detectVenvPythonMinor` → `selectTorchSpec` (≤12 → 2.5.1/cu121,
+ * 13 → 2.6.0/cu124, ≥14 → 2.6.0/cu124 best-effort). Tests inject `spec`
+ * directly.
+ *
+ * Decision matrix (NVIDIA flavor = spec.nvidiaLabel):
  *   - macOS (any arch)        → default wheel (MPS via Apple Silicon)
- *   - Linux + NVIDIA detected → cu121 wheel
+ *   - Linux + NVIDIA detected → cu121|cu124 wheel (per Python version)
  *   - Linux + no NVIDIA       → cpu wheel (current pre-slice behaviour)
- *   - Windows + NVIDIA        → cu121 wheel
+ *   - Windows + NVIDIA        → cu121|cu124 wheel (per Python version)
  *   - Windows + no NVIDIA     → cpu wheel
  *   - Anything else           → cpu wheel (safe default)
  *
@@ -206,9 +334,14 @@ function defaultNvidiaProbe(): boolean {
 export function pickTorchWheel(opts: {
   platform?: NodeJS.Platform;
   nvidiaProbeFn?: () => boolean;
+  /** Resolved torch spec. Defaults to the venv Python minor selection. */
+  spec?: TorchSpec;
 } = {}): TorchWheelChoice {
   const platform = opts.platform ?? os.platform();
   const probeFn = opts.nvidiaProbeFn ?? defaultNvidiaProbe;
+  // Default spec: detect the venv Python minor; null detection conserves
+  // the proven legacy default (treated as ≤12 → 2.5.1/cu121).
+  const spec = opts.spec ?? selectTorchSpec(detectVenvPythonMinor() ?? 12);
 
   // Per P24: any throw from a user-supplied (or default) probe is
   // treated as "no NVIDIA" — never crash install-deps because the
@@ -225,16 +358,21 @@ export function pickTorchWheel(opts: {
       indexUrl: null,
       label: 'mps/default',
       hasNvidia: false, // macOS never gets NVIDIA CUDA; MPS is the GPU path
-      reason: 'macOS detected — using default PyPI wheel (MPS-enabled via Apple Silicon)',
+      torchVersion: spec.torchVersion,
+      bestEffort: spec.bestEffort,
+      reason: `macOS detected — using default PyPI wheel torch ${spec.torchVersion} (MPS-enabled via Apple Silicon)`,
     };
   }
 
   if ((platform === 'linux' || platform === 'win32') && hasNvidia) {
+    const cudaVer = spec.nvidiaLabel === 'cu124' ? '12.4' : '12.1';
     return {
-      indexUrl: 'https://download.pytorch.org/whl/cu121',
-      label: 'cu121',
+      indexUrl: spec.nvidiaIndexUrl,
+      label: spec.nvidiaLabel,
       hasNvidia: true,
-      reason: 'NVIDIA GPU detected — installing CUDA 12.1 PyTorch wheel for GPU acceleration',
+      torchVersion: spec.torchVersion,
+      bestEffort: spec.bestEffort,
+      reason: `NVIDIA GPU detected — installing CUDA ${cudaVer} PyTorch ${spec.torchVersion} (${spec.nvidiaLabel}) wheel for GPU acceleration`,
     };
   }
 
@@ -243,7 +381,9 @@ export function pickTorchWheel(opts: {
       indexUrl: 'https://download.pytorch.org/whl/cpu',
       label: 'cpu',
       hasNvidia: false,
-      reason: 'No NVIDIA GPU detected — installing CPU PyTorch wheel',
+      torchVersion: spec.torchVersion,
+      bestEffort: spec.bestEffort,
+      reason: `No NVIDIA GPU detected — installing CPU PyTorch ${spec.torchVersion} wheel`,
     };
   }
 
@@ -252,7 +392,9 @@ export function pickTorchWheel(opts: {
     indexUrl: 'https://download.pytorch.org/whl/cpu',
     label: 'cpu',
     hasNvidia,
-    reason: `Unsupported platform '${platform}' — falling back to CPU PyTorch wheel`,
+    torchVersion: spec.torchVersion,
+    bestEffort: spec.bestEffort,
+    reason: `Unsupported platform '${platform}' — falling back to CPU PyTorch ${spec.torchVersion} wheel`,
   };
 }
 
@@ -306,16 +448,17 @@ const DILOCO_MODEL_MIN_SIZE_BYTES = 500 * 1024 * 1024;
  *
  * Phases (in order):
  *   1. venv          — create ~/.synapseia/venv if absent
- *   2. torch         — pip install torch wheel selected per host:
- *                      NVIDIA Linux/Win → cu121, macOS → default (MPS),
+ *   2. torch         — pip install torch wheel selected per host AND
+ *                      Python version: NVIDIA Linux/Win → cu121 (≤cp312)
+ *                      or cu124 (cp313+), macOS → default (MPS),
  *                      everything else → cpu. Migrating an existing
- *                      cpu→cu121 install uses --force-reinstall.
+ *                      cpu→NVIDIA install uses --force-reinstall.
  *   3. lora-stack    — pip install transformers + peft + datasets + safetensors + accelerate
  *                      (only on Tier 1+ nodes with enough RAM/VRAM)
  *   4. cuda-probe    — probe torch.cuda.is_available() for telemetry
  *                      (informational; Phase 5 gates on wheel choice)
- *   5. bitsandbytes  — pip install bitsandbytes (only when cu121 wheel
- *                      was installed in Phase 2)
+ *   5. bitsandbytes  — pip install bitsandbytes (only when an NVIDIA
+ *                      wheel — cu121 or cu124 — was installed in Phase 2)
  *   6. diloco-model  — pre-download DiLoCo foundation model (Qwen2.5-7B,
  *                      ~13 GB) into the HF cache so runtime DiLoCo WOs
  *                      never hit Hugging Face Hub (Bug 18 v3). Gated on
@@ -384,24 +527,31 @@ export async function installPythonDeps(
   // ── Phase 2: torch ──────────────────────────────────────────────────────
   // Pick the wheel BEFORE the version probe so the "already installed"
   // path can also verify the installed wheel matches the expected
-  // flavor (cu121 on NVIDIA, mps/default on macOS, cpu otherwise).
+  // flavor (cu121/cu124 on NVIDIA, mps/default on macOS, cpu otherwise).
   // Without that check, an operator who installed cpu torch under the
   // old hardcoded path would be left with a stale cpu wheel even after
   // attaching an A40 — `torch.cuda.is_available()` would still return
   // False and DiLoCo would still OOM.
+  //
+  // The torch VERSION + NVIDIA index are Python-version-aware (see
+  // `selectTorchSpec`): a cp313 host gets torch 2.6.0 / cu124, a ≤cp312
+  // host keeps the proven torch 2.5.1 / cu121. `pickTorchWheel` resolves
+  // the spec from `detectVenvPythonMinor()` internally.
   const torchWheel = pickTorchWheel();
+  const torchVersion = torchWheel.torchVersion;
   logger.log(`[install-deps] ${torchWheel.reason}`);
 
   // Two-part probe:
-  //   1. version matches the pin (cheap import + __version__ compare).
+  //   1. version matches the DYNAMICALLY-chosen pin (import + __version__).
   //   2. CUDA-availability matches the expected wheel flavor.
-  //      - cu121 wheel must expose torch.cuda.is_available() == True
+  //      - cu121/cu124 wheel must expose torch.cuda.is_available() == True
   //      - cpu / mps wheels must expose torch.cuda.is_available() == False
   //      Either mismatch → force reinstall against the correct index.
-  const expectCuda = torchWheel.label === 'cu121';
+  const isNvidiaWheel = torchWheel.label === 'cu121' || torchWheel.label === 'cu124';
+  const expectCuda = isNvidiaWheel;
   const torchProbeScript = [
     'import torch, sys',
-    `assert torch.__version__.startswith('${TORCH_VERSION}'), torch.__version__`,
+    `assert torch.__version__.startswith('${torchVersion}'), torch.__version__`,
     `cuda_ok = torch.cuda.is_available()`,
     `expect_cuda = ${expectCuda ? 'True' : 'False'}`,
     'sys.exit(0 if cuda_ok == expect_cuda else 2)',
@@ -417,25 +567,25 @@ export async function installPythonDeps(
     emit({
       phase: 'torch',
       status: 'skip',
-      message: `PyTorch ${TORCH_VERSION} (${torchWheel.label}) already installed`,
+      message: `PyTorch ${torchVersion} (${torchWheel.label}) already installed`,
     });
   } else {
     // status == 2 means version OK but wheel flavor wrong → MIGRATING.
     // Any other failure (1, null, missing) means torch absent or wrong
     // version. Both cases need an install. We pass --force-reinstall
     // when migrating so pip will overwrite the existing same-version
-    // cpu wheel with the cu121 (or vice versa) wheel; without it pip
-    // would see "torch==2.5.1 already installed" and no-op.
+    // cpu wheel with the NVIDIA (or vice versa) wheel; without it pip
+    // would see "torch==X already installed" and no-op.
     //
     // F-node-014 (MED): switched from `execSync(installCmd: string)` to
     // `spawnSync(bin, [...args])` so torchWheel.indexUrl (built from
-    // env-driven hardware detection) and TORCH_VERSION (env override)
-    // can no longer be shell-interpreted. The previous shape would have
-    // exploded on any unsanitized space/quote/semicolon in either value.
+    // env-driven hardware detection) and the torch version can no longer
+    // be shell-interpreted. The previous shape would have exploded on any
+    // unsanitized space/quote/semicolon in either value.
     const isMigrating = torchProbe.status === 2;
     const torchInstallArgs = [
       'install',
-      `torch==${TORCH_VERSION}`,
+      `torch==${torchVersion}`,
       ...(torchWheel.indexUrl ? ['--index-url', torchWheel.indexUrl] : []),
       ...(isMigrating ? ['--force-reinstall'] : []),
     ];
@@ -446,9 +596,10 @@ export async function installPythonDeps(
     // spawnSync.
     const installHint = `"${venvPip()}" ${torchInstallArgs.map((a) => a.includes(' ') ? JSON.stringify(a) : a).join(' ')}`;
 
+    const migratedFrom = isNvidiaWheel ? 'cpu' : torchWheel.label;
     const runningMsg = isMigrating
-      ? `Migrating PyTorch to ${torchWheel.label} wheel (was ${torchWheel.label === 'cu121' ? 'cpu' : 'cu121'}); reinstalling ${TORCH_VERSION}...`
-      : `Installing PyTorch ${TORCH_VERSION} (${torchWheel.label} wheel)...`;
+      ? `Migrating PyTorch to ${torchWheel.label} wheel (was ${migratedFrom}); reinstalling ${torchVersion}...`
+      : `Installing PyTorch ${torchVersion} (${torchWheel.label} wheel)...`;
     emit({ phase: 'torch', status: 'running', message: runningMsg });
 
     const torchInstallProc = spawnSync(venvPip(), torchInstallArgs, { stdio: 'inherit' });
@@ -457,15 +608,28 @@ export async function installPythonDeps(
       emit({
         phase: 'torch',
         status: 'done',
-        message: `PyTorch ${TORCH_VERSION} (${torchWheel.label}) installed`,
+        message: `PyTorch ${torchVersion} (${torchWheel.label}) installed`,
       });
     } else {
       const errMsg = torchInstallProc.error?.message ?? `pip exited with status ${torchInstallProc.status}`;
-      const msg = `PyTorch install failed: ${errMsg}. Try manually: ${installHint}`;
-      emit({ phase: 'torch', status: 'error', message: msg });
-      result.errors.push(msg);
-      // Continue — LoRA install will likely fail too, but we let the next
-      // phase decide rather than aborting the whole flow here.
+      if (torchWheel.bestEffort) {
+        // Python ≥ 3.14: no pinned cp314 torch wheel exists anywhere
+        // (torch 2.6.0 has no cp314 wheel; the cpu index jumps to 2.9+).
+        // The install was attempted but a 404 / build failure here is
+        // EXPECTED on the bleeding edge — do NOT hard-fail the node.
+        // Emit a non-fatal skip; the node boots without torch and simply
+        // won't advertise training caps until a wheel exists upstream.
+        const msg = `PyTorch ${torchVersion} (${torchWheel.label}) unavailable for this Python version (best-effort, no pinned cp314 wheel exists yet): ${errMsg}. Node will boot WITHOUT torch / training caps. Manual attempt: ${installHint}`;
+        emit({ phase: 'torch', status: 'skip', message: msg });
+        // Intentionally NOT pushed to result.errors — best-effort failure
+        // is not a node-boot failure.
+      } else {
+        const msg = `PyTorch install failed: ${errMsg}. Try manually: ${installHint}`;
+        emit({ phase: 'torch', status: 'error', message: msg });
+        result.errors.push(msg);
+        // Continue — LoRA install will likely fail too, but we let the next
+        // phase decide rather than aborting the whole flow here.
+      }
     }
   }
 
@@ -576,7 +740,7 @@ export async function installPythonDeps(
   // bitsandbytes should install. That broke when the hardcoded cpu wheel
   // hid real CUDA hardware (A40 pods showing is_available()==False). The
   // probe still runs for informational telemetry, but Phase 5 now gates
-  // on the wheel CHOICE (torchWheel.label === 'cu121'), which is the
+  // on the wheel CHOICE (isNvidiaWheel — cu121 or cu124), which is the
   // upstream signal — if we installed a CUDA wheel, we want bnb.
   const cudaProbe = spawnSync(
     venvPython(),
@@ -589,14 +753,16 @@ export async function installPythonDeps(
     && (cudaProbe.stdout ?? '').toString().includes('cuda_ok=True');
   if (cudaRuntimeOk) {
     emit({ phase: 'cuda-probe', status: 'done', message: 'CUDA available at runtime' });
-  } else if (torchWheel.label === 'cu121') {
+  } else if (isNvidiaWheel) {
     // Wheel says CUDA but runtime disagrees — likely a missing driver
     // or libc++ mismatch. Surface as a warning, but still attempt bnb
     // (it may still install; runtime DiLoCo will fail loudly if not).
+    // NOTE: a cu124 wheel needs driver ≥ ~550 (CUDA 12.4) — an older
+    // driver on a cp313 host produces exactly this branch.
     emit({
       phase: 'cuda-probe',
       status: 'error',
-      message: 'cu121 torch wheel installed but torch.cuda.is_available()=False — check NVIDIA driver / libcuda',
+      message: `${torchWheel.label} torch wheel installed but torch.cuda.is_available()=False — check NVIDIA driver / libcuda (cu124 needs driver ≥ ~550)`,
     });
   } else {
     emit({ phase: 'cuda-probe', status: 'skip', message: 'CUDA not available (CPU-only / MPS node)' });
@@ -604,12 +770,12 @@ export async function installPythonDeps(
 
   // ── Phase 5: bitsandbytes ───────────────────────────────────────────────
   // Gated on the wheel choice, not the runtime cuda probe. Rationale:
-  // if we installed the cu121 wheel, the operator's intent is GPU
-  // compute, and bnb is required for DiLoCo 4-bit. A failed runtime
+  // if we installed an NVIDIA wheel (cu121 or cu124), the operator's
+  // intent is GPU compute, and bnb is required for DiLoCo 4-bit. A failed runtime
   // probe (driver issue) shouldn't suppress bnb install — better to
   // have bnb available and surface the driver problem separately than
   // to skip bnb and have DiLoCo silently fall back to fp32 OOM.
-  if (torchWheel.label === 'cu121') {
+  if (isNvidiaWheel) {
     const bnbProbe = spawnSync(
       venvPython(),
       ['-c', 'import bitsandbytes'],
