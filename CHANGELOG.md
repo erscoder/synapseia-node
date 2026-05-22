@@ -1,5 +1,22 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(node): Python-version-aware torch pin — 3.13+ support (66c6bbe1)
+
+The hard-pinned `torch==2.5.1` + `cu121` index hard-failed on Python ≥ 3.13: the
+`cu121` index has no cp313 wheels and 2.5.1 has no cp313/cp314 on the cpu/default
+index, so a Linux NVIDIA node on Python 3.13 could not install torch → could not
+train. Now `selectTorchSpec(pythonMinor)`:
+- ≤ 3.12 → torch 2.5.1 / cu121 (UNCHANGED — proven on the live 3.12 pod)
+- 3.13 → torch 2.6.0 / cu124 (empirically verified: `cuda_avail=True` +
+  `train_micro.py` RC=0 on a live A5000, driver 570 / CUDA 12.8)
+- ≥ 3.14 → torch 2.6.0 / cu124 best-effort (non-fatal skip; no verified cp314
+  wheel exists yet). macOS always uses the default/MPS wheel (never cu124).
+
+`detectVenvPythonMinor` probes the venv; null → conserves the legacy ≤12 default.
+cu124 needs an NVIDIA driver supporting CUDA ≥ 12.4 (≥ ~550); older drivers on
+cp313 have no cu121 fallback (accepted edge, surfaced via the cuda-probe). Reviewer
+SHIP AS-IS. 38 install-deps tests pass. node-only release.
+
 ## [2026-05-22] fix(node): close remaining P26 prompt-injection gaps (8ef4fbcc)
 
 Full P26 audit of every LLM-prompt construction site in the node, classified by
