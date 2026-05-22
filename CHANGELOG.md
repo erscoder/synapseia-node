@@ -1,5 +1,19 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-22] fix(training): count reclaimable page cache in heavy-training memory gate (aa257c36)
+
+DiLoCo + LoRA (BioGPT 7B) WOs were skipped on every GPU pod
+(`needs 8192MB free after liberation, only ~3500MB available`). The
+preflight measured `free = cgroup limit - usage`, but cgroup `usage`/`current`
+includes reclaimable page cache and `drop_caches` is denied on RunPod (no
+`CAP_SYS_ADMIN`), so it over-skipped when most "used" memory was evictable
+file cache (pod2: usage 44GB but `total_rss` only 342MB, `total_inactive_file`
+17GB). Fix adds the kernel's immediately-reclaimable clean file cache back
+into the free figure (`inactive_file` v2 / `total_inactive_file` v1); on
+`memory.stat` miss it falls back to the bare figure plus a one-time warn (not
+fail-closed-to-0). `active_file`/`slab_reclaimable` excluded as the
+conservative choice. Thresholds unchanged.
+
 ## [2026-05-22] fix(lora): install protobuf + sentencepiece + sacremoses for BioGPT tokenizer (0e3be788)
 
 `LORA_CLASSIFICATION on BioGPT-Large` failed 100% (`train_lora.py` exit 2):
