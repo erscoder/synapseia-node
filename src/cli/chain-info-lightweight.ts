@@ -123,9 +123,159 @@ interface StakeInfo {
 }
 
 /**
+ * `SECONDS_PER_DAY` constant from
+ * packages/contracts/programs/syn_staking/src/lib.rs:13
+ * (`pub const SECONDS_PER_DAY: u64 = 86_400;`). Pinned verbatim — the
+ * estimation below MUST match the on-chain divisor exactly or the live
+ * preview drifts from what `claim_rewards` actually pays.
+ */
+const SECONDS_PER_DAY = 86_400n;
+
+/**
+ * Pure replica of the on-chain `calc_rewards` (syn_staking lib.rs:1392):
+ *
+ *   reward(u128) = staked * daily_pool_lamports * elapsed_seconds
+ *                  / total_staked / SECONDS_PER_DAY
+ *
+ * All inputs and the multiply-then-divide are done in BigInt so we match
+ * Rust's u128 integer semantics exactly (multiply ALL three numerators
+ * FIRST, then divide by total_staked, then by SECONDS_PER_DAY — each a
+ * floor integer division). Any zero input → 0, mirroring the contract's
+ * `if staked==0 || elapsed==0 || daily_pool==0 || total==0 { return 0 }`.
+ * Returns lamports (BigInt). u64::MAX clamp omitted: real pool params
+ * never approach it and a clamp would only ever *under*-report.
+ */
+function calcRewardsLamports(
+  stakedLamports: bigint,
+  elapsedSeconds: bigint,
+  dailyPoolLamports: bigint,
+  totalStakedLamports: bigint,
+): bigint {
+  if (
+    stakedLamports <= 0n ||
+    elapsedSeconds <= 0n ||
+    dailyPoolLamports <= 0n ||
+    totalStakedLamports <= 0n
+  ) {
+    return 0n;
+  }
+  return (
+    (stakedLamports * dailyPoolLamports * elapsedSeconds) /
+    totalStakedLamports /
+    SECONDS_PER_DAY
+  );
+}
+
+/**
+ * Replica of the on-chain `get_rewards` view (syn_staking lib.rs:565):
+ *
+ *   elapsed = last_accrual_at > 0 ? max(0, now - last_accrual_at) : 0
+ *   total   = rewards_pending + (amount > 0 ? calc_rewards(...) : 0)
+ *
+ * All args are raw lamports / unix-second BigInts read straight off the
+ * StakeAccount + StakingPool buffers. Returns the LIVE claimable amount
+ * in lamports (BigInt). Caller divides by 1e9 (in Number) for UI units.
+ */
+export function estimateLiveRewardsLamports(params: {
+  rewardsPendingLamports: bigint;
+  stakedLamports: bigint;
+  lastAccrualAt: bigint;
+  nowSeconds: bigint;
+  dailyPoolLamports: bigint;
+  totalStakedLamports: bigint;
+}): bigint {
+  const {
+    rewardsPendingLamports,
+    stakedLamports,
+    lastAccrualAt,
+    nowSeconds,
+    dailyPoolLamports,
+    totalStakedLamports,
+  } = params;
+  const elapsed =
+    lastAccrualAt > 0n
+      ? (() => {
+          const delta = nowSeconds - lastAccrualAt;
+          return delta > 0n ? delta : 0n;
+        })()
+      : 0n;
+  const estimated =
+    stakedLamports > 0n
+      ? calcRewardsLamports(stakedLamports, elapsed, dailyPoolLamports, totalStakedLamports)
+      : 0n;
+  return rewardsPendingLamports + estimated;
+}
+
+/**
+ * Minimal structural type for the `@solana/web3.js` Connection methods this
+ * file uses. Lets tests inject a mock connection without pulling in the real
+ * package (which is loaded via dynamic `import()` in production).
+ */
+interface MinimalConnection {
+  getProgramAccounts(
+    programId: unknown,
+    config?: unknown,
+  ): Promise<Array<{ account: { data: Buffer } }>>;
+  getAccountInfo(pubkey: unknown, commitment?: unknown): Promise<{ data: Buffer } | null>;
+}
+
+/**
+ * Connection factory seam. Production builds a real `@solana/web3.js`
+ * Connection via dynamic import (no NestJS, no Anchor — same bootstrap-free
+ * style as the rest of this file). Tests pass an override returning a mock.
+ */
+export type StakeConnFactory = (rpcUrl: string) => Promise<MinimalConnection>;
+
+const defaultConnFactory: StakeConnFactory = async (rpcUrl: string) => {
+  const { Connection } = await import('@solana/web3.js');
+  return new Connection(rpcUrl, 'confirmed') as unknown as MinimalConnection;
+};
+
+/**
+ * Read `StakingPool.daily_pool_lamports` (u64 @ absolute offset 8) and
+ * `StakingPool.total_staked` (u64 @ absolute offset 16) from the
+ * [b"staking_pool"] PDA. Confirmed against `pub struct StakingPool`
+ * (syn_staking lib.rs:1817) — the first two fields after the 8-byte
+ * discriminator are `daily_pool_lamports` then `total_staked`.
+ *
+ * Returns null when the PDA is missing or too short (< 24 bytes), so the
+ * caller falls back to the raw `rewards_pending` field. Best-effort: any
+ * throw is swallowed by the caller's try/catch.
+ */
+async function fetchStakingPool(
+  conn: MinimalConnection,
+  PublicKeyCtor: { new (v: string): unknown },
+  findProgramAddressSync: (seeds: Buffer[], programId: unknown) => [unknown, number],
+  stakingProgramId: string,
+): Promise<{ dailyPoolLamports: bigint; totalStakedLamports: bigint } | null> {
+  const program = new PublicKeyCtor(stakingProgramId);
+  const [poolPda] = findProgramAddressSync([Buffer.from('staking_pool')], program);
+  const info = await conn.getAccountInfo(poolPda, 'confirmed');
+  if (!info || info.data.length < 24) return null;
+  const dailyPoolLamports = info.data.readBigUInt64LE(8);
+  const totalStakedLamports = info.data.readBigUInt64LE(16);
+  return { dailyPoolLamports, totalStakedLamports };
+}
+
+/**
  * Read the on-chain StakeAccount directly. No coordinator round-trip, no
  * NestJS DI. Mirrors packages/node/src/modules/staking/staking-cli.ts
  * (findStakeAccount + getStakeInfo) but bootstrap-free.
+ *
+ * `rewardsPending` is the LIVE claimable amount, NOT the raw on-chain
+ * `rewards_pending` field. The raw field is only advanced by the hourly
+ * StakingCronService accrue, which lags real time — so node-ui showed
+ * "0 SYN" and disabled Claim even with thousands of SYN actually claimable.
+ * We instead replicate the on-chain `get_rewards` view (syn_staking
+ * lib.rs:565): `rewards_pending + calc_rewards(amount, now - last_accrual_at,
+ * daily_pool_lamports, total_staked)`. On-chain `claim_rewards` (lib.rs:535)
+ * self-accrues the same delta before sweeping, so this estimate equals what
+ * a claim pays. The pool params come from a second read of the
+ * [b"staking_pool"] PDA (`fetchStakingPool`). The estimation is purely
+ * additive + best-effort: if the pool read or BigInt math throws/returns
+ * null for ANY reason we fall back to the raw `rewards_pending` field
+ * (prior behaviour) — this is a hot path polled by node-ui every few
+ * seconds and must never crash or return NaN.
  *
  * V3 StakeAccount layout (matches
  * packages/contracts/programs/syn_staking/src/lib.rs `StakeAccount`,
@@ -140,19 +290,20 @@ interface StakeInfo {
  *   [90-97]   banned_until      i64
  *   [98-161]  ban_reason        [u8; 64]
  *   [162-169] locked_until      i64   ← reads at absolute offset 162
- *   [170-177] rewards_pending   u64   ← claimable rewards, absolute offset 170
+ *   [170-177] rewards_pending   u64   ← raw field, absolute offset 170
  *   [178-185] last_claim_at     i64
- *   [186-193] last_accrual_at   i64
+ *   [186-193] last_accrual_at   i64   ← reads at absolute offset 186
  *   [194-226] pending_authority Option<Pubkey> (1 tag + 32)
  */
 async function fetchStakeInfo(
   rpcUrl: string,
   ownerPubkey: string,
   stakingProgramId: string,
+  connFactory: StakeConnFactory = defaultConnFactory,
 ): Promise<StakeInfo> {
   try {
-    const { Connection, PublicKey } = await import('@solana/web3.js');
-    const conn = new Connection(rpcUrl, 'confirmed');
+    const { PublicKey } = await import('@solana/web3.js');
+    const conn = await connFactory(rpcUrl);
     const owner = new PublicKey(ownerPubkey);
 
     const accounts = await conn.getProgramAccounts(new PublicKey(stakingProgramId), {
@@ -163,17 +314,54 @@ async function fetchStakeInfo(
     }
 
     const data = accounts[0].account.data;
-    // V3 StakeAccount is 227 bytes (8 disc + 219 payload). Reject anything
-    // shorter than the last field we read (rewards_pending ends at byte 178)
-    // so a pre-upgrade buffer never yields garbage from stale tail bytes.
-    if (data.length < 178) {
+    // V3 StakeAccount is 227 bytes (8 disc + 219 payload). We now read
+    // last_accrual_at (i64) at absolute offset 186, which ends at byte 194 —
+    // so reject anything shorter than 194 (was 178) to avoid garbage from a
+    // pre-upgrade buffer's stale tail bytes.
+    if (data.length < 194) {
       return { exists: false, amount: 0, rewardsPending: 0, lockedUntil: 0 };
     }
 
     // Absolute offsets into `account.data` (discriminator-relative + 8).
-    const amount = Number(data.readBigUInt64LE(72)) / 1_000_000_000;
+    const amountLamports = data.readBigUInt64LE(72);
     const lockedUntil = Number(data.readBigInt64LE(162));
-    const rewardsPending = Number(data.readBigUInt64LE(170)) / 1_000_000_000;
+    const rewardsPendingLamports = data.readBigUInt64LE(170);
+    const lastAccrualAt = data.readBigInt64LE(186);
+
+    const amount = Number(amountLamports) / 1_000_000_000;
+
+    // Default to the raw field (prior behaviour). Then try to layer the
+    // live-accrued estimate on top, mirroring the on-chain get_rewards view.
+    let liveRewardsLamports = rewardsPendingLamports;
+    try {
+      const pool = await fetchStakingPool(
+        conn,
+        PublicKey as unknown as { new (v: string): unknown },
+        PublicKey.findProgramAddressSync.bind(PublicKey) as unknown as (
+          seeds: Buffer[],
+          programId: unknown,
+        ) => [unknown, number],
+        stakingProgramId,
+      );
+      if (pool) {
+        const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+        liveRewardsLamports = estimateLiveRewardsLamports({
+          rewardsPendingLamports,
+          stakedLamports: amountLamports,
+          lastAccrualAt,
+          nowSeconds,
+          dailyPoolLamports: pool.dailyPoolLamports,
+          totalStakedLamports: pool.totalStakedLamports,
+        });
+      }
+    } catch {
+      // Pool read / estimation failed — keep the raw field value. Best-effort.
+      liveRewardsLamports = rewardsPendingLamports;
+    }
+
+    // Convert to UI units in Number AFTER all BigInt integer math, exactly
+    // like the existing `amount` read does.
+    const rewardsPending = Number(liveRewardsLamports) / 1_000_000_000;
     return { exists: true, amount, rewardsPending, lockedUntil };
   } catch {
     return { exists: false, amount: 0, rewardsPending: 0, lockedUntil: 0 };
@@ -320,6 +508,13 @@ async function fetchNodeStats(coordinatorUrl: string, pubkey: string): Promise<N
     return EMPTY_STATS;
   }
 }
+
+/**
+ * Internal test seam. `fetchStakeInfo` is not part of the production public
+ * surface (only `runChainInfoLightweight` is invoked by the CLI), but the
+ * unit tests drive it directly via the injectable `connFactory` argument.
+ */
+export const __testing = { fetchStakeInfo };
 
 export async function runChainInfoLightweight(): Promise<void> {
   const wallet = readPublicKey();
