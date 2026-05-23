@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(cli): run on-chain one-shot commands without full bootstrap (a82df2ba)
+
+`claim-rewards`, `claim-wo-rewards`, `stake`, `unstake`, `withdraw-sol`,
+`withdraw-syn`, `deposit-sol`, `deposit-syn` fell through to `bootstrap()`
+(`NestFactory.createApplicationContext(AppModule)` + every module + P2P/libp2p
++ heartbeat) before the on-chain instruction ran. That heavy init hangs past
+node-ui's 120s on-chain timeout — especially when a `syn start` node is already
+running and P2P is flapping — so the instruction never executed: node-ui showed
+"claim-rewards timed out after 120s" and left orphaned processes, while the
+dashboard does the identical ix in <1s because it never bootstraps. Adds a
+pre-`bootstrap()` fast-path (mirroring the existing `chain-info` short-circuit)
+that dispatches these 8 one-shot ops straight to the raw-`@solana/web3.js`
+`staking-cli` / `rewards-vault-cli` functions via lazy import, then exits —
+never loading NestJS/P2P/heartbeat. Arg parsing/validation and the
+`__VAULT_CLAIM_OK__` stdout marker match the legacy commander handlers exactly;
+`start` / `wallet-*` / `config` / `chain-info` routing is unchanged. The claim
+instruction itself was always correct — the regression was bootstrapping the
+whole node just to send one transaction.
+
 ## [2026-05-23] fix(llm): resolve Ollama tag via catalog for generate + auto-pull (1cbe1896)
 
 The Ollama LLM path used the catalog model NAME (`model.modelId`, e.g.
