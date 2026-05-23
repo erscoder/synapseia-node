@@ -25,6 +25,7 @@ import {
 } from './providers';
 import { getAdapter } from './adapters';
 import { type ChatRequest } from './adapters/llm-response-adapter';
+import { resolveOllamaTag } from '../model/model-catalog';
 
 export type { CloudProviderId } from './providers';
 
@@ -313,8 +314,17 @@ export class LlmProviderHelper {
   }
 
   private async generateOllamaLLM(model: LLMModel, prompt: string, hyperparams?: GenerateOptions): Promise<string> {
+    // Resolve the catalog NAME (UI label / config slug, e.g.
+    // `llama-3.1-8b-instruct`) to the identifier Ollama indexes the
+    // model under (its colon-separated tag, e.g.
+    // `llama3.1:8b-instruct-q4_K_M`). Non-catalog ids (arbitrary pulled
+    // tags like `qwen2.5:0.5b`) pass through unchanged. The SAME resolved
+    // tag must drive the primary generate, the auto-pull, and the retry
+    // generate — pulling the tag while generating the name is what opened
+    // the `ollama-generate` circuit in production.
+    const ollamaModelId = resolveOllamaTag(model.modelId);
     try {
-      return await this.ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
+      return await this.ollamaHelper.generate(prompt, ollamaModelId, undefined, hyperparams);
     } catch (err) {
       // Auto-recover the most common operator misconfig: the model the
       // node was told to use is not yet pulled into the local Ollama
@@ -331,17 +341,17 @@ export class LlmProviderHelper {
       const isMissing = /model\s+['"`].*['"`]\s+not found|not found, try pulling/i.test(text);
       if (!isMissing) throw err;
       logger.warn(
-        `[LLM] ollama model '${model.modelId}' missing — auto-pulling once before retry`,
+        `[LLM] ollama model '${ollamaModelId}' missing — auto-pulling once before retry`,
       );
       try {
-        await this.ollamaHelper.pullModel(model.modelId);
+        await this.ollamaHelper.pullModel(ollamaModelId);
       } catch (pullErr) {
         logger.error(
-          `[LLM] auto-pull failed for '${model.modelId}': ${(pullErr as Error).message}`,
+          `[LLM] auto-pull failed for '${ollamaModelId}': ${(pullErr as Error).message}`,
         );
         throw err; // propagate original generate error so caller sees the runtime context
       }
-      return await this.ollamaHelper.generate(prompt, model.modelId, undefined, hyperparams);
+      return await this.ollamaHelper.generate(prompt, ollamaModelId, undefined, hyperparams);
     }
   }
 

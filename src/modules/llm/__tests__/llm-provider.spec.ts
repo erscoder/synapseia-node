@@ -17,6 +17,7 @@ import {
   MODEL_METADATA,
   type LLMModel,
 } from '../llm-provider';
+import { MODEL_CATALOG, getOllamaTag } from '../../model/model-catalog';
 
 // ── helpers ───────────────────────────────────────────────────────────────
 const originalFetch = global.fetch;
@@ -39,6 +40,7 @@ function mockFetchOnce(opts: {
 interface OllamaMock {
   checkOllama: jest.Mock;
   generate: jest.Mock;
+  pullModel: jest.Mock;
 }
 
 function makeHelper(synapseia?: unknown): { helper: LlmProviderHelper; ollama: OllamaMock } {
@@ -46,6 +48,7 @@ function makeHelper(synapseia?: unknown): { helper: LlmProviderHelper; ollama: O
   const ollama: OllamaMock = {
     checkOllama: jest.fn(),
     generate: jest.fn(),
+    pullModel: jest.fn(),
   };
   (helper as unknown as { ollamaHelper: OllamaMock }).ollamaHelper = ollama;
   return { helper, ollama };
@@ -404,5 +407,91 @@ describe('LlmProviderHelper — ollama passthrough', () => {
     const { helper, ollama } = makeHelper();
     ollama.generate.mockResolvedValueOnce('result');
     expect(await helper.generateOllama('prompt', 'qwen')).toBe('result');
+  });
+});
+
+// ── ollama tag resolution (catalog name → ollamaTag) ──────────────────────
+// Regression: the node called Ollama with the catalog NAME
+// (`llama-3.1-8b-instruct`) instead of its `ollamaTag`
+// (`llama3.1:8b-instruct-q4_K_M`). Ollama returned "model not found",
+// which auto-pulled the wrong name → "pull model manifest: file does not
+// exist" → the `ollama-generate` circuit opened, killing all local
+// inference. The fix resolves NAME → tag before EVERY Ollama call
+// (primary generate, auto-pull, retry generate). Catalog drives the
+// expected tag — never hardcode a copy of the impl string.
+describe('LlmProviderHelper — ollama tag resolution', () => {
+  const llamaEntry = MODEL_CATALOG.find((m) => m.name === 'llama-3.1-8b-instruct')!;
+  // Sanity: this entry must have name !== ollamaTag for the test to be meaningful.
+  expect(llamaEntry).toBeDefined();
+  expect(llamaEntry.ollamaTag).toBeDefined();
+  expect(getOllamaTag(llamaEntry)).not.toBe(llamaEntry.name);
+  const llamaTag = getOllamaTag(llamaEntry); // 'llama3.1:8b-instruct-q4_K_M'
+
+  it('(a) generate uses the resolved ollamaTag for a catalog model whose name !== ollamaTag', async () => {
+    const { helper, ollama } = makeHelper();
+    ollama.generate.mockResolvedValueOnce('ok');
+    await helper.generateLLM(
+      { provider: 'ollama', providerId: '', modelId: llamaEntry.name },
+      'ping',
+    );
+    expect(ollama.generate).toHaveBeenCalledTimes(1);
+    expect(ollama.generate).toHaveBeenCalledWith('ping', llamaTag, undefined, undefined);
+    expect(ollama.generate).not.toHaveBeenCalledWith('ping', llamaEntry.name, undefined, undefined);
+  });
+
+  it('(b) an arbitrary non-catalog modelId passes through unchanged', async () => {
+    const { helper, ollama } = makeHelper();
+    ollama.generate.mockResolvedValueOnce('ok');
+    await helper.generateLLM(
+      { provider: 'ollama', providerId: '', modelId: 'qwen2.5:0.5b' },
+      'ping',
+    );
+    expect(ollama.generate).toHaveBeenCalledWith('ping', 'qwen2.5:0.5b', undefined, undefined);
+  });
+
+  it('(c) auto-pull-on-missing pulls the RESOLVED tag and retries generate with the same tag', async () => {
+    const { helper, ollama } = makeHelper();
+    ollama.generate
+      .mockRejectedValueOnce(new Error("model 'llama3.1:8b-instruct-q4_K_M' not found"))
+      .mockResolvedValueOnce('recovered');
+    ollama.pullModel.mockResolvedValueOnce(undefined);
+    const r = await helper.generateLLM(
+      { provider: 'ollama', providerId: '', modelId: llamaEntry.name },
+      'ping',
+    );
+    expect(r).toBe('recovered');
+    // Pull must target the resolved tag, never the bare catalog name.
+    expect(ollama.pullModel).toHaveBeenCalledTimes(1);
+    expect(ollama.pullModel).toHaveBeenCalledWith(llamaTag);
+    expect(ollama.pullModel).not.toHaveBeenCalledWith(llamaEntry.name);
+    // Both the primary and the retry generate use the resolved tag.
+    expect(ollama.generate).toHaveBeenCalledTimes(2);
+    expect(ollama.generate).toHaveBeenNthCalledWith(1, 'ping', llamaTag, undefined, undefined);
+    expect(ollama.generate).toHaveBeenNthCalledWith(2, 'ping', llamaTag, undefined, undefined);
+  });
+
+  it('(d) an `ollama/`-prefixed catalog name resolves to the same tag', async () => {
+    const { helper, ollama } = makeHelper();
+    ollama.generate.mockResolvedValueOnce('ok');
+    await helper.generateLLM(
+      { provider: 'ollama', providerId: '', modelId: `ollama/${llamaEntry.name}` },
+      'ping',
+    );
+    expect(ollama.generate).toHaveBeenCalledWith('ping', llamaTag, undefined, undefined);
+  });
+
+  it('passthrough for a catalog model whose name === ollamaTag (no explicit override)', async () => {
+    // `home-3b-v3` has no ollamaTag → getOllamaTag falls back to name,
+    // so resolution is a no-op and the name flows through unchanged.
+    const passthroughEntry = MODEL_CATALOG.find((m) => m.ollamaTag === undefined)!;
+    expect(passthroughEntry).toBeDefined();
+    expect(getOllamaTag(passthroughEntry)).toBe(passthroughEntry.name);
+    const { helper, ollama } = makeHelper();
+    ollama.generate.mockResolvedValueOnce('ok');
+    await helper.generateLLM(
+      { provider: 'ollama', providerId: '', modelId: passthroughEntry.name },
+      'ping',
+    );
+    expect(ollama.generate).toHaveBeenCalledWith('ping', passthroughEntry.name, undefined, undefined);
   });
 });

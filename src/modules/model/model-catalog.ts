@@ -46,6 +46,51 @@ export function getOllamaTag(model: ModelInfo): string {
 }
 
 /**
+ * Look up a catalog entry by an arbitrary identifier — used by both the
+ * wizard (which writes `name`) and the runtime (which may carry `name`,
+ * an `ollama/`-prefixed `name`, or the raw `ollamaTag`). Returns the
+ * matching `ModelInfo` or null. Pure (no `this`/IO) so it can be reused
+ * outside the injectable helper. Mirrors `ModelCatalogHelper.getModelByName`.
+ */
+export function findCatalogModel(name: string): ModelInfo | null {
+  const ollamaStripped = name.replace(/^ollama\//, '');
+  const normalized = ollamaStripped.replace(/:/g, '-').toLowerCase();
+  return (
+    MODEL_CATALOG.find(
+      (m) =>
+        m.name === normalized ||
+        m.name === name ||
+        m.ollamaTag === ollamaStripped ||
+        m.ollamaTag === name,
+    ) ?? null
+  );
+}
+
+/**
+ * Resolve an LLM-provider `modelId` to the identifier Ollama expects on
+ * the wire (`/api/generate`, `/api/pull`).
+ *
+ * Why this exists: the catalog `name` (e.g. `llama-3.1-8b-instruct`)
+ * doubles as the UI label and is dash-separated, but Ollama indexes the
+ * model under its colon-separated tag (`llama3.1:8b-instruct-q4_K_M`).
+ * Calling Ollama with the bare `name` yields "model not found", which
+ * previously triggered an auto-pull of the WRONG identifier
+ * (`pull model manifest: file does not exist`) and opened the
+ * `ollama-generate` circuit, killing all local inference on the node.
+ *
+ * Behaviour:
+ *  - `modelId` matches a catalog entry (by `name`, `ollama/`-prefixed
+ *    `name`, or `ollamaTag`) → return `getOllamaTag(entry)`.
+ *  - `modelId` is NOT in the catalog → pass through UNCHANGED. Ollama is
+ *    open-ended; arbitrary tags like `qwen2.5:0.5b` are valid and must
+ *    keep working (see `LlmProviderHelper.parseModel`).
+ */
+export function resolveOllamaTag(modelId: string): string {
+  const model = findCatalogModel(modelId);
+  return model ? getOllamaTag(model) : modelId;
+}
+
+/**
  * Ollama model response
  */
 interface OllamaModel {
@@ -272,7 +317,7 @@ export const MODEL_CATALOG: ModelInfo[] = [
   },
   {
     name: 'qwen3-coder-30b-a3b',
-    ollamaTag: 'qwen3-coder:30b-a3b',
+    ollamaTag: 'qwen3-coder:30b-a3b-q4_K_M',
     minVram: 24,
     recommendedTier: 4,
     category: 'code',
@@ -386,14 +431,7 @@ export class ModelCatalogHelper {
   }
 
   getModelByName(name: string): ModelInfo | null {
-    const normalized = this.normalizeModelName(name);
-    const ollamaStripped = name.replace(/^ollama\//, '');
-    return MODEL_CATALOG.find((m) =>
-      m.name === normalized ||
-      m.name === name ||
-      m.ollamaTag === ollamaStripped ||
-      m.ollamaTag === name
-    ) || null;
+    return findCatalogModel(name);
   }
 }
 
