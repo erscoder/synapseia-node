@@ -1,5 +1,31 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(self-update + lora): atomic self-updater + causal-LM collator (0.8.116) (1a9b1967, 886265ef)
+
+Two prod-critical fixes (0.8.115 -> 0.8.116).
+
+`fix(self-update)` (1a9b1967): the self-updater ran `npm install -g` with a 120s
+`execSync` timeout directly on the LIVE global prefix. On slow npm it killed the
+install mid-write, leaving the global package corrupt (dist/scripts + package.json
+gone) so the node couldn't boot -> a brick + 30-min re-corruption loop in prod.
+Now: timeout raised to 600s (`SYN_SELFUPDATE_TIMEOUT_MS` overridable), and the
+install is ATOMIC - npm builds into a throwaway staging prefix
+(`<prefix>/.syn-update-staging-<pid>`, same FS), the staged tree is integrity-checked
+(`verifyInstalledPackage`), then swapped in via `live->.bak`, `rename(staged->live)`,
+drop `.bak` (restore on failure). `execSync` never touches the live prefix; a
+timed-out/failed install leaves it byte-for-byte intact. This ends the auto-update
+corruption. (Post-ship follow-ups: EXDEV copy-fallback for bind-mounted node_modules;
+GC of orphan staging dirs.)
+
+`fix(lora)` (886265ef): GENERATION (CausalLM) failed `Expected input batch_size (256)
+to match target batch_size (1)` - it reused the classification collator
+(`DataCollatorWithPadding` + scalar `label`) but a CausalLM needs `labels=input_ids`.
+Now subtype-aware: GENERATION -> `DataCollatorForLanguageModeling(mlm=False)` +
+drops `text`/`label` columns; CLASSIFICATION unchanged. This was the layer under the
+0.8.114 OOM fix and the 0.8.115 processing_class fix.
+
+Reviewer: SHIP (no BLOCKER/HIGH). Build green; 54 jest + 22 pytest pass.
+
 ## [2026-05-23] fix(lora): use processing_class so Trainer works on transformers 4.57+ (0.8.115) (2d4441cc)
 
 LoRA training (BOTH subtypes — classification + generation) failed `train_lora.py
