@@ -19,14 +19,14 @@ export class SubmitResultNode {
     const { selectedWorkOrder, executionResult, researchResult, coordinatorUrl, peerId, walletAddress } = state;
     if (!selectedWorkOrder || !executionResult) return { submitted: false };
 
-    // Hard guard: never ship a failed execution. QualityGateNode is supposed
-    // to route around this via `shouldSubmit: false`, but a belt-and-suspenders
-    // check here protects against graph-edge regressions AND any legacy path
-    // that might invoke this node directly. Also arms the cooldown so the
-    // node doesn't hot-loop on the same broken WO.
+    // Hard guard: never ship a failed execution AS a success. QualityGateNode
+    // is supposed to route around this via `shouldSubmit: false`, but a
+    // belt-and-suspenders check here protects against graph-edge regressions
+    // AND any legacy path that might invoke this node directly. Also arms the
+    // cooldown so the node doesn't hot-loop on the same broken WO.
     if (executionResult.success === false) {
       logger.warn(
-        ` Skipping submission: execution failed for WO ${selectedWorkOrder.id} — ` +
+        ` Execution failed for WO ${selectedWorkOrder.id} — ` +
         `${executionResult.result.slice(0, 120)}`,
       );
       // Bug 20 v3 (2026-05-18) — when a docking WO fails with a timeout
@@ -52,6 +52,37 @@ export class SubmitResultNode {
           this.fetchNode.markFailedTimeout(selectedWorkOrder.id, reason);
         }
       }
+
+      // Bug 20 v4 (2026-05-23) — report the failure to the coordinator
+      // instead of silently abandoning it (P21/P22). Previously this branch
+      // only armed the local cooldown via `markCompleted`, so the WO sat in
+      // ACCEPTED until the coord's ACCEPTED-TTL reaper (minutes), blocking
+      // re-dispatch the whole time. We now POST `success: false` to the
+      // SAME `/work-orders/:id/complete` endpoint the success path uses
+      // (`completeWorkOrder` already carries the `success` flag) so the
+      // coordinator releases the WO promptly. The endpoint treats a stale
+      // WO (status flipped away from ACCEPTED) as a benign 400 drop, so a
+      // race with the reaper is harmless. We pass no-op reward callbacks
+      // because a failed WO earns nothing. The LIGHT backpressure slot is
+      // released independently by AgentGraphService after this node returns.
+      const failCompletedIds = new Set<string>(state.completedWorkOrderIds ?? []);
+      const reported = await this.coordinator.completeWorkOrder(
+        coordinatorUrl, selectedWorkOrder.id, peerId, walletAddress,
+        executionResult.result, false,
+        failCompletedIds,
+        () => {},
+        () => {},
+        () => 0n,
+      );
+      if (reported) {
+        logger.info(`[Submit] reported failure for WO ${selectedWorkOrder.id} to coordinator — released for re-dispatch`);
+      } else {
+        // Network error / non-400 reject: the coord did not release the WO.
+        // It will fall back to the ACCEPTED-TTL reaper. Log clearly so the
+        // delayed release is not mistaken for a silent drop (P22).
+        logger.warn(`[Submit] failure report for WO ${selectedWorkOrder.id} not acked — coord will release via ACCEPTED-TTL reaper`);
+      }
+
       this.fetchNode.markCompleted(selectedWorkOrder);
       return { submitted: false };
     }

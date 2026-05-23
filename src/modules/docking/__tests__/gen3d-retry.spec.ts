@@ -36,7 +36,11 @@ describe('Bug 20 v2 — prepLigandPdbqt two-tier --gen3d retry', () => {
     await fs.promises.rm(workDir, { recursive: true, force: true }).catch(() => { /* best effort */ });
   });
 
-  it('happy path: med tier succeeds → no fast-retry call', async () => {
+  // Bug 20 v4 (2026-05-23): tier order INVERTED to fast-first with a short
+  // fast budget (default 90s) so pathological ligands fall through quickly
+  // instead of burning the old med-first 300s per tier. Med is the fallback
+  // now and gets the remaining budget (total - fast).
+  it('happy path: fast tier succeeds → no med-retry call', async () => {
     const runChild = jest.fn<(bin: string, args: string[], opts: any) => Promise<{ stdout: string; stderr: string }>>()
       .mockResolvedValue({ stdout: '', stderr: '' });
 
@@ -49,15 +53,15 @@ describe('Bug 20 v2 — prepLigandPdbqt two-tier --gen3d retry', () => {
     expect(out).toBe(path.join(workDir, 'ligand.pdbqt'));
     expect(runChild).toHaveBeenCalledTimes(1);
     const args = runChild.mock.calls[0]![1];
-    expect(args).toEqual(expect.arrayContaining(['--gen3d', 'med', '-h']));
-    // Per-tier budget = total / 2.
-    expect((runChild.mock.calls[0]![2] as { timeoutMs: number }).timeoutMs).toBe(300_000);
+    expect(args).toEqual(expect.arrayContaining(['--gen3d', 'fast', '-h']));
+    // Fast tier uses the short default budget (90s), NOT a 300s half-split.
+    expect((runChild.mock.calls[0]![2] as { timeoutMs: number }).timeoutMs).toBe(90_000);
   });
 
-  it('timeout on med tier → fast tier invoked with same per-tier budget', async () => {
+  it('timeout on fast tier → med tier invoked with the remaining budget', async () => {
     const runChild = jest.fn<(bin: string, args: string[], opts: any) => Promise<{ stdout: string; stderr: string }>>()
       .mockRejectedValueOnce(new Error(
-        'Process timed out after 300000ms: obabel ligand.smi -O ligand.pdbqt --gen3d med -h\n  step: ligand-gen3d-med',
+        'Process timed out after 90000ms: obabel ligand.smi -O ligand.pdbqt --gen3d fast -h\n  step: ligand-gen3d-fast',
       ))
       .mockResolvedValueOnce({ stdout: '', stderr: '' });
 
@@ -72,20 +76,20 @@ describe('Bug 20 v2 — prepLigandPdbqt two-tier --gen3d retry', () => {
 
     const firstArgs = runChild.mock.calls[0]![1];
     const secondArgs = runChild.mock.calls[1]![1];
-    expect(firstArgs).toEqual(expect.arrayContaining(['--gen3d', 'med', '-h']));
-    expect(secondArgs).toEqual(expect.arrayContaining(['--gen3d', 'fast', '-h']));
+    expect(firstArgs).toEqual(expect.arrayContaining(['--gen3d', 'fast', '-h']));
+    expect(secondArgs).toEqual(expect.arrayContaining(['--gen3d', 'med', '-h']));
 
-    // Both tiers honor the per-tier budget (total split in half).
-    expect((runChild.mock.calls[0]![2] as { timeoutMs: number }).timeoutMs).toBe(300_000);
-    expect((runChild.mock.calls[1]![2] as { timeoutMs: number }).timeoutMs).toBe(300_000);
+    // Fast = 90s (short), med = remaining budget (600s - 90s = 510s).
+    expect((runChild.mock.calls[0]![2] as { timeoutMs: number }).timeoutMs).toBe(90_000);
+    expect((runChild.mock.calls[1]![2] as { timeoutMs: number }).timeoutMs).toBe(510_000);
 
     // Second call carries a distinct diagnostic step so logs are
     // unambiguous about which tier the timeout came from.
     const secondCtx = (runChild.mock.calls[1]![2] as { timeoutContext: { step: string } }).timeoutContext;
-    expect(secondCtx.step).toBe('ligand-gen3d-fast-retry');
+    expect(secondCtx.step).toBe('ligand-gen3d-med-retry');
   });
 
-  it('non-timeout failure on med tier → rethrow, no fast-retry', async () => {
+  it('non-timeout failure on fast tier → rethrow, no med-retry', async () => {
     const runChild = jest.fn<(bin: string, args: string[], opts: any) => Promise<{ stdout: string; stderr: string }>>()
       .mockRejectedValueOnce(new Error('spawn obabel ENOENT'));
 

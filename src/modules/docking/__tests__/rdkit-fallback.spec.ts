@@ -40,8 +40,8 @@ describe('Bug 20 v3 — prepLigandPdbqt RDKit tier-3 fallback', () => {
   });
 
   function makePipelineStub(plan: {
-    medResult: 'timeout' | 'ok' | 'enoent';
-    fastResult: 'timeout' | 'ok' | 'never';
+    medResult: 'timeout' | 'ok' | 'enoent' | 'never';
+    fastResult: 'timeout' | 'ok' | 'enoent' | 'never';
     rdkitResult: 'ok' | 'enoent' | 'rdkit-missing' | 'never';
     formatConvertResult: 'ok' | 'timeout' | 'never';
   }) {
@@ -49,13 +49,15 @@ describe('Bug 20 v3 — prepLigandPdbqt RDKit tier-3 fallback', () => {
       .mockImplementation(async (bin: string, args: string[]) => {
         const argStr = args.join(' ');
         if (bin === 'obabel' && argStr.includes('--gen3d med')) {
+          if (plan.medResult === 'never') throw new Error('unexpected: med-tier should not be called');
           if (plan.medResult === 'timeout') throw new Error(TIMEOUT_MSG);
           if (plan.medResult === 'enoent') throw new Error('obabel: ENOENT');
           return { stdout: '', stderr: '' };
         }
         if (bin === 'obabel' && argStr.includes('--gen3d fast')) {
-          if (plan.fastResult === 'timeout') throw new Error(FAST_TIMEOUT_MSG);
           if (plan.fastResult === 'never') throw new Error('unexpected: fast-tier should not be called');
+          if (plan.fastResult === 'timeout') throw new Error(FAST_TIMEOUT_MSG);
+          if (plan.fastResult === 'enoent') throw new Error('obabel: ENOENT');
           return { stdout: '', stderr: '' };
         }
         // Python RDKit fallback step
@@ -131,10 +133,12 @@ describe('Bug 20 v3 — prepLigandPdbqt RDKit tier-3 fallback', () => {
     expect(stub).toHaveBeenCalledTimes(4);
   });
 
-  it('med-tier non-timeout ENOENT → rethrow immediately, no fast/rdkit calls', async () => {
+  it('first-tier (fast) non-timeout ENOENT → rethrow immediately, no med/rdkit calls', async () => {
+    // Bug 20 v4 (2026-05-23): fast is now the FIRST tier. A non-timeout
+    // failure on the first tier must rethrow without trying med or RDKit.
     const stub = makePipelineStub({
-      medResult: 'enoent',
-      fastResult: 'never',
+      medResult: 'never',
+      fastResult: 'enoent',
       rdkitResult: 'never',
       formatConvertResult: 'never',
     });
@@ -145,14 +149,16 @@ describe('Bug 20 v3 — prepLigandPdbqt RDKit tier-3 fallback', () => {
       pythonBin: 'python3',
       __runChildForTests: stub,
     })).rejects.toThrow(/ENOENT/);
-    // Only the med tier was attempted.
+    // Only the first (fast) tier was attempted.
     expect(stub).toHaveBeenCalledTimes(1);
   });
 
-  it('happy path: med tier succeeds → no fast, no rdkit, no format-convert', async () => {
+  it('happy path: first-tier (fast) succeeds → no med, no rdkit, no format-convert', async () => {
+    // Bug 20 v4 (2026-05-23): fast is now the FIRST tier and succeeds on the
+    // common drug-like ligand, so med/RDKit are never reached.
     const stub = makePipelineStub({
-      medResult: 'ok',
-      fastResult: 'never',
+      medResult: 'never',
+      fastResult: 'ok',
       rdkitResult: 'never',
       formatConvertResult: 'never',
     });

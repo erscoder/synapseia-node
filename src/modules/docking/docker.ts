@@ -42,17 +42,20 @@ const DEFAULT_VINA_BIN = process.env.VINA_BIN
 const DEFAULT_OBABEL_BIN = process.env.OBABEL_BIN || 'obabel';
 
 /**
- * Default timeout for Open Babel `--gen3d` ligand prep and receptor
- * protonation. Bumped 180s → 600s (10 min) after Bug 20 (2026-05-17):
- * pod fleet observed legitimate drug-like ligands (Indinavir,
- * Imatinib, etc.) regularly exceeding 180s on `obabel ligand.smi -O
- * ligand.pdbqt --gen3d -h`. 3D conformer generation with explicit
- * hydrogens on rotatable-bond-heavy molecules can take 5-10 min on a
- * busy CPU — 600s is the measured worst-case observed in pod logs.
+ * Default total wall budget for Open Babel `--gen3d` ligand prep and
+ * receptor protonation. Bumped 180s → 600s after Bug 20 (2026-05-17).
  *
- * Override via `DOCKING_OBABEL_TIMEOUT_MS` env var when running on
- * slower hardware or with even more complex ligands. parseInt
- * tolerates trailing garbage; NaN/0 falls back to the default.
+ * Bug 20 v4 (2026-05-23) — the 600s budget itself was sound, but the
+ * SHAPE of how it was spent was the #2 root cause: a flat 50/50 split ran
+ * `--gen3d med` (the slow, brute-force tier) FIRST for the full 300s, so
+ * every doomed ligand burned ~600s before failing. v4 inverts the order
+ * (fast tier first, see `prepLigandPdbqt`) and shortens the fast tier to a
+ * tight per-tier budget so pathological ligands fail in ~90s instead of
+ * ~600s. The total budget below is unchanged; only the split changed.
+ *
+ * Override via `DOCKING_OBABEL_TIMEOUT_MS` when running on slower hardware
+ * or with even more complex ligands. parseInt tolerates trailing garbage;
+ * NaN/0 falls back to the default.
  */
 function parseObabelTimeoutEnv(): number {
   const raw = process.env.DOCKING_OBABEL_TIMEOUT_MS;
@@ -62,10 +65,183 @@ function parseObabelTimeoutEnv(): number {
 }
 const DEFAULT_OBABEL_TIMEOUT_MS = parseObabelTimeoutEnv();
 
+/**
+ * Bug 20 v4 (2026-05-23) — fast-tier per-attempt budget. The fast tier
+ * runs FIRST now; we cap it tight so pathological ligands fall through to
+ * RDKit (or fail) quickly instead of consuming half the total budget.
+ * Default 90s; clamped to never exceed half the total obabel budget.
+ * Override via `DOCKING_FAST_TIER_MS`.
+ */
+function parseFastTierEnv(): number {
+  const raw = process.env.DOCKING_FAST_TIER_MS;
+  if (!raw) return 90_000;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 90_000;
+}
+const DEFAULT_FAST_TIER_MS = parseFastTierEnv();
+
 interface RunChildOpts {
   timeoutMs: number;
   /** Diagnostic context surfaced when the timeout fires. */
   timeoutContext?: { step?: string; input?: string };
+  /**
+   * Bug 20 v4 (2026-05-23) — when true, the child is launched at reduced
+   * CPU priority (`nice -n 19`) so it yields to concurrent torch GPU
+   * training. This is the highest-impact lever against the #1 root cause
+   * (CPU contention starves obabel's single-threaded gen3d search). Only
+   * obabel/RDKit prep spawns set this; Vina itself keeps normal priority
+   * (it is the work we are paid for). Gracefully degrades to a normal
+   * spawn when `nice` is unavailable (detected once, cached).
+   */
+  nice?: boolean;
+}
+
+/**
+ * Bug 20 v4 (2026-05-23) — grace window between SIGTERM and SIGKILL when a
+ * child overruns its timeout. obabel occasionally ignores SIGTERM mid
+ * conformer search (or spawns helper subprocesses), leaving a zombie that
+ * keeps burning CPU after the "timeout" already rejected — exactly the
+ * contention we are trying to relieve. After SIGTERM we wait this long,
+ * then SIGKILL the whole process group. Override via env for slow hosts.
+ */
+function parseKillGraceEnv(): number {
+  const raw = process.env.DOCKING_KILL_GRACE_MS;
+  if (!raw) return 4_000;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 4_000;
+}
+
+/**
+ * Bug 20 v4 (2026-05-23) — cheap, parse-free SMILES complexity proxy.
+ * The #3 root cause is the occasional pathological ligand whose gen3d
+ * conformer search never converges. Counting heavy atoms (any character
+ * that is NOT a bond/branch/ring/charge/stereo token — i.e. an element
+ * letter or a bracketed atom) and rotatable-bond proxies (acyclic single
+ * `-`/implicit bonds, approximated by counting non-ring single-bond
+ * boundaries) lets us short-circuit obabel's brute-force search BEFORE
+ * burning the budget, jumping straight to RDKit ETKDGv3 which embeds
+ * large flexible molecules in seconds.
+ *
+ * Thresholds are intentionally conservative — we only want to skip
+ * obabel for genuinely large/flexible ligands, not borderline drug-like
+ * ones (Indinavir ~57 heavy atoms still embeds fine on a quiet CPU). The
+ * defaults below were picked so all of the named pod offenders
+ * (Indinavir, Imatinib, Saquinavir) sit UNDER the gate and only truly
+ * pathological inputs trip it. Override via env for tuning.
+ */
+function parseIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** Heavy-atom count above which we skip obabel gen3d (default 80). */
+const LIGAND_HEAVY_ATOM_GATE = parseIntEnv('DOCKING_MAX_HEAVY_ATOMS', 80);
+/**
+ * Rotatable-bond proxy above which we skip obabel gen3d (default 40).
+ *
+ * Calibrated conservatively: the named pod offenders all sit under it
+ * (Indinavir's acyclic-single-bond proxy ≈ 29). We only want to skip
+ * obabel for ligands materially MORE flexible than Indinavir, where the
+ * brute-force conformer search blows up combinatorially. The proxy
+ * over-counts slightly vs. RDKit's true rotatable-bond definition (it
+ * does not exclude terminal/symmetric bonds), so the gate is set above
+ * the worst legitimate offender with margin.
+ */
+const LIGAND_ROTATABLE_GATE = parseIntEnv('DOCKING_MAX_ROTATABLE_BONDS', 40);
+
+export interface SmilesComplexity {
+  heavyAtoms: number;
+  rotatableProxy: number;
+}
+
+/**
+ * Estimate ligand complexity directly from the SMILES string — no RDKit /
+ * obabel parse. Exported for unit testing the gate thresholds.
+ *
+ * - heavyAtoms: organic-subset atoms outside brackets (B,C,N,O,P,S,F,Cl,
+ *   Br,I — two-letter halogens counted once) PLUS each bracketed atom
+ *   `[...]`. Lowercase aromatic atoms (c,n,o,s,p) count too. Hydrogens are
+ *   ignored (they are the `H` we add at gen3d time, not heavy atoms).
+ * - rotatableProxy: count of acyclic single-bond separators. We count the
+ *   number of explicit/implicit single bonds between two heavy atoms that
+ *   are not inside a ring-closure pair. Cheap heuristic: every heavy-atom
+ *   boundary that is not part of a double/triple/aromatic bond and not a
+ *   ring-bond digit. Over-counts slightly, which is fine for a guard.
+ */
+export function estimateSmilesComplexity(smiles: string): SmilesComplexity {
+  let heavyAtoms = 0;
+  let rotatableProxy = 0;
+  let i = 0;
+  let prevWasHeavy = false;
+  let pendingMultiBond = false; // last token was = or # (non-rotatable)
+  const upperHalogenSecond = (c: string): boolean => c === 'l' || c === 'r';
+  while (i < smiles.length) {
+    const ch = smiles[i]!;
+    if (ch === '[') {
+      // Bracketed atom — consume to the matching ']' and count as one heavy
+      // atom unless it is an explicit hydrogen atom `[H]`.
+      const end = smiles.indexOf(']', i);
+      const inner = end === -1 ? smiles.slice(i + 1) : smiles.slice(i + 1, end);
+      const isHydrogen = /^\d*H\d*[+-]?\d*$/.test(inner.replace(/[@]/g, ''));
+      if (!isHydrogen) {
+        heavyAtoms++;
+        if (prevWasHeavy && !pendingMultiBond) rotatableProxy++;
+        prevWasHeavy = true;
+      }
+      pendingMultiBond = false;
+      i = end === -1 ? smiles.length : end + 1;
+      continue;
+    }
+    if (ch === '=' || ch === '#' || ch === ':') {
+      pendingMultiBond = true; // double/triple/aromatic bond — not rotatable
+      i++;
+      continue;
+    }
+    if (/[A-Za-z]/.test(ch)) {
+      // Organic-subset element. Two-letter halogens (Cl, Br) consume the
+      // next char. Aromatic lowercase atoms count as heavy.
+      let isHeavy = true;
+      if (ch === 'H') isHeavy = false; // free H outside brackets is rare/invalid; skip
+      if ((ch === 'C' || ch === 'B') && i + 1 < smiles.length && upperHalogenSecond(smiles[i + 1]!)) {
+        i++; // Cl / Br — one heavy atom
+      }
+      if (isHeavy) {
+        heavyAtoms++;
+        if (prevWasHeavy && !pendingMultiBond) rotatableProxy++;
+        prevWasHeavy = true;
+      }
+      pendingMultiBond = false;
+      i++;
+      continue;
+    }
+    // Ring-closure digits, branch open/close, charges, dots — these break
+    // the "previous-was-heavy" rotatable chain so we don't double-count the
+    // first atom after a branch as rotatable across the branch boundary.
+    if (ch === '(' || ch === ')' || ch === '.') {
+      prevWasHeavy = false;
+      pendingMultiBond = false;
+    }
+    i++;
+  }
+  return { heavyAtoms, rotatableProxy };
+}
+
+/**
+ * Bug 20 v4 (2026-05-23) — gate decision: should we skip obabel gen3d for
+ * this ligand and go straight to the RDKit ETKDGv3 path? Returns a reason
+ * string when the ligand exceeds either threshold, else null.
+ */
+export function shouldSkipObabelGen3d(smiles: string): string | null {
+  const { heavyAtoms, rotatableProxy } = estimateSmilesComplexity(smiles);
+  if (heavyAtoms > LIGAND_HEAVY_ATOM_GATE) {
+    return `heavy-atom count ${heavyAtoms} > ${LIGAND_HEAVY_ATOM_GATE} gate`;
+  }
+  if (rotatableProxy > LIGAND_ROTATABLE_GATE) {
+    return `rotatable-bond proxy ${rotatableProxy} > ${LIGAND_ROTATABLE_GATE} gate`;
+  }
+  return null;
 }
 
 export interface RunDockingOptions {
@@ -80,6 +256,12 @@ export interface RunDockingOptions {
    * Test-only injection point.
    */
   obabelTimeoutMs?: number;
+  /**
+   * Bug 20 v4 (2026-05-23) — fast-tier per-attempt budget override
+   * (test-only injection point). Defaults to DEFAULT_FAST_TIER_MS (90s),
+   * clamped to half the total obabel budget.
+   */
+  fastTierMs?: number;
   /** Override the working directory (default: a fresh temp dir per WO). */
   workDir?: string;
   /** Override hardware reporting (mostly for tests). */
@@ -218,6 +400,9 @@ async function prepReceptorPdbqt(pdbPath: string, opts: RunDockingOptions): Prom
   ], {
     timeoutMs,
     timeoutContext: { step: 'receptor-protonate', input: pdbPath },
+    // Bug 20 v4 — receptor protonation is also CPU-bound obabel work; nice
+    // it so it yields to concurrent torch training.
+    nice: true,
   });
   return out;
 }
@@ -227,52 +412,104 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   const ligandPdbqtPath = path.join(workDir, 'ligand.pdbqt');
   await fs.promises.writeFile(ligandSmiPath, smiles + '\n', 'utf8');
   const totalBudgetMs = opts.obabelTimeoutMs ?? DEFAULT_OBABEL_TIMEOUT_MS;
-  const perTierMs = Math.floor(totalBudgetMs / 2);
-
-  // Bug 20 v2 (2026-05-18): two-tier retry. Primary --gen3d med (best
-  // conformer quality, slowest); fallback --gen3d fast on timeout (lower
-  // quality but ~5x faster, still acceptable for Vina docking).
-  // Total wall budget unchanged from Bug 20 (600s default).
-  // Bug 20 v3 (2026-05-18): if BOTH obabel tiers time out, attempt the
-  // RDKit ETKDGv3 fallback (Python helper at scripts/docking_rdkit_fallback.py).
-  // RDKit's experimental-torsion-knowledge embedding completes in seconds
-  // for the same drug-like ligands that defeat obabel's brute-force
-  // conformer search. If RDKit is absent or fails, we rethrow the
-  // original fast-tier timeout so the WO marks failed and the per-WO
-  // failure counter increments. Total wall budget remains the same
-  // (no new minutes spent on top of the obabel tiers).
+  // Bug 20 v4 (2026-05-23) — invert + shorten the tiers. The fast tier
+  // runs FIRST with a tight budget (default 90s, never more than half the
+  // total) so a pathological ligand falls through to RDKit / failure in
+  // ~90s instead of the old ~600s. If the fast tier succeeds (the common
+  // case for drug-like ligands) we never pay for med at all. The med tier
+  // is the fallback now and gets whatever budget remains after fast — it
+  // exists only for the rare ligand where fast produces a degenerate
+  // conformer Vina then rejects (Vina exit, not a prep timeout). Total
+  // wall budget unchanged (still ≤ totalBudgetMs).
+  const fastTierMs = Math.min(
+    opts.fastTierMs ?? DEFAULT_FAST_TIER_MS,
+    Math.floor(totalBudgetMs / 2),
+  );
+  const medTierMs = Math.max(totalBudgetMs - fastTierMs, fastTierMs);
   const obabelBin = opts.obabelBin ?? DEFAULT_OBABEL_BIN;
   const spawn = opts.__runChildForTests ?? runChild;
-  logger.info(`[Docking] ligand-prep WO smiles_len=${smiles.length} tier=obabel-med timeoutMs=${perTierMs}`);
+
+  // Bug 20 v4 (2026-05-23) — complexity pre-filter (#3 root cause:
+  // pathological ligands whose gen3d never converges). Estimate heavy-atom
+  // count + rotatable-bond proxy straight from the SMILES string (no heavy
+  // parse) and, when it exceeds a conservative gate, skip obabel gen3d
+  // entirely and go straight to RDKit ETKDGv3 — which embeds large flexible
+  // molecules in seconds. Saves the full obabel budget for the inputs most
+  // likely to defeat it. If RDKit is unavailable here we fail fast with a
+  // clear reason rather than burning the obabel budget on a known-doomed run.
+  const skipReason = shouldSkipObabelGen3d(smiles);
+  if (skipReason) {
+    logger.warn(
+      `[Docking] complexity pre-filter: skipping obabel gen3d (${skipReason}) — using RDKit ETKDGv3 directly`,
+    );
+    const rdkitOk = await tryRdkitFallback({
+      smiles,
+      workDir,
+      ligandPdbqtPath,
+      obabelBin,
+      spawn,
+      rdkitTimeoutMs: opts.rdkitTimeoutMs ?? 60_000,
+      rdkitScriptPath: opts.rdkitScriptPath,
+      pythonBin: opts.pythonBin,
+      formatConvertTimeoutMs: 10_000,
+    });
+    if (rdkitOk) {
+      logger.info(`[Docking] RDKit ETKDGv3 (pre-filter path) succeeded for WO smiles_len=${smiles.length}`);
+      return ligandPdbqtPath;
+    }
+    // RDKit absent/failed and obabel was deemed too risky to attempt — fail
+    // fast with a clear, timeout-shaped reason so the downstream per-WO
+    // failure counter (submit-result.ts) treats it like the other gen3d
+    // timeouts and the WO is released + skipped on subsequent polls.
+    throw new DockingError(
+      `Process timed out (pre-filter): ligand too complex for obabel gen3d (${skipReason}) and RDKit fallback unavailable`,
+      'ligand',
+    );
+  }
+
+  // Bug 20 v2 (2026-05-18): two-tier retry. Bug 20 v4 (2026-05-23): order
+  // inverted to fast-first. Primary --gen3d fast (lower conformer quality
+  // but ~5x faster, acceptable for Vina docking) with the short budget.
+  // Fallback --gen3d med (best quality) on timeout with the remaining
+  // budget. If BOTH obabel tiers time out, attempt the RDKit ETKDGv3
+  // fallback. RDKit's experimental-torsion-knowledge embedding completes
+  // in seconds for the same drug-like ligands that defeat obabel's
+  // brute-force conformer search. If RDKit is absent or fails, we rethrow
+  // the original timeout so the WO marks failed and the per-WO failure
+  // counter increments.
+  logger.info(`[Docking] ligand-prep WO smiles_len=${smiles.length} tier=obabel-fast timeoutMs=${fastTierMs}`);
   try {
     await spawn(obabelBin, [
-      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'med', '-h',
+      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
     ], {
-      timeoutMs: perTierMs,
-      timeoutContext: { step: 'ligand-gen3d-med', input: smiles },
+      timeoutMs: fastTierMs,
+      timeoutContext: { step: 'ligand-gen3d-fast', input: smiles },
+      nice: true,
     });
     return ligandPdbqtPath;
   } catch (err) {
     const isTimeout = err instanceof Error && /timed out/i.test(err.message);
     if (!isTimeout) throw err;
-    // Med tier timed out — fall back to fast. Remove any partial output
-    // file from the failed first attempt before retry.
-    logger.warn(`[Docking] obabel --gen3d med timed out after ${perTierMs}ms — retrying with fast tier`);
+    // Fast tier timed out — fall back to med (better search heuristics may
+    // converge where fast did not). Remove any partial output file from
+    // the failed first attempt before retry.
+    logger.warn(`[Docking] obabel --gen3d fast timed out after ${fastTierMs}ms — retrying with med tier`);
     await fs.promises.rm(ligandPdbqtPath, { force: true });
   }
   try {
     await spawn(obabelBin, [
-      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
+      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'med', '-h',
     ], {
-      timeoutMs: perTierMs,
-      timeoutContext: { step: 'ligand-gen3d-fast-retry', input: smiles },
+      timeoutMs: medTierMs,
+      timeoutContext: { step: 'ligand-gen3d-med-retry', input: smiles },
+      nice: true,
     });
     return ligandPdbqtPath;
   } catch (err) {
     const isTimeout = err instanceof Error && /timed out/i.test(err.message);
     if (!isTimeout) throw err;
     // Both obabel tiers timed out — attempt RDKit tier-3 fallback.
-    logger.warn(`[Docking] obabel --gen3d fast timed out after ${perTierMs}ms — attempting RDKit tier-3 fallback`);
+    logger.warn(`[Docking] obabel --gen3d med timed out after ${medTierMs}ms — attempting RDKit tier-3 fallback`);
     await fs.promises.rm(ligandPdbqtPath, { force: true });
     const rdkitOk = await tryRdkitFallback({
       smiles,
@@ -289,7 +526,7 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
       logger.info(`[Docking] RDKit tier-3 fallback succeeded for WO smiles_len=${smiles.length}`);
       return ligandPdbqtPath;
     }
-    // RDKit unavailable or failed — rethrow the fast-tier timeout so the
+    // RDKit unavailable or failed — rethrow the med-tier timeout so the
     // WO is marked failed. Per-WO failure counter increments downstream;
     // after the cap, the WO is locally skipped (Bug 20 v3).
     logger.warn('[Docking] RDKit tier-3 fallback unavailable or failed — propagating obabel timeout');
@@ -341,6 +578,9 @@ async function tryRdkitFallback(args: {
       {
         timeoutMs: args.rdkitTimeoutMs,
         timeoutContext: { step: 'ligand-rdkit-etkdg', input: args.smiles },
+        // Bug 20 v4 — RDKit embedding is CPU-bound; nice it so it yields to
+        // concurrent torch training (the #1 contention root cause).
+        nice: true,
       },
     );
     if (stderr && stderr.trim()) {
@@ -360,6 +600,7 @@ async function tryRdkitFallback(args: {
       {
         timeoutMs: args.formatConvertTimeoutMs,
         timeoutContext: { step: 'ligand-pdb-to-pdbqt', input: pdbOut },
+        nice: true,
       },
     );
   } catch (err) {
@@ -572,15 +813,102 @@ export function buildObabelTimeoutMessage(args: {
   return lines.join('\n');
 }
 
+/**
+ * Bug 20 v4 (2026-05-23) — `nice` availability probe. Cached after first
+ * resolution. We only ever wrap with `nice` on POSIX (Linux pods + macOS
+ * dev). On Windows or if `nice` is somehow absent, the wrapper is dropped
+ * and the child spawns at normal priority — the rest of the timeout/kill
+ * machinery is unaffected, so this degrades gracefully (no hard dep on a
+ * system binary). `existsSync` on the common paths is enough; we never
+ * shell out to detect it.
+ */
+let niceBinCache: string | null | undefined;
+function resolveNiceBin(): string | null {
+  if (niceBinCache !== undefined) return niceBinCache;
+  if (process.platform === 'win32') {
+    niceBinCache = null;
+    return null;
+  }
+  const override = process.env.DOCKING_NICE_BIN;
+  if (override) {
+    niceBinCache = existsSync(override) ? override : null;
+    return niceBinCache;
+  }
+  niceBinCache = ['/usr/bin/nice', '/bin/nice'].find(existsSync) ?? null;
+  return niceBinCache;
+}
+
+/** Test-only: reset the cached `nice` probe between specs. */
+export function __resetNiceCacheForTests(): void {
+  niceBinCache = undefined;
+}
+
+/**
+ * Test-only: exposes the real `runChild` so the SIGTERM→SIGKILL escalation
+ * and process-group reap can be exercised against a real (stubborn) child
+ * without spawning obabel. Production code uses the module-private function.
+ */
+export function __runChildForTests(
+  bin: string,
+  args: string[],
+  opts: RunChildOpts,
+): Promise<{ stdout: string; stderr: string }> {
+  return runChild(bin, args, opts);
+}
+
 function runChild(bin: string, args: string[], opts: RunChildOpts): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Bug 20 v4 — reduce CPU priority for prep spawns so they yield to
+    // concurrent torch GPU training (the #1 contention root cause). Wrap
+    // `<bin> <args>` as `nice -n 19 <bin> <args>` when requested AND `nice`
+    // is available; otherwise spawn directly. Vina invocations never set
+    // `opts.nice` — that is the work we are paid for and runs at normal
+    // priority.
+    const niceBin = opts.nice ? resolveNiceBin() : null;
+    const spawnBin = niceBin ?? bin;
+    const spawnArgs = niceBin ? ['-n', '19', bin, ...args] : args;
+    // `detached: true` puts the child in its own process group so we can
+    // signal the WHOLE group on timeout — obabel/RDKit may fork helper
+    // subprocesses, and a bare `proc.kill` would orphan them as
+    // CPU-burning zombies, defeating the timeout. We do NOT `unref()`:
+    // the parent must stay attached to reap it.
+    const proc = spawn(spawnBin, spawnArgs, { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let stdout = '';
     let stderr = '';
+    let killGraceTimer: NodeJS.Timeout | undefined;
+    let settled = false;
     proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    // Signal the child's whole process group when possible (negative PID =
+    // process group, requires `detached`). Falls back to signalling just
+    // the child if the group send fails (e.g. group already gone).
+    const signalGroup = (signal: NodeJS.Signals): void => {
+      const pid = proc.pid;
+      if (pid === undefined) return;
+      try {
+        process.kill(-pid, signal);
+      } catch {
+        try { proc.kill(signal); } catch { /* already dead */ }
+      }
+    };
+
     const timer = setTimeout(() => {
-      try { proc.kill('SIGTERM'); } catch { /* noop */ }
+      // SIGTERM first (graceful), then escalate to SIGKILL after a short
+      // grace if the child is still alive — obabel can ignore SIGTERM mid
+      // conformer search and leave a zombie eating CPU after the "timeout".
+      // Re-read the grace env at fire-time so tests can shorten it without
+      // re-loading the module.
+      const killGraceMs = parseKillGraceEnv();
+      signalGroup('SIGTERM');
+      killGraceTimer = setTimeout(() => {
+        if (!settled) {
+          logger.warn(`[Docking] child ${bin} ignored SIGTERM after ${killGraceMs}ms — sending SIGKILL`);
+          signalGroup('SIGKILL');
+        }
+      }, killGraceMs);
+      // Allow the process to exit even if this grace timer is pending.
+      killGraceTimer.unref?.();
       reject(new Error(buildObabelTimeoutMessage({
         bin,
         cliArgs: args,
@@ -589,9 +917,17 @@ function runChild(bin: string, args: string[], opts: RunChildOpts): Promise<{ st
         input: opts.timeoutContext?.input,
       })));
     }, opts.timeoutMs);
-    proc.on('error', err => { clearTimeout(timer); reject(err); });
-    proc.on('close', code => {
+
+    proc.on('error', err => {
+      settled = true;
       clearTimeout(timer);
+      if (killGraceTimer) clearTimeout(killGraceTimer);
+      reject(err);
+    });
+    proc.on('close', code => {
+      settled = true;
+      clearTimeout(timer);
+      if (killGraceTimer) clearTimeout(killGraceTimer);
       if (code === 0) resolve({ stdout, stderr });
       else reject(new Error(`${bin} exited with code ${code}: ${stderr.slice(0, 500)}`));
     });

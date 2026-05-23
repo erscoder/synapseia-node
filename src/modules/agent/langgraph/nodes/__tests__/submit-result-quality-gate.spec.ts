@@ -150,7 +150,7 @@ describe('SubmitResultNode — Bug 31 local quality gate', () => {
       selectedWorkOrder: dockingWO,
       executionResult: {
         success: false,
-        result: 'Docking failed [ligand] Process timed out after 300000ms: obabel ... --gen3d med',
+        result: 'Docking failed [ligand] Process timed out after 90000ms: obabel ... --gen3d fast',
       },
     };
     const out = await node.execute(state);
@@ -158,7 +158,11 @@ describe('SubmitResultNode — Bug 31 local quality gate', () => {
       dockingWO.id,
       'obabel-gen3d-timeout',
     );
-    expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+    // Bug 20 v4 (2026-05-23): the failure is now REPORTED to the coordinator
+    // (success=false) so the WO is released promptly instead of waiting for
+    // the ACCEPTED-TTL reaper (P21/P22). Previously this asserted no POST.
+    expect(coordinator.completeWorkOrder).toHaveBeenCalledTimes(1);
+    expect(coordinator.completeWorkOrder.mock.calls[0][5]).toBe(false);
     expect(out.submitted).toBe(false);
   });
 
