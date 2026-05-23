@@ -4,9 +4,18 @@ import {
   attemptSelfUpdate,
   restartProcess,
   respawnDetached,
+  verifyInstalledPackage,
+  resolveSelfUpdateTimeoutMs,
 } from '../utils/self-updater';
 import { execSync, spawn } from 'child_process';
-import { existsSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  renameSync,
+  rmSync,
+} from 'fs';
 
 jest.mock('child_process');
 jest.mock('fs');
@@ -18,8 +27,14 @@ jest.mock('../utils/logger', () => ({
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
 const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
+const mockReadFileSync = readFileSync as jest.MockedFunction<typeof readFileSync>;
+const mockReaddirSync = readdirSync as jest.MockedFunction<typeof readdirSync>;
+const mockStatSync = statSync as jest.MockedFunction<typeof statSync>;
+const mockRenameSync = renameSync as jest.MockedFunction<typeof renameSync>;
+const mockRmSync = rmSync as jest.MockedFunction<typeof rmSync>;
 
 const TARGET_VERSION = '0.8.106';
+const PKG_NAME = '@synapseia-network/node';
 
 describe('detectInstallType', () => {
   beforeEach(() => {
@@ -49,17 +64,308 @@ describe('detectInstallType', () => {
   });
 });
 
+describe('resolveSelfUpdateTimeoutMs', () => {
+  it('defaults to 600_000 (10 min) when env var is unset', () => {
+    expect(resolveSelfUpdateTimeoutMs({})).toBe(600_000);
+  });
+
+  it('honours a positive integer SYN_SELFUPDATE_TIMEOUT_MS override', () => {
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: '900000' })).toBe(900_000);
+  });
+
+  it('ignores a non-numeric / non-positive / non-integer override', () => {
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: 'abc' })).toBe(600_000);
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: '0' })).toBe(600_000);
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: '-5' })).toBe(600_000);
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: '1.5' })).toBe(600_000);
+    expect(resolveSelfUpdateTimeoutMs({ SYN_SELFUPDATE_TIMEOUT_MS: '' })).toBe(600_000);
+  });
+
+  it('never uses the 120s value that caused the prod corruption loop', () => {
+    expect(resolveSelfUpdateTimeoutMs({})).toBeGreaterThan(120_000);
+  });
+});
+
+describe('verifyInstalledPackage', () => {
+  const PKG_DIR = '/prefix/lib/node_modules/@synapseia-network/node';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * Wire fs so a COMPLETE, correct-version install verifies clean. Callers
+   * pass overrides to simulate the various corruption modes.
+   */
+  function wireComplete(opts: {
+    pkgJsonExists?: boolean;
+    pkgJson?: string | null; // null → readFileSync throws
+    bootstrapExists?: boolean;
+    distScriptsEntries?: string[] | null; // null → statSync throws
+    scriptsEntries?: string[] | null;
+  } = {}) {
+    const {
+      pkgJsonExists = true,
+      pkgJson = JSON.stringify({ name: PKG_NAME, version: TARGET_VERSION }),
+      bootstrapExists = true,
+      distScriptsEntries = ['build.js'],
+      scriptsEntries = ['provision.sh'],
+    } = opts;
+
+    mockExistsSync.mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('package.json')) return pkgJsonExists;
+      if (s.endsWith('dist/bootstrap.js')) return bootstrapExists;
+      return false;
+    });
+    mockReadFileSync.mockImplementation((p: any) => {
+      if (String(p).endsWith('package.json')) {
+        if (pkgJson === null) throw new Error('EIO read failure');
+        return pkgJson as any;
+      }
+      return '' as any;
+    });
+    const dirFor = (entries: string[] | null) => {
+      if (entries === null) throw new Error('ENOENT');
+      return { isDirectory: () => true } as any;
+    };
+    mockStatSync.mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('dist/scripts')) return dirFor(distScriptsEntries);
+      if (s.endsWith(`node/scripts`)) return dirFor(scriptsEntries);
+      throw new Error('ENOENT');
+    });
+    mockReaddirSync.mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('dist/scripts')) return (distScriptsEntries ?? []) as any;
+      if (s.endsWith(`node/scripts`)) return (scriptsEntries ?? []) as any;
+      return [] as any;
+    });
+  }
+
+  it('ok:true for a complete, correct-version install', () => {
+    wireComplete();
+    expect(verifyInstalledPackage(PKG_DIR, TARGET_VERSION)).toEqual({ ok: true });
+  });
+
+  it('ok:false when package.json is missing', () => {
+    wireComplete({ pkgJsonExists: false });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/package\.json missing/i);
+  });
+
+  it('ok:false when package.json is unparseable', () => {
+    wireComplete({ pkgJson: '{ broken json' });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/unparseable/i);
+  });
+
+  it('ok:false on wrong version (partial / stale install)', () => {
+    wireComplete({ pkgJson: JSON.stringify({ name: PKG_NAME, version: '0.0.1' }) });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/version mismatch/i);
+  });
+
+  it('ok:false on unexpected package name', () => {
+    wireComplete({ pkgJson: JSON.stringify({ name: 'evil', version: TARGET_VERSION }) });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/unexpected package name/i);
+  });
+
+  it('ok:false when dist/bootstrap.js is missing (truncated dist/)', () => {
+    wireComplete({ bootstrapExists: false });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/dist\/bootstrap\.js missing/i);
+  });
+
+  it('ok:false when BOTH scripts dirs are empty', () => {
+    wireComplete({ distScriptsEntries: [], scriptsEntries: [] });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/scripts directory missing or empty/i);
+  });
+
+  it('ok:true when only ONE scripts dir is present + non-empty', () => {
+    wireComplete({ distScriptsEntries: null, scriptsEntries: ['x.sh'] });
+    expect(verifyInstalledPackage(PKG_DIR, TARGET_VERSION)).toEqual({ ok: true });
+  });
+
+  it('ok:false (never throws) when readFileSync blows up', () => {
+    wireComplete({ pkgJson: null });
+    const r = verifyInstalledPackage(PKG_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe('attemptSelfUpdate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: no coord URL is ever fetched on the install path. Wire a
-    // fetch spy so any accidental network call is observable + asserted off.
     // @ts-expect-error global fetch spy
     global.fetch = jest.fn();
+    // Default fs wiring for the swap helpers (no-ops). Individual tests
+    // override existsSync to drive detection + verification.
+    mockRenameSync.mockImplementation(() => undefined);
+    mockRmSync.mockImplementation(() => undefined);
   });
 
-  /** Make detectInstallType resolve to NPM_GLOBAL and capture exec argv. */
-  function wireNpmGlobal(): string[] {
+  /**
+   * Wire detectInstallType → NPM_GLOBAL, npm install → success, and a
+   * COMPLETE staged tree so verifyInstalledPackage passes. Captures exec argv
+   * and the options each install was invoked with.
+   */
+  function wireHappyPath(): { calls: string[]; opts: any[] } {
+    const calls: string[] = [];
+    const opts: any[] = [];
+    mockExecSync.mockImplementation((cmd: any, o?: any) => {
+      const s = String(cmd);
+      calls.push(s);
+      if (o) opts.push(o);
+      if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
+      return '';
+    });
+    // existsSync: true for the detect probe (package.json) AND the staged
+    // dist/bootstrap.js. False for live .bak/liveDir so swap treats it as a
+    // fresh install.
+    mockExistsSync.mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('@synapseia-network/node/package.json')) return true;
+      if (s.endsWith('dist/bootstrap.js')) return true;
+      return false;
+    });
+    mockReadFileSync.mockImplementation((p: any) => {
+      if (String(p).endsWith('package.json')) {
+        return JSON.stringify({ name: PKG_NAME, version: TARGET_VERSION }) as any;
+      }
+      return '' as any;
+    });
+    mockStatSync.mockImplementation((p: any) => {
+      if (String(p).endsWith('dist/scripts')) return { isDirectory: () => true } as any;
+      throw new Error('ENOENT');
+    });
+    mockReaddirSync.mockImplementation((p: any) => {
+      if (String(p).endsWith('dist/scripts')) return ['build.js'] as any;
+      return [] as any;
+    });
+    return { calls, opts };
+  }
+
+  it('stages → verifies → swaps; installs PINNED version with --ignore-scripts into a STAGING prefix', async () => {
+    const { calls, opts } = wireHappyPath();
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+
+    expect(result.success).toBe(true);
+    expect(result.installType).toBe(InstallType.NPM_GLOBAL);
+    expect(result.message).toMatch(/atomic swap/i);
+
+    const installCmd = calls.find((c) => c.startsWith('npm install -g'));
+    expect(installCmd).toBeDefined();
+    expect(installCmd).toContain(`@synapseia-network/node@'${TARGET_VERSION}'`);
+    expect(installCmd).toMatch(/--ignore-scripts/);
+    expect(installCmd).not.toMatch(/@latest/);
+    expect(calls.some((c) => c.startsWith('npm pack'))).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    // The install must target a STAGING prefix, not the live one, and use the
+    // raised default timeout (10 min) — never the 120s prod-failure value.
+    const installOpts = opts.find((o) => o?.env?.NPM_CONFIG_PREFIX?.includes('.syn-update-staging-'));
+    expect(installOpts).toBeDefined();
+    expect(installOpts.timeout).toBe(600_000);
+
+    // A successful swap renames the staged package into the live tree.
+    expect(mockRenameSync).toHaveBeenCalled();
+  });
+
+  it('honours SYN_SELFUPDATE_TIMEOUT_MS for the install timeout', async () => {
+    const { opts } = wireHappyPath();
+    process.env.SYN_SELFUPDATE_TIMEOUT_MS = '720000';
+    try {
+      await attemptSelfUpdate(TARGET_VERSION);
+    } finally {
+      delete process.env.SYN_SELFUPDATE_TIMEOUT_MS;
+    }
+    const installOpts = opts.find((o) => o?.env?.NPM_CONFIG_PREFIX?.includes('.syn-update-staging-'));
+    expect(installOpts.timeout).toBe(720_000);
+  });
+
+  it('FAILED verification → live install untouched (no rename swap), staging purged', async () => {
+    const calls: string[] = [];
+    mockExecSync.mockImplementation((cmd: any) => {
+      const s = String(cmd);
+      calls.push(s);
+      if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
+      return '';
+    });
+    // Detect passes, but the STAGED package.json reports the WRONG version →
+    // integrity fails, so the swap must NEVER run.
+    mockExistsSync.mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('@synapseia-network/node/package.json')) return true;
+      if (s.endsWith('dist/bootstrap.js')) return true;
+      return false;
+    });
+    mockReadFileSync.mockImplementation(
+      () => JSON.stringify({ name: PKG_NAME, version: '0.0.1-wrong' }) as any,
+    );
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/integrity check/i);
+    // HARD GUARANTEE: a failed verify never swaps the live package.
+    expect(mockRenameSync).not.toHaveBeenCalled();
+    // Staging must be cleaned up.
+    expect(mockRmSync).toHaveBeenCalled();
+  });
+
+  it('install timeout/throw → fail-closed, staging purged, no swap, no throw', async () => {
+    mockExistsSync.mockImplementation((p: any) =>
+      String(p).includes('@synapseia-network/node/package.json'),
+    );
+    mockExecSync.mockImplementation((cmd: any) => {
+      const s = String(cmd);
+      if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
+      if (s.startsWith('npm install -g')) {
+        const e = new Error('ETIMEDOUT') as any;
+        e.code = 'ETIMEDOUT';
+        throw e;
+      }
+      return '';
+    });
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+    expect(result.success).toBe(false);
+    expect(result.installType).toBe(InstallType.NPM_GLOBAL);
+    expect(result.message).toMatch(/failed/i);
+    // No swap on a failed install → live binary intact.
+    expect(mockRenameSync).not.toHaveBeenCalled();
+    // Staging dir cleaned up in the catch.
+    expect(mockRmSync).toHaveBeenCalled();
+  });
+
+  it('preserves the EACCES operator hint on a permission error', async () => {
+    mockExistsSync.mockImplementation((p: any) =>
+      String(p).includes('@synapseia-network/node/package.json'),
+    );
+    mockExecSync.mockImplementation((cmd: any) => {
+      const s = String(cmd);
+      if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
+      if (s.startsWith('npm install -g')) throw new Error('EACCES: permission denied');
+      return '';
+    });
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/permission error/i);
+    expect(result.message).toMatch(/sudo npm install/i);
+  });
+
+  it('refuses install when target version is not valid semver (no install spawned)', async () => {
     const calls: string[] = [];
     mockExecSync.mockImplementation((cmd: any) => {
       const s = String(cmd);
@@ -70,31 +376,6 @@ describe('attemptSelfUpdate', () => {
     mockExistsSync.mockImplementation((p: any) =>
       String(p).includes('@synapseia-network/node/package.json'),
     );
-    return calls;
-  }
-
-  it('installs the PINNED npm version with --ignore-scripts and fetches NO coord URL', async () => {
-    const calls = wireNpmGlobal();
-
-    const result = await attemptSelfUpdate(TARGET_VERSION);
-
-    expect(result.success).toBe(true);
-    expect(result.installType).toBe(InstallType.NPM_GLOBAL);
-
-    // Exact install argv: pinned version + --ignore-scripts, never @latest.
-    const installCmd = calls.find((c) => c.startsWith('npm install -g'));
-    expect(installCmd).toBeDefined();
-    expect(installCmd).toContain(`@synapseia-network/node@'${TARGET_VERSION}'`);
-    expect(installCmd).toMatch(/--ignore-scripts/);
-    expect(installCmd).not.toMatch(/@latest/);
-    // No tarball / npm pack step anymore — install is direct from the registry.
-    expect(calls.some((c) => c.startsWith('npm pack'))).toBe(false);
-    // The signed-manifest coord round-trip is gone: nothing is fetched.
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  it('refuses install when target version is not valid semver (no install spawned)', async () => {
-    const calls = wireNpmGlobal();
 
     const result = await attemptSelfUpdate('not-a-version');
 
@@ -102,23 +383,6 @@ describe('attemptSelfUpdate', () => {
     expect(result.installType).toBe(InstallType.NPM_GLOBAL);
     expect(result.message).toMatch(/not valid semver/i);
     expect(calls.some((c) => c.startsWith('npm install -g'))).toBe(false);
-  });
-
-  it('install spawn failure → fail-closed, no throw', async () => {
-    mockExistsSync.mockImplementation((p: any) =>
-      String(p).includes('@synapseia-network/node/package.json'),
-    );
-    mockExecSync.mockImplementation((cmd: any) => {
-      const s = String(cmd);
-      if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
-      if (s.startsWith('npm install -g')) throw new Error('ENOSPC: no space left');
-      return '';
-    });
-
-    const result = await attemptSelfUpdate(TARGET_VERSION);
-    expect(result.success).toBe(false);
-    expect(result.installType).toBe(InstallType.NPM_GLOBAL);
-    expect(result.message).toMatch(/failed/i);
   });
 
   it('fails gracefully for GIT_CLONE (no install spawned)', async () => {

@@ -1,7 +1,17 @@
 import { execSync, spawn } from 'child_process';
-import { existsSync, mkdirSync, readFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+} from 'fs';
 import { homedir } from 'os';
-import { join, dirname } from 'path';
+import { join, dirname, relative } from 'path';
 import { valid } from 'semver';
 import logger from './logger';
 
@@ -105,6 +115,182 @@ function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+/** The published package name. Single constant so the path-building below and
+ *  the integrity check can never drift apart. */
+const PACKAGE_NAME = '@synapseia-network/node';
+
+/** Default install timeout (10 min). 120s was the proven pod failure point —
+ *  the full dependency tree on a slow registry/disk takes 6-10+ minutes, so
+ *  a 120s SIGTERM kills npm mid-install (ETIMEDOUT) and, with the old in-place
+ *  `npm install -g`, left the live global package corrupt. Overridable via
+ *  `SYN_SELFUPDATE_TIMEOUT_MS` for operators on especially slow hosts. */
+const DEFAULT_SELFUPDATE_TIMEOUT_MS = 600_000;
+
+/** Resolve the install timeout. Honours `SYN_SELFUPDATE_TIMEOUT_MS` when it is
+ *  a positive integer; otherwise falls back to the 10-minute default. Exported
+ *  pure helper so the env-override logic is unit-testable without spawning npm. */
+export function resolveSelfUpdateTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env.SYN_SELFUPDATE_TIMEOUT_MS;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && Number.isInteger(n) && n > 0) {
+      return n;
+    }
+  }
+  return DEFAULT_SELFUPDATE_TIMEOUT_MS;
+}
+
+export interface IntegrityResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Integrity self-check for a candidate `@synapseia-network/node` install.
+ *
+ * `packageDir` is the directory that should contain the package's
+ * `package.json` (i.e. `<prefix>/lib/node_modules/@synapseia-network/node`).
+ * The install is considered complete + correct iff ALL hold:
+ *   1. `package.json` exists and parses;
+ *   2. its `name` is `@synapseia-network/node`;
+ *   3. its `version` strictly equals `expectedVersion`;
+ *   4. the bin entry-point `dist/bootstrap.js` exists (what `bin/syn` links to);
+ *   5. at least one of `dist/scripts/` or `scripts/` exists and is NON-EMPTY
+ *      (a half-extracted tree typically loses these directories first).
+ *
+ * Pure-ish (filesystem reads only, no spawning, no mutation) so it can be
+ * unit-tested by mocking `fs`. Never throws — any unexpected error is
+ * captured and reported as `ok:false` so callers stay fail-closed.
+ */
+export function verifyInstalledPackage(
+  packageDir: string,
+  expectedVersion: string,
+): IntegrityResult {
+  try {
+    const pkgJsonPath = join(packageDir, 'package.json');
+    if (!existsSync(pkgJsonPath)) {
+      return { ok: false, reason: 'package.json missing' };
+    }
+
+    let parsed: { name?: unknown; version?: unknown };
+    try {
+      parsed = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as typeof parsed;
+    } catch {
+      return { ok: false, reason: 'package.json unparseable' };
+    }
+
+    if (parsed.name !== PACKAGE_NAME) {
+      return { ok: false, reason: `unexpected package name "${String(parsed.name)}"` };
+    }
+    if (typeof parsed.version !== 'string' || parsed.version !== expectedVersion) {
+      return {
+        ok: false,
+        reason: `version mismatch: found "${String(parsed.version)}" expected "${expectedVersion}"`,
+      };
+    }
+
+    // Entry-point the bin symlink resolves to. A truncated install loses dist/.
+    if (!existsSync(join(packageDir, 'dist', 'bootstrap.js'))) {
+      return { ok: false, reason: 'dist/bootstrap.js missing' };
+    }
+
+    // At least one scripts dir must exist AND be non-empty.
+    const scriptDirsNonEmpty = ['dist/scripts', 'scripts'].some((rel) => {
+      const dir = join(packageDir, rel);
+      try {
+        return statSync(dir).isDirectory() && readdirSync(dir).length > 0;
+      } catch {
+        return false;
+      }
+    });
+    if (!scriptDirsNonEmpty) {
+      return { ok: false, reason: 'scripts directory missing or empty' };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: `integrity check error: ${(err as Error).message}` };
+  }
+}
+
+/**
+ * Atomic swap of a freshly-staged, integrity-verified package into the live
+ * prefix. Both `liveModulesDir` and `stagedPackageDir` are assumed on the SAME
+ * filesystem (the staging dir is a sibling under the same prefix root), so
+ * `renameSync` is atomic — there is NO window in which the live package is
+ * partially present.
+ *
+ * Sequence:
+ *   1. rename live `@synapseia-network/node` → `@synapseia-network/node.bak`
+ *      (instant; if absent, fresh install — skip).
+ *   2. rename staged tree → live location (instant).
+ *   3. on success: rm `.bak` recursively.
+ *   4. on ANY failure after step 1: rename `.bak` back to restore the live
+ *      install exactly as it was, then rethrow — the live tree is untouched.
+ *
+ * The live `@synapseia-network/` scope dir is created if missing (npm always
+ * creates it, but staging-only prefixes may not have the live one yet).
+ */
+function atomicSwapPackage(liveModulesDir: string, stagedPackageDir: string): void {
+  const scopeDir = join(liveModulesDir, '@synapseia-network');
+  const liveDir = join(scopeDir, 'node');
+  const bakDir = join(scopeDir, 'node.bak');
+
+  mkdirSync(scopeDir, { recursive: true });
+
+  // Clean a stale .bak from a previously-interrupted swap (best effort).
+  if (existsSync(bakDir)) {
+    try { rmSync(bakDir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+
+  const hadLive = existsSync(liveDir);
+  if (hadLive) {
+    renameSync(liveDir, bakDir); // step 1 — instant, atomic on same FS
+  }
+  try {
+    renameSync(stagedPackageDir, liveDir); // step 2 — instant, atomic on same FS
+  } catch (err) {
+    // step 4 — restore the previous live install, leave it exactly as before.
+    if (hadLive && !existsSync(liveDir) && existsSync(bakDir)) {
+      try { renameSync(bakDir, liveDir); } catch { /* keep .bak for manual recovery */ }
+    }
+    throw err;
+  }
+  // step 3 — drop the old version now that the new one is in place.
+  if (hadLive) {
+    try { rmSync(bakDir, { recursive: true, force: true }); } catch { /* harmless leftover */ }
+  }
+}
+
+/**
+ * Re-point the `<prefix>/bin/syn` and `<prefix>/bin/synapseia` symlinks at the
+ * just-swapped package's `dist/bootstrap.js`. npm normally manages these, but
+ * because we move the package dir behind npm's back the existing links still
+ * resolve to the right inode (same path), so this is defensive: it only
+ * rewrites a link when it is missing or dangling. Best-effort — a failure here
+ * does NOT corrupt the install (the package itself is already swapped in), so
+ * we log and continue rather than rolling back a valid update.
+ */
+function ensureBinSymlinks(prefix: string, liveModulesDir: string): void {
+  const target = join(liveModulesDir, '@synapseia-network', 'node', 'dist', 'bootstrap.js');
+  const binDir = join(prefix, 'bin');
+  for (const name of ['syn', 'synapseia']) {
+    const link = join(binDir, name);
+    try {
+      // existsSync follows symlinks → false for a dangling link.
+      if (existsSync(link)) continue;
+      mkdirSync(binDir, { recursive: true });
+      try { unlinkSync(link); } catch { /* not present / not a link */ }
+      // Relative link keeps the install relocatable.
+      symlinkSync(relative(binDir, target), link);
+    } catch (err) {
+      logger.warn(`[SelfUpdate] could not refresh bin symlink ${name}: ${(err as Error).message}`);
+    }
+  }
+}
+
 /**
  * Attempt to self-update the node CLI.
  *
@@ -124,6 +310,24 @@ function shellQuote(s: string): string {
  * `@latest`), so the install is reproducible and cannot be moved out from
  * under us by a registry change between the check and the install.
  *
+ * ATOMIC, NON-DESTRUCTIVE install (the 0.8.116 fix). The pod's slow npm took
+ * 6-10+ min to fetch the full tree, so the old 120s timeout SIGTERM-killed
+ * `npm install -g` mid-write — and because that command mutates the live
+ * global package in place, a killed install left it PARTIAL (no dist/, no
+ * package.json) and the node could not even boot on restart, looping every
+ * 30 min and re-corrupting. The fix:
+ *   1. Raise the timeout to 10 min (env-overridable, see resolveSelfUpdateTimeoutMs).
+ *   2. Install into a SEPARATE staging prefix (sibling of the live prefix,
+ *      same filesystem) so npm builds a COMPLETE tree there without ever
+ *      touching the live package.
+ *   3. Verify the staged tree (verifyInstalledPackage): package.json present,
+ *      version === target, dist/bootstrap.js present, scripts/ non-empty.
+ *   4. Only on a passing verify, atomically `rename()` the staged package over
+ *      the live one (old → .bak → swap → drop .bak; restore .bak on failure).
+ * If the install times out / fails / fails verification, staging is cleaned
+ * up and the LIVE install is left byte-for-byte untouched. There is no window
+ * in which the live package is partial.
+ *
  * Fail-closed: any failure returns `{success:false}` and the caller keeps
  * the node on its current version. Only NPM_GLOBAL installs self-update;
  * git-clone and binary installs still require manual intervention.
@@ -141,6 +345,9 @@ export async function attemptSelfUpdate(targetVersion: string): Promise<SelfUpda
         };
       }
 
+      // Staging dir we must clean up on every exit path. Declared here so the
+      // catch block can also remove it if npm threw mid-install.
+      let stagingPrefix: string | null = null;
       try {
         logger.log(
           `[SelfUpdate] Installing @synapseia-network/node@${targetVersion} from npm with --ignore-scripts...`,
@@ -159,27 +366,77 @@ export async function attemptSelfUpdate(targetVersion: string): Promise<SelfUpda
         mkdirSync(targetPrefix, { recursive: true });
         logger.log(`[SelfUpdate] target prefix: ${targetPrefix}`);
 
+        // Staging prefix: a sibling under the SAME prefix root so it is on the
+        // same filesystem as the live `lib/node_modules`, which guarantees the
+        // final swap `rename()` is atomic (cross-FS rename would EXDEV).
+        stagingPrefix = join(targetPrefix, `.syn-update-staging-${process.pid}`);
+        // Always start from a clean staging dir (drop any leftover from a
+        // previously-interrupted attempt).
+        try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* none yet */ }
+        mkdirSync(stagingPrefix, { recursive: true });
+
+        const timeoutMs = resolveSelfUpdateTimeoutMs();
         // PINNED version (never floating `@latest`): the target was resolved
         // from npm dist-tags upstream; pinning makes the install reproducible
         // and immune to a registry change between the check and the install.
+        //
+        // NPM_CONFIG_PREFIX points at the STAGING prefix, so npm builds the
+        // complete tree under <staging>/lib/node_modules WITHOUT touching the
+        // live install. A timeout/kill here corrupts only the throwaway
+        // staging dir, never the running binary.
         execSync(
           `npm install -g @synapseia-network/node@${shellQuote(targetVersion)} --ignore-scripts`,
           {
             encoding: 'utf-8',
-            timeout: 120_000,
+            timeout: timeoutMs,
             stdio: 'pipe',
             env: {
               ...process.env,
-              NPM_CONFIG_PREFIX: targetPrefix,
+              NPM_CONFIG_PREFIX: stagingPrefix,
             },
           },
         );
+
+        // VERIFY the staged tree before we touch the live install.
+        const stagedModulesDir = join(stagingPrefix, 'lib', 'node_modules');
+        const stagedPackageDir = join(stagedModulesDir, '@synapseia-network', 'node');
+        const integrity = verifyInstalledPackage(stagedPackageDir, targetVersion);
+        if (!integrity.ok) {
+          // Live install UNTOUCHED — we never started the swap.
+          try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* best effort */ }
+          stagingPrefix = null;
+          return {
+            success: false,
+            installType,
+            message:
+              `Staged update to v${targetVersion} failed integrity check ` +
+              `(${integrity.reason}). Live install left untouched.`,
+          };
+        }
+
+        // ATOMIC swap: move the verified staged package over the live one.
+        const liveModulesDir = join(targetPrefix, 'lib', 'node_modules');
+        mkdirSync(liveModulesDir, { recursive: true });
+        atomicSwapPackage(liveModulesDir, stagedPackageDir);
+        ensureBinSymlinks(targetPrefix, liveModulesDir);
+
+        // Tear down the now-empty staging prefix (the package dir was moved
+        // out; what remains is npm scaffolding + lockfiles).
+        try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* harmless */ }
+        stagingPrefix = null;
+
         return {
           success: true,
           installType,
-          message: `Updated to v${targetVersion} (npm latest, --ignore-scripts). Restarting...`,
+          message: `Updated to v${targetVersion} (npm latest, --ignore-scripts, atomic swap). Restarting...`,
         };
       } catch (err) {
+        // Any failure (timeout, ENOSPC, swap error) — purge staging so a
+        // partial tree can't be picked up next time. The live install is
+        // untouched unless atomicSwapPackage already restored its own .bak.
+        if (stagingPrefix) {
+          try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* best effort */ }
+        }
         const msg = (err as Error).message ?? String(err);
         if (/EACCES|permission denied|operation not permitted/i.test(msg)) {
           return {
