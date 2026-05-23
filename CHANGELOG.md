@@ -1,5 +1,22 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(llm): resolve Ollama tag via catalog for generate + auto-pull (1cbe1896)
+
+The Ollama LLM path used the catalog model NAME (`model.modelId`, e.g.
+`llama-3.1-8b-instruct`) as the Ollama model identifier for the primary
+generate, the missing-model auto-pull, and the retry generate — instead of
+the catalog `ollamaTag` (`llama3.1:8b-instruct-q4_K_M`). Ollama serves the
+model under the tag, so generate returned "not found", the one-shot auto-pull
+then pulled the wrong name and failed with `manifest: file does not exist`,
+the `ollama-generate` circuit opened, and all inference/research/critique on
+that node failed (observed on the qwen pod, which had to pull the llama tag).
+Adds `findCatalogModel` + `resolveOllamaTag` (catalog hit → `getOllamaTag`,
+miss → passthrough so arbitrary Ollama tags still work) and applies it at
+every Ollama boundary in `generateOllamaLLM`. Also corrects the
+`qwen3-coder-30b-a3b` ollamaTag from `qwen3-coder:30b-a3b` (404 in the Ollama
+registry) to `qwen3-coder:30b-a3b-q4_K_M` (verified present); a full registry
+audit of all 21 catalog tags found this was the only broken one.
+
 ## [2026-05-23] fix(staking): chain-info reports live-accrued pending rewards, not stale raw field (f5b13a69)
 
 `chain-info` (which node-ui spawns to show staking rewards) returned the raw
