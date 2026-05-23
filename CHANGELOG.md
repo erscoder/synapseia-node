@@ -1,5 +1,30 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(lora): fit LORA_GENERATION on a 24GB GPU; fix docking obabel timeouts (0.8.114) (e7b206f4, fb86856f)
+
+Two prod fixes shipped together (node 0.8.113 -> 0.8.114).
+
+`fix(lora)` (e7b206f4): LORA_GENERATION on BioGPT-Large OOM'd at step 0 on the
+A5000 (24GB) because both subtypes shared `batch=8` / fp32 / no
+`gradient_checkpointing` / `max_length=512`. `train_lora.py` is now subtype-aware:
+GENERATION uses `batch=1` + `gradient_accumulation_steps=8` (effective batch
+unchanged), `gradient_checkpointing=True` (`use_reentrant=False` +
+`enable_input_require_grads()` so adapter grads flow through the frozen base),
+bf16 on Ampere (fp16 fallback), `max_seq_length=256`. CLASSIFICATION unchanged.
+bitsandbytes available but not used (no-dep levers fit).
+
+`fix(docking)` (fb86856f): `obabel ... --gen3d` timed out at 300000ms on both
+pods. Fixes: run obabel/RDKit/prep via `nice -n 19` (yield CPU to torch
+training; graceful degrade if absent); SIGKILL the obabel process group after a
+4s SIGTERM grace (kill zombies); invert tiers (`--gen3d fast` first with a 90s
+budget, `med` fallback, RDKit reachable sooner) so doomed ligands fail in ~90s
+not ~600s; parse-free SMILES complexity pre-filter (heavy>80 / rotatable>40 ->
+RDKit/fail-fast); report failure to the coordinator (`POST /complete`
+success:false) instead of silent abandon.
+
+Reviewer: SHIP (no BLOCKER/HIGH/MEDIUM). Build clean; docking jest 69, LoRA jest
+42, pytest 10 pass; full node suite 2395 pass.
+
 ## [2026-05-23] fix(staking): claim gates on live estimate, not stale raw rewards_pending (d79fc38b)
 
 After 0.8.112 made `claim-rewards` fast (no bootstrap), it still didn't claim:
