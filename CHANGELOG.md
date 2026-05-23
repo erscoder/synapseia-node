@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(lora): use processing_class so Trainer works on transformers 4.57+ (0.8.115) (2d4441cc)
+
+LoRA training (BOTH subtypes — classification + generation) failed `train_lora.py
+exited code 2` at Trainer init (after the dataset Map step). The pod venv's
+transformers 4.57.6 REMOVED the `Trainer(tokenizer=...)` param (→ `processing_class`);
+`train_lora.py` still passed `tokenizer=` → `TypeError` → top-level except →
+`sys.exit(2)`. Broke ALL LoRA once the venv hit 4.57.x. Unrelated to the OOM fix.
+
+Fix (`0.8.114` -> `0.8.115`):
+- `train_lora.py`: `_trainer_tokenizer_kwarg()` inspects `Trainer.__init__` and passes
+  `processing_class=` (4.57+/5.x) or `tokenizer=` (old 4.x) at the single Trainer site
+  (shared by both subtypes). `DataCollatorWithPadding(tokenizer=...)` unchanged
+  (collators not renamed). Audited rest of train path — no other removed kwargs.
+- `lora_trainer.ts`: `tailStderr` (head+tail) replaces `stderr.slice(0,800)` (HEAD) so
+  the python exception (printed at the END) is visible; missing-dep regex still runs on
+  the full stderr. This is why the TypeError was invisible.
+
+Reviewer: SHIP. Build green, 14 pytest + 46 jest pass.
+
 ## [2026-05-23] fix(lora): fit LORA_GENERATION on a 24GB GPU; fix docking obabel timeouts (0.8.114) (e7b206f4, fb86856f)
 
 Two prod fixes shipped together (node 0.8.113 -> 0.8.114).
