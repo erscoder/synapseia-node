@@ -1,5 +1,14 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(staking): idl.ts falls back to OFFICIAL program-id constants (no env required) (5b3a93e4)
+
+`idl.ts` resolved STAKING_PROGRAM_ID / TOKEN_PROGRAM_ID / ESCROW_PROGRAM_ID via
+`requireEnv`, which threw when the env var was absent. Operators don't set these,
+so staking/claim/stake-info commands threw and reported "you have nothing" despite
+real on-chain stake. Now resolves env-override-else-OFFICIAL-constant (from
+constants/programs.ts): STAKING→CYW5, TOKEN→8iFr (custom SYN token program, not
+standard SPL), ESCROW→HwFPR5. Node works out-of-the-box with no env vars.
+
 ## [2026-05-22] fix(training): count reclaimable page cache in heavy-training memory gate (aa257c36)
 
 DiLoCo + LoRA (BioGPT 7B) WOs were skipped on every GPU pod
