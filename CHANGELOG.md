@@ -1,5 +1,22 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(staking): claim gates on live estimate, not stale raw rewards_pending (d79fc38b)
+
+After 0.8.112 made `claim-rewards` fast (no bootstrap), it still didn't claim:
+`claimStakingRewards` bailed with "No pending rewards" whenever the raw on-chain
+`rewards_pending` field (offset 170) was 0. That field only updates when the
+coordinator's hourly accrue cron runs (lagged ~13h), so it read 0 even with real
+claimable rewards — node-ui showed ~5096 SYN (live estimate, since 0.8.110) and
+enabled Claim, but the CLI checked the stale field and returned without sending
+the tx. The on-chain `claim_rewards` self-accrues and would have paid. Now gates
+on the LIVE claimable (raw field + accrued-since-`last_accrual_at`) via a new
+canonical helper `reward-estimate.ts` (pure-BigInt `calc_rewards` replica +
+`computeLiveClaimableLamports`), which `chain-info-lightweight` now reuses too
+(single source). 3-way gate: live>0 → claim; live==0 & estimate-ok → no-rewards;
+live==0 & estimate failed (transient pool read) → proceed and let the on-chain
+ix accrue/verify (it `require!`s rewards>0, failing closed harmlessly on a true
+zero), so a transient RPC failure can never block a real claim.
+
 ## [2026-05-23] fix(cli): run on-chain one-shot commands without full bootstrap (a82df2ba)
 
 `claim-rewards`, `claim-wo-rewards`, `stake`, `unstake`, `withdraw-sol`,
