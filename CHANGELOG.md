@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-23] fix(staking): chain-info reports live-accrued pending rewards, not stale raw field (f5b13a69)
+
+`chain-info` (which node-ui spawns to show staking rewards) returned the raw
+on-chain `StakeAccount.rewards_pending` field (offset 170). That field only
+updates when the coordinator's hourly accrue cron runs, which had lagged ~13h,
+so node-ui displayed "0 SYN" and disabled the Claim button even though the
+wallet had ~5,096 SYN of real, claimable staking rewards. The dashboard showed
+the correct figure because it calls the on-chain `get_rewards` view; on-chain
+`claim_rewards` likewise self-accrues before sweeping, so the live amount is
+what a claim actually pays. Fix mirrors `get_rewards` in `fetchStakeInfo`: reads
+the `staking_pool` PDA (`daily_pool_lamports` @8, `total_staked` @16) and adds a
+live estimate via a pure-BigInt replica of `calc_rewards` (multiply all three
+numerators, then floor-divide by `total_staked` then `SECONDS_PER_DAY`=86_400;
+same four zero-guards). `rewardsPending` = raw field + estimate. Best-effort:
+any pool-read or math failure falls back to the raw field and never throws (the
+subcommand is polled by node-ui every few seconds). Ships as a node release;
+node-ui picks it up from npm automatically (no node-ui re-release). 16 new unit
+tests cover formula parity, BigInt precision, and fallback paths.
+
 ## [2026-05-23] fix(staking): idl.ts falls back to OFFICIAL program-id constants (no env required) (5b3a93e4)
 
 `idl.ts` resolved STAKING_PROGRAM_ID / TOKEN_PROGRAM_ID / ESCROW_PROGRAM_ID via
