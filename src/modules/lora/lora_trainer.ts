@@ -73,6 +73,21 @@ export class LoraError extends Error {
   }
 }
 
+/**
+ * Build a bounded excerpt of the trainer's stderr for an error message.
+ *
+ * The Python trainer prints its real exception (e.g.
+ * `error: Trainer.__init__() got an unexpected keyword argument 'tokenizer'`)
+ * at the END of stderr, after pages of torch/transformers import noise. A
+ * head-only slice cut that off. We keep a small head (dep-load context, where
+ * `No module named 'X'` lives) plus a larger tail (the actual exception).
+ */
+export function tailStderr(stderr: string, headChars = 400, tailChars = 1200): string {
+  const s = stderr.trimEnd();
+  if (s.length <= headChars + tailChars) return s;
+  return `${s.slice(0, headChars)}\n…[truncated]…\n${s.slice(-tailChars)}`;
+}
+
 // ── Top-level entry ─────────────────────────────────────────────────────────
 
 export async function runLora(input: RunLoraInput, options: RunLoraOptions = {}): Promise<LoraSubmissionPayload> {
@@ -252,12 +267,18 @@ function runPython(bin: string, script: string, payload: object, timeoutMs: numb
       }
       // Surface a friendly hint when the failure is a missing Python dep
       // (transformers/peft/datasets/safetensors/accelerate). Keeps the raw
-      // exit code + stderr tail so reviewers can still see the original error.
+      // exit code + stderr so reviewers can still see the original error.
       const missingDep = stderr.match(/No module named '(transformers|peft|datasets|safetensors|accelerate)'/);
       const hint = missingDep
         ? `[LoRA] Python deps missing. Install: pip3 install transformers peft datasets safetensors accelerate\n`
         : '';
-      reject(new LoraError(`${hint}python3 train_lora.py exited with code ${code}: ${stderr.slice(0, 800)}`, 'python'));
+      // The real Python exception (e.g. `TypeError: ... unexpected keyword
+      // argument 'tokenizer'`) is printed at the END of stderr by the
+      // script's top-level handler. A HEAD-only slice (slice(0, 800)) buried
+      // it under torch/transformers import chatter. Capture head + tail so
+      // both the dep-load context and the actual error survive.
+      const errTail = tailStderr(stderr);
+      reject(new LoraError(`${hint}python3 train_lora.py exited with code ${code}: ${errTail}`, 'python'));
     });
   });
 }

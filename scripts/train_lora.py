@@ -43,8 +43,31 @@ import os
 import sys
 import math
 import gc
+import inspect
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
+
+
+def _trainer_tokenizer_kwarg(trainer_init_params: Mapping[str, Any], tokenizer: Any) -> Dict[str, Any]:
+    """Pick the version-correct keyword for handing a tokenizer to a
+    HuggingFace ``Trainer``.
+
+    transformers 4.57+/5.x renamed the ``tokenizer=`` constructor argument to
+    ``processing_class=`` and REMOVED ``tokenizer`` entirely — passing it now
+    raises ``TypeError: __init__() got an unexpected keyword argument
+    'tokenizer'`` (caught by main()'s top-level handler → exit 2, right after
+    the dataset Map step). Older 4.x still expects ``tokenizer``.
+
+    We inspect the real ``Trainer.__init__`` signature at runtime instead of
+    sniffing the transformers version string, so this stays correct across the
+    rename regardless of how the pod venv was pinned.
+
+    PURE on purpose (no torch/transformers import) so it is unit-testable on a
+    CI runner without the heavy deps — mirror of `_build_training_kwargs`.
+    """
+    if "processing_class" in trainer_init_params:
+        return {"processing_class": tokenizer}
+    return {"tokenizer": tokenizer}
 
 
 def _emit_progress(label: str, fields: Dict[str, Any]) -> None:
@@ -381,13 +404,19 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
         **mem_kwargs,
     )
 
+    # transformers 4.57+/5.x removed `Trainer(tokenizer=...)` (renamed to
+    # `processing_class=`). Select the kwarg from the live signature so the
+    # same script runs on both old 4.x and new 4.57+/5.x pod venvs.
+    # NB: `DataCollatorWithPadding(tokenizer=...)` is a *collator* constructor,
+    # not the Trainer — it still takes `tokenizer=` in 4.57/5.x, so leave it.
+    _tok_kw = _trainer_tokenizer_kwarg(inspect.signature(Trainer.__init__).parameters, tokenizer)
     trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
         data_collator=DataCollatorWithPadding(tokenizer=tokenizer),
+        **_tok_kw,
     )
     train_result = trainer.train()
     eval_result = trainer.evaluate()
