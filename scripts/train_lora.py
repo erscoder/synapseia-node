@@ -103,6 +103,137 @@ def _peft_target_modules(default: list[str]) -> list[str]:
     return list(default) if default else ["q_proj", "v_proj"]
 
 
+# ── Memory configuration (subtype-aware) ─────────────────────────────────────
+#
+# Bug (live, both A5000 pods, 24 GB each, 2026-05-23):
+#   subtype=LORA_GENERATION on BioGPT-Large (~1.5B params, causal LM) OOMs at
+#   training step 0 — "CUDA out of memory. Tried to allocate 902 MiB. GPU 0
+#   has total 23.56 GiB, 847 MiB free, this process 22.72 GiB in use". The GPU
+#   is empty before the run (4 MiB used) so this is NOT contention — the old
+#   GENERATION config genuinely needed > 24 GB.
+#
+# Root cause (the previous `_train` hardcoded these for BOTH subtypes):
+#   - per_device_train_batch_size = 8  → 8 concurrent fwd/bwd activation sets
+#     over 512-token sequences on a generative LM head (vocab-sized logits per
+#     position) is the dominant activation cost for a 1.5B causal model.
+#   - NO mixed precision → weights + activations + gradients materialize in
+#     fp32. AdamW also keeps two fp32 optimizer-state tensors per trainable
+#     param. Even though LoRA freezes the base, the fp32 activation graph over
+#     batch=8 × seq=512 × |vocab| is what blows the budget.
+#   - NO gradient_checkpointing → every layer's activations are retained for
+#     the backward pass instead of being recomputed.
+#   - max_length = 512 → long generative sequences amplify all of the above.
+#
+# CONTRAST: LORA_CLASSIFICATION on the same BioGPT-Large fits and uploads an
+# adapter — an encoder-style 2-logit head over 512 tokens has a tiny output
+# projection vs. the full causal LM head, so batch=8/fp32 stays under 24 GB.
+#
+# Fix levers (least-invasive, NO new dependency — bitsandbytes/QLoRA NOT used;
+# we deliberately avoid the 4-bit path so this can't regress classification or
+# depend on bnb being importable at training time):
+#   1. gradient_checkpointing=True for GENERATION (trade compute for memory).
+#   2. per_device_train_batch_size=1 + gradient_accumulation_steps=8 for
+#      GENERATION → same effective batch (8) as before, ~8× less activation
+#      memory at any instant.
+#   3. bf16 mixed precision when the CUDA device supports it (A5000 / Ampere
+#      does). Falls back to fp16 on older CUDA GPUs, and to fp32 on CPU/MPS
+#      (where bf16/fp16 autocast is unreliable / unsupported) — classification
+#      keeps working unchanged on those backends.
+#   4. max_seq_length capped at 256 for GENERATION (down from 512). Mission
+#      generative corpora are short; 256 is a sane cap that halves the
+#      activation footprint.
+#
+# CLASSIFICATION is intentionally left at its proven config (batch=8, no
+# gradient checkpointing, seq=512, fp32 on CPU/MPS) so the working path does
+# not regress; it only opts into bf16/fp16 when running on a capable CUDA GPU,
+# which is a free win and never enabled on the CPU/MPS backends it normally
+# uses.
+#
+# All helpers below are PURE (no torch import) so they are unit-testable on a
+# CI runner without CUDA / torch installed.
+
+# Effective batch size kept constant across subtypes so learning dynamics are
+# unchanged: GENERATION uses batch=1 × accum=8, CLASSIFICATION uses batch=8 ×
+# accum=1. Both = 8.
+_EFFECTIVE_TRAIN_BATCH = 8
+
+# Per-subtype tokenizer truncation cap. GENERATION is capped lower (256) to
+# bound the causal-LM activation footprint that caused the 24 GB OOM;
+# CLASSIFICATION keeps its proven 512.
+_MAX_SEQ_LENGTH = {
+    "LORA_CLASSIFICATION": 512,
+    "LORA_GENERATION": 256,
+}
+
+
+def _max_seq_length(subtype: str) -> int:
+    """Tokenizer truncation length per subtype. PURE (no torch)."""
+    return _MAX_SEQ_LENGTH.get(subtype, 512)
+
+
+def _precision_flags(subtype: str, device: str, bf16_supported: bool) -> Dict[str, bool]:
+    """
+    Decide mixed-precision flags for `TrainingArguments`. PURE (no torch) —
+    `bf16_supported` is probed by the caller and injected so this stays
+    unit-testable without a GPU.
+
+    - CUDA + bf16-capable (A5000 / Ampere+)  → bf16=True  (best: no loss
+      scaling, full dynamic range).
+    - CUDA without bf16 (older GPUs)         → fp16=True  (half the memory of
+      fp32; needs the Trainer's built-in grad scaler).
+    - CPU / MPS                              → fp32 (both False). bf16/fp16
+      autocast is unreliable/unsupported there; CLASSIFICATION runs here today
+      and MUST stay on its working fp32 path.
+    """
+    if device != "cuda":
+        return {"bf16": False, "fp16": False}
+    if bf16_supported:
+        return {"bf16": True, "fp16": False}
+    return {"bf16": False, "fp16": True}
+
+
+def _build_training_kwargs(
+    subtype: str, device: str, bf16_supported: bool
+) -> Dict[str, Any]:
+    """
+    Build the subtype-aware memory knobs for `TrainingArguments`. PURE (no
+    torch) so it is unit-testable on a CI runner without CUDA. The caller
+    merges the result into the full `TrainingArguments(...)` call.
+
+    GENERATION (BioGPT-Large causal LM) — the path that OOMed on 24 GB:
+        per_device_train_batch_size = 1
+        gradient_accumulation_steps = 8        (effective batch unchanged = 8)
+        gradient_checkpointing      = True
+        + bf16/fp16 per `_precision_flags`
+
+    CLASSIFICATION — the proven, working path. Left unchanged on memory knobs
+    (batch=8, accum=1, no gradient checkpointing); only opts into bf16/fp16
+    when on a capable CUDA GPU (free win, never enabled on its usual CPU/MPS).
+    """
+    precision = _precision_flags(subtype, device, bf16_supported)
+    if subtype == "LORA_GENERATION":
+        return {
+            "per_device_train_batch_size": 1,
+            "per_device_eval_batch_size": 1,
+            "gradient_accumulation_steps": _EFFECTIVE_TRAIN_BATCH,  # → eff. batch 8
+            "gradient_checkpointing": True,
+            # Non-reentrant checkpointing is the recommended path for PEFT +
+            # frozen base: it composes correctly with the input-require-grads
+            # hook set in `_train` and avoids the reentrant-autograd warning
+            # newer transformers emit.
+            "gradient_checkpointing_kwargs": {"use_reentrant": False},
+            **precision,
+        }
+    # LORA_CLASSIFICATION (and any future encoder subtype): proven config.
+    return {
+        "per_device_train_batch_size": _EFFECTIVE_TRAIN_BATCH,
+        "per_device_eval_batch_size": _EFFECTIVE_TRAIN_BATCH,
+        "gradient_accumulation_steps": 1,
+        "gradient_checkpointing": False,
+        **precision,
+    }
+
+
 def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     import torch  # type: ignore
     from transformers import (  # type: ignore
@@ -162,7 +293,38 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
             return AutoModelForCausalLM.from_pretrained(base_model_name)
 
     model = _load_base()
+
+    # Subtype-aware memory config (see `_build_training_kwargs` for the OOM
+    # root cause). bf16 support is probed once here and injected into the
+    # PURE helpers so they remain torch-free / unit-testable.
+    bf16_supported = bool(
+        device == "cuda"
+        and getattr(torch.cuda, "is_bf16_supported", None)
+        and torch.cuda.is_bf16_supported()
+    )
+    mem_kwargs = _build_training_kwargs(subtype, device, bf16_supported)
+
+    # gradient_checkpointing (GENERATION) is incompatible with the KV cache:
+    # `use_cache=True` makes the checkpointed forward pass recompute against a
+    # cache that no longer matches, so transformers warns and silently
+    # disables caching. Disable it explicitly on the base config to keep the
+    # backward pass correct and silence the warning.
+    if mem_kwargs.get("gradient_checkpointing"):
+        if getattr(model, "config", None) is not None:
+            model.config.use_cache = False
+
     model = get_peft_model(model, lora_cfg)
+
+    # PEFT + gradient_checkpointing (GENERATION): the base model is frozen, so
+    # the checkpointed segment's input tensor has requires_grad=False and the
+    # backward pass would produce NO gradient for the LoRA adapters (silent
+    # no-op training). `enable_input_require_grads()` registers the forward
+    # hook that flags the embedding output as requiring grad, restoring the
+    # gradient path through the checkpointed layers. Must be called AFTER
+    # get_peft_model and BEFORE the Trainer enables checkpointing.
+    if mem_kwargs.get("gradient_checkpointing") and hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+
     model.to(device)
 
     # Slice 11 (Plan B, 2026-05-17): drop transient load buffers
@@ -176,17 +338,28 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     train_ds = _load_dataset(payload["trainingDatasetUri"])
     val_ds = _load_dataset(payload["validationDatasetUri"])
 
+    # Subtype-aware truncation cap: GENERATION is capped at 256 (down from
+    # 512) to bound the causal-LM activation footprint behind the 24 GB OOM;
+    # CLASSIFICATION keeps 512. See `_max_seq_length`.
+    max_seq_length = _max_seq_length(subtype)
+
     def tokenize(batch: Dict[str, Any]) -> Dict[str, Any]:
-        return tokenizer(batch["text"], padding=False, truncation=True, max_length=512)
+        return tokenizer(batch["text"], padding=False, truncation=True, max_length=max_seq_length)
 
     train_ds = train_ds.map(tokenize, batched=True)
     val_ds = val_ds.map(tokenize, batched=True)
 
+    _emit_progress("mem_config", {
+        "subtype": subtype,
+        "device": device,
+        "max_seq_length": max_seq_length,
+        "bf16_supported": bf16_supported,
+        **mem_kwargs,
+    })
+
     args = TrainingArguments(
         output_dir=str(out_dir / "trainer_state"),
         num_train_epochs=int(payload.get("maxEpochs", 3)),
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
         learning_rate=2e-4,
         eval_strategy="epoch",
         save_strategy="no",
@@ -197,9 +370,15 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
         # memory pool. Each pinned page lives outside the cgroup
         # reclaimable set so it stacks with the base model and inflates
         # the OOM headroom required by `LORA_REQUIRED_FREE_MB`. The
-        # H2D copy on batch_size=8 is fast enough that pinning is a
-        # luxury, not a need.
+        # H2D copy is fast enough that pinning is a luxury, not a need.
         dataloader_pin_memory=False,
+        # Subtype-aware memory knobs (Bug 2026-05-23 — LORA_GENERATION OOM on
+        # 24 GB A5000): per_device_train_batch_size / eval_batch_size,
+        # gradient_accumulation_steps, gradient_checkpointing, and bf16/fp16.
+        # GENERATION → batch 1 + accum 8 + checkpointing + bf16; CLASSIFICATION
+        # → batch 8 + no checkpointing (proven config). See
+        # `_build_training_kwargs`.
+        **mem_kwargs,
     )
 
     trainer = Trainer(
