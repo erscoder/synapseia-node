@@ -3,30 +3,43 @@
  * Derive PDA addresses for staking, token, and escrow programs
  *
  * NOTE: Program IDs are resolved lazily (on first access) so that importing
- * this module does NOT throw when staking env vars are absent — e.g. when
- * the CLI runs `--help` or non-staking commands.
+ * this module does NOT construct PublicKeys at import time — e.g. when the
+ * CLI runs `--help` or non-staking commands.
+ *
+ * Resolution is "env override, OFFICIAL constant fallback": each program id
+ * defaults to the canonical devnet address from `../constants/programs`
+ * (the single source of truth) so a fresh node works out-of-the-box with no
+ * env vars set. Operators can still override via the matching env var for
+ * dev clusters / mainnet-flip flows.
+ *
+ * The TOKEN_PROGRAM_ID resolver here points at the *custom* SYN token program
+ * (OFFICIAL_SYN_TOKEN_PROGRAM_ID), NOT the standard SPL Token program — the
+ * SYN token is deployed under its own token program.
  */
 
 import { PublicKey } from '@solana/web3.js';
+import {
+  OFFICIAL_STAKING_PROGRAM_ID,
+  OFFICIAL_SYN_TOKEN_PROGRAM_ID,
+  OFFICIAL_ESCROW_PROGRAM_ID,
+} from '../constants/programs';
 
-function requireEnv(key: string): string {
-  const val = process.env[key];
-  if (!val) throw new Error(`${key} not informed`);
-  return val;
+function resolveEnvOrOfficial(envKey: string, official: string): string {
+  return process.env[envKey]?.trim() || official;
 }
 
-function lazyPublicKey(envKey: string): () => PublicKey {
+function lazyPublicKey(envKey: string, official: string): () => PublicKey {
   let cached: PublicKey | undefined;
   return () => {
-    if (!cached) cached = new PublicKey(requireEnv(envKey));
+    if (!cached) cached = new PublicKey(resolveEnvOrOfficial(envKey, official));
     return cached;
   };
 }
 
-// Lazy getters — no error at import time
-const getStakingProgramId  = lazyPublicKey('STAKING_PROGRAM_ID');
-const getTokenProgramId    = lazyPublicKey('TOKEN_PROGRAM_ID');
-const getEscrowProgramId   = lazyPublicKey('ESCROW_PROGRAM_ID');
+// Lazy getters — env override, OFFICIAL constant fallback, no construction at import time
+const getStakingProgramId  = lazyPublicKey('STAKING_PROGRAM_ID', OFFICIAL_STAKING_PROGRAM_ID);
+const getTokenProgramId    = lazyPublicKey('TOKEN_PROGRAM_ID', OFFICIAL_SYN_TOKEN_PROGRAM_ID);
+const getEscrowProgramId   = lazyPublicKey('ESCROW_PROGRAM_ID', OFFICIAL_ESCROW_PROGRAM_ID);
 
 // Re-export as getters so callers keep the same `STAKING_PROGRAM_ID` name
 export const STAKING_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
