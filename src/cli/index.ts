@@ -68,6 +68,7 @@ import { UpdateManager } from '../utils/update-manager';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { getSynBalance, getStakedAmount } from '../modules/wallet/solana-balance';
 import { stakeTokens, unstakeTokens, claimStakingRewards, getStakeInfo, depositSol, depositSyn, withdrawSol, withdrawSyn, getWalletBalance } from '../modules/staking/staking-cli';
+import { ONE_SHOT_ONCHAIN_COMMANDS, runOneShotOnchainAndExit } from './one-shot-onchain';
 import { activateNode } from '../modules/wallet/activation';
 import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE, MODEL_SLUG_REGEX, DEFAULT_SOLANA_RPC_URL } from '../modules/config/config';
@@ -1789,7 +1790,17 @@ async function bootstrap() {
 // libp2p and hammer the coordinator on each tick — exactly the noise we're
 // trying to eliminate. Short-circuit BEFORE bootstrap() so the helper runs
 // in a bare Node.js context with only the imports it needs.
-if (process.argv[2] === 'chain-info') {
+//
+// Same rationale for the one-shot on-chain ops (stake/unstake/claim/withdraw/
+// deposit): they're single raw-web3.js transactions that need neither NestJS
+// DI nor the P2P/heartbeat stack. Booting AppModule first hung past node-ui's
+// 120s timeout (the on-chain ix never ran) when a `syn start` node was already
+// flapping libp2p. Routing them through the bootstrap-free dispatcher mirrors
+// the dashboard's <1s on-chain-only path. The commander handlers below remain
+// as a dead fallback (never reached for these commands — the fast-path exits).
+if (ONE_SHOT_ONCHAIN_COMMANDS.has(process.argv[2])) {
+  runOneShotOnchainAndExit(process.argv);
+} else if (process.argv[2] === 'chain-info') {
   import('./chain-info-lightweight').then(({ runChainInfoLightweight }) =>
     runChainInfoLightweight().catch((err) => {
       logger.error(`chain-info failed: ${err instanceof Error ? err.message : String(err)}`);
