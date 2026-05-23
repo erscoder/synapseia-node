@@ -257,6 +257,63 @@ def _build_training_kwargs(
     }
 
 
+# ── Data collator + tokenized columns (subtype-aware) ────────────────────────
+#
+# Bug (live, 2026-05-23): subtype=LORA_GENERATION failed at the FIRST training
+# step with `RuntimeError: Expected input batch_size (256) to match target
+# batch_size (1)`. The generation path reused the CLASSIFICATION data setup:
+#
+#   - `tokenize()` returns only input_ids / attention_mask (no `labels`).
+#   - The collator was `DataCollatorWithPadding` for BOTH subtypes.
+#
+# For CLASSIFICATION that is correct: the dataset's scalar `label` column is the
+# target, and DataCollatorWithPadding passes it straight through as `labels`.
+# For GENERATION (AutoModelForCausalLM) the model needs `labels = input_ids`
+# (next-token loss), but DataCollatorWithPadding does NOT build them — it instead
+# forwards the classification scalar `label`, so the loss saw input [B, seq=256]
+# vs target [1] → the batch_size mismatch.
+#
+# Fix (GENERATION only; CLASSIFICATION left exactly as is):
+#   1. Use `DataCollatorForLanguageModeling(tokenizer, mlm=False)` for GENERATION.
+#      It derives `labels` from `input_ids` (causal LM), so target shape becomes
+#      [B, seq] and matches the input — the mismatch is gone.
+#   2. Drop the original dataset columns (`text` and, if present, `label`) after
+#      tokenization for GENERATION so no stray classification `label` reaches the
+#      collator/model. CLASSIFICATION KEEPS its `label` column intact (it is the
+#      target there).
+#
+# Both helpers are PURE: `_columns_to_remove` takes no torch; `_build_data_collator`
+# takes the collator CLASSES injected by the caller (mirror of `_precision_flags`
+# injecting `bf16_supported`) so it is unit-testable without transformers.
+
+
+def _build_data_collator(subtype: str, tokenizer: Any, *, padding_cls: Any, lm_cls: Any) -> Any:
+    """Select the version-correct data collator for the subtype. PURE — the two
+    collator classes are injected so this is unit-testable without transformers.
+
+    - LORA_GENERATION (causal LM)  → DataCollatorForLanguageModeling(mlm=False):
+      derives `labels` from `input_ids`, fixing the batch_size mismatch.
+    - LORA_CLASSIFICATION (+default) → DataCollatorWithPadding: the proven path,
+      passes the scalar `label` column through as the target.
+    """
+    if subtype == "LORA_GENERATION":
+        return lm_cls(tokenizer=tokenizer, mlm=False)
+    return padding_cls(tokenizer=tokenizer)
+
+
+def _columns_to_remove(subtype: str, dataset_columns: list[str]) -> list[str]:
+    """Columns to strip from the tokenized dataset via `.map(remove_columns=...)`.
+    PURE (no torch).
+
+    GENERATION: drop the original columns (`text`, and `label` if present) so the
+    LM collator builds `labels` from `input_ids` with nothing stale interfering.
+    CLASSIFICATION: keep everything (its scalar `label` is the target) → [].
+    """
+    if subtype != "LORA_GENERATION":
+        return []
+    return [c for c in dataset_columns if c in ("text", "label")]
+
+
 def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     import torch  # type: ignore
     from transformers import (  # type: ignore
@@ -266,6 +323,7 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
         TrainingArguments,
         Trainer,
         DataCollatorWithPadding,
+        DataCollatorForLanguageModeling,
     )
     from peft import LoraConfig, get_peft_model, TaskType  # type: ignore
 
@@ -369,8 +427,17 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     def tokenize(batch: Dict[str, Any]) -> Dict[str, Any]:
         return tokenizer(batch["text"], padding=False, truncation=True, max_length=max_seq_length)
 
-    train_ds = train_ds.map(tokenize, batched=True)
-    val_ds = val_ds.map(tokenize, batched=True)
+    # Subtype-aware column handling (Bug 2026-05-23 — GENERATION batch_size
+    # mismatch): for GENERATION drop the original `text`/`label` columns after
+    # tokenization so only input_ids/attention_mask remain and the LM collator
+    # builds `labels` from input_ids. CLASSIFICATION keeps its `label` (the
+    # target). See `_columns_to_remove`.
+    train_ds = train_ds.map(
+        tokenize, batched=True, remove_columns=_columns_to_remove(subtype, train_ds.column_names)
+    )
+    val_ds = val_ds.map(
+        tokenize, batched=True, remove_columns=_columns_to_remove(subtype, val_ds.column_names)
+    )
 
     _emit_progress("mem_config", {
         "subtype": subtype,
@@ -407,15 +474,22 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     # transformers 4.57+/5.x removed `Trainer(tokenizer=...)` (renamed to
     # `processing_class=`). Select the kwarg from the live signature so the
     # same script runs on both old 4.x and new 4.57+/5.x pod venvs.
-    # NB: `DataCollatorWithPadding(tokenizer=...)` is a *collator* constructor,
-    # not the Trainer — it still takes `tokenizer=` in 4.57/5.x, so leave it.
+    # NB: both collator constructors still take `tokenizer=` in 4.57/5.x — only
+    # the Trainer renamed it — so the collator keeps `tokenizer=`.
     _tok_kw = _trainer_tokenizer_kwarg(inspect.signature(Trainer.__init__).parameters, tokenizer)
+    # Subtype-aware collator (Bug 2026-05-23 — GENERATION batch_size mismatch):
+    # GENERATION → DataCollatorForLanguageModeling(mlm=False) (labels=input_ids);
+    # CLASSIFICATION → DataCollatorWithPadding (scalar label is the target).
+    # See `_build_data_collator`.
+    data_collator = _build_data_collator(
+        subtype, tokenizer, padding_cls=DataCollatorWithPadding, lm_cls=DataCollatorForLanguageModeling
+    )
     trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        data_collator=DataCollatorWithPadding(tokenizer=tokenizer),
+        data_collator=data_collator,
         **_tok_kw,
     )
     train_result = trainer.train()
