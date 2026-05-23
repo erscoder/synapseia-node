@@ -26,6 +26,7 @@ import {
   getStakingProgramId as resolveStakingProgramId,
   getSynTokenMint as resolveSynTokenMint,
 } from '../../constants/programs';
+import { computeLiveClaimableLamports } from './reward-estimate';
 
 // Resolvers default to the official devnet program ids / mint; env vars
 // (`STAKING_PROGRAM_ID`, `SYN_TOKEN_MINT`) override for dev clusters or a
@@ -604,21 +605,52 @@ export async function claimStakingRewards(): Promise<string> {
     throw new Error('Stake account not found on chain');
   }
   
-  const data = accountInfo.data;
-  const rewardsPending = data.readBigUInt64LE(170); // offset: 8 disc + 32 owner + 32 coord_auth + 8 amount + 1 tier + 8 lm + 1 ban_times + 8 banned_until + 64 ban_reason + 8 locked_until = 170
-  const rewards = Number(rewardsPending) / 1_000_000_000;
-  
+  // Compute the LIVE claimable amount, NOT the raw on-chain `rewards_pending`
+  // field. The raw field is only advanced by the coordinator's hourly accrue
+  // cron, which lags real time (~13h observed) and reads 0 even when the
+  // wallet has thousands of SYN claimable. node-ui's display already shows the
+  // LIVE value (since v0.8.110); gating the claim on the raw field instead made
+  // the Claim button do nothing. The on-chain `claim_rewards` ix self-accrues
+  // `now - last_accrual_at` before sweeping (syn_staking lib.rs:535), so the
+  // live estimate equals what a claim actually pays — we use it as the gate.
+  const [stakingPool] = getStakingPoolPDA();
+  const { lamports: liveRewardsLamports, estimateOk } = await computeLiveClaimableLamports(
+    connection,
+    accountInfo.data,
+    stakingPool,
+  );
+  const rewards = Number(liveRewardsLamports) / 1_000_000_000;
+
+  // 3-way gate (P10: comment reflects exactly what the code below does):
+  //   live > 0                  → proceed (the live estimate shows claimable).
+  //   live == 0 && estimateOk    → GENUINE zero; the live math ran and the
+  //                                wallet truly has nothing. Early-return.
+  //   live == 0 && !estimateOk   → UNKNOWN zero; the staking_pool read/estimate
+  //                                FAILED and the raw fallback field is also 0.
+  //                                We CANNOT prove there's nothing claimable, and
+  //                                the wallet may hold live-but-unaccrued rewards
+  //                                only the on-chain ix can see. PROCEED and let
+  //                                `claim_rewards` accrue+verify; it fails closed
+  //                                harmlessly (require!(rewards_to_claim > 0,
+  //                                NoRewardsToClaim), syn_staking lib.rs:544) — a
+  //                                genuine zero only costs a reverted-tx fee.
   if (rewards <= 0) {
-    logger.log(`ℹ️ No pending rewards to claim.`);
-    return '';
+    if (estimateOk) {
+      logger.log(`ℹ️ No pending rewards to claim.`);
+      return '';
+    }
+    logger.warn(
+      '[staking-cli] live reward estimate unavailable (staking_pool read failed); ' +
+        'attempting claim anyway — the on-chain ix will accrue/verify and revert ' +
+        'harmlessly if there is nothing to claim.',
+    );
+  } else {
+    logger.log(`\n💰 Claiming ~${rewards} SYN in rewards (live estimate)...`);
   }
-  
-  logger.log(`\n💰 Claiming ${rewards} SYN in rewards...`);
 
   const userTokenAccount = await getUserTokenAccount(connection, wallet.publicKey);
   const [treasuryAuthority] = getTreasuryAuthorityPDA();
   const treasuryTokenAccount = await getTreasuryTokenAccount(connection);
-  const [stakingPool] = getStakingPoolPDA();
 
   // Make sure the treasury ATA exists. If the wallet is the first to claim
   // rewards in the lifetime of this deploy, the PDA-owned ATA may not be

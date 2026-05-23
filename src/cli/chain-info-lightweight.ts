@@ -24,6 +24,16 @@ import {
   getRewardsVaultProgramIdString,
   getSynTokenMintString,
 } from '../constants/programs';
+import {
+  estimateLiveRewardsLamports,
+  readStakingPoolParams,
+  POOL_MIN_LEN,
+} from '../modules/staking/reward-estimate';
+
+// Re-export the canonical pure helper so existing importers (and the
+// chain-info-lightweight spec) keep their import path unchanged after the
+// formula moved to `modules/staking/reward-estimate.ts` (P34 single source).
+export { estimateLiveRewardsLamports };
 
 interface ChainInfoPayload {
   wallet: string | null;
@@ -123,88 +133,12 @@ interface StakeInfo {
 }
 
 /**
- * `SECONDS_PER_DAY` constant from
- * packages/contracts/programs/syn_staking/src/lib.rs:13
- * (`pub const SECONDS_PER_DAY: u64 = 86_400;`). Pinned verbatim — the
- * estimation below MUST match the on-chain divisor exactly or the live
- * preview drifts from what `claim_rewards` actually pays.
+ * The live-accrual math (`calcRewardsLamports` / `estimateLiveRewardsLamports`
+ * / `SECONDS_PER_DAY`) and the StakingPool offsets now live in the canonical
+ * `modules/staking/reward-estimate.ts` so `staking-cli.ts`'s claim pre-check
+ * and this poll share ONE source (P34). They are imported at the top of this
+ * file; `estimateLiveRewardsLamports` is re-exported for the spec.
  */
-const SECONDS_PER_DAY = 86_400n;
-
-/**
- * Pure replica of the on-chain `calc_rewards` (syn_staking lib.rs:1392):
- *
- *   reward(u128) = staked * daily_pool_lamports * elapsed_seconds
- *                  / total_staked / SECONDS_PER_DAY
- *
- * All inputs and the multiply-then-divide are done in BigInt so we match
- * Rust's u128 integer semantics exactly (multiply ALL three numerators
- * FIRST, then divide by total_staked, then by SECONDS_PER_DAY — each a
- * floor integer division). Any zero input → 0, mirroring the contract's
- * `if staked==0 || elapsed==0 || daily_pool==0 || total==0 { return 0 }`.
- * Returns lamports (BigInt). u64::MAX clamp omitted: real pool params
- * never approach it and a clamp would only ever *under*-report.
- */
-function calcRewardsLamports(
-  stakedLamports: bigint,
-  elapsedSeconds: bigint,
-  dailyPoolLamports: bigint,
-  totalStakedLamports: bigint,
-): bigint {
-  if (
-    stakedLamports <= 0n ||
-    elapsedSeconds <= 0n ||
-    dailyPoolLamports <= 0n ||
-    totalStakedLamports <= 0n
-  ) {
-    return 0n;
-  }
-  return (
-    (stakedLamports * dailyPoolLamports * elapsedSeconds) /
-    totalStakedLamports /
-    SECONDS_PER_DAY
-  );
-}
-
-/**
- * Replica of the on-chain `get_rewards` view (syn_staking lib.rs:565):
- *
- *   elapsed = last_accrual_at > 0 ? max(0, now - last_accrual_at) : 0
- *   total   = rewards_pending + (amount > 0 ? calc_rewards(...) : 0)
- *
- * All args are raw lamports / unix-second BigInts read straight off the
- * StakeAccount + StakingPool buffers. Returns the LIVE claimable amount
- * in lamports (BigInt). Caller divides by 1e9 (in Number) for UI units.
- */
-export function estimateLiveRewardsLamports(params: {
-  rewardsPendingLamports: bigint;
-  stakedLamports: bigint;
-  lastAccrualAt: bigint;
-  nowSeconds: bigint;
-  dailyPoolLamports: bigint;
-  totalStakedLamports: bigint;
-}): bigint {
-  const {
-    rewardsPendingLamports,
-    stakedLamports,
-    lastAccrualAt,
-    nowSeconds,
-    dailyPoolLamports,
-    totalStakedLamports,
-  } = params;
-  const elapsed =
-    lastAccrualAt > 0n
-      ? (() => {
-          const delta = nowSeconds - lastAccrualAt;
-          return delta > 0n ? delta : 0n;
-        })()
-      : 0n;
-  const estimated =
-    stakedLamports > 0n
-      ? calcRewardsLamports(stakedLamports, elapsed, dailyPoolLamports, totalStakedLamports)
-      : 0n;
-  return rewardsPendingLamports + estimated;
-}
 
 /**
  * Minimal structural type for the `@solana/web3.js` Connection methods this
@@ -251,10 +185,9 @@ async function fetchStakingPool(
   const program = new PublicKeyCtor(stakingProgramId);
   const [poolPda] = findProgramAddressSync([Buffer.from('staking_pool')], program);
   const info = await conn.getAccountInfo(poolPda, 'confirmed');
-  if (!info || info.data.length < 24) return null;
-  const dailyPoolLamports = info.data.readBigUInt64LE(8);
-  const totalStakedLamports = info.data.readBigUInt64LE(16);
-  return { dailyPoolLamports, totalStakedLamports };
+  if (!info || info.data.length < POOL_MIN_LEN) return null;
+  // Decode via the canonical helper so the offsets stay single-source.
+  return readStakingPoolParams(info.data);
 }
 
 /**
