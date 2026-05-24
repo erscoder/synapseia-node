@@ -14,6 +14,7 @@ import { ExecuteResearchNode } from './nodes/execute-research';
 import { ExecuteTrainingNode } from './nodes/execute-training';
 import { ExecuteInferenceNode } from './nodes/execute-inference';
 import { ExecuteDilocoNode } from './nodes/execute-diloco';
+import { ExecuteDilocoAggregationNode } from './nodes/execute-diloco-aggregation';
 import { ExecuteDockingNode } from './nodes/execute-docking';
 import { ExecuteLoraNode } from './nodes/execute-lora';
 import { ExecuteLoraValidationNode } from './nodes/execute-lora-validation';
@@ -80,6 +81,7 @@ export class AgentGraphService {
     private readonly executeTrainingNode: ExecuteTrainingNode,
     private readonly executeInferenceNode: ExecuteInferenceNode,
     private readonly executeDilocoNode: ExecuteDilocoNode,
+    private readonly executeDilocoAggregationNode: ExecuteDilocoAggregationNode,
     private readonly executeDockingNode: ExecuteDockingNode,
     private readonly executeLoraNode: ExecuteLoraNode,
     private readonly executeLoraValidationNode: ExecuteLoraValidationNode,
@@ -119,6 +121,7 @@ export class AgentGraphService {
     workflow.addNode('executeTraining', (s: AgentState) => this.executeTrainingNode.execute(s));
     workflow.addNode('executeInference', (s: AgentState) => this.executeInferenceNode.execute(s));
     workflow.addNode('executeDiloco', (s: AgentState) => this.executeDilocoNode.execute(s));
+    workflow.addNode('executeDilocoAggregation', (s: AgentState) => this.executeDilocoAggregationNode.execute(s));
     workflow.addNode('executeDocking', (s: AgentState) => this.executeDockingNode.execute(s));
     workflow.addNode('executeLora', (s: AgentState) => this.executeLoraNode.execute(s));
     workflow.addNode('executeLoraValidation', (s: AgentState) => this.executeLoraValidationNode.execute(s));
@@ -161,6 +164,7 @@ export class AgentGraphService {
           case 'CPU_INFERENCE':     return 'executeInference';
           case 'GPU_INFERENCE':     return 'executeInference';
           case 'DILOCO_TRAINING':   return 'executeDiloco';
+          case 'DILOCO_AGGREGATION': return 'executeDilocoAggregation';
           case 'MOLECULAR_DOCKING': return 'executeDocking';
           case 'LORA_TRAINING':     return 'executeLora';
           case 'LORA_VALIDATION':   return 'executeLoraValidation';
@@ -184,6 +188,7 @@ export class AgentGraphService {
         executeTraining: 'executeTraining',
         executeInference: 'executeInference',
         executeDiloco: 'executeDiloco',
+        executeDilocoAggregation: 'executeDilocoAggregation',
         executeDocking: 'executeDocking',
         executeLora: 'executeLora',
         executeLoraValidation: 'executeLoraValidation',
@@ -198,6 +203,7 @@ export class AgentGraphService {
     w.addEdge('executeTraining', 'qualityGate');
     w.addEdge('executeInference', 'qualityGate');
     w.addEdge('executeDiloco', 'qualityGate');
+    w.addEdge('executeDilocoAggregation', 'qualityGate');
     w.addEdge('executeDocking', 'qualityGate');
     w.addEdge('executeLora', 'qualityGate');
     w.addEdge('executeLoraValidation', 'qualityGate');

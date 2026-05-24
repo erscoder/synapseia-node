@@ -13,6 +13,7 @@ import { runDocking, DockingError } from '../../docking';
 import type { DockingWorkOrderPayload } from '../../docking/types';
 import { runLora, LoraError } from '../../lora/lora_trainer';
 import { runLoraValidation, LoraValidationError } from '../../lora/lora_validator';
+import { runDiLoCoAggregation, DiLoCoAggregationError } from '../../diloco/diloco_aggregation_runner';
 import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
@@ -31,6 +32,7 @@ import type {
   CpuInferenceWorkOrderPayload,
   CpuInferenceResultPayload,
   GpuInferenceWorkOrderPayload,
+  DiLoCoAggregationWorkOrderPayload,
 } from './work-order.types';
 import { EMBEDDING_MODEL as EMBED_MODEL, GPU_INFERENCE_MODEL } from './work-order.types';
 import { WorkOrderCoordinatorHelper } from './work-order.coordinator';
@@ -741,6 +743,53 @@ Abstract: ${safeAbstract}`;
       const msg = (err as Error).message;
       logger.error(` LoRA validation failed ${stage}${msg}`);
       return { result: `LoRA validation failed ${stage}${msg}`, success: false };
+    }
+  }
+
+  /**
+   * Execute a DILOCO_AGGREGATION work order (node-side aggregation
+   * re-architecture, Phase 3). DARK until Phase 4: the old coord (flag
+   * off) never dispatches this WO, so this handler only fires once the
+   * coord flips `DILOCO_NODE_AGGREGATION_ENABLED=true` AND this node has
+   * a configured S3 bucket (`AWS_DILOCO_BUCKET`). It is correct + compiles
+   * now.
+   *
+   * Downloads the pinned gradients + prevAdapter + prevVelocity from the
+   * shared S3 bucket (sha256-verified, P2 fail-closed), runs the
+   * CPU-pinned aggregation script, uploads the candidate to the
+   * per-aggregator prefix (P36), then commits + reveals a SIGNED result.
+   */
+  async executeDilocoAggregationWorkOrder(
+    workOrder: WorkOrder,
+    peerId: string,
+    coordinatorUrl: string,
+  ): Promise<{ result: string; success: boolean }> {
+    logger.log(` Executing DILOCO_AGGREGATION: ${workOrder.title}`);
+    let payload: DiLoCoAggregationWorkOrderPayload;
+    try {
+      payload = JSON.parse(workOrder.description) as DiLoCoAggregationWorkOrderPayload;
+    } catch {
+      return { result: 'Invalid DiLoCo aggregation payload', success: false };
+    }
+
+    try {
+      const submission = await runDiLoCoAggregation({
+        workOrderId: workOrder.id,
+        peerId,
+        coordinatorUrl,
+        payload,
+      });
+      logger.log(
+        ` DiLoCo aggregation complete — round=${submission.roundId}, ` +
+        `accepted=${submission.invariants.acceptedPeerIds.length}, ` +
+        `adapter=${submission.adapterS3Key}`,
+      );
+      return { result: JSON.stringify(submission), success: true };
+    } catch (err) {
+      const stage = err instanceof DiLoCoAggregationError ? `[${err.stage}] ` : '';
+      const msg = (err as Error).message;
+      logger.error(` DiLoCo aggregation failed ${stage}${msg}`);
+      return { result: `DiLoCo aggregation failed ${stage}${msg}`, success: false };
     }
   }
 

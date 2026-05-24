@@ -50,6 +50,14 @@ const WO_TYPE_TO_CAP: Record<
   // Training family
   TRAINING: 'cpu_training',
   DILOCO_TRAINING: 'diloco_training',
+  // Node-side aggregation re-architecture (Phase 3). The coord ships
+  // `requiredCapabilities: ['gpu_training']` for DILOCO_AGGREGATION WOs
+  // (reuses the existing cap — every DiLoCo training node already
+  // advertises it, so no node-release gate for a new cap string, design
+  // §3.1). The runner additionally fails closed when AWS_DILOCO_BUCKET is
+  // unset, so an un-provisioned gpu_training node simply returns
+  // success=false without aggregating.
+  DILOCO_AGGREGATION: 'gpu_training',
   LORA_TRAINING: 'lora_training',
   // LoRA validation runs on the same Python stack as LoRA training.
   // Additional opt-in env gate (LORA_VALIDATOR_ENABLED) enforced in

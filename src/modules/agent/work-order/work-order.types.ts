@@ -42,7 +42,7 @@ export interface WorkOrder {
   assigneeAddress?: string;
   createdAt: number;
   expiresAt?: number;
-  type?: 'TRAINING' | 'RESEARCH' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'MOLECULAR_DOCKING' | 'LORA_TRAINING' | 'LORA_VALIDATION';
+  type?: 'TRAINING' | 'RESEARCH' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'DILOCO_AGGREGATION' | 'MOLECULAR_DOCKING' | 'LORA_TRAINING' | 'LORA_VALIDATION';
   metadata?: Record<string, string>;
 }
 
@@ -131,6 +131,49 @@ export interface DiLoCoWorkOrderPayload {
     batchSize?: number;
   };
   deadline: number;
+}
+
+/**
+ * DILOCO_AGGREGATION WO payload (node-side aggregation re-architecture,
+ * Phase 3). Coord → node contract — MUST match field-for-field the
+ * payload the coord builds in
+ * `WorkOrderCreationService.createDiLoCoAggregationWorkOrder` (design §3.1).
+ * Shipped as JSON in `WorkOrder.description`.
+ *
+ * Everything here is coord-pinned: the node MUST NOT recompute
+ * `stakeWeight` (it has no stake oracle) and MUST use the exact pinned
+ * `prevVelocity` / `prevAdapter` S3 keys (NOT node-local velocity — §2
+ * velocity carry-over). `s3Key` values are bucket-relative keys in the
+ * shared DiLoCo S3 bucket (`AWS_DILOCO_BUCKET`).
+ */
+export interface DiLoCoAggregationGradient {
+  peerId: string;
+  walletAddress: string | null;
+  /** Bucket-relative S3 key of the peer's pinned gradient. */
+  s3Key: string;
+  /** Hex sha256 (64 chars) the node MUST verify on download (P2). */
+  sha256: string;
+  /** Coord-computed sqrt-stake weight — node uses verbatim. */
+  stakeWeight: number;
+}
+
+export interface DiLoCoAggregationWorkOrderPayload {
+  roundId: string;
+  domain: string;
+  outerRound: number;
+  modelId: string;
+  momentum: number;
+  gradients: DiLoCoAggregationGradient[];
+  /** Round 0 → null (§2 adapter-accumulation cold-start). */
+  prevAdapter: { s3Key: string; sha256: string } | null;
+  /** Round 0 → null (§2 velocity carry-over cold-start). */
+  prevVelocity: { s3Key: string; sha256: string } | null;
+  /** Canonical cosine-reject threshold, coord-pinned. */
+  cosineRejectThreshold: number;
+  /** Coord-computed quorum; echoed back in the result, coord re-checks. */
+  effectiveQuorum: number;
+  /** Aggregation WO deadline (unix ms). */
+  deadlineMs: number;
 }
 
 export interface CpuInferenceWorkOrderPayload {
