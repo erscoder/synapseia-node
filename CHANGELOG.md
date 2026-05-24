@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-25] fix(diloco): 0.8.122 - report coord-provided attempt-unique candidate key (8efadca2)
+
+`0.8.121` -> `0.8.122`. The candidate S3 key was scoped only by `(domain, outerRound, peerId)`; a
+redispatch to the same peer overwrote the object, so the coord's later byte-verify hashed the
+overwritten bytes (not the revealed ones) → false sha mismatch → round FAILED + false misbehavior
+(live round 1230). The runner now reports `adapterS3Key`/`velocityS3Key` from the coord WO payload
+(`payload.adapterS3Key ?? <legacy round-level rebuild>`), so the revealed key references the EXACT
+object the presigned PUT wrote. Pairs with the coord attempt-unique key
+(`…/candidates/${peerId}/${workOrderId}/adapter_weights.pkl`). **DEPLOY ORDER: node FIRST, then coord**
+(coord-new + node-old would re-break). Backward-compatible with old coord (legacy fallback). 43 tests.
+
 ## [2026-05-24] fix(diloco): 0.8.121 - aggregation accepts list SVD components + correct reconstruction (no transpose) (783387e3)
 
 `0.8.120` -> `0.8.121`. Both GPU pods failed DiLoCo aggregation with
