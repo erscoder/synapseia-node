@@ -572,31 +572,44 @@ describe('Bug NEW-2 — reclaimable page-cache add-back (parseReclaimableFromMem
   ].join('\n');
 
   const INACTIVE_FILE_MB = Math.floor(18166677504 / 1024 / 1024); // 17324
+  const ACTIVE_FILE_MB = Math.floor(27276017664 / 1024 / 1024); // 26012
+  // Bug NEW-2 part 2: add back BOTH file caches (inactive + active).
+  const BOTH_FILE_MB = INACTIVE_FILE_MB + ACTIVE_FILE_MB; // 43336
 
-  it('v1: parses total_inactive_file (17324 MB) from real pod2 memory.stat', () => {
-    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(INACTIVE_FILE_MB);
+  it('v1: sums total_inactive_file + total_active_file from real pod2 memory.stat', () => {
+    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(BOTH_FILE_MB);
   });
 
-  it('v2: parses bare inactive_file (17324 MB), not the v1 total_ key', () => {
-    expect(parseReclaimableFromMemStat(V2_STAT, 'v2')).toBe(INACTIVE_FILE_MB);
+  it('v2: sums bare inactive_file + active_file, not the v1 total_ keys', () => {
+    expect(parseReclaimableFromMemStat(V2_STAT, 'v2')).toBe(BOTH_FILE_MB);
   });
 
   it('v1: does NOT match total_inactive_anon (prefix collision guard)', () => {
     // total_inactive_anon shares the "total_inactive_" prefix with the
     // key we want; an exact-key match must pick total_inactive_file.
-    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(INACTIVE_FILE_MB);
+    expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).toBe(BOTH_FILE_MB);
     // The anon value is 0 here; ensure we did NOT return 0.
     expect(parseReclaimableFromMemStat(POD2_V1_STAT, 'v1')).not.toBe(0);
   });
 
-  it('returns NaN when the key is absent (caller falls back to bare free)', () => {
+  it('v1: counts inactive_file alone when active_file is absent', () => {
+    const inactiveOnly = 'total_inactive_file 18166677504\ntotal_active_file not-a-number\n';
+    expect(parseReclaimableFromMemStat(inactiveOnly, 'v1')).toBe(INACTIVE_FILE_MB);
+  });
+
+  it('v2: counts active_file alone when inactive_file is absent', () => {
+    const activeOnly = 'active_file 27276017664\n';
+    expect(parseReclaimableFromMemStat(activeOnly, 'v2')).toBe(ACTIVE_FILE_MB);
+  });
+
+  it('returns NaN when BOTH file-cache keys are absent (caller falls back to bare free)', () => {
     const noKey = 'cache 1\nrss 2\n';
     expect(parseReclaimableFromMemStat(noKey, 'v1')).toBeNaN();
     expect(parseReclaimableFromMemStat(noKey, 'v2')).toBeNaN();
   });
 
-  it('returns NaN when the value is unparseable', () => {
-    const garbage = 'total_inactive_file not-a-number\n';
+  it('returns NaN when both values are unparseable', () => {
+    const garbage = 'total_inactive_file not-a-number\ntotal_active_file also-bad\n';
     expect(parseReclaimableFromMemStat(garbage, 'v1')).toBeNaN();
   });
 
@@ -607,11 +620,17 @@ describe('Bug NEW-2 — reclaimable page-cache add-back (parseReclaimableFromMem
 });
 
 describe('Bug NEW-2 — defaultGetContainerFreeMemMB reclaimable add-back (mocked fs)', () => {
-  // Live pod2 (cgroup v1) byte values, 2026-05-22.
+  // Live pod2 (cgroup v1) byte values, 2026-05-24. The over-skip scenario:
+  // active_file (39628 MB) dwarfs inactive_file (4391 MB); the inactive-only
+  // add-back gave free ≈ 7307 MB and SKIPPED DiLoCo QUANT (needs 8192 MB).
   const LIMIT_MB = 47683;
-  const USAGE_MB = 44046;
-  const INACTIVE_FILE_BYTES = 18166677504; // 17324 MB
-  const INACTIVE_FILE_MB = Math.floor(INACTIVE_FILE_BYTES / 1024 / 1024);
+  const USAGE_MB = 44808;
+  const INACTIVE_FILE_MB = 4391;
+  const ACTIVE_FILE_MB = 39628;
+  const INACTIVE_FILE_BYTES = INACTIVE_FILE_MB * 1024 * 1024;
+  const ACTIVE_FILE_BYTES = ACTIVE_FILE_MB * 1024 * 1024;
+  // Safety reserve withheld from the add-back (Bug NEW-2 part 2).
+  const RESERVE_MB = 256;
 
   const limitBytes = String(LIMIT_MB * 1024 * 1024);
   const usageBytes = String(USAGE_MB * 1024 * 1024);
@@ -620,7 +639,15 @@ describe('Bug NEW-2 — defaultGetContainerFreeMemMB reclaimable add-back (mocke
     'total_cache 45447675904',
     'total_rss 358612992',
     `total_inactive_file ${INACTIVE_FILE_BYTES}`,
-    'total_active_file 27276017664',
+    `total_active_file ${ACTIVE_FILE_BYTES}`,
+    '',
+  ].join('\n');
+
+  const V2_STAT = [
+    'anon 358612992',
+    'file 45447675904',
+    `inactive_file ${INACTIVE_FILE_BYTES}`,
+    `active_file ${ACTIVE_FILE_BYTES}`,
     '',
   ].join('\n');
 
@@ -650,27 +677,62 @@ describe('Bug NEW-2 — defaultGetContainerFreeMemMB reclaimable add-back (mocke
       });
   }
 
-  it('v1: free = (limit-usage) + total_inactive_file → ~21GB, not the old 3637MB', async () => {
+  // Helper: route fs.readFile so the v2 branch resolves (max + current + stat).
+  function mockV2Reads(statText: string) {
+    readFileSpy = jest
+      .spyOn(fs, 'readFile')
+      .mockImplementation(async (p: unknown) => {
+        const path = String(p);
+        if (path === '/sys/fs/cgroup/memory.max') return limitBytes as never;
+        if (path === '/sys/fs/cgroup/memory.current') return usageBytes as never;
+        if (path === '/sys/fs/cgroup/memory.stat') return statText as never;
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+  }
+
+  it('v1: free = (limit-usage) + inactive+active file − reserve → ~46GB, not the old 7307MB', async () => {
     mockV1Reads(V1_STAT);
     const free = await defaultGetContainerFreeMemMB();
-    const bare = LIMIT_MB - USAGE_MB; // 3637
-    expect(free).toBe(bare + INACTIVE_FILE_MB); // 3637 + 17324 = 20961
-    // Crucially: the new figure clears both heavy-training thresholds
-    // that the old 3637MB over-skipped.
-    expect(free).toBeGreaterThan(DILOCO_REQUIRED_FREE_MB_QUANT); // 8192
-    expect(free).toBeGreaterThan(LORA_REQUIRED_FREE_MB_QUANT); // 6144
+    const bare = LIMIT_MB - USAGE_MB; // 2875
+    const reclaim = INACTIVE_FILE_MB + ACTIVE_FILE_MB - RESERVE_MB; // 43763
+    expect(free).toBe(bare + reclaim); // 2875 + 43763 = 46638
+    // The pod2 over-skip: inactive-only gave ≈7307 MB and SKIPPED QUANT.
+    // Both-cache add-back must now CLEAR the 8192 MB QUANT requirement.
+    const inactiveOnly = bare + INACTIVE_FILE_MB; // 7266 — old behavior, < 8192
+    expect(inactiveOnly).toBeLessThan(DILOCO_REQUIRED_FREE_MB_QUANT);
+    expect(free).toBeGreaterThan(DILOCO_REQUIRED_FREE_MB_QUANT); // 8192 → PASS
+    expect(free).toBeGreaterThan(LORA_REQUIRED_FREE_MB_QUANT); // 6144 → PASS
+  });
+
+  it('v2: free = (max-current) + inactive+active file − reserve → same ~46GB, clears QUANT', async () => {
+    mockV2Reads(V2_STAT);
+    const free = await defaultGetContainerFreeMemMB();
+    const bare = LIMIT_MB - USAGE_MB; // 2875
+    const reclaim = INACTIVE_FILE_MB + ACTIVE_FILE_MB - RESERVE_MB; // 43763
+    expect(free).toBe(bare + reclaim);
+    expect(free).toBeGreaterThan(DILOCO_REQUIRED_FREE_MB_QUANT);
+  });
+
+  it('v1: safety reserve (RECLAIM_RESERVE_MB=256) is withheld from the add-back', async () => {
+    mockV1Reads(V1_STAT);
+    const free = await defaultGetContainerFreeMemMB();
+    const bare = LIMIT_MB - USAGE_MB;
+    // Pin the SIGKILL-direction behavior: free is exactly the reserve below
+    // the un-discounted both-cache figure.
+    const noReserve = bare + INACTIVE_FILE_MB + ACTIVE_FILE_MB;
+    expect(free).toBe(noReserve - RESERVE_MB);
   });
 
   it('v1: memory.stat unreadable → falls back to bare (limit-usage), NOT 0', async () => {
     mockV1Reads(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
     const free = await defaultGetContainerFreeMemMB();
     // No add-back, but we keep the conservative lower bound (no fail-CLOSED-to-0).
-    expect(free).toBe(LIMIT_MB - USAGE_MB); // 3637
+    expect(free).toBe(LIMIT_MB - USAGE_MB); // 2875
   });
 
-  it('v1: memory.stat present but key absent → bare free (NaN add-back ignored)', async () => {
+  it('v1: memory.stat present but both file keys absent → bare free (NaN add-back ignored)', async () => {
     mockV1Reads('total_cache 1\ntotal_rss 2\n');
     const free = await defaultGetContainerFreeMemMB();
-    expect(free).toBe(LIMIT_MB - USAGE_MB); // 3637
+    expect(free).toBe(LIMIT_MB - USAGE_MB); // 2875
   });
 });

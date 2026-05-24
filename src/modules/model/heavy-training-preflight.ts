@@ -287,6 +287,17 @@ const CGROUP_V1_USAGE = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
 const CGROUP_V1_STAT = '/sys/fs/cgroup/memory/memory.stat';
 const DROP_CACHES_PATH = '/proc/sys/vm/drop_caches';
 
+/**
+ * Reserve (MB) withheld from the reclaimable add-back (Bug NEW-2 part 2).
+ * active_file pages are reclaimable but slightly hotter than inactive_file,
+ * and the kernel keeps a low watermark it will not let us touch. We mirror
+ * `MemAvailable`'s conservatism by subtracting a small fixed reserve so the
+ * gate never over-counts free in the SIGKILL direction. 256 MB is negligible
+ * against the 25%-margin thresholds (so it cannot cause an over-skip) but
+ * keeps us defensively below the true reclaimable ceiling.
+ */
+const RECLAIM_RESERVE_MB = 256;
+
 // One-time WARN guards: if memory.stat is unreadable / unparseable we
 // LOSE the reclaimable-cache bonus and fall back to the OLD bare
 // (limit-usage / max-current) figure for that branch. That base value is
@@ -329,44 +340,77 @@ let v1ReclaimWarned = false;
  * DiLoCo ("needs 8192MB free, only 3488MB") / LoRA ("needs 6144MB, only
  * 1887MB") on a pod with tens of GB of evictable cache.
  *
- * Which key we read
- * -----------------
- * We add back `inactive_file` (v2) / `total_inactive_file` (v1) ONLY.
- * That is the kernel's least-recently-used, immediately-reclaimable
- * file-backed set — the most conservative "definitely free under
- * pressure" figure. `active_file` and `slab_reclaimable` are ALSO
- * reclaimable but require more scan work / are partly dirty, so we
- * deliberately leave them out to keep the gate conservative (P24
- * direction: prefer under-counting free over over-counting).
+ * Which keys we read (Bug NEW-2 part 2, 2026-05-24)
+ * -------------------------------------------------
+ * We add back BOTH `inactive_file` + `active_file` (v2) /
+ * `total_inactive_file` + `total_active_file` (v1). The original NEW-2
+ * fix counted only the inactive set, but clean, file-backed ACTIVE pages
+ * are also reclaimable under allocation pressure — the kernel evicts them
+ * before OOM-killing, and /proc/meminfo `MemAvailable` counts both active
+ * and inactive file pages. Excluding active_file massively under-reports
+ * free memory on cache-heavy pods.
+ *
+ * Live evidence (pod2, cgroup v1, 2026-05-24, limit 47683 MB)
+ * -----------------------------------------------------------
+ *   rss                 =   386 MB   (tiny actual process footprint)
+ *   total_active_file   = 39628 MB
+ *   total_inactive_file =  4391 MB
+ * Inactive-only add-back gave free = (47683-44808) + 4391 ≈ 7307 MB → the
+ * gate SKIPPED DiLoCo QUANT ("needs 8192MB, only 7307MB") even though
+ * ~46 GB was evictable. Counting both file sets fixes the over-skip.
+ *
+ * SAFETY (P24, the SIGKILL direction)
+ * -----------------------------------
+ * active_file pages are slightly hotter than inactive_file and the kernel
+ * keeps a low watermark, so the caller withholds a small `RECLAIM_RESERVE_MB`
+ * before adding the figure to bare free (mirroring `MemAvailable`'s
+ * conservatism). The required-MB thresholds already bake in a 25% margin
+ * (see the DILOCO/LORA docblocks), so this stays well clear of over-skip
+ * while never over-counting free. `slab_reclaimable` is still left out
+ * (partly dirty / more scan work) to keep the gate conservative.
  *
  * @param statText raw contents of memory.stat (key/value lines, bytes).
  * @param v 'v1' (keys prefixed `total_`) or 'v2' (bare keys).
- * @returns reclaimable MB, or NaN if the key is absent / unparseable so
- *          the caller can decide to fall back to the bare free figure.
+ * @returns reclaimable MB (inactive_file + active_file), or NaN if NEITHER
+ *          file-cache key is present / parseable so the caller can fall
+ *          back to the bare free figure (fail-CLOSED, never inflated).
  */
 export function parseReclaimableFromMemStat(
   statText: string,
   v: 'v1' | 'v2',
 ): number {
-  const key = v === 'v1' ? 'total_inactive_file' : 'inactive_file';
-  for (const line of statText.split('\n')) {
-    // cgroup memory.stat lines are "key value" (single space, value in
-    // bytes). Match the exact key to avoid e.g. `total_inactive_anon`
-    // sharing a prefix.
-    const trimmed = line.trim();
-    if (!trimmed.startsWith(key + ' ')) continue;
-    const bytes = Number(trimmed.slice(key.length + 1).trim());
-    if (!Number.isFinite(bytes) || bytes < 0) return NaN;
-    return Math.floor(bytes / 1024 / 1024);
-  }
-  return NaN;
+  const inactiveKey = v === 'v1' ? 'total_inactive_file' : 'inactive_file';
+  const activeKey = v === 'v1' ? 'total_active_file' : 'active_file';
+  // Read one exact-key value (bytes) out of memory.stat, or NaN if absent /
+  // unparseable. Exact-key match avoids e.g. `total_inactive_anon` sharing
+  // a prefix with `total_inactive_file`.
+  const readKey = (key: string): number => {
+    for (const line of statText.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith(key + ' ')) continue;
+      const bytes = Number(trimmed.slice(key.length + 1).trim());
+      if (!Number.isFinite(bytes) || bytes < 0) return NaN;
+      return bytes;
+    }
+    return NaN;
+  };
+  const inactive = readKey(inactiveKey);
+  const active = readKey(activeKey);
+  // Sum whichever file-cache keys are present. NaN only if NEITHER parses,
+  // so the caller falls back to bare free (fail-CLOSED, never inflated).
+  const total =
+    (Number.isFinite(inactive) ? inactive : 0) +
+    (Number.isFinite(active) ? active : 0);
+  if (!Number.isFinite(inactive) && !Number.isFinite(active)) return NaN;
+  return Math.floor(total / 1024 / 1024);
 }
 
 /**
- * Read a cgroup memory.stat file and return the reclaimable (inactive_file)
- * MB, or NaN on any read/parse failure. On NaN the caller adds nothing —
- * it keeps the bare (limit-usage / max-current) free figure, which is a
- * valid conservative lower bound (NOT fail-CLOSED-to-0; see
+ * Read a cgroup memory.stat file and return the reclaimable file-cache
+ * (inactive_file + active_file) MB MINUS `RECLAIM_RESERVE_MB`, or NaN on
+ * any read/parse failure. On NaN the caller adds nothing — it keeps the
+ * bare (limit-usage / max-current) free figure, which is a valid
+ * conservative lower bound (NOT fail-CLOSED-to-0; see
  * `defaultGetContainerFreeMemMB` docblock). Invokes `onMiss` once on
  * failure so the caller can emit a one-time WARN.
  */
@@ -382,7 +426,9 @@ async function readReclaimableMB(
       onMiss();
       return NaN;
     }
-    return mb;
+    // Withhold the safety reserve (Bug NEW-2 part 2). Clamp at 0 so a tiny
+    // cache never pushes the add-back negative below bare free.
+    return Math.max(0, mb - RECLAIM_RESERVE_MB);
   } catch {
     onMiss();
     return NaN;
@@ -666,9 +712,10 @@ export async function defaultGetContainerFreeMemMB(): Promise<number> {
     const max = Number(maxTrim);
     if (Number.isFinite(max) && Number.isFinite(current) && max > 0) {
       const bareFree = Math.floor((max - current) / 1024 / 1024);
-      // Add back immediately-reclaimable file cache (inactive_file).
-      // current counts it, but the kernel evicts it for free under
-      // pressure — no drop_caches/CAP_SYS_ADMIN needed.
+      // Add back immediately-reclaimable file cache (inactive_file +
+      // active_file, minus RECLAIM_RESERVE_MB). current counts it, but the
+      // kernel evicts it for free under pressure — no drop_caches/CAP_SYS_ADMIN
+      // needed. See parseReclaimableFromMemStat Bug NEW-2 part 2 docblock.
       const reclaim = await readReclaimableMB(CGROUP_V2_STAT, 'v2', () => {
         if (!v2ReclaimWarned) {
           v2ReclaimWarned = true;
@@ -696,10 +743,10 @@ export async function defaultGetContainerFreeMemMB(): Promise<number> {
     // v1 reports an absurd sentinel (~9.2e18) for "no limit".
     if (Number.isFinite(limit) && Number.isFinite(usage) && limit > 0 && limit < 1e18) {
       const bareFree = Math.floor((limit - usage) / 1024 / 1024);
-      // Add back immediately-reclaimable file cache (total_inactive_file).
-      // usage_in_bytes counts it, but it is evicted for free under
-      // pressure — no drop_caches/CAP_SYS_ADMIN needed. See pod2 evidence
-      // in parseReclaimableFromMemStat.
+      // Add back immediately-reclaimable file cache (total_inactive_file +
+      // total_active_file, minus RECLAIM_RESERVE_MB). usage_in_bytes counts
+      // it, but it is evicted for free under pressure — no drop_caches/
+      // CAP_SYS_ADMIN needed. See pod2 evidence in parseReclaimableFromMemStat.
       const reclaim = await readReclaimableMB(CGROUP_V1_STAT, 'v1', () => {
         if (!v1ReclaimWarned) {
           v1ReclaimWarned = true;
