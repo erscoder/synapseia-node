@@ -6,7 +6,6 @@ import * as path from 'path';
 import * as os from 'os';
 import logger from '../../utils/logger';
 import { tcp } from '@libp2p/tcp';
-import { webSockets } from '@libp2p/websockets';
 import { noise } from '@libp2p/noise';
 import { yamux } from '@libp2p/yamux';
 import { gossipsub } from '@libp2p/gossipsub';
@@ -111,16 +110,7 @@ export class P2PNode {
 
     this.node = await createLibp2p({
       privateKey,
-      // `tcp()` stays as a fallback for local/dev peers reachable on raw
-      // TCP. `webSockets()` is the transport that actually connects to the
-      // public coordinator behind Fly's shared IPv4: raw TCP 9000 is RESET
-      // by the Fly edge (non-HTTP), but the coord's WS listener on 9001 is
-      // exposed via the `[http]` handler and reachable as a TLS-terminated
-      // secure WebSocket on `/dns4/<host>/tcp/443/wss/...`. v10 of
-      // @libp2p/websockets dials every WS / WSS multiaddr by default (no
-      // `filter` option exists / is needed), so DNS + wss addrs are NOT
-      // dropped — the v9-era "default filter drops DNS" footgun is gone.
-      transports: [tcp(), webSockets()],
+      transports: [tcp()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       services: svc as any,

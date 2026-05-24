@@ -92,9 +92,6 @@ importers:
       '@libp2p/utils':
         specifier: 7.1.0
         version: 7.1.0
-      '@libp2p/websockets':
-        specifier: ^10.1.6
-        version: 10.1.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@libp2p/yamux':
         specifier: ^8.0.1
         version: 8.0.1
@@ -1179,9 +1176,6 @@ packages:
   '@libp2p/utils@7.2.1':
     resolution: {integrity: sha512-tRBQHUqgggXATgTY8S0A8amdhljZ7Xx9nAWDOpfvW/ojDVY89BpIJfKLEe0TUD9Lc/3pSmlAC6oBYaHe2jP9UA==}
 
-  '@libp2p/websockets@10.1.13':
-    resolution: {integrity: sha512-p0gVOeehKqkE9SWceY17NYeeO0ZuyoLu30GhJU7bAO9iG/s/0bON6+mKvks2ALvVGUCrJSqUE0qzNZHMGixOMg==}
-
   '@libp2p/yamux@8.0.1':
     resolution: {integrity: sha512-d4ObT4Yumnfz9v6+HWkb/gRgIXvJ3kpva9W98or/ngdH2S0BDnbtT9lslpopl+61mVPxMwxuuwkDDLD7S6wmeg==}
 
@@ -1194,9 +1188,6 @@ packages:
 
   '@multiformats/multiaddr-matcher@3.0.2':
     resolution: {integrity: sha512-iphGQJliZxe2yKu57bdRDgeS+3znc5uXtMybDO1Wau3rIjas4zjrjlyxmFz3wqyUL9f3VDQwas/ZqA7N4QeSfw==}
-
-  '@multiformats/multiaddr-to-uri@12.0.0':
-    resolution: {integrity: sha512-3uIEBCiy8tfzxYYBl81x1tISiNBQ7mHU4pGjippbJRoQYHzy/ZdZM/7JvTldr8pc/dzpkaNJxnsuxxlhsPOJsA==}
 
   '@multiformats/multiaddr@13.0.3':
     resolution: {integrity: sha512-mEqqJ4r3a/uuFMTpRkU316wGNIDQNhuVWpm+ebKTQeYsfv9jXbPONWM6VVnj3KGUrwfsX7GZOyp4TFqEA2SPCw==}
@@ -5352,23 +5343,6 @@ snapshots:
       uint8arraylist: 2.4.9
       uint8arrays: 5.1.1
 
-  '@libp2p/websockets@10.1.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
-    dependencies:
-      '@libp2p/interface': 3.2.2
-      '@libp2p/utils': 7.2.1
-      '@multiformats/multiaddr': 13.0.3
-      '@multiformats/multiaddr-matcher': 3.0.2
-      '@multiformats/multiaddr-to-uri': 12.0.0
-      main-event: 1.0.4
-      p-event: 7.1.0
-      progress-events: 1.1.0
-      uint8arraylist: 2.4.9
-      uint8arrays: 5.1.1
-      ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@libp2p/yamux@8.0.1':
     dependencies:
       '@libp2p/interface': 3.2.2
@@ -5388,10 +5362,6 @@ snapshots:
       uint8arrays: 5.1.1
 
   '@multiformats/multiaddr-matcher@3.0.2':
-    dependencies:
-      '@multiformats/multiaddr': 13.0.3
-
-  '@multiformats/multiaddr-to-uri@12.0.0':
     dependencies:
       '@multiformats/multiaddr': 13.0.3
 
