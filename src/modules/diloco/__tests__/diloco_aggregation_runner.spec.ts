@@ -1,10 +1,13 @@
 /**
- * DiLoCo aggregation runner tests (node-side aggregation, Phase 3).
+ * DiLoCo aggregation runner tests (node-side aggregation, Phase 4 —
+ * coord-mediated presigned-URL S3 I/O).
  *
- * S3, the python script, identity and HTTP are all injected (the runner
- * exposes test seams) so these run fast + offline. The python script
- * itself is covered separately by
- * `scripts/__tests__/diloco_aggregate_executor_test.py` (real torch).
+ * The presigned-URL HTTP I/O, the python script, identity and the signed
+ * POSTs are all injected (the runner exposes test seams) so these run fast +
+ * offline. The node holds NO AWS creds: every input is fetched via the
+ * coord-presigned `downloadUrl` and the candidate is PUT via
+ * `adapterUploadUrl`/`velocityUploadUrl`. The python script itself is covered
+ * separately by `scripts/__tests__/diloco_aggregate_executor_test.py`.
  */
 import * as os from 'os';
 import * as path from 'path';
@@ -18,30 +21,9 @@ import {
 } from '../diloco_aggregation_runner';
 import type { DiLoCoAggregationWorkOrderPayload } from '../../agent/work-order/work-order.types';
 import { computeCommitment } from '../diloco-aggregation-commitment';
-import type { DiLoCoAggregationS3 } from '../diloco-aggregation-s3';
+import type { DiLoCoAggregationHttpIO } from '../diloco-aggregation-http';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
-
-// A tiny in-memory S3 double: each key maps to a fixed buffer; sha256 of
-// the buffer is what we pin in the WO so the verify passes by default.
-function makeS3(objects: Record<string, Buffer>): {
-  s3: DiLoCoAggregationS3;
-  puts: Array<{ key: string; sha256: string; len: number }>;
-} {
-  const puts: Array<{ key: string; sha256: string; len: number }> = [];
-  const s3: DiLoCoAggregationS3 = {
-    bucket: 'test-bucket',
-    async getObject(key: string): Promise<Buffer> {
-      const buf = objects[key];
-      if (!buf) throw new Error(`no such key ${key}`);
-      return buf;
-    },
-    async putObject(key: string, body: Buffer, sha256Hex: string): Promise<void> {
-      puts.push({ key, sha256: sha256Hex, len: body.length });
-    },
-  };
-  return { s3, puts };
-}
 
 const PEER = 'aggpeer123';
 const WALLET = 'WaLLeT1111111111111111111111111111111111111';
@@ -51,6 +33,35 @@ const gradBufB = Buffer.from('gradient-B-bytes');
 const prevAdapBuf = Buffer.from('prev-adapter-bytes');
 const prevVelBuf = Buffer.from('prev-velocity-bytes');
 
+// Presigned URLs — opaque https URLs keyed to each input so the HTTP double
+// can map url → bytes (the runner only ever sees `downloadUrl`, not the key).
+const URL_GRAD_A = 'https://s3.example.com/med/round_7/gradients/p1.pt?sig=A';
+const URL_GRAD_B = 'https://s3.example.com/med/round_7/gradients/p2.pt?sig=B';
+const URL_PREV_ADAPTER = 'https://s3.example.com/med/latest/adapter_weights.pkl?sig=PA';
+const URL_PREV_VELOCITY = 'https://s3.example.com/med/velocity/round_6.pkl?sig=PV';
+const URL_PUT_ADAPTER = `https://s3.example.com/med/round_7/candidates/${PEER}/adapter_weights.pkl?sig=UA`;
+const URL_PUT_VELOCITY = `https://s3.example.com/med/round_7/candidates/${PEER}/velocity.pkl?sig=UV`;
+
+// A tiny in-memory presigned-URL HTTP double: GET maps url → buffer; PUT
+// records the upload (url + sha256 of the body + length).
+function makeHttpIO(objects: Record<string, Buffer>): {
+  httpIO: DiLoCoAggregationHttpIO;
+  puts: Array<{ url: string; sha256: string; len: number }>;
+} {
+  const puts: Array<{ url: string; sha256: string; len: number }> = [];
+  const httpIO: DiLoCoAggregationHttpIO = {
+    async getUrl(url: string): Promise<Buffer> {
+      const buf = objects[url];
+      if (!buf) throw new DiLoCoAggregationError(`no such url ${url}`, 'download');
+      return buf;
+    },
+    async putUrl(url: string, body: Buffer): Promise<void> {
+      puts.push({ url, sha256: sha(body), len: body.length });
+    },
+  };
+  return { httpIO, puts };
+}
+
 function basePayload(over: Partial<DiLoCoAggregationWorkOrderPayload> = {}): DiLoCoAggregationWorkOrderPayload {
   return {
     roundId: 'diloco_med_7_1700000000000',
@@ -59,11 +70,13 @@ function basePayload(over: Partial<DiLoCoAggregationWorkOrderPayload> = {}): DiL
     modelId: 'Qwen/Qwen2.5-7B-Instruct',
     momentum: 0.9,
     gradients: [
-      { peerId: 'p1', walletAddress: 'w1', s3Key: 'med/round_7/gradients/p1.pt', sha256: sha(gradBufA), stakeWeight: 0.6 },
-      { peerId: 'p2', walletAddress: 'w2', s3Key: 'med/round_7/gradients/p2.pt', sha256: sha(gradBufB), stakeWeight: 0.4 },
+      { peerId: 'p1', walletAddress: 'w1', s3Key: 'med/round_7/gradients/p1.pt', sha256: sha(gradBufA), stakeWeight: 0.6, downloadUrl: URL_GRAD_A },
+      { peerId: 'p2', walletAddress: 'w2', s3Key: 'med/round_7/gradients/p2.pt', sha256: sha(gradBufB), stakeWeight: 0.4, downloadUrl: URL_GRAD_B },
     ],
-    prevAdapter: { s3Key: 'med/latest/adapter_weights.pkl', sha256: sha(prevAdapBuf) },
-    prevVelocity: { s3Key: 'med/velocity/round_6.pkl', sha256: sha(prevVelBuf) },
+    prevAdapter: { s3Key: 'med/latest/adapter_weights.pkl', sha256: sha(prevAdapBuf), downloadUrl: URL_PREV_ADAPTER },
+    prevVelocity: { s3Key: 'med/velocity/round_6.pkl', sha256: sha(prevVelBuf), downloadUrl: URL_PREV_VELOCITY },
+    adapterUploadUrl: URL_PUT_ADAPTER,
+    velocityUploadUrl: URL_PUT_VELOCITY,
     cosineRejectThreshold: 0.3,
     effectiveQuorum: 2,
     deadlineMs: 1700000900000,
@@ -73,11 +86,11 @@ function basePayload(over: Partial<DiLoCoAggregationWorkOrderPayload> = {}): DiL
 
 const objectsFor = (p: DiLoCoAggregationWorkOrderPayload): Record<string, Buffer> => {
   const o: Record<string, Buffer> = {
-    [p.gradients[0].s3Key]: gradBufA,
-    [p.gradients[1].s3Key]: gradBufB,
+    [p.gradients[0].downloadUrl]: gradBufA,
+    [p.gradients[1].downloadUrl]: gradBufB,
   };
-  if (p.prevAdapter) o[p.prevAdapter.s3Key] = prevAdapBuf;
-  if (p.prevVelocity) o[p.prevVelocity.s3Key] = prevVelBuf;
+  if (p.prevAdapter) o[p.prevAdapter.downloadUrl] = prevAdapBuf;
+  if (p.prevVelocity) o[p.prevVelocity.downloadUrl] = prevVelBuf;
   return o;
 };
 
@@ -113,7 +126,7 @@ const identity = { privateKeyHex: PRIV_HEX, publicKeyHex: PUB_HEX, peerId: PEER 
 
 function makeOptions(over: Partial<RunDiLoCoAggregationOptions> = {}): RunDiLoCoAggregationOptions {
   return {
-    s3: makeS3({}).s3, // replaced per-test
+    httpIO: makeHttpIO({}).httpIO, // replaced per-test
     identity,
     runScript: makeRunScript(),
     nonce: 'ab'.repeat(32),
@@ -134,25 +147,25 @@ describe('runDiLoCoAggregation', () => {
     delete process.env.SYNAPSEIA_WALLET_ADDRESS;
   });
 
-  it('happy path: downloads pinned keys, runs, uploads candidate, commits + reveals', async () => {
+  it('happy path: downloads via presigned URLs, runs, uploads candidate via PUT URLs, commits + reveals', async () => {
     const payload = basePayload();
-    const { s3, puts } = makeS3(objectsFor(payload));
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
-    const opts = makeOptions({ s3, httpPost, workDir });
+    const opts = makeOptions({ httpIO, httpPost, workDir });
 
     const sub = await runDiLoCoAggregation(
       { workOrderId: 'wo_diloco_agg_1', peerId: PEER, coordinatorUrl: 'https://coord', payload },
       opts,
     );
 
-    // candidate uploaded to the per-aggregator prefix (P36)
-    expect(puts.map((p) => p.key).sort()).toEqual([
-      `med/round_7/candidates/${PEER}/adapter_weights.pkl`,
-      `med/round_7/candidates/${PEER}/velocity.pkl`,
-    ]);
+    // candidate uploaded via the per-aggregator presigned PUT URLs (P36)
+    expect(puts.map((p) => p.url).sort()).toEqual([URL_PUT_ADAPTER, URL_PUT_VELOCITY].sort());
     expect(sub.aggregatorPeerId).toBe(PEER);
     expect(sub.aggregatorWallet).toBe(WALLET);
+    // reported s3Key = the candidate key behind the presigned PUT URL so the
+    // coord (which has direct S3) can read it back + verify sha256.
     expect(sub.adapterS3Key).toBe(`med/round_7/candidates/${PEER}/adapter_weights.pkl`);
+    expect(sub.velocityS3Key).toBe(`med/round_7/candidates/${PEER}/velocity.pkl`);
     expect(sub.invariants.acceptedPeerIds).toEqual(['p1', 'p2']);
 
     // commit + reveal both posted, in order
@@ -164,9 +177,9 @@ describe('runDiLoCoAggregation', () => {
 
   it('commit body carries commitment == sha256(canonicalEnvelope || nonce)', async () => {
     const payload = basePayload();
-    const { s3 } = makeS3(objectsFor(payload));
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
-    const opts = makeOptions({ s3, httpPost, workDir });
+    const opts = makeOptions({ httpIO, httpPost, workDir });
 
     const sub = await runDiLoCoAggregation(
       { workOrderId: 'wo_diloco_agg_2', peerId: PEER, coordinatorUrl: 'https://coord', payload },
@@ -181,9 +194,9 @@ describe('runDiLoCoAggregation', () => {
 
   it('reveal body carries the nonce + invariants and matches the commitment', async () => {
     const payload = basePayload();
-    const { s3 } = makeS3(objectsFor(payload));
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
-    const opts = makeOptions({ s3, httpPost, workDir });
+    const opts = makeOptions({ httpIO, httpPost, workDir });
 
     const sub = await runDiLoCoAggregation(
       { workOrderId: 'wo_diloco_agg_3', peerId: PEER, coordinatorUrl: 'https://coord', payload },
@@ -211,11 +224,11 @@ describe('runDiLoCoAggregation', () => {
 
   it('reveal carries a non-empty body signature AND a transport X-Signature header (both required)', async () => {
     const payload = basePayload();
-    const { s3 } = makeS3(objectsFor(payload));
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
     await runDiLoCoAggregation(
       { workOrderId: 'wo_diloco_agg_sig', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-      makeOptions({ s3, httpPost, workDir }),
+      makeOptions({ httpIO, httpPost, workDir }),
     );
     const revealHeaders = httpPost.mock.calls[1][1] as Record<string, string>;
     const revealBody = httpPost.mock.calls[1][2] as { signature: string };
@@ -241,11 +254,11 @@ describe('runDiLoCoAggregation', () => {
     (ed.hashes as Record<string, unknown>).sha512 = sha512;
 
     const payload = basePayload();
-    const { s3 } = makeS3(objectsFor(payload));
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
     await runDiLoCoAggregation(
       { workOrderId: 'wo_sig_parity', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-      makeOptions({ s3, httpPost, workDir }),
+      makeOptions({ httpIO, httpPost, workDir }),
     );
     const headers = httpPost.mock.calls[1][1] as Record<string, string>;
     const body = httpPost.mock.calls[1][2];
@@ -276,14 +289,14 @@ describe('runDiLoCoAggregation', () => {
   it('fails closed on gradient sha256 mismatch — no script, no upload, no commit', async () => {
     const payload = basePayload();
     payload.gradients[1].sha256 = 'f'.repeat(64); // wrong
-    const { s3, puts } = makeS3(objectsFor(payload));
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
     const runScript = jest.fn(makeRunScript());
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
 
     await expect(
       runDiLoCoAggregation(
         { workOrderId: 'wo_g', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3, runScript, httpPost, workDir }),
+        makeOptions({ httpIO, runScript, httpPost, workDir }),
       ),
     ).rejects.toThrow(/sha256 mismatch/);
     expect(runScript).not.toHaveBeenCalled();
@@ -293,13 +306,13 @@ describe('runDiLoCoAggregation', () => {
 
   it('fails closed on prevAdapter sha256 mismatch', async () => {
     const payload = basePayload();
-    payload.prevAdapter = { s3Key: payload.prevAdapter!.s3Key, sha256: 'e'.repeat(64) };
-    const { s3, puts } = makeS3(objectsFor(payload));
+    payload.prevAdapter = { s3Key: payload.prevAdapter!.s3Key, sha256: 'e'.repeat(64), downloadUrl: URL_PREV_ADAPTER };
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
     const runScript = jest.fn(makeRunScript());
     await expect(
       runDiLoCoAggregation(
         { workOrderId: 'wo_pa', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3, runScript, workDir }),
+        makeOptions({ httpIO, runScript, workDir }),
       ),
     ).rejects.toThrow(/sha256 mismatch/);
     expect(runScript).not.toHaveBeenCalled();
@@ -308,17 +321,67 @@ describe('runDiLoCoAggregation', () => {
 
   it('fails closed on prevVelocity sha256 mismatch', async () => {
     const payload = basePayload();
-    payload.prevVelocity = { s3Key: payload.prevVelocity!.s3Key, sha256: 'd'.repeat(64) };
-    const { s3, puts } = makeS3(objectsFor(payload));
+    payload.prevVelocity = { s3Key: payload.prevVelocity!.s3Key, sha256: 'd'.repeat(64), downloadUrl: URL_PREV_VELOCITY };
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
     const runScript = jest.fn(makeRunScript());
     await expect(
       runDiLoCoAggregation(
         { workOrderId: 'wo_pv', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3, runScript, workDir }),
+        makeOptions({ httpIO, runScript, workDir }),
       ),
     ).rejects.toThrow(/sha256 mismatch/);
     expect(runScript).not.toHaveBeenCalled();
     expect(puts).toHaveLength(0);
+  });
+
+  // ── HTTP fail-closed: 403/expired presigned URL (P35) ───────────────────────
+
+  it('fails closed on a 403/expired download URL — no script, no upload, no commit', async () => {
+    const payload = basePayload();
+    // Map every input URL EXCEPT one gradient → simulate the runner's HTTP
+    // GET on an expired URL raising a typed error (S3 returns 403 on an
+    // expired presigned URL).
+    const httpIO: DiLoCoAggregationHttpIO = {
+      async getUrl(url: string): Promise<Buffer> {
+        if (url === URL_GRAD_A) return gradBufA;
+        throw new DiLoCoAggregationError(`HTTP GET (presigned) returned 403`, 'download');
+      },
+      putUrl: jest.fn(),
+    };
+    const runScript = jest.fn(makeRunScript());
+    const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
+    await expect(
+      runDiLoCoAggregation(
+        { workOrderId: 'wo_403', peerId: PEER, coordinatorUrl: 'https://coord', payload },
+        makeOptions({ httpIO, runScript, httpPost, workDir }),
+      ),
+    ).rejects.toThrow(/returned 403/);
+    expect(runScript).not.toHaveBeenCalled();
+    expect(httpIO.putUrl).not.toHaveBeenCalled();
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on a non-2xx upload PUT (expired candidate URL) — no commit', async () => {
+    const payload = basePayload();
+    const httpIO: DiLoCoAggregationHttpIO = {
+      async getUrl(url: string): Promise<Buffer> {
+        const o = objectsFor(payload);
+        const b = o[url];
+        if (!b) throw new DiLoCoAggregationError(`no url ${url}`, 'download');
+        return b;
+      },
+      async putUrl(): Promise<void> {
+        throw new DiLoCoAggregationError(`HTTP PUT (presigned) returned 403`, 'upload');
+      },
+    };
+    const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
+    await expect(
+      runDiLoCoAggregation(
+        { workOrderId: 'wo_put403', peerId: PEER, coordinatorUrl: 'https://coord', payload },
+        makeOptions({ httpIO, httpPost, workDir }),
+      ),
+    ).rejects.toThrow(/returned 403/);
+    expect(httpPost).not.toHaveBeenCalled();
   });
 
   // ── round-0 null handling (§2 cold start) ────────────────────────────────────
@@ -326,23 +389,23 @@ describe('runDiLoCoAggregation', () => {
   it('round 0: null prevAdapter + null prevVelocity handled (no download of either)', async () => {
     const payload = basePayload({ outerRound: 0, prevAdapter: null, prevVelocity: null });
     const objects = {
-      [payload.gradients[0].s3Key]: gradBufA,
-      [payload.gradients[1].s3Key]: gradBufB,
+      [payload.gradients[0].downloadUrl]: gradBufA,
+      [payload.gradients[1].downloadUrl]: gradBufB,
     };
-    const getObject = jest.fn(async (key: string) => {
-      const b = objects[key];
-      if (!b) throw new Error(`no key ${key}`);
+    const getUrl = jest.fn(async (url: string) => {
+      const b = objects[url];
+      if (!b) throw new DiLoCoAggregationError(`no url ${url}`, 'download');
       return b;
     });
-    const s3: DiLoCoAggregationS3 = { bucket: 'b', getObject, putObject: jest.fn() };
+    const httpIO: DiLoCoAggregationHttpIO = { getUrl, putUrl: jest.fn() };
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
 
     const sub = await runDiLoCoAggregation(
       { workOrderId: 'wo_r0', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-      makeOptions({ s3, httpPost, workDir }),
+      makeOptions({ httpIO, httpPost, workDir }),
     );
-    // only the two gradient keys were downloaded (no prevAdapter/prevVelocity)
-    expect(getObject).toHaveBeenCalledTimes(2);
+    // only the two gradient URLs were downloaded (no prevAdapter/prevVelocity)
+    expect(getUrl).toHaveBeenCalledTimes(2);
     expect(sub.adapterS3Key).toBe(`med/round_0/candidates/${PEER}/adapter_weights.pkl`);
     expect(httpPost).toHaveBeenCalledTimes(2);
   });
@@ -351,32 +414,46 @@ describe('runDiLoCoAggregation', () => {
 
   it('fails closed when identity peerId != runtime peerId (never sign for another peer)', async () => {
     const payload = basePayload();
-    const { s3 } = makeS3(objectsFor(payload));
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     await expect(
       runDiLoCoAggregation(
         { workOrderId: 'wo_id', peerId: 'OTHERPEER', coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3, workDir }),
+        makeOptions({ httpIO, workDir }),
       ),
     ).rejects.toThrow(/Identity peerId .* != runtime peerId/);
   });
 
-  // ── config fail-closed ───────────────────────────────────────────────────────
+  // ── payload fail-closed: missing presigned URLs ───────────────────────────────
 
-  it('fails closed when S3 is not configured (no shared bucket)', async () => {
+  it('fails closed when a gradient downloadUrl is missing', async () => {
     const payload = basePayload();
+    (payload.gradients[0] as { downloadUrl?: string }).downloadUrl = '';
+    const { httpIO } = makeHttpIO(objectsFor(payload));
     await expect(
       runDiLoCoAggregation(
-        { workOrderId: 'wo_noS3', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3: null, workDir }),
+        { workOrderId: 'wo_nourl', peerId: PEER, coordinatorUrl: 'https://coord', payload },
+        makeOptions({ httpIO, workDir }),
       ),
-    ).rejects.toThrow(/AWS_DILOCO_BUCKET not set/);
+    ).rejects.toThrow(/downloadUrl must be an http/);
+  });
+
+  it('fails closed when adapterUploadUrl is missing', async () => {
+    const payload = basePayload();
+    (payload as { adapterUploadUrl?: string }).adapterUploadUrl = '';
+    const { httpIO } = makeHttpIO(objectsFor(payload));
+    await expect(
+      runDiLoCoAggregation(
+        { workOrderId: 'wo_noput', peerId: PEER, coordinatorUrl: 'https://coord', payload },
+        makeOptions({ httpIO, workDir }),
+      ),
+    ).rejects.toThrow(/adapterUploadUrl must be an http/);
   });
 
   // ── script error surfaces as abort ───────────────────────────────────────────
 
   it('aborts when the script returns an error key (no commit/reveal)', async () => {
     const payload = basePayload();
-    const { s3, puts } = makeS3(objectsFor(payload));
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
     const httpPost = jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' }));
     const runScript: RunDiLoCoAggregationOptions['runScript'] = async () => ({
       avgGradientNorm: 0,
@@ -393,7 +470,7 @@ describe('runDiLoCoAggregation', () => {
     await expect(
       runDiLoCoAggregation(
         { workOrderId: 'wo_err', peerId: PEER, coordinatorUrl: 'https://coord', payload },
-        makeOptions({ s3, httpPost, runScript, workDir }),
+        makeOptions({ httpIO, httpPost, runScript, workDir }),
       ),
     ).rejects.toThrow(/aggregation script failed/);
     expect(puts).toHaveLength(0);
@@ -417,6 +494,13 @@ describe('runner internals', () => {
     expect(__internal.isHex64('sha256:' + 'a'.repeat(64))).toBe(true);
     expect(__internal.isHex64('a'.repeat(64))).toBe(true);
     expect(__internal.isHex64('a'.repeat(63))).toBe(false);
+  });
+  it('isHttpUrl accepts http(s), rejects non-URL / non-http', () => {
+    expect(__internal.isHttpUrl('https://s3.example.com/x?sig=1')).toBe(true);
+    expect(__internal.isHttpUrl('http://localhost:9000/x')).toBe(true);
+    expect(__internal.isHttpUrl('med/round_7/p1.pt')).toBe(false);
+    expect(__internal.isHttpUrl('s3://bucket/key')).toBe(false);
+    expect(__internal.isHttpUrl('')).toBe(false);
   });
   it('lastJsonLine extracts the final JSON object line', () => {
     expect(__internal.lastJsonLine('log noise\n{"a":1}\nmore noise\n{"b":2}\n')).toBe('{"b":2}');

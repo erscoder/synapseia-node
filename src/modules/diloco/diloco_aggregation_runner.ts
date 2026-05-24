@@ -7,17 +7,25 @@
  *   1. Parse + validate the DILOCO_AGGREGATION WO payload (§3.1 contract).
  *   2. Sandbox: `<nodeHome>/diloco-aggregation/<woId>/`; every filename
  *      resolved strictly INSIDE that root (P7).
- *   3. Download each pinned gradient + prevAdapter + prevVelocity from the
- *      shared S3 bucket BY KEY, sha256-verify each (P2 fail-closed — abort
- *      on ANY mismatch, never aggregate a tampered input).
+ *   3. Download each pinned gradient + prevAdapter + prevVelocity via the
+ *      coord-PRESIGNED GET URL shipped in the WO payload (`downloadUrl`) —
+ *      plain HTTP, NO AWS creds (the node has none). sha256-verify each
+ *      downloaded buffer against the pinned sha256 (P2 fail-closed — abort
+ *      on ANY mismatch, never aggregate a tampered input; the URL only
+ *      proves the coord presigned the object, the sha256 is the integrity
+ *      gate). A 403/expired-URL surfaces as a typed HTTP error → abort (P35).
  *   4. Spawn `diloco_aggregate_executor.py` on CPU (CPU-pin + float64 —
  *      OPEN DECISION 1) with the local paths on stdin. The script runs the
  *      node-side Byzantine/cosine filter + Nesterov momentum + adapter
  *      accumulation and emits the canonical scalar invariants.
- *   5. Upload the candidate adapter + velocity to the per-AGGREGATOR S3
- *      prefix `candidates/<aggregatorPeerId>/` (P36 — two aggregators never
- *      collide). aggregatorPeerId = THIS node's peerId (the coord
- *      cross-checks `aggregatorPeerId === signer`, P2).
+ *   5. Upload the candidate adapter + velocity via the coord-PRESIGNED PUT
+ *      URLs (`adapterUploadUrl` / `velocityUploadUrl`) — plain HTTP PUT, NO
+ *      AWS creds. Those URLs target the per-AGGREGATOR S3 prefix
+ *      `candidates/<aggregatorPeerId>/` (P36 — two aggregators never
+ *      collide); the coord presigned THIS aggregator's keys. The reported
+ *      `adapterS3Key`/`velocityS3Key` echo those keys so the coord (which
+ *      DOES hold S3 access) reads the candidate back + verifies sha256. The
+ *      coord cross-checks `aggregatorPeerId === signer` (P2).
  *   6. COMMIT: POST signed `:domain/aggregation-commit` with
  *      `commitment = sha256(canonicalJSON({envelope, nonce}))` — byte-
  *      identical to the coord's recompute (see
@@ -32,9 +40,11 @@
  * so the runner is inert in production until the coord flips
  * `DILOCO_NODE_AGGREGATION_ENABLED=true`. It still compiles + is correct.
  *
- * Fail-closed everywhere (P2): missing S3 config, sha256 mismatch, script
- * non-zero exit, identity mismatch, commitment mismatch → throw
- * `DiLoCoAggregationError`. Never aggregate / commit a partial result.
+ * Fail-closed everywhere (P2): HTTP non-2xx (incl. 403/expired URL),
+ * sha256 mismatch, script non-zero exit, identity mismatch, commitment
+ * mismatch → throw `DiLoCoAggregationError`. Never aggregate / commit a
+ * partial result. The node holds NO AWS creds — all S3 I/O is via the
+ * coord-presigned URLs in the WO payload.
  */
 import { spawn } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
@@ -56,10 +66,10 @@ import {
   type DiLoCoRejectedPeer,
 } from './diloco-aggregation-commitment';
 import {
-  createDiLoCoAggregationS3,
+  createDiLoCoAggregationHttpIO,
   sha256OfBuffer,
-  type DiLoCoAggregationS3,
-} from './diloco-aggregation-s3';
+  type DiLoCoAggregationHttpIO,
+} from './diloco-aggregation-http';
 
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.DILOCO_AGG_TIMEOUT_MS || '900000', 10); // 15 min
 const MAX_GRADIENT_BYTES = 256 * 1024 * 1024; // 256 MB per pinned input (gradients are ~92 MB)
@@ -98,8 +108,10 @@ export interface RunDiLoCoAggregationOptions {
   timeoutMs?: number;
   workDir?: string;
   scriptPath?: string;
-  /** Override the S3 client (tests). Default = `createDiLoCoAggregationS3()`. */
-  s3?: DiLoCoAggregationS3 | null;
+  /** Override the presigned-URL HTTP I/O (tests). Default =
+   *  `createDiLoCoAggregationHttpIO()`. The node has NO AWS creds — all S3
+   *  reads/writes go through the coord-presigned URLs in the WO payload. */
+  httpIO?: DiLoCoAggregationHttpIO;
   /** Override the identity loader (tests). */
   identity?: { privateKeyHex: string; publicKeyHex: string; peerId: string };
   /** Override the spawn-and-collect (tests). Returns the parsed script stdout. */
@@ -144,14 +156,9 @@ export async function runDiLoCoAggregation(
 
   validatePayload(payload);
 
-  // P2 fail-closed: a node that doesn't share the bucket cannot aggregate.
-  const s3 = options.s3 !== undefined ? options.s3 : createDiLoCoAggregationS3();
-  if (!s3) {
-    throw new DiLoCoAggregationError(
-      'AWS_DILOCO_BUCKET not set — node cannot download pinned inputs / upload candidate. Refusing to aggregate.',
-      'config',
-    );
-  }
+  // Phase 4: no AWS creds on the node — all S3 I/O is via the coord-presigned
+  // URLs in the WO payload (validated for presence in `validatePayload`).
+  const httpIO = options.httpIO ?? createDiLoCoAggregationHttpIO();
 
   if (!isSafePathSegment(workOrderId)) {
     throw new DiLoCoAggregationError(`Unsafe workOrderId: ${workOrderId}`, 'sandbox');
@@ -178,18 +185,21 @@ export async function runDiLoCoAggregation(
   await fs.promises.mkdir(sandboxRoot, { recursive: true, mode: 0o700 });
 
   try {
-    // 3. Download + sha256-verify each pinned input (P2 fail-closed).
+    // 3. Download (via the coord-presigned GET URL) + sha256-verify each
+    //    pinned input (P2 fail-closed). The URL identifies the object; the
+    //    sha256 (also pinned in the WO) is the integrity gate.
     const gradientPaths: Array<{ peerId: string; gradientPath: string; stakeWeight: number }> = [];
     for (let i = 0; i < payload.gradients.length; i++) {
       const g = payload.gradients[i];
-      const dest = await downloadAndVerify(s3, g.s3Key, g.sha256, sandboxRoot, `gradient_${i}.pt`);
+      const dest = await downloadAndVerify(httpIO, g.downloadUrl, g.s3Key, g.sha256, sandboxRoot, `gradient_${i}.pt`);
       gradientPaths.push({ peerId: g.peerId, gradientPath: dest, stakeWeight: g.stakeWeight });
     }
 
     let prevAdapterPath: string | null = null;
     if (payload.prevAdapter) {
       prevAdapterPath = await downloadAndVerify(
-        s3,
+        httpIO,
+        payload.prevAdapter.downloadUrl,
         payload.prevAdapter.s3Key,
         payload.prevAdapter.sha256,
         sandboxRoot,
@@ -199,7 +209,8 @@ export async function runDiLoCoAggregation(
     let prevVelocityPath: string | null = null;
     if (payload.prevVelocity) {
       prevVelocityPath = await downloadAndVerify(
-        s3,
+        httpIO,
+        payload.prevVelocity.downloadUrl,
         payload.prevVelocity.s3Key,
         payload.prevVelocity.sha256,
         sandboxRoot,
@@ -228,15 +239,20 @@ export async function runDiLoCoAggregation(
       );
     }
 
-    // 5. Read candidate bytes, hash, upload to per-aggregator prefix (P36).
+    // 5. Read candidate bytes, hash, upload via the coord-presigned PUT URLs
+    //    (P36 per-aggregator prefix — the coord presigned THIS aggregator's
+    //    keys). The reported `adapterS3Key`/`velocityS3Key` are the canonical
+    //    keys the coord presigned: they MUST equal the keys behind
+    //    `adapterUploadUrl`/`velocityUploadUrl` so the coord reads the
+    //    candidate back (it has direct S3) and verifies sha256.
     const adapterBuf = await fs.promises.readFile(outputAdapterPath);
     const velocityBuf = await fs.promises.readFile(outputVelocityPath);
     const adapterSha256 = sha256OfBuffer(adapterBuf);
     const velocitySha256 = sha256OfBuffer(velocityBuf);
     const adapterS3Key = `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/adapter_weights.pkl`;
     const velocityS3Key = `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/velocity.pkl`;
-    await s3.putObject(adapterS3Key, adapterBuf, adapterSha256);
-    await s3.putObject(velocityS3Key, velocityBuf, velocitySha256);
+    await httpIO.putUrl(payload.adapterUploadUrl, adapterBuf);
+    await httpIO.putUrl(payload.velocityUploadUrl, velocityBuf);
 
     // Build the canonical invariants (sets sorted in the envelope fn).
     const invariants: DiLoCoAggregationInvariants = {
@@ -337,12 +353,31 @@ function validatePayload(p: DiLoCoAggregationWorkOrderPayload): void {
     if (typeof g.stakeWeight !== 'number' || !Number.isFinite(g.stakeWeight)) {
       throw new DiLoCoAggregationError(`gradient stakeWeight must be finite: ${g.peerId}`, 'payload');
     }
+    // Phase 4: the coord-presigned GET URL is the ONLY way the node fetches
+    // the input (no AWS creds). Missing → fail-closed (P2).
+    if (!isHttpUrl(g.downloadUrl)) {
+      throw new DiLoCoAggregationError(`gradient downloadUrl must be an http(s) URL: ${g.peerId}`, 'payload');
+    }
   }
-  if (p.prevAdapter && (!p.prevAdapter.s3Key || !isHex64(p.prevAdapter.sha256))) {
-    throw new DiLoCoAggregationError('prevAdapter, when present, needs s3Key + 64-char hex sha256', 'payload');
+  if (p.prevAdapter && (!p.prevAdapter.s3Key || !isHex64(p.prevAdapter.sha256) || !isHttpUrl(p.prevAdapter.downloadUrl))) {
+    throw new DiLoCoAggregationError(
+      'prevAdapter, when present, needs s3Key + 64-char hex sha256 + http(s) downloadUrl',
+      'payload',
+    );
   }
-  if (p.prevVelocity && (!p.prevVelocity.s3Key || !isHex64(p.prevVelocity.sha256))) {
-    throw new DiLoCoAggregationError('prevVelocity, when present, needs s3Key + 64-char hex sha256', 'payload');
+  if (p.prevVelocity && (!p.prevVelocity.s3Key || !isHex64(p.prevVelocity.sha256) || !isHttpUrl(p.prevVelocity.downloadUrl))) {
+    throw new DiLoCoAggregationError(
+      'prevVelocity, when present, needs s3Key + 64-char hex sha256 + http(s) downloadUrl',
+      'payload',
+    );
+  }
+  // Phase 4: the candidate PUT URLs are mandatory — the node uploads its
+  // result via these (no AWS creds). Missing → fail-closed (P2).
+  if (!isHttpUrl(p.adapterUploadUrl)) {
+    throw new DiLoCoAggregationError('adapterUploadUrl must be an http(s) URL', 'payload');
+  }
+  if (!isHttpUrl(p.velocityUploadUrl)) {
+    throw new DiLoCoAggregationError('velocityUploadUrl must be an http(s) URL', 'payload');
   }
 }
 
@@ -360,7 +395,8 @@ function resolveAggregatorWallet(p: DiLoCoAggregationWorkOrderPayload, aggregato
 // ── Download + verify ────────────────────────────────────────────────────────
 
 async function downloadAndVerify(
-  s3: DiLoCoAggregationS3,
+  httpIO: DiLoCoAggregationHttpIO,
+  downloadUrl: string,
   key: string,
   expectedSha256: string,
   sandboxRoot: string,
@@ -374,11 +410,14 @@ async function downloadAndVerify(
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new DiLoCoAggregationError(`dest escapes sandbox: ${destAbs}`, 'download');
   }
-  const buf = await s3.getObject(key, MAX_GRADIENT_BYTES);
+  // Download via the coord-presigned GET URL (no AWS creds). A 403/expired
+  // URL throws a typed HTTP error here → abort (P35 / P2 fail-closed).
+  const buf = await httpIO.getUrl(downloadUrl, MAX_GRADIENT_BYTES);
   const sha = sha256OfBuffer(buf);
   const expected = expectedSha256.startsWith('sha256:') ? expectedSha256.slice(7) : expectedSha256;
   if (sha.toLowerCase() !== expected.toLowerCase()) {
-    // P2 fail-closed — abort, never aggregate a tampered input.
+    // P2 fail-closed — abort, never aggregate a tampered input. The URL only
+    // proves the coord presigned the object; the sha256 is the integrity gate.
     throw new DiLoCoAggregationError(
       `sha256 mismatch for key=${key}: expected ${expected.slice(0, 12)}…, got ${sha.slice(0, 12)}…`,
       'sha256',
@@ -668,6 +707,18 @@ function isHex64(s: unknown): boolean {
   return /^[0-9a-f]{64}$/i.test(v);
 }
 
+/** A presigned S3 URL is an absolute http(s) URL. Fail-closed on anything
+ *  else (P2) — a non-URL value can never be fetched/PUT. */
+function isHttpUrl(s: unknown): boolean {
+  if (typeof s !== 'string' || s.length === 0) return false;
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 // ── Test seam ──────────────────────────────────────────────────────────────────
 
 export const __internal = {
@@ -676,6 +727,7 @@ export const __internal = {
   resolveAggregateScript,
   isSafePathSegment,
   isHex64,
+  isHttpUrl,
   lastJsonLine,
   resolveAggregatorWallet,
   MAX_GRADIENT_BYTES,

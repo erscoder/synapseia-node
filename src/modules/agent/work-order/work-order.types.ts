@@ -149,12 +149,17 @@ export interface DiLoCoWorkOrderPayload {
 export interface DiLoCoAggregationGradient {
   peerId: string;
   walletAddress: string | null;
-  /** Bucket-relative S3 key of the peer's pinned gradient. */
+  /** Bucket-relative S3 key of the peer's pinned gradient (reported in the
+   *  result; the node downloads via `downloadUrl`, not this key). */
   s3Key: string;
-  /** Hex sha256 (64 chars) the node MUST verify on download (P2). */
+  /** Hex sha256 (64 chars) the node MUST verify on the downloaded bytes
+   *  (P2 fail-closed — abort on mismatch, never aggregate wrong bytes). */
   sha256: string;
   /** Coord-computed sqrt-stake weight — node uses verbatim. */
   stakeWeight: number;
+  /** Phase 4: presigned GET URL the node downloads over plain HTTP (no AWS
+   *  creds). The node sha256-verifies the bytes against `sha256` above. */
+  downloadUrl: string;
 }
 
 export interface DiLoCoAggregationWorkOrderPayload {
@@ -164,10 +169,20 @@ export interface DiLoCoAggregationWorkOrderPayload {
   modelId: string;
   momentum: number;
   gradients: DiLoCoAggregationGradient[];
-  /** Round 0 → null (§2 adapter-accumulation cold-start). */
-  prevAdapter: { s3Key: string; sha256: string } | null;
+  /** Round 0 → null (§2 adapter-accumulation cold-start). `downloadUrl` =
+   *  presigned GET; the node sha256-verifies against `sha256`. */
+  prevAdapter: { s3Key: string; sha256: string; downloadUrl: string } | null;
   /** Round 0 → null (§2 velocity carry-over cold-start). */
-  prevVelocity: { s3Key: string; sha256: string } | null;
+  prevVelocity: { s3Key: string; sha256: string; downloadUrl: string } | null;
+  /** Phase 4: presigned PUT URL for THIS aggregator's candidate adapter at
+   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/adapter_weights.pkl`
+   *  (P36 per-peer prefix). The node uploads over plain HTTP (no AWS creds);
+   *  the reported `adapterS3Key` = this candidate key so the coord reads it
+   *  back (it has direct S3) and verifies sha256. */
+  adapterUploadUrl: string;
+  /** Presigned PUT URL for THIS aggregator's candidate velocity at
+   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/velocity.pkl`. */
+  velocityUploadUrl: string;
   /** Canonical cosine-reject threshold, coord-pinned. */
   cosineRejectThreshold: number;
   /** Coord-computed quorum; echoed back in the result, coord re-checks. */
