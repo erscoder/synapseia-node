@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] fix(node): p2p WebSocket transport so the node connects to the Fly coord (79e80802)
+
+Targets the next node release (bundled with Phase 3). NOT yet released. Fixes the
+`connected=false` libp2p link: the node dialed only raw `/tcp/9000` over a `tcp()`-only
+transport, which the Fly shared-IPv4 edge RESETs (non-HTTP), so the dial never completed.
+
+- add `@libp2p/websockets`; `transports: [tcp(), webSockets()]`.
+- `coord-dial-addr.ts` (pure, tested): public Fly host dials
+  `/dns4/<host>/tcp/443/wss/p2p/<peerId>` (Fly's `[http]` handler on 9001 terminates TLS
+  at 443; edge-reachability confirmed via `multiaddr-matcher` `WebSocketsSecure`) with
+  `/tcp/9000` fallback; localhost / non-Fly dial `/tcp/9000` only; never `/tcp/9001/ws`
+  (internal). Used by both the initial dial and the 30s watchdog reconnect.
+- `subprocess-env.ts`: `AWS_*` credentials denylisted from spawned children (Phase-3 NIT-3).
+- aggregation commitment golden-vector spec (+ shared fixture in the coordinator) pins the
+  hash so a future `canonicalJSON`/envelope drift on either side fails its own suite (NIT-1).
+
+Reviewer SHIP-WITH-NITS, the P10 nit fixed (dropped a vestigial `announcedMultiaddrs`
+field). A live wss handshake confirming `connected=true` is a post-release canary.
+
 ## [2026-05-24] feat(node): DiLoCo node-side aggregation executor (Phase 3, DARK) (bb7971fc)
 
 Targets the next node release (bundled with the p2p WS-transport fix). NOT yet released.
