@@ -1,5 +1,22 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] fix(diloco): 0.8.119 - do not cache transient quant-probe timeout as permanent FP32 (6cb18373)
+
+`0.8.118` -> `0.8.119`. `detectQuantSupport()` cached a spawnSync TIMEOUT
+(`res.status === null`) as a permanent `false`, pinning the node to the FP32
+36GB DiLoCo threshold for the process lifetime. Right after a self-update
+reinstalls the CUDA torch wheel, the first probe runs while `import torch` is
+cold (10-20s) and exceeds the 8s timeout, so every DiLoCo training WO was
+skipped on a 47GB RunPod cgroup (FP32 needs 36GB free, never fits) until
+restart. Confirmed live on pod1 after the 0.8.118 self-update.
+- Transient probe failures (`status === null`, `res.error`, thrown) return
+  `false` WITHOUT caching so the next WO re-probes with warm torch and gets the
+  QUANT (~8GB) path; bounded at `QUANT_PROBE_TRANSIENT_CAP=3`.
+- Definitive results cache as before (fail-closed preserved, P24: no path
+  caches `true` without `status===0 && stdout==='1'`, so no SIGKILL regression).
+- Probe timeout `8000ms` -> `25000ms`; logs report real status/error (P10).
+- 38/38 heavy-training-preflight tests pass. Reviewer SHIP (nits folded).
+
 ## [2026-05-24] chore(release): 0.8.118 release presigned-URL transport + FIX B WS revert (DARK) (9f2cac0a)
 
 `0.8.117` -> `0.8.118`. npm release that bundles the two already-committed changes below for
