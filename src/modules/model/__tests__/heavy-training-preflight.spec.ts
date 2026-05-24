@@ -400,6 +400,125 @@ describe('Slice 17 — detectQuantSupport + requiredMemForHeavyTraining', () => 
 });
 
 /**
+ * Bug 2026-05-24 — transient vs definitive probe result via the spawnSync
+ * path. A spawnSync TIMEOUT yields `status === null`; the old code cached
+ * that as a permanent `false`, pinning a freshly-self-updated CUDA pod to
+ * FP32 (36 GB) forever while torch was still cold. These specs drive the
+ * spawnSync result shape through the `spawnFn` test hook (no real
+ * subprocess) and assert that transient failures are NOT cached while
+ * definitive results ARE.
+ */
+describe('Bug 2026-05-24 — detectQuantSupport transient vs definitive', () => {
+  beforeEach(() => {
+    __resetQuantSupportCacheForTests();
+  });
+
+  // Minimal SpawnSyncReturns<string> shaped objects for the spawnFn hook.
+  type SpawnSyncFn = NonNullable<
+    Parameters<typeof detectQuantSupport>[0]
+  >['spawnFn'];
+
+  const transientResult = {
+    pid: 0,
+    output: [null, '', ''] as [null, string, string],
+    stdout: '',
+    stderr: '',
+    status: null, // timer fired / killed by signal
+    signal: 'SIGTERM' as NodeJS.Signals,
+  };
+
+  const definitiveResult = (stdout: string) => ({
+    pid: 1234,
+    output: [null, stdout, ''] as [null, string, string],
+    stdout,
+    stderr: '',
+    status: 0,
+    signal: null,
+  });
+
+  it('transient (status=null) → returns false AND does NOT cache → re-probes', () => {
+    const spawnFn = jest.fn(() => transientResult) as unknown as SpawnSyncFn;
+    // First call: transient timeout → false, NOT cached.
+    expect(detectQuantSupport({ spawnFn })).toBe(false);
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+
+    // Second call with a now-warm torch returning '1' → must re-probe (not
+    // serve a cached false) and flip to QUANT.
+    const warm = jest.fn(() => definitiveResult('1')) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn: warm })).toBe(true);
+    expect(warm).toHaveBeenCalledTimes(1);
+
+    // And now it's cached true.
+    expect(detectQuantSupport({ spawnFn: warm })).toBe(true);
+    expect(warm).toHaveBeenCalledTimes(1);
+  });
+
+  it("definitive '0' (status 0, stdout '0') → caches false → no re-probe", () => {
+    const spawnFn = jest.fn(() => definitiveResult('0')) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn })).toBe(false);
+    expect(detectQuantSupport({ spawnFn })).toBe(false);
+    // Definitive false is cached — probe runs exactly once.
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("definitive '1' (status 0, stdout '1') → caches true", () => {
+    const spawnFn = jest.fn(() => definitiveResult('1')) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn })).toBe(true);
+    expect(detectQuantSupport({ spawnFn })).toBe(true);
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('res.error set (even with status 0) → transient, NOT cached → re-probes', () => {
+    // spawnSync sets `error` (e.g. ETIMEDOUT) independently of `status`. The
+    // `res.status === null || res.error` guard must treat this as transient
+    // (return false, do not cache), not misread it as a definitive result.
+    const erroredResult = {
+      pid: 0,
+      output: [null, '', ''] as [null, string, string],
+      stdout: '',
+      stderr: '',
+      status: 0,
+      signal: null,
+      error: Object.assign(new Error('spawnSync ETIMEDOUT'), {
+        code: 'ETIMEDOUT',
+      }),
+    };
+    const spawnFn = jest.fn(() => erroredResult) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn })).toBe(false);
+
+    // Not cached — a subsequent warm probe re-runs and flips to QUANT.
+    const warm = jest.fn(() => definitiveResult('1')) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn: warm })).toBe(true);
+    expect(warm).toHaveBeenCalledTimes(1);
+  });
+
+  it('transient cap — after CAP consecutive transients → caches false (stops re-probing)', () => {
+    const spawnFn = jest.fn(() => transientResult) as unknown as SpawnSyncFn;
+    // CAP = 3: the third transient hits the cap and caches false.
+    expect(detectQuantSupport({ spawnFn })).toBe(false); // attempt 1 — uncached
+    expect(detectQuantSupport({ spawnFn })).toBe(false); // attempt 2 — uncached
+    expect(detectQuantSupport({ spawnFn })).toBe(false); // attempt 3 — cap → cache
+    expect(spawnFn).toHaveBeenCalledTimes(3);
+
+    // Now cached: even a warm '1' probe is never consulted again.
+    const warm = jest.fn(() => definitiveResult('1')) as unknown as SpawnSyncFn;
+    expect(detectQuantSupport({ spawnFn: warm })).toBe(false);
+    expect(warm).not.toHaveBeenCalled();
+  });
+
+  it('probe passes a 25000ms timeout (cold CUDA torch headroom)', () => {
+    // The spawnFn hook receives the exact options the production call uses.
+    const spawnFn = jest.fn(() => definitiveResult('0'));
+    detectQuantSupport({ spawnFn: spawnFn as unknown as SpawnSyncFn });
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    const optsArg = (spawnFn.mock.calls[0] as unknown[])[2] as {
+      timeout?: number;
+    };
+    expect(optsArg.timeout).toBe(25000);
+  });
+});
+
+/**
  * Bug NEW-2 (2026-05-22) — reclaimable page-cache add-back. The old free
  * formula `limit - usage` (v1) / `max - current` (v2) under-reports free
  * memory because the cgroup usage counter INCLUDES evictable file cache,

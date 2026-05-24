@@ -404,18 +404,59 @@ async function readReclaimableMB(
  *
  * Fail-CLOSED (per P24)
  * ---------------------
- * Any probe failure → caches `false` → callers fall through to the
- * FP32 threshold. The cost of a false negative (CUDA pod treated as
+ * A DEFINITIVE probe failure → caches `false` → callers fall through to
+ * the FP32 threshold. The cost of a false negative (CUDA pod treated as
  * FP32) is over-skip on memory-light pods. The cost of a false
  * positive (FP32-only pod treated as CUDA) is a guaranteed SIGKILL.
  * The asymmetry justifies the conservative direction.
+ *
+ * Transient vs definitive (Bug 2026-05-24)
+ * ----------------------------------------
+ * The fail-CLOSED rule must NOT cache a *transient* failure forever. Live
+ * on pod1: right after a 0.8.118 self-update reinstalled the CUDA torch
+ * wheel, the very first probe ran while `import torch` was still cold —
+ * a cold CUDA torch import takes 10-20s and blew past the old 8s timeout,
+ * so spawnSync returned `status=null` (the timer fired). The old code
+ * cached that `null` as a permanent `false`, pinning the node to FP32
+ * (36 GB) for its whole lifetime → every DiLoCo WO skipped on a 47 GB
+ * RunPod cgroup until restart. So we now distinguish:
+ *   - DEFINITIVE (`status === 0`, or a clean non-zero exit with a real
+ *     python/import error): CACHE the result (fail-CLOSED preserved).
+ *   - TRANSIENT (`status === null` from timeout/signal, `res.error` set
+ *     from a spawn failure, or the catch block): return `false` for THIS
+ *     call so the caller still safely uses FP32 once, but DO NOT cache —
+ *     the next WO re-probes, and once torch is warm it gets QUANT.
+ * To bound re-probing on a genuinely-slow-forever pod (so we don't add
+ * ~25s probe latency to every WO indefinitely), we cap transient retries
+ * at `QUANT_PROBE_TRANSIENT_CAP`; after the cap we cache `false` and give
+ * up. Tradeoff: a pod whose torch import is permanently >25s settles on
+ * FP32 after a few WOs instead of re-probing forever.
  */
 let quantSupportCache: boolean | null = null;
+
+/**
+ * Count of consecutive transient (uncached) probe failures. Reset to 0
+ * on any definitive result and by `__resetQuantSupportCacheForTests`.
+ */
+let quantProbeTransientCount = 0;
+
+/**
+ * Max transient probe failures before we give up and cache `false`.
+ * Small so a permanently-slow pod settles on FP32 within a few WOs
+ * rather than re-probing (and eating ~25s) on every WO forever.
+ */
+const QUANT_PROBE_TRANSIENT_CAP = 3;
 
 export function detectQuantSupport(opts?: {
   pythonBin?: string;
   /** Test-only hook: bypass spawnSync entirely. */
   probeFn?: () => boolean;
+  /**
+   * Test-only hook: stand in for `spawnSync`, receiving the exact args and
+   * options the production call uses so specs can both drive the result
+   * shape (transient `status:null` vs definitive) and assert the timeout.
+   */
+  spawnFn?: typeof spawnSync;
 }): boolean {
   if (quantSupportCache !== null) return quantSupportCache;
 
@@ -426,7 +467,8 @@ export function detectQuantSupport(opts?: {
 
   try {
     const pyBin = opts?.pythonBin ?? resolvePython();
-    const res = spawnSync(
+    const spawn = opts?.spawnFn ?? spawnSync;
+    const res = spawn(
       pyBin,
       [
         '-c',
@@ -434,7 +476,10 @@ export function detectQuantSupport(opts?: {
       ],
       {
         stdio: 'pipe',
-        timeout: 8000,
+        // Cold CUDA torch import takes 10-20s right after a self-update
+        // reinstalls the wheel; 8s timed out and cached a false negative
+        // for the process lifetime. 25s gives the cold import headroom.
+        timeout: 25000,
         encoding: 'utf8',
         // SECURITY (F-node-008 / P9): strip wallet / keystore secrets
         // before spawning the python quant probe — see
@@ -442,6 +487,33 @@ export function detectQuantSupport(opts?: {
         env: sanitizedEnvForSubprocess(),
       },
     );
+
+    // TRANSIENT: spawnSync timed out / was killed by signal (status === null)
+    // or the spawn itself failed (res.error set). DO NOT cache — re-probe
+    // on the next WO once torch is warm, up to the cap.
+    if (res.status === null || res.error) {
+      quantProbeTransientCount += 1;
+      if (quantProbeTransientCount >= QUANT_PROBE_TRANSIENT_CAP) {
+        logger.warn(
+          `[Preflight] quant probe transient failure ` +
+            `(status=${res.status}, error=${res.error?.message ?? 'none'}) — cap reached ` +
+            `(${quantProbeTransientCount}/${QUANT_PROBE_TRANSIENT_CAP}), ` +
+            `caching FALSE, using FP32 thresholds`,
+        );
+        quantSupportCache = false;
+        return false;
+      }
+      logger.warn(
+        `[Preflight] quant probe transient failure ` +
+          `(status=${res.status}, error=${res.error?.message ?? 'none'}) — NOT caching, will re-probe ` +
+          `next WO (attempt ${quantProbeTransientCount}/${QUANT_PROBE_TRANSIENT_CAP})`,
+      );
+      return false;
+    }
+
+    // DEFINITIVE: clean exit (status 0 → parse stdout; non-zero with a real
+    // python/import error → quant genuinely unavailable). Cache per P24.
+    quantProbeTransientCount = 0;
     const ok = res.status === 0 && res.stdout?.trim() === '1';
     if (ok) {
       logger.log(
@@ -457,22 +529,37 @@ export function detectQuantSupport(opts?: {
     quantSupportCache = ok;
     return ok;
   } catch (err) {
+    // TRANSIENT: resolvePython / spawnSync threw. Same as a timeout — do
+    // not cache; re-probe next WO up to the cap.
+    quantProbeTransientCount += 1;
+    if (quantProbeTransientCount >= QUANT_PROBE_TRANSIENT_CAP) {
+      logger.warn(
+        `[Preflight] quant probe transient failure ` +
+          `(threw: ${(err as Error).message}) — cap reached ` +
+          `(${quantProbeTransientCount}/${QUANT_PROBE_TRANSIENT_CAP}), ` +
+          `caching FALSE, using FP32 thresholds`,
+      );
+      quantSupportCache = false;
+      return false;
+    }
     logger.warn(
-      `[Preflight] quant-support probe threw (${(err as Error).message}) — ` +
-        'fail-CLOSED, using FP32 thresholds',
+      `[Preflight] quant probe transient failure ` +
+        `(threw: ${(err as Error).message}) — NOT caching, will re-probe ` +
+        `next WO (attempt ${quantProbeTransientCount}/${QUANT_PROBE_TRANSIENT_CAP})`,
     );
-    quantSupportCache = false;
     return false;
   }
 }
 
 /**
- * Test-only: reset the module-level cache so consecutive specs can
- * exercise the probe path without process restart. Production code
- * never calls this — the cache is intentionally process-lifetime.
+ * Test-only: reset the module-level cache + transient counter so
+ * consecutive specs can exercise the probe path without process restart.
+ * Production code never calls this — the cache is intentionally
+ * process-lifetime.
  */
 export function __resetQuantSupportCacheForTests(): void {
   quantSupportCache = null;
+  quantProbeTransientCount = 0;
 }
 
 /**
