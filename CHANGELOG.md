@@ -1,5 +1,20 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] fix(diloco): 0.8.120 - count active_file as reclaimable in heavy-training memory gate (5b526a62)
+
+`0.8.119` -> `0.8.120`. The cgroup memory gate counted only `inactive_file`
+cache as reclaimable; `active_file` (clean file-backed pages) is also reclaimable
+under pressure (kernel `MemAvailable` counts both). On a 47GB RunPod cgroup with
+`rss=386MB` but `total_active_file=39628MB`, the gate saw ~7307MB free and skipped
+DiLoCo QUANT (needs 8192MB) though ~46GB is reclaimable. Confirmed live on pod2.
+- `parseReclaimableFromMemStat` now sums `active_file + inactive_file` (v1
+  `total_*`, v2 plain), minus `RECLAIM_RESERVE_MB=256`. Fail-closed preserved
+  (parse miss -> bare `limit - usage`). pod2: 7266MB -> 46638MB (passes QUANT).
+- Reviewer SHIP-WITH-NITS. Follow-up (non-blocking): the flat 256MB reserve is
+  less conservative than kernel `min(pagecache/2, wmark_low)`; if a QUANT-path
+  SIGKILL appears on a dirty-cache pod, cap the active_file contribution. Fleet
+  is read-dominated (dirty ~= 0). 42/42 tests pass.
+
 ## [2026-05-24] fix(diloco): 0.8.119 - do not cache transient quant-probe timeout as permanent FP32 (6cb18373)
 
 `0.8.118` -> `0.8.119`. `detectQuantSupport()` cached a spawnSync TIMEOUT
