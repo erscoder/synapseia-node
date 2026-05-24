@@ -63,21 +63,50 @@ def _load_gradient_bundle(path: str) -> Dict[str, Any]:
     return bundle
 
 
+def _as_f32_tensor(value: Any):
+    """Coerce a gradient component (Python list, numpy array, or torch
+    Tensor) to a float32 tensor.
+
+    `diloco_train.py::compress_gradients_svd` persists U/S/V (and the `raw`
+    fallback) via `.tolist()`, so by contract they arrive as nested Python
+    LISTS — tensor ops (`unsqueeze`/`transpose`) raised AttributeError on a
+    list (round 1228 production failure). `torch.as_tensor` accepts list /
+    ndarray / Tensor uniformly. Defense-in-depth (P2): be liberal in what
+    we accept so the averaging math never crashes on a list."""
+    import torch
+
+    if isinstance(value, torch.Tensor):
+        return value.to(dtype=torch.float32)
+    return torch.as_tensor(value, dtype=torch.float32)
+
+
 def _decompress_if_svd(name: str, value: Any):
     """If `value` is an SVD bundle, reconstruct the dense tensor.
 
-    Otherwise return the tensor as-is.
+    Accepts the two on-disk shapes `diloco_train.py` emits — the SVD bundle
+    `{U,S,V,shape}` and the `{raw,shape}` non-SVD fallback — plus a bare
+    tensor. U/S/V/raw are stored as Python lists (`.tolist()`); they are
+    coerced to float32 tensors before any tensor op (P2).
     """
     import torch  # local import — keep top-level light for tests
 
     if isinstance(value, dict) and {"U", "S", "V", "shape"}.issubset(value.keys()):
-        U = value["U"]
-        S = value["S"]
-        V = value["V"]
+        U = _as_f32_tensor(value["U"])
+        S = _as_f32_tensor(value["S"])
+        V = _as_f32_tensor(value["V"])
         shape = value["shape"]
-        # reconstruct: U @ diag(S) @ V.T  → reshape to original
-        dense = (U * S.unsqueeze(0)) @ V.transpose(-2, -1)
+        # reconstruct: U @ diag(S) @ Vh  → reshape to original.
+        # `diloco_train.py::compress_gradients_svd` stores the "V" key as
+        # `Vh[:k, :]` — it ALREADY holds Vh (the conjugate transpose from
+        # `torch.linalg.svd`), shape (k, cols). So `U`=(rows,k), `S`=(k,),
+        # `V`=Vh=(k,cols), and (U * S) @ V = (rows,cols) directly. NO
+        # transpose on V — transposing would silently corrupt square layers
+        # and crash rectangular ones.
+        dense = (U * S.unsqueeze(0)) @ V
         return dense.reshape(shape)
+    if isinstance(value, dict) and {"raw", "shape"}.issubset(value.keys()):
+        # Non-SVD fallback bundle (SVD raised on the training side).
+        return _as_f32_tensor(value["raw"]).reshape(value["shape"])
     if isinstance(value, torch.Tensor):
         return value
     raise ValueError(f"unsupported gradient entry shape for tensor {name!r}: {type(value)}")

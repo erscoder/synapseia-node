@@ -117,18 +117,53 @@ def _is_meta_key(name: str) -> bool:
     return name.startswith("_")
 
 
+def _as_cpu_f32(value: Any):
+    """Coerce a gradient component (Python list, numpy array, or torch
+    Tensor) to a CPU float32 tensor.
+
+    `diloco_train.py::compress_gradients_svd` persists U/S/V (and the `raw`
+    fallback) via `.tolist()`, so by contract they arrive as nested Python
+    LISTS, not tensors — calling `.cpu()` on a list raised AttributeError
+    (round 1228 production failure). `torch.as_tensor` accepts list /
+    ndarray / Tensor uniformly and yields a CPU tensor (lists/ndarrays
+    materialise on CPU; an already-CPU tensor is returned without copy).
+    The explicit `.cpu()` only fires for a tensor that somehow carries a
+    device, keeping the accumulator CPU-pinned (design §2). Defense-in-depth
+    (P2): be liberal in what we accept — the averaging math must never
+    crash on a list."""
+    torch = _force_cpu_torch()
+    if isinstance(value, torch.Tensor):
+        return value.detach().to(device="cpu", dtype=torch.float32)
+    return torch.as_tensor(value, dtype=torch.float32)
+
+
 def _decompress_if_svd(name: str, value: Any):
-    """Reconstruct a dense tensor from an SVD bundle, else pass through."""
+    """Reconstruct a dense tensor from an SVD bundle, else pass through.
+
+    Accepts the two on-disk shapes `diloco_train.py` emits — the SVD bundle
+    `{U,S,V,shape}` and the `{raw,shape}` non-SVD fallback — plus a bare
+    tensor. U/S/V/raw are stored as Python lists (`.tolist()`); they are
+    coerced to CPU float32 tensors before any tensor op (P2)."""
     torch = _force_cpu_torch()
     if isinstance(value, dict) and {"U", "S", "V", "shape"}.issubset(value.keys()):
-        U = value["U"].cpu()
-        S = value["S"].cpu()
-        V = value["V"].cpu()
+        U = _as_cpu_f32(value["U"])
+        S = _as_cpu_f32(value["S"])
+        V = _as_cpu_f32(value["V"])
         shape = value["shape"]
-        dense = (U * S.unsqueeze(0)) @ V.transpose(-2, -1)
+        # Exact reconstruction: U @ diag(S) @ Vh, then reshape to original.
+        # `diloco_train.py::compress_gradients_svd` stores the "V" key as
+        # `Vh[:k, :]` — i.e. it ALREADY holds Vh (the conjugate transpose
+        # from `torch.linalg.svd`), shape (k, cols). So `U`=(rows,k),
+        # `S`=(k,), `V`=Vh=(k,cols), and (U * S) @ V = (rows,cols) directly.
+        # NO transpose on V — transposing would silently corrupt square
+        # layers (recon error ~3.3 vs ~2e-6) and crash rectangular ones.
+        dense = (U * S.unsqueeze(0)) @ V
         return dense.reshape(shape)
+    if isinstance(value, dict) and {"raw", "shape"}.issubset(value.keys()):
+        # Non-SVD fallback bundle (SVD raised on the training side).
+        return _as_cpu_f32(value["raw"]).reshape(value["shape"])
     if isinstance(value, torch.Tensor):
-        return value.cpu()
+        return value.detach().cpu()
     raise ValueError(f"unsupported gradient entry for tensor {name!r}: {type(value)}")
 
 

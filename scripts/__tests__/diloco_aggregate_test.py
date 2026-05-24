@@ -26,6 +26,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import diloco_aggregate as agg  # noqa: E402
+from diloco_train import compress_gradients_svd  # noqa: E402 — REAL compressor (source of truth)
 
 
 # ----------------------------- helpers -----------------------------
@@ -216,3 +217,77 @@ def test_cli_handles_zero_peer_without_crash(tmp_path: Path) -> None:
     assert out["perPeerCosine"]["z"] == "NaN"
     # Real peer is a finite number.
     assert isinstance(out["perPeerCosine"]["r"], (int, float))
+
+
+def _exact_rank_k_grad(rows: int, cols: int, k: int):
+    """A dense gradient that is EXACTLY rank-k, so truncated SVD at top_k>=k
+    reconstructs it (near-)exactly. Built as A @ B with inner dim k."""
+    torch.manual_seed(rows * 1000 + cols * 10 + k)
+    a = torch.randn(rows, k)
+    b = torch.randn(k, cols)
+    return (a @ b).float()
+
+
+@pytest.mark.parametrize(
+    "rows,cols,k",
+    [
+        (16, 32, 8),   # rectangular wide
+        (32, 16, 8),   # rectangular tall
+        (16, 16, 8),   # SQUARE — the case that catches a silent V transpose
+    ],
+)
+def test_decompress_svd_matches_real_compressor(rows: int, cols: int, k: int) -> None:
+    """BLOCKER-2: drive the reconstruction with the ACTUAL
+    `compress_gradients_svd` from `diloco_train.py` (the production source of
+    truth). The "V" key holds `Vh[:k,:]` (k,cols), so the correct
+    reconstruction is `(U * S) @ V` with NO transpose. The SQUARE case
+    (16x16) is critical: a wrong `V.transpose()` does NOT crash there — it
+    silently reconstructs garbage. Input forced exactly rank-k → near-exact
+    round-trip; re-adding the transpose blows up the error and this fails."""
+    original = _exact_rank_k_grad(rows, cols, k)
+    bundle = compress_gradients_svd({"w": original}, top_k=k)["w"]
+    assert set(bundle.keys()) >= {"U", "S", "V", "shape"}
+    assert isinstance(bundle["U"], list) and isinstance(bundle["V"], list)
+
+    decompressed = agg._decompress_if_svd("w", bundle)
+    assert tuple(decompressed.shape) == (rows, cols)
+    # atol 1e-4: exactly rank-k input → only float32 SVD round-off remains.
+    assert torch.allclose(decompressed, original, atol=1e-4), (
+        f"recon error {(decompressed - original).abs().max().item():.3e} "
+        f"for {rows}x{cols} k={k}"
+    )
+
+
+def test_decompress_svd_list_inputs_match_tensor_inputs() -> None:
+    """List-vs-tensor equivalence (regression round 1228): the SAME bundle
+    from the real compressor, once with list components and once coerced to
+    tensors, must reconstruct identically and never raise on `list`."""
+    original = _exact_rank_k_grad(16, 32, 8)
+    list_bundle = compress_gradients_svd({"w": original}, top_k=8)["w"]
+    tensor_bundle = {
+        "U": torch.tensor(list_bundle["U"]),
+        "S": torch.tensor(list_bundle["S"]),
+        "V": torch.tensor(list_bundle["V"]),
+        "shape": list_bundle["shape"],
+    }
+
+    dense_from_tensors = agg._decompress_if_svd("w", tensor_bundle)
+    dense_from_lists = agg._decompress_if_svd("w", list_bundle)
+
+    assert tuple(dense_from_lists.shape) == tuple(tensor_bundle["shape"])
+    assert torch.allclose(dense_from_lists, dense_from_tensors, atol=1e-6)
+
+
+def test_decompress_raw_fallback_list_input() -> None:
+    """Non-SVD `{raw, shape}` fallback also arrives as a list via
+    `.tolist()` and must reconstruct."""
+    raw = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    out = agg._decompress_if_svd("w", {"raw": raw, "shape": [2, 3]})
+    assert tuple(out.shape) == (2, 3)
+    assert torch.allclose(out, torch.tensor(raw, dtype=torch.float32))
+
+
+def test_decompress_unsupported_type_still_raises() -> None:
+    """Fail-closed (P2): unknown entry must raise, never silently skip."""
+    with pytest.raises(ValueError):
+        agg._decompress_if_svd("w", object())
