@@ -1,5 +1,21 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] fix(diloco): 0.8.121 - aggregation accepts list SVD components + correct reconstruction (no transpose) (783387e3)
+
+`0.8.120` -> `0.8.121`. Both GPU pods failed DiLoCo aggregation with
+`'list' object has no attribute 'cpu'`. The training side (`compress_gradients_svd`)
+persists SVD components as Python lists (pickle): `U`=(rows,k), `S`=(k,), `V`=`Vh`=(k,cols),
+plus a `{raw,shape}` fallback. The aggregation scripts assumed tensors. Fixes in BOTH
+`scripts/diloco_aggregate_executor.py` (node) and `scripts/diloco_aggregate.py` (coord):
+- Coerce list/ndarray/Tensor -> CPU float32 (`torch.as_tensor`); fail-closed `ValueError`
+  on truly-unknown types (never silently drop a tensor entry).
+- Correct reconstruction (reviewer BLOCKER — silent corruption): `V` holds `Vh`=(k,cols), so
+  `dense = U @ diag(S) @ Vh = (U * S.unsqueeze(0)) @ V` with NO transpose. The prior
+  `@ V.transpose(-2,-1)` crashed rectangular layers and silently corrupted square ones
+  (wrong adapter promoted to `<domain>/latest`).
+- Tests rewritten to drive reconstruction through the REAL `compress_gradients_svd`
+  (16x32/32x16/16x16, recon err 3-7e-6); re-adding the transpose makes them fail. 36 pass.
+
 ## [2026-05-24] fix(diloco): 0.8.120 - count active_file as reclaimable in heavy-training memory gate (5b526a62)
 
 `0.8.119` -> `0.8.120`. The cgroup memory gate counted only `inactive_file`
