@@ -1,5 +1,20 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] feat(node): presigned-URL HTTP transport for DiLoCo aggregation (no S3 creds) (d741942d)
+
+Code-only, not yet released (next node release 0.8.118 bundles this + the FIX B WS revert). The
+aggregation executor downloads inputs + uploads the candidate via the presigned URLs the coord
+ships in the WO payload (plain HTTP GET/PUT) — no AWS creds on the pod (which had 0/7 S3 vars).
+Mirrors the training path. Pairs with coord f4bd55bf. DARK until `DILOCO_NODE_AGGREGATION_ENABLED`.
+- NEW `diloco-aggregation-http.ts`: axios GET/PUT. PUT sends EXACTLY
+  `Content-Type=application/octet-stream` (no `x-amz-*`) to match the coord PUT signature; fail-
+  closed on non-2xx/403/expired (P35); GET `maxContentLength` cap.
+- `diloco_aggregation_runner.ts`: download-via-URL + sha256-verify each input (P2 fail-closed),
+  upload-via-PUT. DELETED `diloco-aggregation-s3.ts`; removed `@aws-sdk/client-s3` — node has ZERO
+  AWS SDK now (lockfile regen pnpm 9, aws-sdk=0, overrides intact).
+Reviewer SHIP-WITH-NITS (test nits filled: 13-case real-http-transport spec + redispatch presign).
+34 diloco/http tests pass; build clean.
+
 ## [2026-05-24] revert(node): drop FIX B WebSocket transport, dial /tcp/9000 only (2bb66e98)
 
 Code-only, NOT released (accumulates for the next node release; npm + pods stay 0.8.117).
