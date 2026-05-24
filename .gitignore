@@ -39,3 +39,6 @@ PROGRESS.md
 
 # Runtime data — generated at startup
 data/
+
+# CodeGraph semantic index — rebuilt from source, never commit
+.codegraph/
