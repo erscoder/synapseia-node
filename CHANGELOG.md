@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] chore(release): 0.8.118 release presigned-URL transport + FIX B WS revert (DARK) (9f2cac0a)
+
+`0.8.117` -> `0.8.118`. npm release that bundles the two already-committed changes below for
+pod auto-update: presigned-URL HTTP transport (d741942d) + FIX B WS transport revert (2bb66e98).
+No behavior change: DiLoCo aggregation still DARK behind `DILOCO_NODE_AGGREGATION_ENABLED`
+(default false). Lockfile unchanged (deps settled at those commits, `aws-sdk` already at 0).
+Pairs with coord 0.8.112. Phase 4 canary sequence step 2 of 4.
+
 ## [2026-05-24] feat(node): presigned-URL HTTP transport for DiLoCo aggregation (no S3 creds) (d741942d)
 
 Code-only, not yet released (next node release 0.8.118 bundles this + the FIX B WS revert). The
