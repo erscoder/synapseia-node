@@ -175,14 +175,24 @@ export interface DiLoCoAggregationWorkOrderPayload {
   /** Round 0 → null (§2 velocity carry-over cold-start). */
   prevVelocity: { s3Key: string; sha256: string; downloadUrl: string } | null;
   /** Phase 4: presigned PUT URL for THIS aggregator's candidate adapter at
-   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/adapter_weights.pkl`
-   *  (P36 per-peer prefix). The node uploads over plain HTTP (no AWS creds);
-   *  the reported `adapterS3Key` = this candidate key so the coord reads it
-   *  back (it has direct S3) and verifies sha256. */
+   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/<workOrderId>/adapter_weights.pkl`
+   *  (P36 per-peer prefix + attempt-unique `<workOrderId>/` level). The node
+   *  uploads over plain HTTP (no AWS creds); the reported `adapterS3Key` =
+   *  `adapterS3Key` below so the coord reads it back (it has direct S3) and
+   *  verifies sha256. */
   adapterUploadUrl: string;
   /** Presigned PUT URL for THIS aggregator's candidate velocity at
-   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/velocity.pkl`. */
+   *  `<domain>/round_<n>/candidates/<thisAggregatorPeerId>/<workOrderId>/velocity.pkl`. */
   velocityUploadUrl: string;
+  /** Coord-determined attempt-unique candidate keys behind the PUT URLs
+   *  above. The node reports these VERBATIM (it does NOT rebuild the key) so
+   *  the reveal's key is always the exact immutable object the presigned URL
+   *  targets — a later redispatch (different WO id → different key) can never
+   *  overwrite the bytes this reveal points to. Optional for backwards-compat
+   *  with an old coord that ships only the URLs (the runner falls back to
+   *  rebuilding the round-level key in that case). */
+  adapterS3Key?: string;
+  velocityS3Key?: string;
   /** Canonical cosine-reject threshold, coord-pinned. */
   cosineRejectThreshold: number;
   /** Coord-computed quorum; echoed back in the result, coord re-checks. */

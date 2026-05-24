@@ -249,8 +249,19 @@ export async function runDiLoCoAggregation(
     const velocityBuf = await fs.promises.readFile(outputVelocityPath);
     const adapterSha256 = sha256OfBuffer(adapterBuf);
     const velocitySha256 = sha256OfBuffer(velocityBuf);
-    const adapterS3Key = `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/adapter_weights.pkl`;
-    const velocityS3Key = `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/velocity.pkl`;
+    // Report the EXACT key the coord presigned (shipped in the WO payload) so
+    // the reveal's `adapterS3Key` == the object behind `adapterUploadUrl`. The
+    // coord scopes the candidate key by the attempt-unique `workOrderId`
+    // (`candidates/<peerId>/<workOrderId>/...`); rebuilding it here would
+    // require re-deriving that id and could drift from the presigned URL. Fall
+    // back to the legacy round-level key ONLY when an old coord ships no key
+    // (then it presigned that round-level key too, so they still agree).
+    const adapterS3Key =
+      payload.adapterS3Key ??
+      `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/adapter_weights.pkl`;
+    const velocityS3Key =
+      payload.velocityS3Key ??
+      `${payload.domain}/round_${payload.outerRound}/candidates/${aggregatorPeerId}/velocity.pkl`;
     await httpIO.putUrl(payload.adapterUploadUrl, adapterBuf);
     await httpIO.putUrl(payload.velocityUploadUrl, velocityBuf);
 

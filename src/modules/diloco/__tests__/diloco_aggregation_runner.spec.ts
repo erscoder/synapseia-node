@@ -175,6 +175,38 @@ describe('runDiLoCoAggregation', () => {
     expect(revealCall[0]).toBe('https://coord/diloco/med/aggregation-result');
   });
 
+  it('reports the coord-provided ATTEMPT-UNIQUE candidate keys verbatim (no rebuild) so the reveal key == the PUT URL object', async () => {
+    // The coord scopes the candidate key by the attempt-unique workOrderId and
+    // ships it in the payload. The node must report THAT key (not rebuild a
+    // round-level key) so a later redispatch (different key) can never
+    // overwrite the immutable object this reveal points to.
+    const attemptAdapterKey = `med/round_7/candidates/${PEER}/wo_diloco_agg_X_42_abcdef/adapter_weights.pkl`;
+    const attemptVelocityKey = `med/round_7/candidates/${PEER}/wo_diloco_agg_X_42_abcdef/velocity.pkl`;
+    const putAdapterUrl = `https://s3.example.com/${attemptAdapterKey}?sig=UA2`;
+    const putVelocityUrl = `https://s3.example.com/${attemptVelocityKey}?sig=UV2`;
+    const payload = basePayload({
+      adapterS3Key: attemptAdapterKey,
+      velocityS3Key: attemptVelocityKey,
+      adapterUploadUrl: putAdapterUrl,
+      velocityUploadUrl: putVelocityUrl,
+    });
+    const { httpIO, puts } = makeHttpIO(objectsFor(payload));
+    const opts = makeOptions({ httpIO, httpPost: jest.fn(async () => ({ ok: true, status: 200, text: async () => 'ok' })), workDir });
+
+    const sub = await runDiLoCoAggregation(
+      { workOrderId: 'wo_diloco_agg_attempt', peerId: PEER, coordinatorUrl: 'https://coord', payload },
+      opts,
+    );
+
+    // Reported keys == coord-provided keys == the objects behind the PUT URLs.
+    expect(sub.adapterS3Key).toBe(attemptAdapterKey);
+    expect(sub.velocityS3Key).toBe(attemptVelocityKey);
+    expect(puts.map((p) => p.url).sort()).toEqual([putAdapterUrl, putVelocityUrl].sort());
+    // The reveal carries the attempt-unique key the coord will hash on verify.
+    const revealBody = (opts.httpPost as jest.Mock).mock.calls[1][2] as Record<string, unknown>;
+    expect(revealBody.adapterS3Key).toBe(attemptAdapterKey);
+  });
+
   it('commit body carries commitment == sha256(canonicalEnvelope || nonce)', async () => {
     const payload = basePayload();
     const { httpIO } = makeHttpIO(objectsFor(payload));
