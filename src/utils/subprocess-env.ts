@@ -73,6 +73,15 @@ export const SENSITIVE_ENV_VARS: readonly string[] = [
   'SYNAPSEIA_PASSPHRASE_FROM_STDIN',
   // Legacy wallet override — same reasoning.
   'SYNAPSEIA_ALLOW_LEGACY_WALLET',
+  // AWS credentials — defence-in-depth (NIT-3). All S3 I/O for DiLoCo
+  // aggregation happens TS-side (`diloco-aggregation-s3.ts` builds the
+  // S3 client and reads these via the SDK default chain); the spawned
+  // python aggregation/trainer/validator scripts do ZERO S3, so they must
+  // never inherit the bucket credentials. Stripping them keeps a poisoned
+  // ML wheel inside a child from exfiltrating the node operator's AWS keys.
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AWS_SESSION_TOKEN',
 ] as const;
 
 /**

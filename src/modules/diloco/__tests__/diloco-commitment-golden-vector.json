@@ -1,0 +1,15 @@
+{
+  "_comment": "GOLDEN VECTOR for the DiLoCo commit-reveal commitment. Duplicated VERBATIM in packages/coordinator/src/domain/entities/__tests__/diloco-commitment-golden-vector.json. Both packages pin `expectedCommitment` in their own test suite; if EITHER side drifts its canonicalJSON / aggregationInvariantEnvelope / computeCommitment, that side's suite fails. DO NOT edit one copy without editing the other (a deliberate divergence indicates a real consensus break).",
+  "invariants": {
+    "avgGradientNorm": 0.12345,
+    "velocityNorm": 0.06789,
+    "acceptedPeerIds": ["12D3KooWPeerC", "12D3KooWPeerA", "12D3KooWPeerB"],
+    "rejectedPeerIds": [
+      { "peerId": "12D3KooWPeerZ", "reason": "cosine_low" },
+      { "peerId": "12D3KooWPeerY", "reason": "cosine_nan" }
+    ],
+    "adapterSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "expectedCommitment": "528ff5511ca0a5bcd53c37060ec334407092e8e457c26ea656f0d3096cd050ab"
+}
