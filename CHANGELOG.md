@@ -1,5 +1,17 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] revert(node): drop FIX B WebSocket transport, dial /tcp/9000 only (2bb66e98)
+
+Code-only, NOT released (accumulates for the next node release; npm + pods stay 0.8.117).
+p2p was fixed at the infra layer (FIX A: dedicated Fly IPv4 `168.220.93.2` + Cloudflare
+A-record), so the node dials `/dns4/<host>/tcp/9000` (Noise-encrypted) and connects. FIX B's
+`/tcp/443/wss` dial was dead weight (443 routes to the REST service, not libp2p). Reverts only
+the WS parts of `79e80802`: `transports [tcp(), webSockets()]` -> `[tcp()]`, removes the
+`@libp2p/websockets` dep + `coord-dial-addr.ts` builder + ws mock + 2 ws specs, restores the
+`/tcp/9000`-only dial (byte-identical to `6b78fab7`). KEEPS the commitment golden-vector drift
+guard + the `AWS_*` subprocess-env denylist (unrelated good changes from `79e80802`). Lockfile
+regenerated with pnpm 9 (`--ignore-workspace`, overrides preserved). Build green; 2447 tests pass.
+
 ## [2026-05-24] release: node 0.8.117 (Phase 3 DiLoCo aggregation executor + p2p WebSocket transport)
 
 `0.8.116` -> `0.8.117`. Bundles the two feature entries below: bb7971fc (Phase 3
