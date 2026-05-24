@@ -1,5 +1,36 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] feat(node): DiLoCo node-side aggregation executor (Phase 3, DARK) (bb7971fc)
+
+Targets the next node release (bundled with the p2p WS-transport fix). NOT yet released.
+The compute-node executor that runs DiLoCo gradient aggregation off the coordinator
+(mirrors the LoRA validation flow). Inert until the coord flips
+`DILOCO_NODE_AGGREGATION_ENABLED` (Phase 4); the old coord never dispatches
+`DILOCO_AGGREGATION`. Adds the agent-graph case that restores the `WorkOrderType`
+switch exhaustiveness (P27) which the Phase-1 enum value broke, so the node compiles.
+
+- `scripts/diloco_aggregate_executor.py`: ported aggregation algorithm, CPU-pinned +
+  float64 accumulation (deterministic scalar invariants for the coord's `1e-5`
+  tolerance consensus). Node-side byzantine/cosine filter, Nesterov momentum with
+  pinned prevVelocity, `new_adapter = prevAdapter + update`.
+- `diloco-aggregation-commitment.ts`: byte-faithful replica of the coord
+  `canonicalJSON` + `aggregationInvariantEnvelope` + commitment (reviewer-verified
+  byte-identical, the silent consensus-breaker).
+- `diloco-aggregation-s3.ts`: direct shared-bucket GET/PUT (no coord presigned
+  endpoint); fail-closed when `AWS_DILOCO_BUCKET` is unset.
+- `diloco_aggregation_runner.ts`: validate, download + sha256-verify each pinned
+  input (P2 fail-closed), spawn CPU script, upload candidate to
+  `candidates/<aggregatorPeerId>/` (P36), signed commit then signed reveal. The
+  `X-Signature` header signs the full body including the body `signature` field
+  (NodeSignatureGuard parity, regression-tested).
+- `execute-diloco-aggregation.ts` LangGraph node + agent-graph case + edge (P27).
+  `wo-type-to-cap`: `DILOCO_AGGREGATION` maps to `gpu_training`.
+- `@aws-sdk/client-s3` added as a DIRECT dep (P13: verify prod install pre-release).
+
+Reviewer SHIP-WITH-NITS. Pre-release nits tracked: NIT-1 shared golden-vector for
+commitment-drift detection, NIT-2 docker/`--prod` resolve check for the new S3 dep,
+NIT-3 `AWS_*` subprocess denylist. 24 jest + 12 pytest pass; build green.
+
 ## [2026-05-23] fix(self-update + lora): atomic self-updater + causal-LM collator (0.8.116) (1a9b1967, 886265ef)
 
 Two prod-critical fixes (0.8.115 -> 0.8.116).
