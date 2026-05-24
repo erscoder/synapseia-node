@@ -1,5 +1,14 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-24] release: node 0.8.117 (Phase 3 DiLoCo aggregation executor + p2p WebSocket transport)
+
+`0.8.116` -> `0.8.117`. Bundles the two feature entries below: bb7971fc (Phase 3
+node-side DiLoCo aggregation executor, DARK until the coord flips
+`DILOCO_NODE_AGGREGATION_ENABLED`) and 79e80802 (p2p WebSocket transport). First
+node release carrying the WS transport, so pods should reach libp2p
+`connected=true` after restart (raw `/tcp/9000` was unroutable on the coord's Fly
+shared IPv4; now dials `/dns4/api.synapseia.network/tcp/443/wss`).
+
 ## [2026-05-24] fix(node): p2p WebSocket transport so the node connects to the Fly coord (79e80802)
 
 Targets the next node release (bundled with Phase 3). NOT yet released. Fixes the
