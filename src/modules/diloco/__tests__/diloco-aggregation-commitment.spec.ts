@@ -35,18 +35,39 @@ function coordSha256Hex(text: string): string {
 function coordSha256OfCanonicalPayload(payloadJson: Record<string, unknown>): string {
   return coordSha256Hex(coordCanonicalJSON(payloadJson));
 }
+function coordSortCosineKeys(
+  perPeerCosine: Readonly<Record<string, number | 'NaN'>>,
+): Record<string, number | 'NaN'> {
+  const out: Record<string, number | 'NaN'> = {};
+  for (const peerId of Object.keys(perPeerCosine).sort()) {
+    out[peerId] = perPeerCosine[peerId];
+  }
+  return out;
+}
 function coordEnvelope(inv: DiLoCoAggregationInvariants) {
   const acceptedPeerIds = [...inv.acceptedPeerIds].sort();
   const rejectedPeerIds = [...inv.rejectedPeerIds]
     .map((r) => ({ peerId: r.peerId, reason: r.reason }))
     .sort((a, b) => (a.peerId < b.peerId ? -1 : a.peerId > b.peerId ? 1 : 0));
-  return {
+  const envelope: {
+    avgGradientNorm: number;
+    velocityNorm: number;
+    acceptedPeerIds: string[];
+    rejectedPeerIds: Array<{ peerId: string; reason: string }>;
+    adapterSha256: string;
+    perPeerCosine?: Record<string, number | 'NaN'>;
+  } = {
     avgGradientNorm: inv.avgGradientNorm,
     velocityNorm: inv.velocityNorm,
     acceptedPeerIds,
     rejectedPeerIds,
     adapterSha256: inv.adapterSha256,
   };
+  // Phase 2 omit-seam: only ADD the key when present (mirrors coord source).
+  if (inv.perPeerCosine !== undefined) {
+    envelope.perPeerCosine = coordSortCosineKeys(inv.perPeerCosine);
+  }
+  return envelope;
 }
 function coordComputeCommitment(inv: DiLoCoAggregationInvariants, nonce: string): string {
   const envelope = coordEnvelope(inv);
@@ -108,5 +129,53 @@ describe('node commitment == coord commitment (byte cross-check)', () => {
 
   it('empty nonce throws (P2 fail-closed)', () => {
     expect(() => computeCommitment(baseInv, '')).toThrow(/nonce is required/);
+  });
+
+  // ── Phase 2: perPeerCosine carried under the commitment ────────────────────
+
+  // A peerId→cosine map with UNSORTED keys + a "NaN" STRING value (the literal
+  // the Python aggregator emits for an undefined cosine, NOT JS NaN).
+  const baseInvWithCosine: DiLoCoAggregationInvariants = {
+    ...baseInv,
+    perPeerCosine: { peerB: 0.91, peerA: 0.95, peerC: 'NaN' },
+  };
+
+  it('present perPeerCosine: commitment is byte-identical to the coord recompute', () => {
+    const nonce = 'deadbeef'.repeat(8);
+    expect(computeCommitment(baseInvWithCosine, nonce)).toBe(
+      coordComputeCommitment(baseInvWithCosine, nonce),
+    );
+  });
+
+  it('perPeerCosine is bound under the commitment (present ≠ absent)', () => {
+    const nonce = 'deadbeef'.repeat(8);
+    // If the cosine were dropped before hashing, these would be equal — proving
+    // the alignment signal is actually carried under the commit-reveal.
+    expect(computeCommitment(baseInvWithCosine, nonce)).not.toBe(
+      computeCommitment(baseInv, nonce),
+    );
+  });
+
+  it('perPeerCosine commitment is stable regardless of map key ordering', () => {
+    const nonce = 'cafe'.repeat(16);
+    const reordered: DiLoCoAggregationInvariants = {
+      ...baseInv,
+      perPeerCosine: { peerC: 'NaN', peerB: 0.91, peerA: 0.95 },
+    };
+    expect(computeCommitment(reordered, nonce)).toBe(
+      computeCommitment(baseInvWithCosine, nonce),
+    );
+  });
+
+  // GOLDEN backward-compat lock (LOAD-BEARING — commit-reveal is LIVE in prod).
+  // An OLD node's reveal carries no perPeerCosine; the omit-seam must keep the
+  // commitment byte-identical to the pre-phase-2 envelope FOREVER. This pins the
+  // absolute hash so ANY future drift in canonicalJSON / envelope field order /
+  // the omit-seam (even a coordinated node+coord change) breaks this test before
+  // it silently rejects in-flight production reveals with HTTP 403.
+  it('GOLDEN: absent perPeerCosine reproduces the pre-phase-2 commitment hash', () => {
+    expect(computeCommitment(baseInv, 'deadbeef'.repeat(8))).toBe(
+      '7eb42a423690c9423168469d3ccb8b64faa0325b93c21a131c8529de2a286323',
+    );
   });
 });

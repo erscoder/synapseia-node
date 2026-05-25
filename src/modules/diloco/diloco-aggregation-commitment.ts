@@ -40,6 +40,21 @@ export interface DiLoCoAggregationInvariants {
   readonly acceptedPeerIds: readonly string[];
   readonly rejectedPeerIds: readonly DiLoCoRejectedPeer[];
   readonly adapterSha256: string;
+  /**
+   * Per-peer cosine-to-consensus the aggregator script emits (phase 2 —
+   * carry the alignment signal under the commitment so a later
+   * blend-ranking phase can read it trustlessly). Map peerId → cosine
+   * float, or the literal STRING `"NaN"` for an undefined cosine (the
+   * Python script emits `"NaN"`, not JS NaN). DARK after this phase:
+   * nothing CONSUMES it yet.
+   *
+   * BACKWARD-COMPAT (critical): OPTIONAL. When `undefined` (old
+   * aggregators that do not send it) the {@link aggregationInvariantEnvelope}
+   * OMITS the key entirely, making the envelope byte-identical to the
+   * pre-change shape — old reveals verify against the golden hash exactly
+   * as before. Only present when the aggregator threads it through.
+   */
+  readonly perPeerCosine?: Readonly<Record<string, number | 'NaN'>>;
 }
 
 /**
@@ -77,18 +92,54 @@ export function aggregationInvariantEnvelope(invariants: DiLoCoAggregationInvari
   acceptedPeerIds: string[];
   rejectedPeerIds: DiLoCoRejectedPeer[];
   adapterSha256: string;
+  perPeerCosine?: Record<string, number | 'NaN'>;
 } {
   const acceptedPeerIds = [...invariants.acceptedPeerIds].sort();
   const rejectedPeerIds = [...invariants.rejectedPeerIds]
     .map((r) => ({ peerId: r.peerId, reason: r.reason }))
     .sort((a, b) => (a.peerId < b.peerId ? -1 : a.peerId > b.peerId ? 1 : 0));
-  return {
+  const envelope: {
+    avgGradientNorm: number;
+    velocityNorm: number;
+    acceptedPeerIds: string[];
+    rejectedPeerIds: DiLoCoRejectedPeer[];
+    adapterSha256: string;
+    perPeerCosine?: Record<string, number | 'NaN'>;
+  } = {
     avgGradientNorm: invariants.avgGradientNorm,
     velocityNorm: invariants.velocityNorm,
     acceptedPeerIds,
     rejectedPeerIds,
     adapterSha256: invariants.adapterSha256,
   };
+  // BACKWARD-COMPAT seam: only ADD the key when present. `canonicalJSON`
+  // sorts object keys recursively, so a key-sorted plain copy here is
+  // already byte-deterministic; we sort the peerId keys explicitly to
+  // mirror the `acceptedPeerIds.sort()` discipline (and so the shape is
+  // independent of insertion order). The `"NaN"` STRING value passes
+  // straight through `JSON.stringify` as `"NaN"`. When `perPeerCosine`
+  // is undefined the key is omitted entirely → the envelope (and thus
+  // the commitment) is byte-identical to the pre-phase-2 shape.
+  if (invariants.perPeerCosine !== undefined) {
+    envelope.perPeerCosine = sortCosineKeys(invariants.perPeerCosine);
+  }
+  return envelope;
+}
+
+/**
+ * Return a NEW plain object with the peerId keys sorted ascending. Values
+ * (cosine float or the `"NaN"` string) are copied verbatim. Deterministic
+ * regardless of the source map's insertion order — mirrors the
+ * coord-side mirror so both pipelines build a byte-identical envelope.
+ */
+function sortCosineKeys(
+  perPeerCosine: Readonly<Record<string, number | 'NaN'>>,
+): Record<string, number | 'NaN'> {
+  const out: Record<string, number | 'NaN'> = {};
+  for (const peerId of Object.keys(perPeerCosine).sort()) {
+    out[peerId] = perPeerCosine[peerId];
+  }
+  return out;
 }
 
 /**

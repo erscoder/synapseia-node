@@ -85,7 +85,11 @@ export class DiLoCoAggregationError extends Error {
 interface ScriptOutput {
   avgGradientNorm: number;
   velocityNorm: number;
-  perPeerCosine: Record<string, number | 'NaN'>;
+  // Optional at the type level so the `!== undefined` guards below are honest:
+  // the current `diloco_aggregate_executor.py` ALWAYS emits it, but a future /
+  // alternate script path may not, and the commitment envelope omits the key
+  // when absent (backward-compat).
+  perPeerCosine?: Record<string, number | 'NaN'>;
   acceptedPeerIds: string[];
   rejectedPeerIds: Array<{ peerId: string; reason: string }>;
   participatingNodes: number;
@@ -266,6 +270,12 @@ export async function runDiLoCoAggregation(
     await httpIO.putUrl(payload.velocityUploadUrl, velocityBuf);
 
     // Build the canonical invariants (sets sorted in the envelope fn).
+    // Phase 2: thread the script's per-peer cosine-to-consensus through
+    // the commitment so it is carried trustlessly (under the commit-reveal
+    // + signature) to the coord. The script ALWAYS emits `perPeerCosine`
+    // (peerId → float | the literal "NaN" string), so a freshly-built
+    // node submits it. The envelope OMITS the key when undefined, so a
+    // future script/path that does not produce it stays byte-compatible.
     const invariants: DiLoCoAggregationInvariants = {
       avgGradientNorm: out.avgGradientNorm,
       velocityNorm: out.velocityNorm,
@@ -275,6 +285,7 @@ export async function runDiLoCoAggregation(
         reason: r.reason,
       })),
       adapterSha256,
+      ...(out.perPeerCosine !== undefined ? { perPeerCosine: out.perPeerCosine } : {}),
     };
 
     // 6. COMMIT. Random 32-byte nonce; the second aggregator can't copy our
@@ -303,6 +314,11 @@ export async function runDiLoCoAggregation(
       velocityNorm: invariants.velocityNorm,
       acceptedPeerIds: [...invariants.acceptedPeerIds],
       rejectedPeerIds: invariants.rejectedPeerIds.map((r) => ({ peerId: r.peerId, reason: r.reason })),
+      // Phase 2: carry per-peer cosine in the reveal so the coord can BOTH
+      // recompute the commitment from it AND persist it. Omitted entirely
+      // when absent so an old-style reveal stays byte-identical (the coord
+      // recompute likewise omits the key → commitment still verifies).
+      ...(invariants.perPeerCosine !== undefined ? { perPeerCosine: invariants.perPeerCosine } : {}),
       nonce,
     }, options);
 
@@ -571,6 +587,9 @@ interface RevealBody {
   velocityNorm: number;
   acceptedPeerIds: string[];
   rejectedPeerIds: Array<{ peerId: string; reason: string }>;
+  /** Phase 2: per-peer cosine-to-consensus (peerId → float | "NaN").
+   *  Optional — an old-style reveal omits it (backward-compat). */
+  perPeerCosine?: Record<string, number | 'NaN'>;
   nonce: string;
 }
 

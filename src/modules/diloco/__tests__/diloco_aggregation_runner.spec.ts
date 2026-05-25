@@ -240,6 +240,11 @@ describe('runDiLoCoAggregation', () => {
     expect(revealBody.aggregatorPeerId).toBe(PEER);
     expect(revealBody.adapterSha256).toBe(sub.adapterSha256);
     expect(revealBody.acceptedPeerIds).toEqual(['p1', 'p2']);
+    // Phase 2: the reveal carries perPeerCosine UNDER the commitment, so the
+    // coord's recompute (mirrored here) MUST feed it back in or the hash
+    // diverges. Assert the reveal carried it, then include it in the recompute
+    // exactly as the coord does.
+    expect(revealBody.perPeerCosine).toEqual({ p1: 0.95, p2: 0.91 });
     // a reveal body carries the same fields the coord recomputes the commitment from
     const recomputed = computeCommitment(
       {
@@ -248,6 +253,7 @@ describe('runDiLoCoAggregation', () => {
         acceptedPeerIds: revealBody.acceptedPeerIds as string[],
         rejectedPeerIds: revealBody.rejectedPeerIds as Array<{ peerId: string; reason: string }>,
         adapterSha256: revealBody.adapterSha256 as string,
+        perPeerCosine: revealBody.perPeerCosine as Record<string, number | 'NaN'>,
       },
       revealBody.nonce as string,
     );
