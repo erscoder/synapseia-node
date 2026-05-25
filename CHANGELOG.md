@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-25] feat(diloco): validator node runner + diloco_validate.py + capability (phase 4b, dark) (74c6aac1)
+
+Phase 4B of the DiLoCo verified-quality top-3 reward plan. Node side of the
+independent DiLoCo Validator: on a DILOCO_VALIDATION WO it computes a GENUINE
+per-peer held-out valLoss, signs + POSTs the result. DARK: coord does not
+dispatch the WO until Phase 6; no version bump.
+
+- `diloco_validation_runner.ts`: presigned-GET download (sha256-verified) of
+  prevAdapter + survivor gradients + held-out val-set, spawn `diloco_validate.py`,
+  Ed25519 sign over `canonicalJSON({perPeerValLoss, roundId})`, POST
+  `/diloco/:domain/validation-result` (body `{roundId, validatorPeerId,
+  perPeerValLoss, signature}`, content-sign then transport-sign). Per-peer
+  failure -> literal `"NaN"`; deterministic `maxSeqLen=512`.
+- `scripts/diloco_validate.py`: each survivor's raw per-peer pseudo-gradient
+  applied on prevAdapter IN ISOLATION (params restored between peers; SVD decode
+  byte-identical to `diloco_aggregate.py`), real held-out cross-entropy = that
+  peer's quality signal for the Phase-5 blend (NOT the aggregator's merged
+  update, NOT the synthetic `loss*1.05`).
+- `execute-diloco-validation.ts` executor + agent-graph branch (resolves enum
+  exhaustiveness) + `wo-type-to-cap` + `diloco_validation` capability advertised
+  only when the torch/transformers stack is present (CPU-only node never
+  advertises; fail-closed routing). No TypeORM/DB imports.
+
 ## [2026-05-25] feat(diloco): carry per-peer cosine through aggregation commit-reveal (phase 2) (78db3ab3)
 
 Phase 2 of the DiLoCo verified-quality top-3 reward plan. Thread the aggregator
