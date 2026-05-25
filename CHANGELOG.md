@@ -1,5 +1,22 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-25] feat(diloco): carry per-peer cosine through aggregation commit-reveal (phase 2) (78db3ab3)
+
+Phase 2 of the DiLoCo verified-quality top-3 reward plan. Thread the aggregator
+script's per-peer cosine-to-consensus through the commitment + reveal so the
+coord carries it trustlessly under the commit-reveal + signature. DARK +
+unreleased: nothing consumes it yet; no version bump.
+
+- `aggregationInvariantEnvelope` adds an optional `perPeerCosine` with an
+  omit-when-undefined seam + `sortCosineKeys` (mirrors coord), so an old-style
+  reveal stays byte-identical to the pre-phase-2 commitment (backward-compat).
+- Runner threads `out.perPeerCosine` into both the commit invariants and the
+  reveal body (omitted when absent); `ScriptOutput.perPeerCosine` typed optional.
+- Tests: reveal-recompute asserts the reveal carries `perPeerCosine`; commitment
+  cross-check covers a present map (incl. the `"NaN"` string) node==coord, binding
+  (present != absent), key-order stability, and a GOLDEN absolute-hash lock pinning
+  the pre-phase-2 backward-compat invariant against future drift.
+
 ## [2026-05-25] fix(diloco): 0.8.122 - report coord-provided attempt-unique candidate key (8efadca2)
 
 `0.8.121` -> `0.8.122`. The candidate S3 key was scoped only by `(domain, outerRound, peerId)`; a
