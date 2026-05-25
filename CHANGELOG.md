@@ -1,5 +1,28 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] fix(lora): route encoder/MLM base models to AutoModelForMaskedLM (e8eab352)
+
+`train_lora.py` routed every non-classification subtype to `AutoModelForCausalLM`.
+For PubMedBERT (encoder-only masked-LM BERT, mission `pubmedbert_v15`) that built
+`BertLMHeadModel` without `is_decoder=True` → `python3 train_lora.py exited with
+code 2: ... add is_decoder=True`, failing every LoRA dispatch fleet-wide.
+
+Adds a third objective route decided by inspecting `AutoConfig` up front:
+`select_objective(config, subtype)` → LORA_CLASSIFICATION→SEQ_CLS; decoder /
+causal-arch / `is_decoder` / ambiguous→CAUSAL; encoder MLM families (bert, roberta,
+xlm-roberta, distilbert, deberta, deberta-v2, electra, albert, camembert, mpnet,
+bigbird, longformer, or `*ForMaskedLM`/bare `*Model` arch and not causal)→MLM. The
+MLM branch uses `AutoModelForMaskedLM` (same `low_cpu_mem_usage` fallback),
+`LoraConfig(task_type=None, target_modules=[query,key,value,dense])`, and
+`DataCollatorForLanguageModeling(mlm=True, mlm_probability)` so labels are
+masked-token targets (not `labels=input_ids`); perplexity = `exp(eval_loss)` into
+the unchanged `metrics.json` shape.
+
+Causal + classification routes are byte-identical. No TS wrapper contract change.
+`py_compile` + 34 trainer tests green. Reviewer SHIP. (The MLM forward pass — PEFT
+wrapping, `target_modules` resolving, finite `eval_loss` — verifies on the pod via
+the new `progress "objective"` log line.)
+
 ## [2026-05-25] chore(release): 0.8.123 — DiLoCo validator role
 
 `0.8.122` -> `0.8.123`. Ships the node side of the DiLoCo Validator: the
