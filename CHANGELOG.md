@@ -1,5 +1,15 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-25] chore(release): 0.8.123 — DiLoCo validator role
+
+`0.8.122` -> `0.8.123`. Ships the node side of the DiLoCo Validator: the
+`diloco_validation` capability (stack-gated), the `diloco_validation_runner.ts`
++ `scripts/diloco_validate.py` (genuine per-peer held-out valLoss), and the
+per-peer cosine carried under the aggregation commit-reveal (Phases 2 + 4B,
+`78db3ab3` + `74c6aac1`). A node advertises `diloco_validation` only when the
+torch/transformers stack is present; coord dispatches the WO once a held-out
+val-set is seeded for the domain.
+
 ## [2026-05-25] feat(diloco): validator node runner + diloco_validate.py + capability (phase 4b, dark) (74c6aac1)
 
 Phase 4B of the DiLoCo verified-quality top-3 reward plan. Node side of the
