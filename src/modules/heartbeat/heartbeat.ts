@@ -260,6 +260,12 @@ const TRAINING_FLOORS_MB: Record<string, number> = {
   lora_training: LORA_TRAINING_MEM_FLOOR_MB,
   lora_generation: LORA_GENERATION_MEM_FLOOR_MB,
   diloco_training: DILOCO_TRAINING_MEM_FLOOR_MB,
+  // diloco_validation runs the SAME torch/transformers/peft stack + the same
+  // pre-downloaded foundation model as diloco_training (a held-out forward
+  // pass per peer), so it carries the identical memory floor — under pressure
+  // the validator must be shed alongside diloco_training (P-pattern: don't
+  // advertise a cap you can't run).
+  diloco_validation: DILOCO_TRAINING_MEM_FLOOR_MB,
   cpu_inference: CPU_INFERENCE_MEM_FLOOR_MB,
   gpu_inference: GPU_INFERENCE_MEM_FLOOR_MB,
   inference: INFERENCE_MEM_FLOOR_MB,
@@ -1486,7 +1492,21 @@ export class HeartbeatHelper {
     // doesn't grow at runtime so there is no restore path. The dynamic
     // filter still handles transient free-RAM pressure for caps that
     // pass this gate. See `container-mem.ts` for thresholds + rationale.
-    return applyContainerMemoryGate(caps);
+    const gated = applyContainerMemoryGate(caps);
+
+    // diloco_validation (B-validator, Phase 4B). Derived from the FINAL gated
+    // caps so it is advertised ONLY when BOTH `diloco_training` (the
+    // pre-downloaded foundation model marker) AND `lora_training` (the
+    // transformers + peft stack) survived all gates — exactly the stack
+    // `diloco_validate.py` needs for a genuine held-out forward pass. A
+    // CPU-only / old / model-less / memory-pressured node never advertises it
+    // (P-pattern: don't advertise a cap you can't run). No extra probe — both
+    // dependency caps already ran their own stack/marker probes above.
+    if (gated.includes('diloco_training') && gated.includes('lora_training')) {
+      gated.push('diloco_validation');
+    }
+
+    return gated;
   }
 
   /**

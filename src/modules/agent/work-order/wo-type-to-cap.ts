@@ -58,6 +58,14 @@ const WO_TYPE_TO_CAP: Record<
   // unset, so an un-provisioned gpu_training node simply returns
   // success=false without aggregating.
   DILOCO_AGGREGATION: 'gpu_training',
+  // DiLoCo B-validator (Phase 4B). Runs a GENUINE held-out forward pass over
+  // candidate peer pseudo-gradients (`diloco_validate.py`), so it needs the
+  // same torch + transformers + peft stack AND the pre-downloaded foundation
+  // model as diloco_training. Capability string `diloco_validation` is
+  // advertised by heartbeat ONLY when both `diloco_training` (model marker)
+  // and `lora_training` (peft/transformers stack) are present — a CPU-only /
+  // old node never advertises it, so this mapping fail-closes for them (P2).
+  DILOCO_VALIDATION: 'diloco_validation',
   LORA_TRAINING: 'lora_training',
   // LoRA validation runs on the same Python stack as LoRA training.
   // Additional opt-in env gate (LORA_VALIDATOR_ENABLED) enforced in

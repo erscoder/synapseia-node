@@ -80,6 +80,11 @@ export class AgentCardService {
         name: 'GPU Training',
         description: 'DiLoCo federated fine-tuning with GPU',
       },
+      diloco_validation: {
+        id: 'validation/diloco',
+        name: 'DiLoCo Validation',
+        description: 'Genuine held-out forward-pass validation of DiLoCo peer pseudo-gradients',
+      },
     };
 
     const skills: A2ASkill[] = [

@@ -98,6 +98,7 @@ function buildService(): AgentGraphService {
     new ExecuteInferenceNode(execution),
     new ExecuteDilocoNode(execution),
     new (require('../nodes/execute-diloco-aggregation').ExecuteDilocoAggregationNode)(execution),
+    new (require('../nodes/execute-diloco-validation').ExecuteDilocoValidationNode)(execution),
     new (require('../nodes/execute-docking').ExecuteDockingNode)(execution),
     new (require('../nodes/execute-lora').ExecuteLoraNode)(execution),
     new (require('../nodes/execute-lora-validation').ExecuteLoraValidationNode)(execution),

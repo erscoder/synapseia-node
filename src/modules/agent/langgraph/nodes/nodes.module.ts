@@ -9,6 +9,7 @@ import { ExecuteTrainingNode } from './execute-training';
 import { ExecuteInferenceNode } from './execute-inference';
 import { ExecuteDilocoNode } from './execute-diloco';
 import { ExecuteDilocoAggregationNode } from './execute-diloco-aggregation';
+import { ExecuteDilocoValidationNode } from './execute-diloco-validation';
 import { ExecuteDockingNode } from './execute-docking';
 import { ExecuteLoraNode } from './execute-lora';
 import { ExecuteLoraValidationNode } from './execute-lora-validation';
@@ -42,6 +43,7 @@ import { AgentBrainHelper } from '../../agent-brain';
     ExecuteInferenceNode,
     ExecuteDilocoNode,
     ExecuteDilocoAggregationNode,
+    ExecuteDilocoValidationNode,
     ExecuteDockingNode,
     ExecuteLoraNode,
     ExecuteLoraValidationNode,
@@ -66,6 +68,7 @@ import { AgentBrainHelper } from '../../agent-brain';
     ExecuteInferenceNode,
     ExecuteDilocoNode,
     ExecuteDilocoAggregationNode,
+    ExecuteDilocoValidationNode,
     ExecuteDockingNode,
     ExecuteLoraNode,
     ExecuteLoraValidationNode,

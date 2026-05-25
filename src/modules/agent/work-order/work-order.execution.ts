@@ -14,6 +14,11 @@ import type { DockingWorkOrderPayload } from '../../docking/types';
 import { runLora, LoraError } from '../../lora/lora_trainer';
 import { runLoraValidation, LoraValidationError } from '../../lora/lora_validator';
 import { runDiLoCoAggregation, DiLoCoAggregationError } from '../../diloco/diloco_aggregation_runner';
+import {
+  runDiLoCoValidation,
+  DiLoCoValidationError,
+  type DiLoCoValidationWorkOrderPayload,
+} from '../../diloco/diloco_validation_runner';
 import type { LoraWorkOrderPayload, LoraValidationWorkOrderPayload } from '../../lora/types';
 import { MutationEngineHelper, MutationEngineError } from '../../model/mutation-engine';
 import { runDiLoCoInnerLoop } from '../../model/diloco-trainer';
@@ -790,6 +795,49 @@ Abstract: ${safeAbstract}`;
       const msg = (err as Error).message;
       logger.error(` DiLoCo aggregation failed ${stage}${msg}`);
       return { result: `DiLoCo aggregation failed ${stage}${msg}`, success: false };
+    }
+  }
+
+  /**
+   * Execute a DILOCO_VALIDATION work order (DiLoCo B-validator, Phase 4B).
+   *
+   * Downloads the pinned gradients + prevAdapter + held-out val set from the
+   * coord-presigned GET URLs (sha256-verified, P2 fail-closed), runs the
+   * CPU-pinned `diloco_validate.py` forward pass per peer, then POSTs a SIGNED
+   * `validation-result` to the coord. The per-peer valLoss is a GENUINE
+   * held-out cross-entropy (NOT the synthetic training heuristic); a peer the
+   * script could not evaluate is reported as the literal "NaN" string.
+   */
+  async executeDilocoValidationWorkOrder(
+    workOrder: WorkOrder,
+    peerId: string,
+    coordinatorUrl: string,
+  ): Promise<{ result: string; success: boolean }> {
+    logger.log(` Executing DILOCO_VALIDATION: ${workOrder.title}`);
+    let payload: DiLoCoValidationWorkOrderPayload;
+    try {
+      payload = JSON.parse(workOrder.description) as DiLoCoValidationWorkOrderPayload;
+    } catch {
+      return { result: 'Invalid DiLoCo validation payload', success: false };
+    }
+
+    try {
+      const submission = await runDiLoCoValidation({
+        workOrderId: workOrder.id,
+        peerId,
+        coordinatorUrl,
+        payload,
+      });
+      logger.log(
+        ` DiLoCo validation complete — round=${submission.roundId}, ` +
+        `peers=${Object.keys(submission.perPeerValLoss).length}`,
+      );
+      return { result: JSON.stringify(submission), success: true };
+    } catch (err) {
+      const stage = err instanceof DiLoCoValidationError ? `[${err.stage}] ` : '';
+      const msg = (err as Error).message;
+      logger.error(` DiLoCo validation failed ${stage}${msg}`);
+      return { result: `DiLoCo validation failed ${stage}${msg}`, success: false };
     }
   }
 
