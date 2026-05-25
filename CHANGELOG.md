@@ -1,5 +1,14 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] chore(release): 0.8.124 — LoRA MLM-routing fix (174d57c2)
+
+`0.8.123` -> `0.8.124`. Ships the `fix(lora)` below: `train_lora.py` now routes
+encoder/masked-LM base models (PubMedBERT etc.) to `AutoModelForMaskedLM` instead of
+`AutoModelForCausalLM`, fixing the fleet-wide `BertLMHeadModel ... add
+is_decoder=True` exit-2 failure on the `pubmedbert_v15` mission. node-only release
+(decoupled from node-ui); pods auto-update from npm `latest`. Verify on the pod via
+the new `progress "objective"` log line (expect `objective:"MLM"` for pubmedbert).
+
 ## [2026-05-26] fix(lora): route encoder/MLM base models to AutoModelForMaskedLM (e8eab352)
 
 `train_lora.py` routed every non-classification subtype to `AutoModelForCausalLM`.
