@@ -126,6 +126,121 @@ def _peft_target_modules(default: list[str]) -> list[str]:
     return list(default) if default else ["q_proj", "v_proj"]
 
 
+# ── Objective routing (encoder-MLM vs decoder-CausalLM vs SeqCls) ────────────
+#
+# Bug (live, both GPU pods, 2026-05-25, repeating every dispatch of the
+# `pubmedbert_v15` mission):
+#
+#   LoRA training failed [python] python3 train_lora.py exited with code 2:
+#   If you want to use `BertLMHeadModel` as a standalone, add `is_decoder=True.`
+#
+# Root cause: the old model-class selection only branched on `subtype`:
+#   LORA_CLASSIFICATION → AutoModelForSequenceClassification + SEQ_CLS
+#   else (incl. LORA_GENERATION) → AutoModelForCausalLM + CAUSAL_LM
+# `pubmedbert_v15` arrives as subtype LORA_GENERATION (the only non-CLS
+# subtype the coordinator/TS wrapper knows), but its base model
+# (microsoft/BiomedNLP-PubMedBERT-…) is an ENCODER-ONLY masked-LM BERT.
+# `AutoModelForCausalLM.from_pretrained` on a BERT builds `BertLMHeadModel`
+# WITHOUT `config.is_decoder=True` → transformers raises → exit 2. CausalLM is
+# simply the wrong objective for an MLM encoder.
+#
+# Fix (operator decision): inspect the model CONFIG once up front and route
+# encoder/masked-LM families to a third, MaskedLM objective — WITHOUT adding a
+# new subtype (the TS wrapper / coordinator only know CLASSIFICATION /
+# GENERATION). Detection is `model_type`-based against a documented allowlist
+# of encoder families, with an architectures fallback, so it is robust to the
+# exact model name. SeqCls remains keyed on the subtype.
+
+# Encoder / masked-LM base families that must train with a MaskedLM head (NOT
+# CausalLM). `config.model_type` is the HF-canonical, name-independent key.
+# Conservative + documented: only well-known BERT-style encoders. Anything not
+# here (gpt2, llama, mistral, biogpt, opt, gptj, falcon, …) stays on CausalLM.
+_ENCODER_MLM_MODEL_TYPES = frozenset({
+    "bert",
+    "roberta",
+    "xlm-roberta",
+    "distilbert",
+    "deberta",
+    "deberta-v2",
+    "electra",
+    "albert",
+    "camembert",
+    "mpnet",
+    "bigbird",
+    "longformer",
+})
+
+
+def select_objective(config: Any, subtype: str) -> str:
+    """Decide the training objective for a base model + subtype. PURE — takes a
+    transformers-style config object (anything exposing `model_type`,
+    `is_decoder`, `is_encoder_decoder`, `architectures`) so it is unit-testable
+    with lightweight fakes (no model download / no torch).
+
+    Returns one of: "SEQ_CLS" | "MLM" | "CAUSAL".
+
+    Predicate (first match wins):
+      1. subtype == LORA_CLASSIFICATION → "SEQ_CLS" (unchanged, regardless of
+         the base architecture — a SequenceClassification head is valid on both
+         encoders and decoders).
+      2. else, if the config indicates a genuine DECODER
+         (`is_decoder` truthy, or `is_encoder_decoder` truthy, or `model_type`
+         is NOT in the encoder allowlist while its architectures look causal)
+         → "CAUSAL".
+      3. else, if `model_type` is in the encoder/masked-LM allowlist, OR the
+         declared `architectures` contain a BERT-style `*ForMaskedLM` / bare
+         `*Model` entry and NOT a `*ForCausalLM`/decoder arch → "MLM".
+      4. genuinely ambiguous → default CAUSAL (the historical behaviour for
+         every non-classification mission, so unknown decoder families keep
+         working). Known BERT families are caught in (3) before reaching here.
+    """
+    if subtype == "LORA_CLASSIFICATION":
+        return "SEQ_CLS"
+
+    model_type = (getattr(config, "model_type", "") or "").lower()
+    is_decoder = bool(getattr(config, "is_decoder", False))
+    is_enc_dec = bool(getattr(config, "is_encoder_decoder", False))
+    architectures = list(getattr(config, "architectures", None) or [])
+    archs_lower = [a.lower() for a in architectures]
+    has_causal_arch = any(
+        a.endswith("forcausallm") or a.endswith("lmheadmodel") for a in archs_lower
+    )
+    has_masked_arch = any(a.endswith("formaskedlm") for a in archs_lower)
+
+    # (2) Genuine decoder → CausalLM (unchanged historical path).
+    if is_decoder or is_enc_dec:
+        return "CAUSAL"
+    # A clearly causal architecture wins even if model_type is unknown.
+    if has_causal_arch and not has_masked_arch:
+        return "CAUSAL"
+
+    # (3) Encoder / masked-LM family → MaskedLM. model_type allowlist first
+    # (name-independent), architectures inspection as the fallback.
+    if model_type in _ENCODER_MLM_MODEL_TYPES:
+        return "MLM"
+    if has_masked_arch and not has_causal_arch:
+        return "MLM"
+    # A bare `*Model` (e.g. "BertModel") with no causal arch is encoder-style.
+    if archs_lower and all(a.endswith("model") for a in archs_lower) and not has_causal_arch:
+        return "MLM"
+
+    # (4) Ambiguous → preserve historical CausalLM default.
+    return "CAUSAL"
+
+
+def _mlm_probability(cfg: Mapping[str, Any]) -> float:
+    """Masked-token probability for DataCollatorForLanguageModeling(mlm=True).
+    PURE. Honours an optional `mlm_probability` in loraConfig; defaults to the
+    standard BERT 0.15. Clamped to the open interval (0, 1)."""
+    try:
+        p = float(cfg.get("mlm_probability", 0.15))
+    except (TypeError, ValueError):
+        p = 0.15
+    if not (0.0 < p < 1.0):
+        p = 0.15
+    return p
+
+
 # ── Memory configuration (subtype-aware) ─────────────────────────────────────
 #
 # Bug (live, both A5000 pods, 24 GB each, 2026-05-23):
@@ -287,17 +402,25 @@ def _build_training_kwargs(
 # injecting `bf16_supported`) so it is unit-testable without transformers.
 
 
-def _build_data_collator(subtype: str, tokenizer: Any, *, padding_cls: Any, lm_cls: Any) -> Any:
-    """Select the version-correct data collator for the subtype. PURE — the two
-    collator classes are injected so this is unit-testable without transformers.
+def _build_data_collator(
+    objective: str, tokenizer: Any, *, padding_cls: Any, lm_cls: Any, mlm_probability: float = 0.15
+) -> Any:
+    """Select the version-correct data collator for the training OBJECTIVE.
+    PURE — the two collator classes are injected so this is unit-testable
+    without transformers.
 
-    - LORA_GENERATION (causal LM)  → DataCollatorForLanguageModeling(mlm=False):
-      derives `labels` from `input_ids`, fixing the batch_size mismatch.
-    - LORA_CLASSIFICATION (+default) → DataCollatorWithPadding: the proven path,
-      passes the scalar `label` column through as the target.
+    - CAUSAL  → DataCollatorForLanguageModeling(mlm=False): derives `labels`
+      from `input_ids` (next-token loss), fixing the batch_size mismatch.
+    - MLM     → DataCollatorForLanguageModeling(mlm=True, mlm_probability=…):
+      masks tokens and builds `labels` as the masked-token targets. Feeding
+      `labels = input_ids` (the causal trick) is WRONG for MLM.
+    - SEQ_CLS (+default) → DataCollatorWithPadding: the proven path, passes the
+      scalar `label` column through as the target.
     """
-    if subtype == "LORA_GENERATION":
+    if objective == "CAUSAL":
         return lm_cls(tokenizer=tokenizer, mlm=False)
+    if objective == "MLM":
+        return lm_cls(tokenizer=tokenizer, mlm=True, mlm_probability=mlm_probability)
     return padding_cls(tokenizer=tokenizer)
 
 
@@ -317,9 +440,11 @@ def _columns_to_remove(subtype: str, dataset_columns: list[str]) -> list[str]:
 def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     import torch  # type: ignore
     from transformers import (  # type: ignore
+        AutoConfig,
         AutoTokenizer,
         AutoModelForSequenceClassification,
         AutoModelForCausalLM,
+        AutoModelForMaskedLM,
         TrainingArguments,
         Trainer,
         DataCollatorWithPadding,
@@ -333,18 +458,57 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     out_dir = Path(payload["outDir"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Bug fix (2026-05-25 — `BertLMHeadModel` / is_decoder exit-2 on the
+    # `pubmedbert_v15` mission): load the base CONFIG once up front and route to
+    # SeqCls / MaskedLM / CausalLM by inspecting it, instead of forcing every
+    # non-classification subtype onto CausalLM (wrong for the PubMedBERT encoder).
+    # See `select_objective`. The route choice is logged so the pod logs show
+    # which head was built and why.
+    base_config = AutoConfig.from_pretrained(base_model_name)
+    objective = select_objective(base_config, subtype)
+    _emit_progress("objective", {
+        "objective": objective,
+        "subtype": subtype,
+        "model_type": (getattr(base_config, "model_type", "") or ""),
+        "architectures": list(getattr(base_config, "architectures", None) or []),
+    })
+
     cfg = payload["loraConfig"]
+    # PEFT TaskType: SeqCls / CausalLM map to dedicated TaskTypes. There is NO
+    # MASKED_LM TaskType in PEFT — the MaskedLM route omits task_type (None) and
+    # relies on EXPLICIT `target_modules` (BERT attention/FFN names) so
+    # get_peft_model wraps the AutoModelForMaskedLM cleanly.
+    if objective == "SEQ_CLS":
+        peft_task_type = TaskType.SEQ_CLS
+    elif objective == "CAUSAL":
+        peft_task_type = TaskType.CAUSAL_LM
+    else:  # MLM — no MASKED_LM TaskType in PEFT.
+        peft_task_type = None
+
     lora_cfg = LoraConfig(
         r=int(cfg.get("r", 8)),
         lora_alpha=int(cfg.get("alpha", 16)),
         lora_dropout=float(cfg.get("dropout", 0.1)),
         bias="none",
-        target_modules=_peft_target_modules(cfg.get("target_modules", [])),
-        task_type=TaskType.SEQ_CLS if subtype == "LORA_CLASSIFICATION" else TaskType.CAUSAL_LM,
+        # BERT-family modules: explicit target_modules for the MLM route. PEFT's
+        # string matcher resolves these as suffixes of the BERT module paths
+        # (encoder.layer.N.attention.self.{query,key,value} and the FFN/output
+        # `dense`), so they apply across all layers. GPT names (`c_attn`) would
+        # NOT match BERT — that is exactly why a hardcoded causal default broke
+        # the encoder mission. Falls back to the cfg-provided list when set.
+        target_modules=(
+            _peft_target_modules(cfg.get("target_modules", []) or ["query", "key", "value", "dense"])
+            if objective == "MLM"
+            else _peft_target_modules(cfg.get("target_modules", []))
+        ),
+        task_type=peft_task_type,
     )
 
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     if tokenizer.pad_token is None:
+        # GPT-family decoders ship no PAD token → reuse EOS. BERT-family
+        # encoders (the MLM route) already have `[PAD]`, so this guard is a
+        # no-op for them and does NOT clobber their pad token.
         tokenizer.pad_token = tokenizer.eos_token
 
     # Slice 11 (Plan B, 2026-05-17) — OOM mitigation
@@ -356,10 +520,17 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     # fallback: older transformers without accelerate raise
     # TypeError / ValueError, in which case retry without the kwarg.
     def _load_base():
+        # Objective-routed model class (was: subtype-only → wrong CausalLM head
+        # for the PubMedBERT encoder). MLM adds the third branch with the SAME
+        # low_cpu_mem_usage try/except fallback as SeqCls/Causal.
         try:
-            if subtype == "LORA_CLASSIFICATION":
+            if objective == "SEQ_CLS":
                 return AutoModelForSequenceClassification.from_pretrained(
                     base_model_name, num_labels=2, low_cpu_mem_usage=True
+                )
+            if objective == "MLM":
+                return AutoModelForMaskedLM.from_pretrained(
+                    base_model_name, low_cpu_mem_usage=True
                 )
             return AutoModelForCausalLM.from_pretrained(
                 base_model_name, low_cpu_mem_usage=True
@@ -369,8 +540,10 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "warn",
                 {"msg": f"low_cpu_mem_usage unsupported; retrying without it: {exc}"},
             )
-            if subtype == "LORA_CLASSIFICATION":
+            if objective == "SEQ_CLS":
                 return AutoModelForSequenceClassification.from_pretrained(base_model_name, num_labels=2)
+            if objective == "MLM":
+                return AutoModelForMaskedLM.from_pretrained(base_model_name)
             return AutoModelForCausalLM.from_pretrained(base_model_name)
 
     model = _load_base()
@@ -477,12 +650,18 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     # NB: both collator constructors still take `tokenizer=` in 4.57/5.x — only
     # the Trainer renamed it — so the collator keeps `tokenizer=`.
     _tok_kw = _trainer_tokenizer_kwarg(inspect.signature(Trainer.__init__).parameters, tokenizer)
-    # Subtype-aware collator (Bug 2026-05-23 — GENERATION batch_size mismatch):
-    # GENERATION → DataCollatorForLanguageModeling(mlm=False) (labels=input_ids);
-    # CLASSIFICATION → DataCollatorWithPadding (scalar label is the target).
+    # Objective-aware collator:
+    #   CAUSAL  → DataCollatorForLanguageModeling(mlm=False)  (labels=input_ids);
+    #   MLM     → DataCollatorForLanguageModeling(mlm=True, mlm_probability=…)
+    #             (masked-token targets — NOT labels=input_ids);
+    #   SEQ_CLS → DataCollatorWithPadding (scalar label is the target).
     # See `_build_data_collator`.
     data_collator = _build_data_collator(
-        subtype, tokenizer, padding_cls=DataCollatorWithPadding, lm_cls=DataCollatorForLanguageModeling
+        objective,
+        tokenizer,
+        padding_cls=DataCollatorWithPadding,
+        lm_cls=DataCollatorForLanguageModeling,
+        mlm_probability=_mlm_probability(cfg),
     )
     trainer = Trainer(
         model=model,
@@ -499,7 +678,7 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
     model.save_pretrained(out_dir, safe_serialization=True)
 
     metrics: Dict[str, float] = {}
-    if subtype == "LORA_CLASSIFICATION":
+    if objective == "SEQ_CLS":
         # Trainer.evaluate() returns eval_loss; we approximate accuracy
         # by running a fresh prediction pass. Cheap because val set is
         # small (mission corpora typically hundreds of items).
@@ -509,7 +688,10 @@ def _train(payload: Dict[str, Any]) -> Dict[str, Any]:
         accuracy = float((pred_ids == labels).mean()) if labels is not None else 0.0
         metrics = {"accuracy": accuracy, "f1": _macro_f1(labels, pred_ids)}
     else:
-        # CausalLM perplexity from eval_loss.
+        # CausalLM AND MaskedLM both report perplexity = exp(eval_loss). For MLM
+        # this is the standard pseudo-perplexity over the masked-token loss the
+        # collator produced (mirrors the CausalLM branch — same metric key so
+        # `reportedValMetrics` shape is unchanged for the TS wrapper).
         loss = float(eval_result.get("eval_loss", float("inf")))
         metrics = {"perplexity": math.exp(loss) if loss < 50 else float("inf")}
 

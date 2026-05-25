@@ -44,42 +44,58 @@ class _FakePaddingCollator:
 
 
 class _FakeLMCollator:
-    """Stand-in for DataCollatorForLanguageModeling(tokenizer=..., mlm=...)."""
+    """Stand-in for DataCollatorForLanguageModeling(tokenizer=..., mlm=..., mlm_probability=...)."""
 
-    def __init__(self, tokenizer, mlm):
+    def __init__(self, tokenizer, mlm, mlm_probability=0.15):
         self.tokenizer = tokenizer
         self.mlm = mlm
+        self.mlm_probability = mlm_probability
 
 
-def _build(subtype: str):
+def _build(objective: str, mlm_probability: float = 0.15):
     return tl._build_data_collator(
-        subtype,
+        objective,
         tokenizer="TOK",
         padding_cls=_FakePaddingCollator,
         lm_cls=_FakeLMCollator,
+        mlm_probability=mlm_probability,
     )
 
 
 # ───────────────────────── data collator selection ──────────────────────────
+#
+# NB: `_build_data_collator` now discriminates on the resolved OBJECTIVE
+# ("CAUSAL" | "MLM" | "SEQ_CLS"), not the raw subtype — `select_objective`
+# computes the objective up front. CausalLM behaviour is unchanged.
 
-def test_generation_uses_language_modeling_collator_mlm_false() -> None:
-    """GENERATION selects DataCollatorForLanguageModeling(mlm=False) so it
+def test_causal_uses_language_modeling_collator_mlm_false() -> None:
+    """CAUSAL selects DataCollatorForLanguageModeling(mlm=False) so it
     derives labels=input_ids — fixing the batch_size mismatch."""
-    collator = _build("LORA_GENERATION")
+    collator = _build("CAUSAL")
     assert isinstance(collator, _FakeLMCollator)
     assert collator.mlm is False
     assert collator.tokenizer == "TOK"
 
 
+def test_mlm_uses_language_modeling_collator_mlm_true() -> None:
+    """MLM selects DataCollatorForLanguageModeling(mlm=True, mlm_probability=…)
+    so labels are masked-token targets — NOT labels=input_ids."""
+    collator = _build("MLM", mlm_probability=0.2)
+    assert isinstance(collator, _FakeLMCollator)
+    assert collator.mlm is True
+    assert collator.mlm_probability == 0.2
+    assert collator.tokenizer == "TOK"
+
+
 def test_classification_uses_padding_collator() -> None:
-    """CLASSIFICATION keeps DataCollatorWithPadding (scalar `label` is target)."""
-    collator = _build("LORA_CLASSIFICATION")
+    """SEQ_CLS keeps DataCollatorWithPadding (scalar `label` is target)."""
+    collator = _build("SEQ_CLS")
     assert isinstance(collator, _FakePaddingCollator)
     assert collator.tokenizer == "TOK"
 
 
-def test_unknown_subtype_defaults_to_padding_collator() -> None:
-    # Any future encoder subtype falls back to the classification collator.
+def test_unknown_objective_defaults_to_padding_collator() -> None:
+    # Any unexpected objective falls back to the classification collator.
     collator = _build("SOMETHING_ELSE")
     assert isinstance(collator, _FakePaddingCollator)
 
