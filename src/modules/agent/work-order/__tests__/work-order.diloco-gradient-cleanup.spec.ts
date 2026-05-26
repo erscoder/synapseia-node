@@ -88,7 +88,7 @@ describe('executeDiLoCoWorkOrder — temp gradient file cleanup', () => {
   });
 
   it('deletes the temp gradient file after a SUCCESSFUL upload', async () => {
-    uploadGradients.mockResolvedValue(true);
+    uploadGradients.mockResolvedValue({ ok: true, roundClosed: false, status: 200 });
 
     const res = await helper.executeDiLoCoWorkOrder(makeDiLoCoWorkOrder(), 'http://coord', 'peer-1', []);
 
@@ -114,7 +114,7 @@ describe('executeDiLoCoWorkOrder — temp gradient file cleanup', () => {
   });
 
   it('does not glob/wildcard-delete; only the WO\'s own exact path', async () => {
-    uploadGradients.mockResolvedValue(true);
+    uploadGradients.mockResolvedValue({ ok: true, roundClosed: false, status: 200 });
 
     await helper.executeDiLoCoWorkOrder(makeDiLoCoWorkOrder(), 'http://coord', 'peer-1', []);
 
@@ -124,5 +124,31 @@ describe('executeDiLoCoWorkOrder — temp gradient file cleanup', () => {
     for (const t of rmTargets) {
       expect(t).not.toMatch(/[*?{}]/);
     }
+  });
+
+  // ── Fix B (orphaned-round abort) ──────────────────────────────────────────
+  it('returns success:false when the upload 422s "No active DiLoCo round" (abort, do not re-loop)', async () => {
+    uploadGradients.mockResolvedValue({ ok: false, roundClosed: true, status: 422 });
+
+    const res = await helper.executeDiLoCoWorkOrder(makeDiLoCoWorkOrder(), 'http://coord', 'peer-1', []);
+
+    // success:false routes through SubmitResultNode's failure branch → coord
+    // releases the WO + the HEAVY slot is freed → node falls through to LoRA.
+    expect(res.success).toBe(false);
+    expect(res.result).toMatch(/no active round/i);
+    // The gradient temp file is still cleaned up (finally) even on abort.
+    expect(rmSpy).toHaveBeenCalledWith(GRADIENT_PATH, { force: true });
+  });
+
+  it('still returns success:true on a TRANSIENT upload failure (not a closed round)', async () => {
+    // A non-roundClosed failure (403 sig race / 503 store-unavailable) is the
+    // recoverable path — the WO succeeds locally (gradients trained) and the
+    // coord/ACCEPTED-TTL handles re-routing; the node does NOT abort.
+    uploadGradients.mockResolvedValue({ ok: false, roundClosed: false, status: 503 });
+
+    const res = await helper.executeDiLoCoWorkOrder(makeDiLoCoWorkOrder(), 'http://coord', 'peer-1', []);
+
+    expect(res.success).toBe(true);
+    expect(rmSpy).toHaveBeenCalledWith(GRADIENT_PATH, { force: true });
   });
 });

@@ -85,8 +85,8 @@ describe('WorkOrderCoordinatorHelper.uploadGradients — Bug 30 sign over gradie
 
     fetchSpy.mockResolvedValue({ ok: true, status: 200, text: async () => '' } as never);
 
-    const ok = await helper.uploadGradients(coordinatorUrl, domain, peerId, gradientBuffer);
-    expect(ok).toBe(true);
+    const outcome = await helper.uploadGradients(coordinatorUrl, domain, peerId, gradientBuffer);
+    expect(outcome).toEqual({ ok: true, roundClosed: false, status: 200 });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [calledUrl, calledInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
@@ -124,7 +124,7 @@ describe('WorkOrderCoordinatorHelper.uploadGradients — Bug 30 sign over gradie
     expect(oldSigOk).toBe(false);
   });
 
-  it('returns false and warns on non-2xx coordinator response', async () => {
+  it('returns {ok:false, roundClosed:false} and warns on a transient non-2xx (403 sig race)', async () => {
     const { privateKey, publicKey } = freshKeypair();
     helper.setIdentity(privateKey, publicKey, peerId);
 
@@ -134,18 +134,52 @@ describe('WorkOrderCoordinatorHelper.uploadGradients — Bug 30 sign over gradie
       text: async () => 'Invalid Ed25519 signature',
     } as never);
 
-    const ok = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
-    expect(ok).toBe(false);
+    const outcome = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
+    // 403 is transient (sig race) — NOT a closed round, so the node keeps the WO.
+    expect(outcome).toEqual({ ok: false, roundClosed: false, status: 403 });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[DiLoCo] Failed to upload gradients'));
   });
 
-  it('returns false on fetch network error', async () => {
+  it('flags roundClosed=true on a 422 "No active DiLoCo round for domain" (terminal — abort)', async () => {
+    const { privateKey, publicKey } = freshKeypair();
+    helper.setIdentity(privateKey, publicKey, peerId);
+
+    // Nest's default exception filter ships the thrown Error message in `message`.
+    fetchSpy.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () =>
+        JSON.stringify({ statusCode: 422, message: 'No active DiLoCo round for domain "medical"' }),
+    } as never);
+
+    const outcome = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
+    expect(outcome).toEqual({ ok: false, roundClosed: true, status: 422 });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[DiLoCo] Failed to upload gradients'));
+  });
+
+  it('does NOT flag roundClosed for an UNRELATED 422 (e.g. hash mismatch)', async () => {
+    const { privateKey, publicKey } = freshKeypair();
+    helper.setIdentity(privateKey, publicKey, peerId);
+
+    fetchSpy.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () =>
+        JSON.stringify({ statusCode: 422, message: 'gradients tensor failed norm-sanity check' }),
+    } as never);
+
+    const outcome = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
+    // A different 422 is treated as a normal transient failure (node keeps the WO).
+    expect(outcome).toEqual({ ok: false, roundClosed: false, status: 422 });
+  });
+
+  it('returns {ok:false, roundClosed:false} (no status) on a fetch network error', async () => {
     const { privateKey, publicKey } = freshKeypair();
     helper.setIdentity(privateKey, publicKey, peerId);
     fetchSpy.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    const ok = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
-    expect(ok).toBe(false);
+    const outcome = await helper.uploadGradients(coordinatorUrl, domain, peerId, Buffer.from('x'));
+    expect(outcome).toEqual({ ok: false, roundClosed: false });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Upload error'));
   });
 });

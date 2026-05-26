@@ -493,10 +493,22 @@ Abstract: ${safeAbstract}`;
       return { result: `DiLoCo training failed: ${(err as Error).message}`, success: false };
     }
 
+    let roundClosed = false;
     try {
       const gradientBuffer = await import('fs').then(fsm => fsm.promises.readFile(dilocoResult.gradientPath));
-      const uploaded = await this.coordinator.uploadGradients(coordinatorUrl, payload.domain, peerId, gradientBuffer);
-      if (!uploaded) logger.warn('[DiLoCo] Failed to upload gradients to coordinator');
+      const outcome = await this.coordinator.uploadGradients(coordinatorUrl, payload.domain, peerId, gradientBuffer);
+      if (!outcome.ok) {
+        logger.warn('[DiLoCo] Failed to upload gradients to coordinator');
+        // Defense-in-depth (orphaned-round fix): a 422 "No active DiLoCo round
+        // for domain" means the round already finalized coordinator-side. ABORT
+        // — do NOT report success (which would re-loop the ~92 MB inner loop and
+        // pin the HEAVY slot away from LoRA, the live zombie). Returning
+        // success:false routes through SubmitResultNode's failure branch, which
+        // POSTs /complete success:false → the coord releases the WO promptly,
+        // and AgentGraphService releases the HEAVY backpressure slot after the
+        // iteration. The node then falls through to LoRA on its next poll.
+        roundClosed = outcome.roundClosed;
+      }
     } catch (err) {
       logger.warn(`[DiLoCo] Could not read/upload gradient file: ${(err as Error).message}`);
     } finally {
@@ -514,6 +526,19 @@ Abstract: ${safeAbstract}`;
     const dilocoValLoss = safeLoss(dilocoResult.valLoss);
     const dilocoFinalLoss = safeLoss(dilocoResult.finalLoss);
     logger.log(`[DiLoCo] Inner loop complete — valLoss=${dilocoValLoss.toFixed(4)}, gradients=${dilocoResult.gradientSizeBytes} bytes`);
+    // Orphaned-round fix — the round finalized while we were training: the
+    // gradient upload 422'd with "No active DiLoCo round". Report the WO as a
+    // FAILED execution so it is released (not re-looped) and the node returns to
+    // polling LoRA. The local inner loop already ran (gradients discarded), so
+    // this is a controlled per-WO failure, not a crash.
+    if (roundClosed) {
+      logger.warn(
+        `[DiLoCo] Round for domain "${payload.domain}" already closed coordinator-side ` +
+        `(gradient upload 422) — aborting WO ${workOrder.id} instead of re-looping; ` +
+        `releasing the HEAVY slot for LoRA.`,
+      );
+      return { result: 'DiLoCo aborted: coordinator reports no active round for domain (round finalized)', success: false };
+    }
     return { result: JSON.stringify({ valLoss: dilocoValLoss, finalLoss: dilocoFinalLoss, innerSteps: dilocoResult.innerSteps, durationMs: dilocoResult.durationMs, gradientSizeBytes: dilocoResult.gradientSizeBytes, metricType: 'val_loss', metricValue: dilocoValLoss }), success: true };
   }
 

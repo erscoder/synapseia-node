@@ -18,6 +18,28 @@ import type { WorkOrder, TrainingWorkOrderPayload, ResearchPayload } from './wor
 import type { Experiment } from '../../../types';
 import { IdentityService } from '../../../modules/identity/services/identity.service';
 
+/**
+ * Outcome of a DiLoCo gradient upload. A bare boolean conflated two very
+ * different failures: a TRANSIENT one (network blip, 503 store-unavailable,
+ * 403 sig race) that the node should keep training/retrying through, and a
+ * TERMINAL one (`roundClosed`) where the coordinator has no active round for
+ * the domain (HTTP 422 "No active DiLoCo round for domain …") — meaning the
+ * round this WO belongs to already finalized COMPLETE/FAILED. On `roundClosed`
+ * the node MUST abort the DiLoCo loop and release the WO instead of looping
+ * the ~92 MB inner loop forever (observed live: pod re-ran to iter=93).
+ */
+export interface GradientUploadOutcome {
+  /** True on a 2xx response (gradients accepted). */
+  ok: boolean;
+  /**
+   * True when the coordinator returned 422 with the "No active DiLoCo round
+   * for domain" message — the round is gone. Terminal: abort, do NOT retry.
+   */
+  roundClosed: boolean;
+  /** HTTP status of the upload response (undefined on a network-layer error). */
+  status?: number;
+}
+
 @Injectable()
 export class WorkOrderCoordinatorHelper implements OnModuleInit {
   private _keypair?: Uint8Array;
@@ -429,7 +451,7 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
     } catch { /* non-critical */ }
   }
 
-  async uploadGradients(coordinatorUrl: string, domain: string, peerId: string, gradientBuffer: Buffer): Promise<boolean> {
+  async uploadGradients(coordinatorUrl: string, domain: string, peerId: string, gradientBuffer: Buffer): Promise<GradientUploadOutcome> {
     try {
       // Bug 30 — the previous version signed `{ peerId }` only; the
       // coord guard hashes `req.body`, which is empty at guard-time
@@ -467,12 +489,27 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
       }
 
       const response = await fetch(`${coordinatorUrl}/diloco/${domain}/gradients`, { method: 'POST', headers, body: formData });
-      if (!response.ok) { logger.warn(`[DiLoCo] Failed to upload gradients: ${await response.text()}`); return false; }
+      if (!response.ok) {
+        const bodyText = await response.text();
+        logger.warn(`[DiLoCo] Failed to upload gradients: ${bodyText}`);
+        // Defense-in-depth (orphaned-round fix): a 422 carrying "No active
+        // DiLoCo round for domain" means the round this WO belongs to already
+        // finalized (COMPLETE/FAILED) coordinator-side. This is TERMINAL — the
+        // node must abort the inner loop and release the WO, NOT retrain +
+        // re-upload (the live zombie loop). Detect it by status + message so a
+        // future unrelated 422 (e.g. a hash mismatch) is NOT mistaken for a
+        // closed round (it would have a different message → roundClosed stays
+        // false → treated as a normal transient failure).
+        const roundClosed =
+          response.status === 422 && /no active diloco round/i.test(bodyText);
+        return { ok: false, roundClosed, status: response.status };
+      }
       logger.log(`[DiLoCo] Gradients uploaded domain=${domain} sha256=${gradientsHash.slice(0, 12)}… size=${gradientBuffer.length}B`);
-      return true;
+      return { ok: true, roundClosed: false, status: response.status };
     } catch (err) {
       logger.warn(`[DiLoCo] Upload error: ${(err as Error).message}`);
-      return false;
+      // Network-layer error (no HTTP status) — transient, not a closed round.
+      return { ok: false, roundClosed: false };
     }
   }
 
