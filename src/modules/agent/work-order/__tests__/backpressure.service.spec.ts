@@ -45,12 +45,23 @@ describe('BackpressureService', () => {
       expect(classifyWorkOrderSlot('LORA_TRAINING')).toBe('HEAVY');
     });
 
-    it('classifies inference / research / docking / lora-validation as LIGHT', () => {
+    it('classifies DILOCO_VALIDATION as HEAVY (GPU held-out forward pass)', () => {
+      // DILOCO_VALIDATION loads the same torch/transformers/peft stack +
+      // foundation model as DILOCO_TRAINING and runs a real GPU forward pass,
+      // so it must reserve/respect the HEAVY budget — not LIGHT.
+      expect(classifyWorkOrderSlot('DILOCO_VALIDATION')).toBe('HEAVY');
+      expect(classifyWorkOrderSlot('diloco_validation')).toBe('HEAVY'); // case-insensitive
+    });
+
+    it('classifies inference / research / docking / lora-validation / diloco-aggregation as LIGHT', () => {
       expect(classifyWorkOrderSlot('CPU_INFERENCE')).toBe('LIGHT');
       expect(classifyWorkOrderSlot('GPU_INFERENCE')).toBe('LIGHT');
       expect(classifyWorkOrderSlot('MOLECULAR_DOCKING')).toBe('LIGHT');
       expect(classifyWorkOrderSlot('RESEARCH')).toBe('LIGHT');
       expect(classifyWorkOrderSlot('LORA_VALIDATION')).toBe('LIGHT');
+      // DILOCO_AGGREGATION runs a CPU-pinned gradient-averaging script (no
+      // model load / GPU forward pass) — stays LIGHT to preserve throughput.
+      expect(classifyWorkOrderSlot('DILOCO_AGGREGATION')).toBe('LIGHT');
     });
 
     it('falls back to LIGHT for unknown / missing type (P2 fail-safe)', () => {

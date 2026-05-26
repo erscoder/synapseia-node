@@ -70,7 +70,21 @@ export function classifyWorkOrderSlot(
 ): SlotClass {
   if (!type) return 'LIGHT';
   const t = String(type).toUpperCase();
-  if (t === 'TRAINING' || t === 'DILOCO_TRAINING' || t === 'LORA_TRAINING') {
+  // DILOCO_VALIDATION is a GENUINE GPU held-out forward pass over candidate
+  // peer pseudo-gradients (execute-diloco-validation.ts; wo-type-to-cap.ts
+  // maps it to the `diloco_validation` cap, advertised only when the full
+  // torch/transformers/peft stack + foundation model are present). It loads
+  // the same model as DILOCO_TRAINING, so it must reserve/respect the HEAVY
+  // GPU budget — not the LIGHT bucket. DILOCO_AGGREGATION is intentionally
+  // NOT here: its runner (diloco_aggregation_runner.ts) executes a CPU-pinned
+  // gradient-averaging script (no model load, no GPU forward pass), so it
+  // belongs in LIGHT to preserve aggregation throughput.
+  if (
+    t === 'TRAINING' ||
+    t === 'DILOCO_TRAINING' ||
+    t === 'LORA_TRAINING' ||
+    t === 'DILOCO_VALIDATION'
+  ) {
     return 'HEAVY';
   }
   return 'LIGHT';

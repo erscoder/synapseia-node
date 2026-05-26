@@ -66,11 +66,24 @@ export class FetchWorkOrdersNode {
     let accepted = 0;
     let drained = 0;
 
-    // Backpressure: if at capacity, skip polling entirely. Expected steady-
-    // state behaviour for a busy node — log at info, not warn.
-    if (!this.backpressure.canAccept()) {
+    // Backpressure: only skip polling entirely when EVERY class is full
+    // (P28/P6 — Slice 9 added per-class buckets but this gate still called
+    // the class-blind `canAccept()` which defaults to LIGHT, so a full LIGHT
+    // bucket suppressed polling even when a HEAVY slot — e.g. for a
+    // DILOCO_VALIDATION — was free). A class-aware per-candidate gate below
+    // (line ~ pending filter) drops only the candidates whose own class is
+    // full. Expected steady-state behaviour for a busy node — log at info,
+    // not warn. Render the count for the class actually gated, not a global.
+    const heavyFull =
+      this.backpressure.isDraining() ||
+      this.backpressure.getInFlightByClass('HEAVY') >= this.backpressure.getMaxByClass('HEAVY');
+    const lightFull =
+      this.backpressure.getInFlightByClass('LIGHT') >= this.backpressure.getMaxByClass('LIGHT');
+    if (heavyFull && lightFull) {
       logger.info(
-        `[Backpressure] At capacity (${this.backpressure.getInFlight()}/${this.backpressure.getMaxConcurrent()}) — skipping poll`,
+        `[Backpressure] At capacity ` +
+          `(HEAVY ${this.backpressure.getInFlightByClass('HEAVY')}/${this.backpressure.getMaxByClass('HEAVY')}, ` +
+          `LIGHT ${this.backpressure.getInFlightByClass('LIGHT')}/${this.backpressure.getMaxByClass('LIGHT')}) — skipping poll`,
       );
       this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap: 1 });
       return { availableWorkOrders: [] };
@@ -145,6 +158,17 @@ export class FetchWorkOrdersNode {
       const gate = canLocallyAcceptWorkOrder(wo, effectiveCaps);
       if (!gate.ok) {
         logger.log(` WO "${wo.title}" skipped: ${gate.reason}`);
+        return false;
+      }
+      // Class-aware backpressure gate (Slice 9 / P28). Drop only candidates
+      // whose own slot class (HEAVY for training/diloco-validation, LIGHT for
+      // the rest — see classifyWorkOrderSlot) is full, so a full LIGHT bucket
+      // does NOT suppress a HEAVY-class WO that fits a free HEAVY slot (and
+      // vice versa). The final reservation still happens in accept-wo.ts via
+      // `backpressure.acquire`.
+      if (!this.backpressure.canAccept(wo.type)) {
+        logger.log(` WO "${wo.title}" skipped: backpressure class at capacity`);
+        rejectedByCap++;
         return false;
       }
       // Skip work orders already rejected by economic evaluation

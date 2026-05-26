@@ -44,6 +44,9 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
     canAccept: jest.Mock;
     getInFlight: jest.Mock;
     getMaxConcurrent: jest.Mock;
+    getInFlightByClass: jest.Mock;
+    getMaxByClass: jest.Mock;
+    isDraining: jest.Mock;
   };
   let node: FetchWorkOrdersNode;
   let infoSpy: jest.SpiedFunction<typeof logger.info>;
@@ -92,6 +95,11 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
       canAccept: jest.fn().mockReturnValue(true),
       getInFlight: jest.fn().mockReturnValue(0),
       getMaxConcurrent: jest.fn().mockReturnValue(4),
+      // Per-class accessors (Slice 9). Default: both buckets have room
+      // (HEAVY 0/1, LIGHT 0/2) and not draining.
+      getInFlightByClass: jest.fn().mockReturnValue(0),
+      getMaxByClass: jest.fn().mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 2)),
+      isDraining: jest.fn().mockReturnValue(false),
     };
     node = new FetchWorkOrdersNode(
       coordinator as any,
@@ -194,15 +202,86 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
     expect(out.availableWorkOrders).toEqual([dilocoWO]);
   });
 
-  it('returns empty when backpressure is at capacity (orthogonal guard still works)', async () => {
+  it('returns empty and skips polling only when EVERY class is full', async () => {
     __seedCapabilitySnapshotForTests(['cpu_inference', 'diloco_training']);
-    backpressure.canAccept.mockReturnValue(false);
-    backpressure.getInFlight.mockReturnValue(4);
+    // Both HEAVY and LIGHT buckets full → genuine global capacity.
+    backpressure.getInFlightByClass.mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 2));
 
     const out = await node.execute(baseState);
 
     expect(out.availableWorkOrders).toEqual([]);
     expect(coordinator.fetchAvailableWorkOrders).not.toHaveBeenCalled();
+  });
+
+  it('still polls when LIGHT is full but HEAVY has room (3a — class-blind gate fixed)', async () => {
+    // LIGHT bucket full (2/2), HEAVY free (0/1). A HEAVY-class WO
+    // (DILOCO_VALIDATION) must NOT be suppressed by the full LIGHT bucket.
+    __seedCapabilitySnapshotForTests(['diloco_validation', 'diloco_training', 'lora_training']);
+    backpressure.getInFlightByClass.mockImplementation((cls: string) => (cls === 'LIGHT' ? 2 : 0));
+    // canAccept is class-aware: HEAVY ok, LIGHT full.
+    backpressure.canAccept.mockImplementation((type?: string | null) => {
+      const t = String(type ?? '').toUpperCase();
+      const heavy = ['TRAINING', 'DILOCO_TRAINING', 'LORA_TRAINING', 'DILOCO_VALIDATION'].includes(t);
+      return heavy; // HEAVY has room, LIGHT does not
+    });
+
+    const validationWO: WorkOrder = {
+      ...dilocoWO,
+      id: 'wo-diloco-validate',
+      title: 'DiLoCo validation',
+      requiredCapabilities: ['diloco_validation'],
+      type: 'DILOCO_VALIDATION',
+    };
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([validationWO]);
+
+    const out = await node.execute(baseState);
+
+    // Polled (not skipped) AND the HEAVY-class WO passes the per-candidate gate.
+    expect(coordinator.fetchAvailableWorkOrders).toHaveBeenCalled();
+    expect(out.availableWorkOrders).toEqual([validationWO]);
+  });
+
+  it('drops a LIGHT WO when LIGHT is full but keeps a HEAVY WO with a free slot', async () => {
+    // LIGHT full, HEAVY free. Mixed batch: the LIGHT WO is dropped by the
+    // per-candidate gate, the HEAVY WO survives.
+    __seedCapabilitySnapshotForTests(['cpu_inference', 'diloco_validation']);
+    backpressure.getInFlightByClass.mockImplementation((cls: string) => (cls === 'LIGHT' ? 2 : 0));
+    backpressure.canAccept.mockImplementation((type?: string | null) => {
+      const t = String(type ?? '').toUpperCase();
+      return ['TRAINING', 'DILOCO_TRAINING', 'LORA_TRAINING', 'DILOCO_VALIDATION'].includes(t);
+    });
+
+    const validationWO: WorkOrder = {
+      ...dilocoWO,
+      id: 'wo-validate',
+      title: 'DiLoCo validation',
+      requiredCapabilities: ['diloco_validation'],
+      type: 'DILOCO_VALIDATION',
+    };
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceWO, validationWO]);
+
+    const out = await node.execute(baseState);
+
+    expect(out.availableWorkOrders).toEqual([validationWO]);
+  });
+
+  it('drops a HEAVY WO when HEAVY is full but keeps a LIGHT WO with a free slot (vice-versa)', async () => {
+    // HEAVY full (1/1), LIGHT free. The DILOCO_TRAINING WO is dropped; the
+    // CPU inference WO survives.
+    __seedCapabilitySnapshotForTests(['cpu_inference', 'diloco_training']);
+    backpressure.getInFlightByClass.mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 0));
+    backpressure.canAccept.mockImplementation((type?: string | null) => {
+      const t = String(type ?? '').toUpperCase();
+      const heavy = ['TRAINING', 'DILOCO_TRAINING', 'LORA_TRAINING', 'DILOCO_VALIDATION'].includes(t);
+      return !heavy; // LIGHT has room, HEAVY does not
+    });
+    execution.isDiLoCoWorkOrder.mockImplementation((wo: any) => wo.type === 'DILOCO_TRAINING');
+
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([dilocoWO, cpuInferenceWO]);
+
+    const out = await node.execute(baseState);
+
+    expect(out.availableWorkOrders).toEqual([cpuInferenceWO]);
   });
 
   it('returns empty when coordinator returns no WOs (no spurious processing)', async () => {
