@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] chore(release): 0.8.126 — re-release 0.8.125 (CI infra retry)
+
+`0.8.125` -> `0.8.126`. Same code as `0.8.125` (the `fix(work-order)` DiLoCo inner-loop abort,
+`b3e28211`). `0.8.125`'s npm publish never ran: the `publish-npm.yml` job failed at `Set up job`
+because `codeload.github.com` could not serve the `pnpm/action-setup@v4` tarball (HTTP E400),
+a residual effect of a GitHub Actions major outage. Version-bumped + re-pushed to trigger a clean
+publish run once GitHub recovered. No code change between 0.8.125 and 0.8.126.
+
 ## [2026-05-26] chore(release): 0.8.125 — abort DiLoCo inner loop on round-closed
 
 `0.8.124` -> `0.8.125`. Ships the `fix(work-order)` below (`b3e28211`): the trainer node now
