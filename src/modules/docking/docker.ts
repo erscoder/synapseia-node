@@ -290,6 +290,42 @@ export interface RunDockingOptions {
    * shell stub.
    */
   pythonBin?: string;
+  /**
+   * Bug 20 v5 (2026-05-26) — force ligand prep to START at a later tier,
+   * skipping the cheaper tier(s). Used by the runVina parse/tree-error
+   * salvage path in `runDocking`: when the obabel-fast conformer is
+   * degenerate and Vina rejects it at parse time, the ligand is re-prepped
+   * with `forceTier: 'med'` (obabel `--gen3d med`, falling through to RDKit
+   * ETKDGv3) and Vina is retried once on the new conformer.
+   *
+   * DETERMINISM CONTRACT: a fast-tier conformer that is degenerate for one
+   * node is degenerate for BOTH nodes of the docking pair (same SMILES,
+   * same obabel-fast). Both therefore escalate to the SAME `med` tier in
+   * the SAME order — no per-node nondeterminism is introduced. obabel
+   * `--gen3d med` and RDKit ETKDGv3 (fixed randomSeed=42) are both
+   * deterministic, so the salvaged conformer class is identical across the
+   * pair and tolerance-based pair consensus is preserved.
+   *
+   * - `undefined` (default): normal fast → med → RDKit ladder.
+   * - `'med'`: skip the fast tier; run med → RDKit.
+   */
+  forceTier?: 'med';
+  /**
+   * Test-only: stub for `runVina`. Lets unit tests assert the
+   * parse/tree-error re-prep + single-retry path in `runDocking` without
+   * spawning a real Vina binary. NEVER set in production code. See
+   * vina-reprep-retry.spec.ts.
+   */
+  __runVinaForTests?: (args: {
+    vinaBin: string;
+    receptorPath: string;
+    ligandPath: string;
+    outPath: string;
+    bindingSite: DockingWorkOrderPayload['bindingSite'];
+    vinaParams: DockingWorkOrderPayload['vinaParams'];
+    vinaSeed: string;
+    timeoutMs: number;
+  }) => Promise<void>;
 }
 
 export interface RunDockingInput {
@@ -425,9 +461,18 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
     opts.fastTierMs ?? DEFAULT_FAST_TIER_MS,
     Math.floor(totalBudgetMs / 2),
   );
-  const medTierMs = Math.max(totalBudgetMs - fastTierMs, fastTierMs);
   const obabelBin = opts.obabelBin ?? DEFAULT_OBABEL_BIN;
   const spawn = opts.__runChildForTests ?? runChild;
+
+  // Bug 20 v5 (2026-05-26) — when re-prepping after a Vina parse/tree
+  // rejection (`forceTier: 'med'`), skip both the complexity pre-filter
+  // shortcut and the fast tier and start at the med tier. No fast tier is
+  // consumed on this path, so the med tier gets the full budget. The
+  // med→RDKit ladder below is shared with the normal path.
+  const skipFastTier = opts.forceTier === 'med';
+  const medTierMs = skipFastTier
+    ? totalBudgetMs
+    : Math.max(totalBudgetMs - fastTierMs, fastTierMs);
 
   // Bug 20 v4 (2026-05-23) — complexity pre-filter (#3 root cause:
   // pathological ligands whose gen3d never converges). Estimate heavy-atom
@@ -437,63 +482,74 @@ async function prepLigandPdbqt(smiles: string, workDir: string, opts: RunDocking
   // molecules in seconds. Saves the full obabel budget for the inputs most
   // likely to defeat it. If RDKit is unavailable here we fail fast with a
   // clear reason rather than burning the obabel budget on a known-doomed run.
-  const skipReason = shouldSkipObabelGen3d(smiles);
-  if (skipReason) {
-    logger.warn(
-      `[Docking] complexity pre-filter: skipping obabel gen3d (${skipReason}) — using RDKit ETKDGv3 directly`,
-    );
-    const rdkitOk = await tryRdkitFallback({
-      smiles,
-      workDir,
-      ligandPdbqtPath,
-      obabelBin,
-      spawn,
-      rdkitTimeoutMs: opts.rdkitTimeoutMs ?? 60_000,
-      rdkitScriptPath: opts.rdkitScriptPath,
-      pythonBin: opts.pythonBin,
-      formatConvertTimeoutMs: 10_000,
-    });
-    if (rdkitOk) {
-      logger.info(`[Docking] RDKit ETKDGv3 (pre-filter path) succeeded for WO smiles_len=${smiles.length}`);
-      return ligandPdbqtPath;
+  if (!skipFastTier) {
+    const skipReason = shouldSkipObabelGen3d(smiles);
+    if (skipReason) {
+      logger.warn(
+        `[Docking] complexity pre-filter: skipping obabel gen3d (${skipReason}) — using RDKit ETKDGv3 directly`,
+      );
+      const rdkitOk = await tryRdkitFallback({
+        smiles,
+        workDir,
+        ligandPdbqtPath,
+        obabelBin,
+        spawn,
+        rdkitTimeoutMs: opts.rdkitTimeoutMs ?? 60_000,
+        rdkitScriptPath: opts.rdkitScriptPath,
+        pythonBin: opts.pythonBin,
+        formatConvertTimeoutMs: 10_000,
+      });
+      if (rdkitOk) {
+        logger.info(`[Docking] RDKit ETKDGv3 (pre-filter path) succeeded for WO smiles_len=${smiles.length}`);
+        return ligandPdbqtPath;
+      }
+      // RDKit absent/failed and obabel was deemed too risky to attempt — fail
+      // fast with a clear, timeout-shaped reason so the downstream per-WO
+      // failure counter (submit-result.ts) treats it like the other gen3d
+      // timeouts and the WO is released + skipped on subsequent polls.
+      throw new DockingError(
+        `Process timed out (pre-filter): ligand too complex for obabel gen3d (${skipReason}) and RDKit fallback unavailable`,
+        'ligand',
+      );
     }
-    // RDKit absent/failed and obabel was deemed too risky to attempt — fail
-    // fast with a clear, timeout-shaped reason so the downstream per-WO
-    // failure counter (submit-result.ts) treats it like the other gen3d
-    // timeouts and the WO is released + skipped on subsequent polls.
-    throw new DockingError(
-      `Process timed out (pre-filter): ligand too complex for obabel gen3d (${skipReason}) and RDKit fallback unavailable`,
-      'ligand',
-    );
-  }
 
-  // Bug 20 v2 (2026-05-18): two-tier retry. Bug 20 v4 (2026-05-23): order
-  // inverted to fast-first. Primary --gen3d fast (lower conformer quality
-  // but ~5x faster, acceptable for Vina docking) with the short budget.
-  // Fallback --gen3d med (best quality) on timeout with the remaining
-  // budget. If BOTH obabel tiers time out, attempt the RDKit ETKDGv3
-  // fallback. RDKit's experimental-torsion-knowledge embedding completes
-  // in seconds for the same drug-like ligands that defeat obabel's
-  // brute-force conformer search. If RDKit is absent or fails, we rethrow
-  // the original timeout so the WO marks failed and the per-WO failure
-  // counter increments.
-  logger.info(`[Docking] ligand-prep WO smiles_len=${smiles.length} tier=obabel-fast timeoutMs=${fastTierMs}`);
-  try {
-    await spawn(obabelBin, [
-      ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
-    ], {
-      timeoutMs: fastTierMs,
-      timeoutContext: { step: 'ligand-gen3d-fast', input: smiles },
-      nice: true,
-    });
-    return ligandPdbqtPath;
-  } catch (err) {
-    const isTimeout = err instanceof Error && /timed out/i.test(err.message);
-    if (!isTimeout) throw err;
-    // Fast tier timed out — fall back to med (better search heuristics may
-    // converge where fast did not). Remove any partial output file from
-    // the failed first attempt before retry.
-    logger.warn(`[Docking] obabel --gen3d fast timed out after ${fastTierMs}ms — retrying with med tier`);
+    // Bug 20 v2 (2026-05-18): two-tier retry. Bug 20 v4 (2026-05-23): order
+    // inverted to fast-first. Primary --gen3d fast (lower conformer quality
+    // but ~5x faster, acceptable for Vina docking) with the short budget.
+    // Fallback --gen3d med (best quality) on timeout with the remaining
+    // budget. If BOTH obabel tiers time out, attempt the RDKit ETKDGv3
+    // fallback. RDKit's experimental-torsion-knowledge embedding completes
+    // in seconds for the same drug-like ligands that defeat obabel's
+    // brute-force conformer search. If RDKit is absent or fails, we rethrow
+    // the original timeout so the WO marks failed and the per-WO failure
+    // counter increments.
+    logger.info(`[Docking] ligand-prep WO smiles_len=${smiles.length} tier=obabel-fast timeoutMs=${fastTierMs}`);
+    try {
+      await spawn(obabelBin, [
+        ligandSmiPath, '-O', ligandPdbqtPath, '--gen3d', 'fast', '-h',
+      ], {
+        timeoutMs: fastTierMs,
+        timeoutContext: { step: 'ligand-gen3d-fast', input: smiles },
+        nice: true,
+      });
+      return ligandPdbqtPath;
+    } catch (err) {
+      const isTimeout = err instanceof Error && /timed out/i.test(err.message);
+      if (!isTimeout) throw err;
+      // Fast tier timed out — fall back to med (better search heuristics may
+      // converge where fast did not). Remove any partial output file from
+      // the failed first attempt before retry.
+      logger.warn(`[Docking] obabel --gen3d fast timed out after ${fastTierMs}ms — retrying with med tier`);
+      await fs.promises.rm(ligandPdbqtPath, { force: true });
+    }
+  } else {
+    // Bug 20 v5 (2026-05-26) — forced med-tier re-prep after a Vina
+    // parse/tree rejection of the fast-tier conformer. Drop any stale
+    // ligand.pdbqt the rejected fast run left behind so the med tier writes
+    // a clean file.
+    logger.warn(
+      `[Docking] forceTier=med re-prep WO smiles_len=${smiles.length} — skipping fast tier after Vina parse/tree rejection`,
+    );
     await fs.promises.rm(ligandPdbqtPath, { force: true });
   }
   try {
@@ -698,6 +754,41 @@ async function runVina(args: {
   await runChild(args.vinaBin, flags, { timeoutMs: args.timeoutMs });
 }
 
+/**
+ * Bug 20 v5 (2026-05-26) — classify a `runVina` failure as a ligand
+ * parse/tree rejection that warrants a one-shot re-prep at the next tier.
+ *
+ * Vina rejects a malformed/degenerate ligand torsion tree at PARSE time
+ * with a non-zero exit and an internal-error message naming the parser
+ * source, e.g.:
+ *   "vina exited with code 1: ... An internal error occurred in
+ *    ../../../src/lib/tree.h(101) ..."
+ *
+ * This is a DIFFERENT failure class from:
+ *   - a Vina TIMEOUT ("Process timed out after ...ms") — the search ran
+ *     but did not finish; re-prepping a different conformer would not help
+ *     and would double the wall cost. MUST NOT trigger re-prep.
+ *   - a genuine "produced no poses" result (DockingError stage='parse',
+ *     raised in runDocking after Vina exited 0) — Vina ran fine, the box
+ *     just yielded nothing; a different conformer is unlikely to help and
+ *     this is not a Vina-side parse error. MUST NOT trigger re-prep.
+ *
+ * We match on the Vina-internal parser sources (tree.h / parse / atom_constants)
+ * that accompany a degenerate-ligand rejection, and explicitly exclude the
+ * timeout message so a slow run is never misclassified.
+ */
+export function isVinaLigandParseError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  // A timeout is never a parse error, even if the truncated stderr tail
+  // happened to contain a parser source name.
+  if (/timed out/i.test(msg)) return false;
+  // The "produced no poses" path is a DockingError (stage='parse') raised
+  // by runDocking, not a runVina rejection — exclude it explicitly.
+  if (err instanceof DockingError) return false;
+  return /tree\.h|parse_error|internal error occurred in .*src\/lib/i.test(msg);
+}
+
 // ── Top-level entry-point ───────────────────────────────────────────────────
 
 export async function runDocking(
@@ -715,28 +806,67 @@ export async function runDocking(
   try {
     const receptorPdb = await ensureReceptorCached(payload.receptorPdbId);
     const receptorPdbqt = await prepReceptorPdbqt(receptorPdb, options);
-    const ligandPdbqt = await prepLigandPdbqt(payload.ligandSmiles, workDir, options);
+    const vinaImpl = options.__runVinaForTests ?? runVina;
+    const vinaTimeoutMs = options.timeoutMs ?? DEFAULT_VINA_TIMEOUT_MS;
     outPath = path.join(workDir, 'out.pdbqt');
 
-    await runVina({
-      vinaBin: options.vinaBin ?? DEFAULT_VINA_BIN,
-      receptorPath: receptorPdbqt,
-      ligandPath: ligandPdbqt,
-      outPath,
-      bindingSite: payload.bindingSite,
-      vinaParams: payload.vinaParams,
-      vinaSeed: payload.vinaSeed,
-      timeoutMs: options.timeoutMs ?? DEFAULT_VINA_TIMEOUT_MS,
-    });
+    // Bug 20 v5 (2026-05-26) — dock the fast-tier conformer, then salvage a
+    // Vina parse/tree rejection ONCE by re-prepping at the next tier.
+    //
+    // A degenerate fast-tier ligand torsion tree (the documented rare case)
+    // makes Vina exit non-zero at PARSE time. Today that just fails the WO.
+    // Instead, re-prep the ligand with `forceTier: 'med'` (obabel --gen3d
+    // med, falling through to RDKit ETKDGv3) and retry Vina exactly once on
+    // the new conformer. The escalation is deterministic and symmetric
+    // across the docking pair (same SMILES → same fast-tier degeneracy →
+    // both nodes escalate to the same med/RDKit conformer class), so
+    // tolerance-based pair consensus is preserved. A Vina TIMEOUT or a
+    // genuine "no poses" result is NOT a parse error and does NOT re-prep.
+    const runVinaOnce = async (ligandPath: string): Promise<DockingPose[]> => {
+      await vinaImpl({
+        vinaBin: options.vinaBin ?? DEFAULT_VINA_BIN,
+        receptorPath: receptorPdbqt,
+        ligandPath,
+        outPath,
+        bindingSite: payload.bindingSite,
+        vinaParams: payload.vinaParams,
+        vinaSeed: payload.vinaSeed,
+        timeoutMs: vinaTimeoutMs,
+      });
+      const out = await fs.promises.readFile(outPath, 'utf8');
+      const parsed: DockingPose[] = parseVinaPdbqt(out);
+      if (parsed.length === 0) {
+        throw new DockingError('Vina produced no poses', 'parse');
+      }
+      return parsed;
+    };
 
-    const text = await fs.promises.readFile(outPath, 'utf8');
-    const poses: DockingPose[] = parseVinaPdbqt(text);
-    if (poses.length === 0) {
-      throw new DockingError('Vina produced no poses', 'parse');
+    const ligandPdbqt = await prepLigandPdbqt(payload.ligandSmiles, workDir, options);
+    let poses: DockingPose[];
+    try {
+      poses = await runVinaOnce(ligandPdbqt);
+    } catch (err) {
+      if (!isVinaLigandParseError(err)) throw err;
+      // Vina rejected the fast-tier conformer at parse time — re-prep at the
+      // med tier (then RDKit) and retry exactly once. No further escalation:
+      // if the med/RDKit conformer is also rejected, the WO fails as before.
+      logger.warn(
+        `[Docking] Vina rejected fast-tier ligand for WO ${workOrderId} (parse/tree error) — re-prepping at med tier and retrying once`,
+      );
+      const reprepped = await prepLigandPdbqt(payload.ligandSmiles, workDir, {
+        ...options,
+        forceTier: 'med',
+      });
+      poses = await runVinaOnce(reprepped);
     }
 
     const bestAffinity = poses.reduce((acc, p) => Math.min(acc, p.affinity), Number.POSITIVE_INFINITY);
-    const resultHash = 'sha256:' + createHash('sha256').update(text).digest('hex');
+    // Hash the winning out.pdbqt — the last successful Vina run (fast tier,
+    // or the med/RDKit re-prep when the fast conformer was rejected) wrote it
+    // to `outPath`. resultHash is metadata only; pair consensus is decided by
+    // tolerance on the rank-1 pose, not by byte-identical hash.
+    const outText = await fs.promises.readFile(outPath, 'utf8');
+    const resultHash = 'sha256:' + createHash('sha256').update(outText).digest('hex');
     const hardwareUsed = options.hardwareReporter
       ? await options.hardwareReporter()
       : { cpu: os.cpus()[0]?.model ?? 'unknown', ramMb: Math.round(os.totalmem() / (1024 * 1024)) };
