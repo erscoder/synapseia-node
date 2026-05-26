@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] fix(docking): salvage Vina ligand-parse failures via med-tier re-prep retry (011e95c9)
+
+When `obabel --gen3d fast` produced a degenerate ligand torsion tree, Vina rejected it
+(`exit 1, internal error in tree.h(101)`) and the docking WO failed outright — the med-tier
+fallback the code comment described was never wired for the Vina-rejection case (only for obabel
+prep timeouts). `runDocking` now, on a Vina ligand-parse/tree error ONLY (`isVinaLigandParseError`,
+which excludes timeouts and "no poses"), re-preps the ligand forcing the `med` tier (then RDKit
+ETKDGv3) and retries Vina exactly once. Deterministic + symmetric across a docking pair, and pair
+consensus is unaffected (verifyPair is tolerance-based: affinity ±0.5, RMSD ±2.0; `resultHash` is
+never compared). 8 new tests; docking suite 77/77.
+
 ## [2026-05-26] chore(release): 0.8.127 — class-aware poll gate + DiLoCo validation HEAVY
 
 `0.8.126` -> `0.8.127`. Ships the `fix(work-order)` below (`c7fddd52`): the node no longer skips
