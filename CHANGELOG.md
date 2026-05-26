@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] chore(release): 0.8.127 — class-aware poll gate + DiLoCo validation HEAVY
+
+`0.8.126` -> `0.8.127`. Ships the `fix(work-order)` below (`c7fddd52`): the node no longer skips
+all polling when one slot class is full, and `DILOCO_VALIDATION` is classified HEAVY so it
+respects the GPU budget. Lets a free node actually pick up validation work. node-only release;
+pods auto-update from npm `latest` on next start. Pairs with coord `0.8.130`.
+
 ## [2026-05-26] fix(work-order): class-aware poll gate + classify DiLoCo validation as HEAVY (c7fddd52)
 
 The validator node never picked up the `DILOCO_VALIDATION` work order, stalling DiLoCo rounds in
