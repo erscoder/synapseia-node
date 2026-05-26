@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] fix(work-order): abort DiLoCo inner loop when the round is already closed (b3e28211)
+
+Node-side counterpart to the coordinator orphan-WO fix. After the coordinator finalized a
+DiLoCo round, the trainer node kept looping the inner loop (gradient upload returned HTTP 422
+`No active DiLoCo round`, logged a WARN, never stopped), holding its HEAVY slot and never
+falling through to LoRA. `uploadGradients` now returns `GradientUploadOutcome {ok, roundClosed,
+status}` with `roundClosed` set only on a 422 whose body matches `no active diloco round`;
+`executeDiLoCoWorkOrder` returns `success:false` on that so the WO is reported failed, the HEAVY
+slot is released, and the node falls through to LoRA. Transient failures (403/503/network) still
+retry.
+
 ## [2026-05-26] chore(release): 0.8.124 — LoRA MLM-routing fix (174d57c2)
 
 `0.8.123` -> `0.8.124`. Ships the `fix(lora)` below: `train_lora.py` now routes
