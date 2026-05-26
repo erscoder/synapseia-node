@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] fix(work-order): class-aware poll gate + classify DiLoCo validation as HEAVY (c7fddd52)
+
+The validator node never picked up the `DILOCO_VALIDATION` work order, stalling DiLoCo rounds in
+VALIDATING. (1) The poll gate called `canAccept()` with no type → defaulted to LIGHT, so a full
+LIGHT bucket made the node skip polling for ALL classes (even with a free HEAVY slot) and log a
+misleading global count. Now it early-skips only when BOTH heavy+light are full, gates each
+candidate by `canAccept(wo.type)`, and logs per-class counts. (2) `DILOCO_VALIDATION` (a real GPU
+forward pass) was misclassified LIGHT in `classifyWorkOrderSlot` → now HEAVY, so it respects the
+GPU budget. `DILOCO_AGGREGATION` stays LIGHT (CPU-pinned). No preemption / reserved slot (coord
+only dispatches validation to a node with a free HEAVY slot). Pairs with coord `0.8.130`.
+
 ## [2026-05-26] chore(release): 0.8.126 — re-release 0.8.125 (CI infra retry)
 
 `0.8.125` -> `0.8.126`. Same code as `0.8.125` (the `fix(work-order)` DiLoCo inner-loop abort,
