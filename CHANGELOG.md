@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] chore(release): 0.8.125 — abort DiLoCo inner loop on round-closed
+
+`0.8.124` -> `0.8.125`. Ships the `fix(work-order)` below (`b3e28211`): the trainer node now
+aborts the DiLoCo inner loop and falls through to LoRA when the coordinator has already closed
+the round (HTTP 422 `No active DiLoCo round`), instead of looping forever and holding its HEAVY
+slot. Node-only release (decoupled from node-ui); pods auto-update from npm `latest` on next
+start. npm publish runs via GitHub Actions on tag push.
+
 ## [2026-05-26] fix(work-order): abort DiLoCo inner loop when the round is already closed (b3e28211)
 
 Node-side counterpart to the coordinator orphan-WO fix. After the coordinator finalized a
