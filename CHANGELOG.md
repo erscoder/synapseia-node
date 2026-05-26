@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-26] chore(release): 0.8.128 — docking Vina parse-failure salvage
+
+`0.8.127` -> `0.8.128`. Ships the `fix(docking)` below (`011e95c9`): a node now salvages a docking
+work order when obabel-fast yields a ligand Vina rejects (`tree.h`), by re-preping with the med
+tier and retrying once, instead of failing the WO. node-only release; pods auto-update from npm
+`latest` on next start.
+
 ## [2026-05-26] fix(docking): salvage Vina ligand-parse failures via med-tier re-prep retry (011e95c9)
 
 When `obabel --gen3d fast` produced a degenerate ligand torsion tree, Vina rejected it
