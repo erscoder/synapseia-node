@@ -113,6 +113,16 @@ export class FetchWorkOrdersNode {
 
     const { coordinatorUrl, peerId, capabilities, rejectedWorkOrderIds = [] } = state;
 
+    // D-P2P Slice 0.6 (2026-05-28) — killswitch flag for the HTTP
+    // fallback. When `SYNAPSEIA_DISABLE_WO_POLL=true` (case-insensitive,
+    // trimmed) the operator has opted into gossipsub-only discovery.
+    // Pre-Slice-0.6 we skipped starting the agent loop entirely; now
+    // the loop runs (so `kickIteration()` from the push wake callback
+    // has somewhere to land) but the HTTP fetch path is suppressed and
+    // an empty drain returns immediately. Read every tick — operators
+    // can toggle the env var without a restart (eventual: ~one iter).
+    const woPollDisabled = isWoPollDisabledFlag(process.env.SYNAPSEIA_DISABLE_WO_POLL);
+
     // D-P2P Slice 0.5 (2026-05-28) — drain the gossipsub push queue first.
     // The HTTP fetch is the safety-net fallback: it only runs when the
     // push queue is empty this tick. If `drain()` itself throws we log
@@ -144,6 +154,14 @@ export class FetchWorkOrdersNode {
         // tick", not "how much survived filters". The Slice 4 cutover
         // gate is a discovery-ratio gate, not an acceptance-ratio gate.
         discoverySourceCounter.increment('gossipsub', pushed.length);
+      } else if (woPollDisabled) {
+        // D-P2P Slice 0.6 — killswitch ON + drain empty: do NOT touch
+        // the HTTP path. Returning `[]` keeps the iteration cheap and
+        // lets the agent loop sleep until the next gossipsub wake
+        // (`kickIteration()`) or the next scheduled tick. Log once per
+        // tick so the operator can see the killswitch is in effect.
+        logger.log('[D-P2P] WO HTTP poll disabled by killswitch — empty drain → idle');
+        workOrders = [];
       } else {
         logger.log(' Polling for available work orders...');
         workOrders = await this.coordinator.fetchAvailableWorkOrders(
@@ -163,16 +181,25 @@ export class FetchWorkOrdersNode {
       logger.warn(
         `[D-P2P] pushQueue.drain() threw — falling back to HTTP: ${(drainErr as Error).message}`,
       );
-      logger.log(' Polling for available work orders...');
-      workOrders = await this.coordinator.fetchAvailableWorkOrders(
-        coordinatorUrl,
-        peerId,
-        capabilities,
-        sinceCursor,
-      );
-      if (workOrders.length > 0) {
-        // Fail-closed HTTP fallback still counts as poll-source discovery.
-        discoverySourceCounter.increment('poll', workOrders.length);
+      // D-P2P Slice 0.6 — even on drain failure honour the killswitch.
+      // The flag opts the operator OUT of HTTP entirely; falling back
+      // here would silently re-open the path they explicitly disabled.
+      // P2 holds: the failure is logged at WARN above, just no HTTP.
+      if (woPollDisabled) {
+        logger.log('[D-P2P] WO HTTP poll disabled by killswitch — drain error → idle');
+        workOrders = [];
+      } else {
+        logger.log(' Polling for available work orders...');
+        workOrders = await this.coordinator.fetchAvailableWorkOrders(
+          coordinatorUrl,
+          peerId,
+          capabilities,
+          sinceCursor,
+        );
+        if (workOrders.length > 0) {
+          // Fail-closed HTTP fallback still counts as poll-source discovery.
+          discoverySourceCounter.increment('poll', workOrders.length);
+        }
       }
     }
     // D-P2P Slice 2 — advance the cursor for every WO surfaced this tick.
@@ -405,6 +432,19 @@ export class FetchWorkOrdersNode {
     this.trainingCooldowns.clear();
     this.completedWorkOrderIds.clear();
   }
+}
+
+/**
+ * D-P2P Slice 0.6 (2026-05-28) — local mirror of
+ * `node-runtime.ts :: isWoPollDisabled`. Duplicated here on purpose to
+ * avoid pulling the runtime module (and its libp2p/heartbeat deps) into
+ * a LangGraph node unit-test surface. Behaviour MUST stay identical: a
+ * trimmed, case-insensitive `'true'` match returns `true`; anything
+ * else returns `false`. Covered by fetch-work-orders-drain.spec.ts.
+ */
+function isWoPollDisabledFlag(rawValue: string | undefined): boolean {
+  if (typeof rawValue !== 'string') return false;
+  return rawValue.trim().toLowerCase() === 'true';
 }
 
 /**

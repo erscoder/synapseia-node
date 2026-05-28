@@ -10,13 +10,30 @@
  * pending work eventually.
  *
  * Design notes:
- *   - Entries expire after `entryTtlMs` (default 60s) so a slow loop never
- *     accepts an already-cancelled WO. The accept HTTP call still races
- *     against other nodes — push doesn't change semantics, only discovery.
+ *   - Entries expire after `entryTtlMs` (default 600s, i.e. 10 min — see
+ *     D-P2P Slice 0.6 / BUG #5 note below) so a slow loop never accepts an
+ *     already-cancelled WO. The accept HTTP call still races against other
+ *     nodes — push doesn't change semantics, only discovery.
  *   - `drain()` clears the queue. Each iteration sees fresh items only.
  *   - `wake()` lets a subscriber kick the loop awake without coupling the
  *     queue to the loop's sleep mechanism. The runtime wires a callback on
- *     boot.
+ *     boot. P21: the callback MUST be idempotent / debounced on the
+ *     consumer side because gossipsub fan-out can deliver bursts.
+ *
+ * D-P2P Slice 0.6 / BUG #5 (2026-05-28) — TTL bumped 60s → 600s.
+ *   Production audit on 2026-05-28 showed gossipsub envelopes arriving mid-
+ *   iteration (e.g. while a TRAINING WO was executing, ~3 min) expiring
+ *   BEFORE the next `drain()` tick because the 60s TTL was shorter than
+ *   the iter cycle (training + sleep ~ 3-5 min). Result: pushed WO was
+ *   stranded in the local queue and the next iter still fell back to the
+ *   HTTP poll path. Invariant from the fix: `entryTtlMs >= max(iter
+ *   execution + sleep window)`. With a 5-min default fallback sleep and
+ *   ~3-min training executions, 10 min is the comfortable upper bound
+ *   that still excludes cancelled WOs. Pair this with the `setWakeCallback`
+ *   path now wired in `node-runtime.ts` → in practice the push arrives,
+ *   wakes the loop, and is drained in milliseconds; the TTL is the
+ *   pathological-case safety net (sleep interrupted by load, kick missed,
+ *   etc.).
  */
 
 /**
@@ -56,7 +73,13 @@ export class WorkOrderPushQueue {
   private readonly entries = new Map<string, PushedWorkOrder>();
   private wakeCb: (() => void) | null = null;
 
-  constructor(private readonly entryTtlMs: number = 60_000) {}
+  /**
+   * D-P2P Slice 0.6 (2026-05-28) — default raised 60_000 → 600_000.
+   * See file header note. Tests that need the old fast-expiry behaviour
+   * pass a small value explicitly (the previous 50ms expiry test still
+   * does so).
+   */
+  constructor(private readonly entryTtlMs: number = 600_000) {}
 
   /** Register the loop's wake-up hook. Called once on boot. */
   setWakeCallback(cb: () => void): void {
@@ -81,7 +104,8 @@ export class WorkOrderPushQueue {
    *
    * Refreshing the timestamp via `push()` would let a WO that loses the
    * capacity race repeatedly live forever in the queue — bypassing the
-   * 60s safety net documented at the top of this file.
+   * TTL safety net documented at the top of this file (10 min default
+   * since D-P2P Slice 0.6).
    *
    * Does NOT fire `wakeCb`: the caller is mid-iteration and the loop is
    * already awake; waking it again would just spin the timer wheel.

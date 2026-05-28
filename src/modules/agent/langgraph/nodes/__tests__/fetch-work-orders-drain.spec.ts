@@ -264,6 +264,97 @@ describe('FetchWorkOrdersNode — D-P2P Slice 0.5 push queue drain path', () => 
     incSpy.mockRestore();
   });
 
+  describe('D-P2P Slice 0.6 — SYNAPSEIA_DISABLE_WO_POLL killswitch (in-node)', () => {
+    let savedEnv: string | undefined;
+    beforeEach(() => {
+      savedEnv = process.env.SYNAPSEIA_DISABLE_WO_POLL;
+    });
+    afterEach(() => {
+      if (savedEnv === undefined) {
+        delete process.env.SYNAPSEIA_DISABLE_WO_POLL;
+      } else {
+        process.env.SYNAPSEIA_DISABLE_WO_POLL = savedEnv;
+      }
+    });
+
+    it('KILLSWITCH ON + drain empty → returns [] WITHOUT calling the HTTP fallback', async () => {
+      process.env.SYNAPSEIA_DISABLE_WO_POLL = 'true';
+      pushQueue.drain.mockReturnValue([]);
+      coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).not.toHaveBeenCalled();
+      expect(out.availableWorkOrders).toEqual([]);
+      // Visible log so the operator sees the killswitch in effect.
+      const logCalls = logSpy.mock.calls.map((c) => String(c[0] ?? ''));
+      expect(
+        logCalls.some((m) => m.includes('WO HTTP poll disabled by killswitch')),
+      ).toBe(true);
+    });
+
+    it("KILLSWITCH OFF (env unset) + drain empty → HTTP fallback IS called (existing behaviour)", async () => {
+      delete process.env.SYNAPSEIA_DISABLE_WO_POLL;
+      pushQueue.drain.mockReturnValue([]);
+      coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).toHaveBeenCalledTimes(1);
+      expect(out.availableWorkOrders).toEqual([cpuInferenceHttp]);
+    });
+
+    it("KILLSWITCH 'false' literal + drain empty → HTTP fallback IS called", async () => {
+      process.env.SYNAPSEIA_DISABLE_WO_POLL = 'false';
+      pushQueue.drain.mockReturnValue([]);
+      coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).toHaveBeenCalledTimes(1);
+      expect(out.availableWorkOrders).toEqual([cpuInferenceHttp]);
+    });
+
+    it("KILLSWITCH 'TRUE' (case-insensitive) + drain empty → no HTTP fallback", async () => {
+      process.env.SYNAPSEIA_DISABLE_WO_POLL = 'TRUE';
+      pushQueue.drain.mockReturnValue([]);
+      coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).not.toHaveBeenCalled();
+      expect(out.availableWorkOrders).toEqual([]);
+    });
+
+    it('KILLSWITCH ON + drain throws → returns [] WITHOUT HTTP fallback (P2 fail-closed)', async () => {
+      process.env.SYNAPSEIA_DISABLE_WO_POLL = 'true';
+      pushQueue.drain.mockImplementation(() => {
+        throw new Error('queue corrupted');
+      });
+      coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).not.toHaveBeenCalled();
+      expect(out.availableWorkOrders).toEqual([]);
+      // Drain error still logged at WARN — never silently swallowed.
+      const warnCalls = warnSpy.mock.calls.map((c) => String(c[0] ?? ''));
+      expect(warnCalls.some((m) => m.includes('pushQueue.drain() threw'))).toBe(true);
+    });
+
+    it('KILLSWITCH ON + drain returns entries → entries pass through unchanged (no HTTP)', async () => {
+      process.env.SYNAPSEIA_DISABLE_WO_POLL = 'true';
+      pushQueue.drain.mockReturnValue([cpuInferencePushed]);
+      pushQueue.size.mockReturnValue(0);
+
+      const out = await node.execute(baseState);
+
+      expect(coordinator.fetchAvailableWorkOrders).not.toHaveBeenCalled();
+      expect(out.availableWorkOrders).toHaveLength(1);
+      expect(out.availableWorkOrders![0]!.id).toBe('wo-pushed-1');
+    });
+  });
+
   it('PushedWorkOrder → WorkOrder mapping preserves id, type, rewardAmount, requiredCapabilities, creatorAddress', async () => {
     pushQueue.drain.mockReturnValue([dilocoPushed]);
     execution.isDiLoCoWorkOrder.mockImplementation((wo: any) => wo.type === 'DILOCO_TRAINING');

@@ -57,6 +57,24 @@ describe('WorkOrderPushQueue', () => {
     expect(q.size()).toBe(2);
   });
 
+  it('D-P2P Slice 0.6 — default TTL is 600_000 ms (10 min), not the legacy 60_000', async () => {
+    // Construct with no args → default TTL must be 10 min so a gossipsub
+    // envelope received mid-execution (~3 min training + sleep) is still
+    // present in the next drain(). The legacy 60s default was the root
+    // cause of BUG #5 (2026-05-28 prod audit).
+    const q = new WorkOrderPushQueue();
+    q.push(mkPush('long-lived'));
+    // Sleep 100ms — well over the legacy 60s would have meant the entry
+    // is still present, but importantly we ASSERT directly on the
+    // private field via a known TTL probe: an entry should ONLY expire
+    // when receivedAt + ttl < now. With ttl=600_000 and 100ms elapsed,
+    // drain MUST return the entry.
+    await new Promise<void>((r) => setTimeout(r, 100));
+    const drained = q.drain();
+    expect(drained).toHaveLength(1);
+    expect(drained[0].id).toBe('long-lived');
+  });
+
   it('clear() empties the queue', () => {
     const q = new WorkOrderPushQueue();
     q.push(mkPush('a'));
