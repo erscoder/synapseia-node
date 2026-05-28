@@ -1,5 +1,33 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] feat(work-orders): persist lastSeenSeq + send ?since= on poll (Slice 2) (e1b63ef1)
+
+D-P2P Slice 2 (node-side). Counterpart to coord (sub coord 9adfaf46). Node now sends
+`?since=<lastSeenSeq>` on each HTTP poll so the safety-net fallback only fetches WOs strictly newer
+than the latest observed (via gossipsub push OR a prior poll).
+
+`last-seen-seq.ts` (NEW) singleton store keyed by coordinator URL, monotonic update, atomic disk
+persist via tmp+rename. Throttled flush (30s) + shutdown hook. Cold boot loads
+`~/.synapseia/last-seen-seq.json`; corrupt/missing -> reset to 0 (P22). Rejects non-finite/negative/
+fractional, floors valid. Version-tagged file for clean reset on future schema bumps.
+
+`fetchAvailableWorkOrders` accepts 4th positional `since?: number`. Appends `?since=<n>` only when
+`finite && >= 1` (cold boot omits param matching coord contract). `URLSearchParams` avoids
+double-`?` / encoding pitfalls. `signedFetch` covers pathname + search.
+
+`fetch-work-orders.ts` reads `seqStore.get(coordinatorUrl)` before HTTP fallback. Advances
+`seqStore.update(..., max(seq across batch))` for BOTH drained gossipsub + HTTP result BEFORE
+filters apply, so a cooldown-rejected WO still moves the cursor (no replay loop).
+
+`PushedWorkOrder.seq?: number` (optional for backwards-compat with legacy coord builds).
+`pushedToWorkOrder` mapper propagates seq with `Number.isFinite` guard.
+
+Reviewer: SHIP-AS-IS, 0 BLOCKER / 0 HIGH / 0 MEDIUM / 1 LOW. Coverage: last-seen-seq.ts ~95%,
+work-order.coordinator since branch 100%. Tests: 15 new specs pass on top of 37/37 from Slice 0.5+1.
+
+Cold boot note: `lastSeenSeq=0` on restart means the first poll hits coord without `?since=` and
+returns the full PENDING set. Intended bootstrap behaviour.
+
 ## [2026-05-28] feat(telemetry): emit discovery-source delta on work-order audit (Slice 1) (132d23ad)
 
 D-P2P Slice 1 (node-side). Process-local accumulator tracks how many work orders the node discovered
