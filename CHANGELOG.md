@@ -1,5 +1,24 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] fix(p2p): wire WorkOrderPushQueue drain in FetchWorkOrdersNode (Slice 0.5) (f75e6d0e)
+
+D-P2P Slice 0.5. Pre-fix the gossipsub push queue was write-only in production: `pushVerifiedWo`
+(node-runtime.ts:643-663) pushed entries that nobody ever drained, so all WO discovery went through
+the 5-min HTTP poll while pushed envelopes expired silently at the 60s TTL. Comment at
+`node-runtime.ts:927-929` claimed the loop still drains, which was false.
+
+Fix: drain-first in `FetchWorkOrdersNode.execute()`. HTTP `fetchAvailableWorkOrders` is now the
+safety-net fallback that only runs when the push queue is empty. `drain()` throw path logs warn
+and falls back to HTTP (P2 fail-closed). `pushedToWorkOrder()` mapper normalises `createdAt`
+to epoch ms with `NaN` guard, coerces `'AVAILABLE'` -> `'PENDING'`, and stringifies non-string
+`metadata` values. No new DI providers (existing `WorkOrderModule` export reused). Comment at
+`node-runtime.ts:923-935` rewritten to reflect the real runtime (P10 fix).
+
+Reviewer: SHIP-AS-IS, 0 BLOCKER / 0 HIGH / 2 MEDIUM (M1 NaN guard applied; M2 coverage gap
+pre-existing). Coverage on `fetch-work-orders.ts` = 92.85% stmts / 87.75% branch / 92.68% lines.
+Tests: 18/18 pass (13 existing + 5 new drain specs). Out of scope: Slice 1 (Prometheus source
+counter), Slice 2 (seq column + reconciliation + publisher lifecycle), Slice 4 (cutover).
+
 ## [2026-05-26] chore(release): 0.8.128 — docking Vina parse-failure salvage
 
 `0.8.127` -> `0.8.128`. Ships the `fix(docking)` below (`011e95c9`): a node now salvages a docking
