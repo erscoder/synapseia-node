@@ -195,10 +195,28 @@ export class WorkOrderCoordinatorHelper implements OnModuleInit {
    * also change the signed `path` for no benefit). The `peerId` /
    * `capabilities` parameters remain in the signature for source-compat
    * with existing callers but are no longer placed on the wire.
+   *
+   * D-P2P Slice 2 (2026-05-28) — `since` is the reconciliation cursor.
+   * When set (positive integer matching a previously-observed `seq`),
+   * the coord skips WOs the node already saw via gossipsub so the HTTP
+   * fallback ships only the delta. The value goes into the URL query
+   * string AND therefore into the canonical signed `path` (the
+   * signature covers `pathname + search`, see `signedFetch`).
    */
-  async fetchAvailableWorkOrders(coordinatorUrl: string, _peerId: string, _capabilities: string[]): Promise<WorkOrder[]> {
+  async fetchAvailableWorkOrders(
+    coordinatorUrl: string,
+    _peerId: string,
+    _capabilities: string[],
+    since?: number,
+  ): Promise<WorkOrder[]> {
     try {
-      const url = `${coordinatorUrl}/work-orders/available`;
+      // Build the URL with `?since=` only when set + valid (P2 fail-closed
+      // against accidental `since=0` / `since=NaN` calls). Coord rejects
+      // those with 400 (see `WorkOrderController.getAvailableOrders`) but
+      // we avoid the round-trip and signature work entirely.
+      const sinceValid = typeof since === 'number' && Number.isFinite(since) && since >= 1;
+      const qs = sinceValid ? `?since=${Math.floor(since)}` : '';
+      const url = `${coordinatorUrl}/work-orders/available${qs}`;
       const { url: fetchUrl, init } = await this.signedFetch(url, 'GET', undefined);
       const response = await fetch(fetchUrl, init);
       if (!response.ok) {

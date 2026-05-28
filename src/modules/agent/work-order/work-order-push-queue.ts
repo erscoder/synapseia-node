@@ -41,6 +41,13 @@ export interface PushedWorkOrder {
   estimatedDuration?: number;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  /**
+   * D-P2P Slice 2 (2026-05-28) — monotonic insertion sequence assigned
+   * by the coord. Tracked node-side as `lastSeenSeq` so the HTTP
+   * fallback can request only the delta (`?since=`). Optional on
+   * the wire because legacy pre-slice envelopes may not carry it.
+   */
+  seq?: number;
   /** Receive timestamp for TTL bookkeeping. */
   receivedAt: number;
 }

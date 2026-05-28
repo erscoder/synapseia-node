@@ -44,6 +44,14 @@ export interface WorkOrder {
   expiresAt?: number;
   type?: 'TRAINING' | 'RESEARCH' | 'CPU_INFERENCE' | 'GPU_INFERENCE' | 'DILOCO_TRAINING' | 'DILOCO_AGGREGATION' | 'DILOCO_VALIDATION' | 'MOLECULAR_DOCKING' | 'LORA_TRAINING' | 'LORA_VALIDATION';
   metadata?: Record<string, string>;
+  /**
+   * D-P2P Slice 2 (2026-05-28) — monotonic insertion sequence assigned
+   * by the coord (Postgres BIGSERIAL). Surfaced end-to-end so the node
+   * can track `lastSeenSeq` and pass it back to `/available?since=`
+   * for reconciliation on reconnect. Optional because pre-slice
+   * persisted WOs may not carry a seq value yet.
+   */
+  seq?: number;
 }
 
 export interface ResearchPayload {

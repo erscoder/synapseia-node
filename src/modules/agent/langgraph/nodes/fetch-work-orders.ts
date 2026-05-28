@@ -11,6 +11,7 @@ import type { AgentState, WorkOrder } from '../state';
 import logger from '../../../../utils/logger';
 import { isChatInferenceActive } from '../../../inference/chat-inference-state';
 import { getWoFailureCountStore, WoFailureCountStore } from '../../../../shared/wo-failure-counts';
+import { getLastSeenSeqStore, LastSeenSeqStore } from '../../../../shared/last-seen-seq';
 import {
   getGlobalTelemetryClient,
   makeWorkOrderQueueAuditEvent,
@@ -51,9 +52,20 @@ export class FetchWorkOrdersNode {
    * singleton backed by `~/.synapseia/wo-failure-counts.json`.
    */
   private failureStore: WoFailureCountStore = getWoFailureCountStore();
+  /**
+   * D-P2P Slice 2 (2026-05-28) — persistent `lastSeenSeq` cursor. Read
+   * before every HTTP fallback poll (`?since=`); updated on EVERY WO
+   * surfaced this tick (gossipsub OR poll) so the next reconnect ships
+   * the strict delta. Injectable for tests via the `seqStore` setter.
+   */
+  private seqStore: LastSeenSeqStore = getLastSeenSeqStore();
   /** Test-only injection point — reset cache between tests. */
   __setFailureStoreForTests(store: WoFailureCountStore): void {
     this.failureStore = store;
+  }
+  /** Test-only injection point — reset cursor between tests. */
+  __setSeqStoreForTests(store: LastSeenSeqStore): void {
+    this.seqStore = store;
   }
 
   /**
@@ -111,6 +123,13 @@ export class FetchWorkOrdersNode {
     let workOrders: WorkOrder[];
     let drainedFromPush = 0;
     const discoverySourceCounter = getDiscoverySourceCounter();
+    // D-P2P Slice 2 (2026-05-28) — reconciliation cursor. The cursor is
+    // shared by BOTH paths: the gossipsub drain updates it (see end of
+    // try block), and the HTTP fallback passes its current value as
+    // `?since=` so the coord ships only the delta. A `undefined` cursor
+    // (cold boot, no prior gossipsub) means the coord ships the full
+    // assignable pool — pre-slice behaviour preserved.
+    const sinceCursor = this.seqStore.get();
     try {
       const pushed = this.pushQueue.drain();
       drainedFromPush = pushed.length;
@@ -127,7 +146,12 @@ export class FetchWorkOrdersNode {
         discoverySourceCounter.increment('gossipsub', pushed.length);
       } else {
         logger.log(' Polling for available work orders...');
-        workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+        workOrders = await this.coordinator.fetchAvailableWorkOrders(
+          coordinatorUrl,
+          peerId,
+          capabilities,
+          sinceCursor,
+        );
         if (workOrders.length > 0) {
           discoverySourceCounter.increment('poll', workOrders.length);
         }
@@ -140,10 +164,25 @@ export class FetchWorkOrdersNode {
         `[D-P2P] pushQueue.drain() threw — falling back to HTTP: ${(drainErr as Error).message}`,
       );
       logger.log(' Polling for available work orders...');
-      workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+      workOrders = await this.coordinator.fetchAvailableWorkOrders(
+        coordinatorUrl,
+        peerId,
+        capabilities,
+        sinceCursor,
+      );
       if (workOrders.length > 0) {
         // Fail-closed HTTP fallback still counts as poll-source discovery.
         discoverySourceCounter.increment('poll', workOrders.length);
+      }
+    }
+    // D-P2P Slice 2 — advance the cursor for every WO surfaced this tick.
+    // Update happens AFTER the source-counter bumps (so the cursor advance
+    // is observable in unit tests even when the WO is later filtered out
+    // by capability / cooldown / cap). Monotonic — `update()` ignores
+    // smaller seq values (out-of-order gossipsub envelopes never rewind).
+    for (const wo of workOrders) {
+      if (typeof wo.seq === 'number' && Number.isFinite(wo.seq)) {
+        this.seqStore.update(wo.seq);
       }
     }
     drained = workOrders.length;
@@ -423,5 +462,8 @@ function pushedToWorkOrder(p: PushedWorkOrder): WorkOrder {
     createdAt,
     type: p.type as WorkOrder['type'],
     metadata,
+    // D-P2P Slice 2 — propagate the monotonic seq so the post-drain
+    // cursor advance in FetchWorkOrdersNode.execute() sees it.
+    seq: typeof p.seq === 'number' && Number.isFinite(p.seq) ? p.seq : undefined,
   };
 }
