@@ -48,6 +48,10 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
     getMaxByClass: jest.Mock;
     isDraining: jest.Mock;
   };
+  let pushQueue: {
+    drain: jest.Mock;
+    size: jest.Mock;
+  };
   let node: FetchWorkOrdersNode;
   let infoSpy: jest.SpiedFunction<typeof logger.info>;
   let logSpy: jest.SpiedFunction<typeof logger.log>;
@@ -101,10 +105,15 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
       getMaxByClass: jest.fn().mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 2)),
       isDraining: jest.fn().mockReturnValue(false),
     };
+    pushQueue = {
+      drain: jest.fn().mockReturnValue([]),
+      size: jest.fn().mockReturnValue(0),
+    };
     node = new FetchWorkOrdersNode(
       coordinator as any,
       execution as any,
       backpressure as any,
+      pushQueue as any,
     );
     infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     logSpy = jest.spyOn(logger, 'log').mockImplementation(() => undefined);
@@ -384,7 +393,7 @@ describe('FetchWorkOrdersNode — Bug 25 effectiveCaps trusts live heartbeat', (
     }));
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { FetchWorkOrdersNode: FreshNode } = require('../fetch-work-orders');
-    const fresh = new FreshNode(coordinator as any, execution as any, backpressure as any);
+    const fresh = new FreshNode(coordinator as any, execution as any, backpressure as any, pushQueue as any);
 
     __seedCapabilitySnapshotForTests(['cpu_training']);
     const trainingWO: WorkOrder = {

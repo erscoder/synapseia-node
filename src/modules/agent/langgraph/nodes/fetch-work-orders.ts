@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkOrderCoordinatorHelper } from '../../work-order/work-order.coordinator';
 import { WorkOrderExecutionHelper } from '../../work-order/work-order.execution';
 import { BackpressureService } from '../../work-order/backpressure.service';
+import { WorkOrderPushQueue, type PushedWorkOrder } from '../../work-order/work-order-push-queue';
 import { LlmProviderHelper } from '../../../llm/llm-provider';
 import { WorkOrderEvaluationHelper } from '../../work-order/work-order.evaluation';
 import { canLocallyAcceptWorkOrder } from '../../work-order/wo-type-to-cap';
@@ -29,6 +30,14 @@ export class FetchWorkOrdersNode {
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly execution: WorkOrderExecutionHelper,
     private readonly backpressure: BackpressureService,
+    // D-P2P Slice 0.5 (2026-05-28) — drain gossipsub-pushed WOs each tick
+    // BEFORE the HTTP fallback. Pre-Slice-0.5 the queue was wired into the
+    // node-runtime gossipsub handler but nothing ever called `drain()` —
+    // entries silently expired at the 60s TTL while every discovery still
+    // went through HTTP poll. See `/tmp/d-p2p-drain-check-2026-05-28.md`
+    // verdict (A). Slice 1 will add Prometheus counters; Slice 4 flips
+    // SYNAPSEIA_DISABLE_WO_POLL=true by default once this path is hot.
+    private readonly pushQueue: WorkOrderPushQueue,
   ) {}
 
 
@@ -90,9 +99,38 @@ export class FetchWorkOrdersNode {
     }
 
     const { coordinatorUrl, peerId, capabilities, rejectedWorkOrderIds = [] } = state;
-    logger.log(' Polling for available work orders...');
 
-    const workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    // D-P2P Slice 0.5 (2026-05-28) — drain the gossipsub push queue first.
+    // The HTTP fetch is the safety-net fallback: it only runs when the
+    // push queue is empty this tick. If `drain()` itself throws we log
+    // and fall back to HTTP (fail-closed on discovery — P2). The queue's
+    // contract is atomic: drain returns entries AND clears them in one
+    // pass (work-order-push-queue.ts:87) — preserved by reading from
+    // the immutable returned array below.
+    let workOrders: WorkOrder[];
+    let drainedFromPush = 0;
+    try {
+      const pushed = this.pushQueue.drain();
+      drainedFromPush = pushed.length;
+      if (pushed.length > 0) {
+        logger.log(
+          `[D-P2P] drained ${pushed.length} from gossipsub (queue size=${this.pushQueue.size()})`,
+        );
+        workOrders = pushed.map(pushedToWorkOrder);
+      } else {
+        logger.log(' Polling for available work orders...');
+        workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+      }
+    } catch (drainErr) {
+      // P2 / P10 — never swallow silently. Push path failed → log and
+      // fall back to HTTP so discovery keeps working. Comment in
+      // node-runtime.ts now correctly reflects this layered fallback.
+      logger.warn(
+        `[D-P2P] pushQueue.drain() threw — falling back to HTTP: ${(drainErr as Error).message}`,
+      );
+      logger.log(' Polling for available work orders...');
+      workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+    }
     drained = workOrders.length;
     if (workOrders.length === 0) {
       logger.log(' No work orders available');
@@ -295,4 +333,62 @@ export class FetchWorkOrdersNode {
     this.trainingCooldowns.clear();
     this.completedWorkOrderIds.clear();
   }
+}
+
+/**
+ * D-P2P Slice 0.5 — normalize a `PushedWorkOrder` (gossipsub envelope
+ * shape, mirror of coord-side `WorkOrderResponseDto`) into the LangGraph
+ * `WorkOrder` shape consumed downstream.
+ *
+ * Differences that need active mapping:
+ *   - `description` is optional in PushedWorkOrder, required in WorkOrder.
+ *   - `createdAt` is `string | number` in PushedWorkOrder, `number` in
+ *     WorkOrder (ISO strings → epoch ms via Date.parse).
+ *   - `status` is a free string in PushedWorkOrder; we coerce 'AVAILABLE'
+ *     → 'PENDING' (the only valid pre-accept status in the LangGraph
+ *     union). Any other value is forwarded as-is and re-checked downstream.
+ *   - `metadata` widens from `Record<string, unknown>` (coord DTO) to the
+ *     stricter `Record<string, string>` LangGraph expects. We stringify
+ *     non-string values for safety; LangGraph state never mutates this
+ *     field so the lossy coercion is acceptable.
+ *
+ * Keep this aligned with `WorkOrderResponseDto` (coord-side
+ * `packages/coordinator/src/application/work-orders/work-order.utils.ts ::
+ * toResponseDto`) whenever either side ships new fields.
+ */
+function pushedToWorkOrder(p: PushedWorkOrder): WorkOrder {
+  // Reviewer M1 (Slice 0.5) — guard against NaN from malformed ISO. Coord
+  // DTO contract emits well-formed ISO, but a single bad envelope must NOT
+  // produce NaN — downstream cooldown math + audit emits treat createdAt
+  // as a finite number and silently misbehave on NaN. Fall back to now()
+  // and log warn so the bad envelope is visible.
+  const rawCreatedAt = typeof p.createdAt === 'number' ? p.createdAt : Date.parse(p.createdAt);
+  let createdAt: number;
+  if (Number.isFinite(rawCreatedAt)) {
+    createdAt = rawCreatedAt;
+  } else {
+    createdAt = Date.now();
+    logger.warn(
+      `[D-P2P] pushed WO id=${p.id} had non-finite createdAt (${JSON.stringify(p.createdAt)}) — defaulting to now()`,
+    );
+  }
+  const status = (p.status === 'AVAILABLE' ? 'PENDING' : p.status) as WorkOrder['status'];
+  const metadata: Record<string, string> | undefined = p.metadata
+    ? Object.fromEntries(
+        Object.entries(p.metadata).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]),
+      )
+    : undefined;
+  return {
+    id: p.id,
+    title: p.title,
+    description: p.description ?? '',
+    requiredCapabilities: p.requiredCapabilities,
+    rewardAmount: p.rewardAmount,
+    status,
+    creatorAddress: p.creatorAddress,
+    assigneeAddress: p.assigneeAddress,
+    createdAt,
+    type: p.type as WorkOrder['type'],
+    metadata,
+  };
 }
