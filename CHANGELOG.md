@@ -1,5 +1,27 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] feat(telemetry): emit discovery-source delta on work-order audit (Slice 1) (132d23ad)
+
+D-P2P Slice 1 (node-side). Process-local accumulator tracks how many work orders the node discovered
+via gossipsub push vs HTTP poll on every `FetchWorkOrdersNode.execute()` tick. Delta piggybacks the
+existing `work-order.queue.audit` telemetry event so it reaches coord ingest without a new transport.
+
+Increments are pre-filter (`fetch-work-orders.ts:127/132/146`) so the metric measures the discovery
+channel, not the acceptance yield. `emitQueueAudit()` reads-and-resets the accumulator once per tick
+and attaches it to `WorkOrderQueueAuditContext.discoverySource`. Field omitted when null (idle ticks)
+for backwards-compat with old coord builds. Audit message also gets a `discovery_gossipsub=N
+discovery_poll=N` suffix for operators reading logs.
+
+Singleton accumulator in `discovery-source.metric.ts` (NEW). Atomicity: single caller per tick + JS
+single-thread invariant (P21). Cardinality bounded by `{gossipsub|poll}` closed enum (P28). No DI
+duplicates (P11/P15). Backwards-compat: omitted field gates old grafana queries unchanged.
+
+Reviewer: SHIP-AS-IS, 0 BLOCKER / 0 HIGH / 0 MEDIUM, 2 LOW advisory. Coverage on new file =
+100% across stmts/branch/funcs/lines. Tests: 37/37 pass (16 metric specs + 4 drain assertions).
+
+Out of scope: coord-side sink registration (paired commit in `packages/coordinator`). Slice 2
+(seq + reconciliation + lifecycle publisher) and Slice 4 (cutover) layer on top of this metric.
+
 ## [2026-05-28] fix(p2p): wire WorkOrderPushQueue drain in FetchWorkOrdersNode (Slice 0.5) (f75e6d0e)
 
 D-P2P Slice 0.5. Pre-fix the gossipsub push queue was write-only in production: `pushVerifiedWo`
