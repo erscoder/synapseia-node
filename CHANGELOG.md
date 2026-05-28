@@ -1,5 +1,26 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] fix(p2p): Slice 0.6 BUG #5 wakeCb + TTL 600s + interruptable sleep (0.8.131)
+
+`0.8.130` -> `0.8.131`. D-P2P drain timing fix discovered during prod verification: push-queue
+TTL 60s < LangGraph iter cycle (~3 min training + 60s sleep) caused gossipsub envelopes to expire
+BEFORE drain. Confirmed empirically (`queued TRAINING wo_... (queue size=1)` at T=0, drain at
+T+3:30 returned empty, HTTP fallback served same WO).
+
+Fix: (1) TTL default 60s -> 600s (entryTtlMs invariant >= max iter cycle); (2) new public
+`kickIteration()` on agent service + interruptable `sleep()` so push events trigger immediate
+drain (mid-execution sets `shouldKickNext`, mid-sleep resolves promise); (3) `setWakeCallback`
+wired in `node-runtime.ts` post-gossipsub-subscribe; (4) killswitch reworked: agent loop ALWAYS
+starts so kick lands; `SYNAPSEIA_DISABLE_WO_POLL=true` now suppresses HTTP fallback per-iter
+inside `FetchWorkOrdersNode.execute()` (env read each call -> runtime toggle without restart).
+
+Reviewer: SHIP-AS-IS, 0 BLOCKER / 0 HIGH / 0 MEDIUM / 3 LOW (cosmetic). Coverage: push-queue
+100%; agent service 83.7% stmt / 75% branch (kick + sleep fully covered); fetch-work-orders
+killswitch branches fully covered. Tests: 48 + 28 pass across 4 suites.
+
+Drain post-Slice-0.6: push during iter -> next iter immediately (no sleep). Push during sleep
+-> resolves in ms. D-P2P now actually drains in practice, not just architecturally.
+
 ## [2026-05-28] chore(release): 0.8.130 - rotate bundled COORDINATOR_PUBKEY_BASE58 (security)
 
 `0.8.129` -> `0.8.130`. **Mandatory rotation**: the previous coord signing privkey for pubkey
