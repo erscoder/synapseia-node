@@ -1,5 +1,20 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] chore(release): 0.8.130 - rotate bundled COORDINATOR_PUBKEY_BASE58 (security)
+
+`0.8.129` -> `0.8.130`. **Mandatory rotation**: the previous coord signing privkey for pubkey
+`AzhtjmKerYgURY6sxSZBPu3GBD7nfzdP8n2mYiAqUs3u` (fp=`7277424779f7495e`) was disclosed via a
+session transcript on 2026-05-28 (operator's automated grep tool previewed an OR-pattern
+match line that included the secret). A fresh Ed25519 keypair was generated; the new pubkey
+is `7RoGRRdZnDWzFqD6Sn5S7RpRq3SLWUfrgsLRJ4S4tNew` (fp=`9ca842c955bb30e7`). All coord Fly
+pods now sign with the matching new privkey.
+
+Nodes still running 0.8.129 or earlier will reject all coord gossipsub envelopes
+(`invalid signature` warn) and fall back to the HTTP poll path until they upgrade. The
+HTTP fallback is unaffected by the rotation. No data path change; D-P2P discovery via
+gossipsub resumes for upgraded nodes. node-only release; pods auto-update from npm
+`latest` on next start.
+
 ## [2026-05-28] chore(release): 0.8.129 - D-P2P Slice 0.5 + Slice 1 + Slice 2 client
 
 `0.8.128` -> `0.8.129`. Ships:
