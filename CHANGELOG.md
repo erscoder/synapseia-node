@@ -1,5 +1,16 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] chore(release): 0.8.129 - D-P2P Slice 0.5 + Slice 1 + Slice 2 client
+
+`0.8.128` -> `0.8.129`. Ships:
+- D-P2P Slice 0.5 (`f75e6d0e`): drain-first WorkOrderPushQueue in FetchWorkOrdersNode (fixes
+  shipped bug where gossipsub push queue was write-only, expired entries at 60s TTL).
+- D-P2P Slice 1 (`132d23ad`): discovery-source counter emitted via work-order.queue.audit event.
+- D-P2P Slice 2 (`e1b63ef1`): persist lastSeenSeq + send ?since= on HTTP poll fallback.
+
+node-only release. Pods auto-update from npm latest on next start. Cold boot lastSeenSeq=0 -> first
+poll hits coord without ?since= and returns full PENDING set (intended bootstrap behaviour).
+
 ## [2026-05-28] feat(work-orders): persist lastSeenSeq + send ?since= on poll (Slice 2) (e1b63ef1)
 
 D-P2P Slice 2 (node-side). Counterpart to coord (sub coord 9adfaf46). Node now sends
