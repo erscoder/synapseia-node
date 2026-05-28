@@ -36,9 +36,16 @@
 /** Hardcoded Ed25519 trust anchor — coord public key, base58 (32-byte
  *  raw key, Solana/Bitcoin alphabet). Generated alongside the matching
  *  `COORDINATOR_PRIVKEY_BASE58` that lives in the coord container's
- *  `.env`. Public — safe to commit. */
+ *  `.env`. Public — safe to commit.
+ *
+ *  Rotation history:
+ *  - 2026-05-28: rotated from `AzhtjmKerYgURY6sxSZBPu3GBD7nfzdP8n2mYiAqUs3u`
+ *    (fp=7277424779f7495e) to the value below (fp=9ca842c955bb30e7) after
+ *    the previous privkey leaked to a session transcript via a context-mode
+ *    OR-pattern grep that preview-rendered the matched line. The leaked key
+ *    is permanently retired. */
 export const COORDINATOR_PUBKEY_BASE58 =
-  'AzhtjmKerYgURY6sxSZBPu3GBD7nfzdP8n2mYiAqUs3u';
+  '7RoGRRdZnDWzFqD6Sn5S7RpRq3SLWUfrgsLRJ4S4tNew';
 
 const ED25519_RAW_PUBKEY_LEN = 32;
 
