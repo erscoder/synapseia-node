@@ -366,13 +366,35 @@ export interface WorkOrderQueueAuditContext {
   accepted: number;
   rejectedByCooldown: number;
   rejectedByCap: number;
+  /**
+   * D-P2P Slice 1 (2026-05-28) — accumulated per-source discovery delta
+   * since the previous audit emit. Coord-side `DiscoverySourceMetricSink`
+   * sums these into `synapseia_discovery_source_total{source}` to track
+   * the gossipsub-vs-poll ratio (Slice 4 cutover gate: ≥95% gossipsub
+   * sustained 72h before flipping `SYNAPSEIA_DISABLE_WO_POLL=true` by
+   * default).
+   *
+   * Omitted when both sides are zero (idle tick) to save wire bytes.
+   * Cardinality bounded by the closed `DiscoverySource` enum — see
+   * `discovery-source.metric.ts` for the rationale.
+   */
+  discoverySource?: {
+    gossipsub: number;
+    poll: number;
+  };
 }
 
 export function makeWorkOrderQueueAuditEvent(
   hw: HwFingerprint,
   ctx: WorkOrderQueueAuditContext,
 ): TelemetryEventInput {
-  const { drained, requeued, accepted, rejectedByCooldown, rejectedByCap } = ctx;
+  const { drained, requeued, accepted, rejectedByCooldown, rejectedByCap, discoverySource } = ctx;
+  // Inline the discovery breakdown only when present — keeps the
+  // message string fully backwards-compatible with existing grafana
+  // dashboards that grep `[WorkOrderPushQueue] drained=N ...`.
+  const sourceSuffix = discoverySource
+    ? ` discovery_gossipsub=${discoverySource.gossipsub} discovery_poll=${discoverySource.poll}`
+    : '';
   return {
     clientEventId: newId(),
     eventAt: now(),
@@ -382,7 +404,7 @@ export function makeWorkOrderQueueAuditEvent(
     message:
       `[WorkOrderPushQueue] drained=${drained} accepted=${accepted} ` +
       `requeued=${requeued} rejected_cooldown=${rejectedByCooldown} ` +
-      `rejected_cap=${rejectedByCap}`,
+      `rejected_cap=${rejectedByCap}${sourceSuffix}`,
     context: {
       kind: 'work-order.queue.audit',
       ...ctx,

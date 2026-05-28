@@ -28,6 +28,15 @@ export {
   makeWorkOrderQueueAuditEvent,
   joinLogArgs,
 } from './event-builder';
+export {
+  DiscoverySourceCounter,
+  getDiscoverySourceCounter,
+  __resetDiscoverySourceCounterForTests,
+} from './discovery-source.metric';
+export type {
+  DiscoverySource,
+  DiscoverySourceCounterSnapshot,
+} from './discovery-source.metric';
 export type {
   TelemetryEventInput,
   TelemetryEventType,

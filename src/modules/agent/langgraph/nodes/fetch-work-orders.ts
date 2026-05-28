@@ -14,6 +14,7 @@ import { getWoFailureCountStore, WoFailureCountStore } from '../../../../shared/
 import {
   getGlobalTelemetryClient,
   makeWorkOrderQueueAuditEvent,
+  getDiscoverySourceCounter,
   type HwFingerprint,
 } from '../../../telemetry';
 
@@ -109,6 +110,7 @@ export class FetchWorkOrdersNode {
     // the immutable returned array below.
     let workOrders: WorkOrder[];
     let drainedFromPush = 0;
+    const discoverySourceCounter = getDiscoverySourceCounter();
     try {
       const pushed = this.pushQueue.drain();
       drainedFromPush = pushed.length;
@@ -117,9 +119,18 @@ export class FetchWorkOrdersNode {
           `[D-P2P] drained ${pushed.length} from gossipsub (queue size=${this.pushQueue.size()})`,
         );
         workOrders = pushed.map(pushedToWorkOrder);
+        // D-P2P Slice 1 (2026-05-28) — bump gossipsub source counter
+        // BEFORE downstream filters (cooldown / cap / capability) so the
+        // delta represents "how much was DISCOVERED via gossipsub this
+        // tick", not "how much survived filters". The Slice 4 cutover
+        // gate is a discovery-ratio gate, not an acceptance-ratio gate.
+        discoverySourceCounter.increment('gossipsub', pushed.length);
       } else {
         logger.log(' Polling for available work orders...');
         workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+        if (workOrders.length > 0) {
+          discoverySourceCounter.increment('poll', workOrders.length);
+        }
       }
     } catch (drainErr) {
       // P2 / P10 — never swallow silently. Push path failed → log and
@@ -130,6 +141,10 @@ export class FetchWorkOrdersNode {
       );
       logger.log(' Polling for available work orders...');
       workOrders = await this.coordinator.fetchAvailableWorkOrders(coordinatorUrl, peerId, capabilities);
+      if (workOrders.length > 0) {
+        // Fail-closed HTTP fallback still counts as poll-source discovery.
+        discoverySourceCounter.increment('poll', workOrders.length);
+      }
     }
     drained = workOrders.length;
     if (workOrders.length === 0) {
@@ -289,12 +304,30 @@ export class FetchWorkOrdersNode {
   }): void {
     try {
       const client = getGlobalTelemetryClient();
-      if (!client) return;
+      if (!client) {
+        // D-P2P Slice 1 (2026-05-28) — when no client is wired (tests,
+        // pre-config window) we still need to ZERO the per-source
+        // counter so a later, configured emit doesn't double-count
+        // discoveries the operator already saw via logs. The counter is
+        // a process-local accumulator with no other consumer.
+        getDiscoverySourceCounter().readAndReset();
+        return;
+      }
       const hw: HwFingerprint = {
         os: process.platform,
         arch: process.arch,
       };
-      client.emit(makeWorkOrderQueueAuditEvent(hw, counts));
+      // D-P2P Slice 1 — read-and-reset the per-source delta so each
+      // audit event ships a MONOTONE-friendly increment for coord side
+      // (`DiscoverySourceMetricSink`). `null` when both sides are 0 →
+      // field omitted, preserving wire-compatibility with old nodes.
+      const discoverySourceDelta = getDiscoverySourceCounter().readAndReset();
+      client.emit(
+        makeWorkOrderQueueAuditEvent(hw, {
+          ...counts,
+          ...(discoverySourceDelta ? { discoverySource: discoverySourceDelta } : {}),
+        }),
+      );
     } catch {
       /* telemetry must never throw past the fetch-WO node */
     }

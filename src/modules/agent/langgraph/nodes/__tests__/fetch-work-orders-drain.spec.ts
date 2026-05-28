@@ -24,6 +24,10 @@ import {
   __seedCapabilitySnapshotForTests,
   __resetCapabilitySnapshotForTests,
 } from '../../../../heartbeat/heartbeat';
+import {
+  getDiscoverySourceCounter,
+  __resetDiscoverySourceCounterForTests,
+} from '../../../../telemetry';
 
 describe('FetchWorkOrdersNode — D-P2P Slice 0.5 push queue drain path', () => {
   let coordinator: { fetchAvailableWorkOrders: jest.Mock };
@@ -121,6 +125,9 @@ describe('FetchWorkOrdersNode — D-P2P Slice 0.5 push queue drain path', () => 
       pushQueue as any,
     );
     __seedCapabilitySnapshotForTests(['cpu_inference', 'diloco_training']);
+    // D-P2P Slice 1 — discovery-source singleton is process-wide;
+    // reset between specs so cross-test bleed can't fake an increment.
+    __resetDiscoverySourceCounterForTests();
     logSpy = jest.spyOn(logger, 'log').mockImplementation(() => undefined);
     warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
@@ -128,6 +135,7 @@ describe('FetchWorkOrdersNode — D-P2P Slice 0.5 push queue drain path', () => 
 
   afterEach(() => {
     __resetCapabilitySnapshotForTests();
+    __resetDiscoverySourceCounterForTests();
     logSpy.mockRestore();
     warnSpy.mockRestore();
     infoSpy.mockRestore();
@@ -186,6 +194,74 @@ describe('FetchWorkOrdersNode — D-P2P Slice 0.5 push queue drain path', () => 
         m.startsWith('[D-P2P] drained 1 from gossipsub (queue size=3)'),
       ),
     ).toBe(true);
+  });
+
+  it('D-P2P Slice 1 — gossipsub drain hit bumps the source counter by pushed.length (BEFORE filters)', async () => {
+    pushQueue.drain.mockReturnValue([cpuInferencePushed, dilocoPushed]);
+    pushQueue.size.mockReturnValue(0);
+    execution.isDiLoCoWorkOrder.mockImplementation((wo: any) => wo.type === 'DILOCO_TRAINING');
+    const counter = getDiscoverySourceCounter();
+    const incSpy = jest.spyOn(counter, 'increment');
+
+    await node.execute(baseState);
+
+    // EXACTLY one call with ('gossipsub', 2). HTTP path NOT touched.
+    const gossipsubCalls = incSpy.mock.calls.filter((c) => c[0] === 'gossipsub');
+    const pollCalls = incSpy.mock.calls.filter((c) => c[0] === 'poll');
+    expect(gossipsubCalls).toHaveLength(1);
+    expect(gossipsubCalls[0]).toEqual(['gossipsub', 2]);
+    expect(pollCalls).toHaveLength(0);
+
+    incSpy.mockRestore();
+  });
+
+  it('D-P2P Slice 1 — empty drain + HTTP fallback returns N → counter bumped by N on poll side', async () => {
+    pushQueue.drain.mockReturnValue([]);
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp, { ...cpuInferenceHttp, id: 'wo-http-2' }]);
+    const counter = getDiscoverySourceCounter();
+    const incSpy = jest.spyOn(counter, 'increment');
+
+    await node.execute(baseState);
+
+    const gossipsubCalls = incSpy.mock.calls.filter((c) => c[0] === 'gossipsub');
+    const pollCalls = incSpy.mock.calls.filter((c) => c[0] === 'poll');
+    expect(gossipsubCalls).toHaveLength(0);
+    expect(pollCalls).toHaveLength(1);
+    expect(pollCalls[0]).toEqual(['poll', 2]);
+
+    incSpy.mockRestore();
+  });
+
+  it('D-P2P Slice 1 — empty drain + empty HTTP result does NOT touch the counter', async () => {
+    pushQueue.drain.mockReturnValue([]);
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([]);
+    const counter = getDiscoverySourceCounter();
+    const incSpy = jest.spyOn(counter, 'increment');
+
+    await node.execute(baseState);
+
+    expect(incSpy).not.toHaveBeenCalled();
+
+    incSpy.mockRestore();
+  });
+
+  it('D-P2P Slice 1 — drain throws → HTTP fallback bumps poll counter, NOT gossipsub', async () => {
+    pushQueue.drain.mockImplementation(() => {
+      throw new Error('queue corrupted');
+    });
+    coordinator.fetchAvailableWorkOrders.mockResolvedValue([cpuInferenceHttp]);
+    const counter = getDiscoverySourceCounter();
+    const incSpy = jest.spyOn(counter, 'increment');
+
+    await node.execute(baseState);
+
+    const gossipsubCalls = incSpy.mock.calls.filter((c) => c[0] === 'gossipsub');
+    const pollCalls = incSpy.mock.calls.filter((c) => c[0] === 'poll');
+    expect(gossipsubCalls).toHaveLength(0);
+    expect(pollCalls).toHaveLength(1);
+    expect(pollCalls[0]).toEqual(['poll', 1]);
+
+    incSpy.mockRestore();
   });
 
   it('PushedWorkOrder → WorkOrder mapping preserves id, type, rewardAmount, requiredCapabilities, creatorAddress', async () => {
