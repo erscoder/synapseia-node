@@ -1,5 +1,23 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-28] feat(p2p): subscribe + filter targeted WO envelopes, node side (D-P2P Slice 2) (bc345889)
+
+`0.8.131` -> `0.8.132`. Slice 2 node side of the D-P2P targeted-push plan. Receive the HTTP coord's
+SIGNED, SHARD-ROUTED, TARGETED WO envelope and act on it only when addressed to this peer.
+
+- `shard-routing.ts`: `fnv1a32` + `shardOf(peerId) % K` (`K = DPUSH_SHARD_COUNT`, default 1).
+  BYTE-IDENTICAL to the coordinator implementation; golden-vector tests on both sides guard divergence.
+- `node-runtime.ts`: on boot (inside the existing coord-pubkey trust-anchor gate) subscribe to
+  `WORK_ORDER_ASSIGNED/shard/<shardOf(myPeerId)>`. With `K=1` every node joins `/shard/0`.
+- `work-order-assigned.ts`: clone of `work-order-available` with the same Ed25519 verify + freshness
+  window + coord-pubkey trust anchor + crisis stats, THEN keep iff `payload.targetPeerId === myPeerId`
+  (exact string, after sig verify — cannot be spoofed), else drop. On match feeds the SAME
+  `pushVerifiedWo` -> `WorkOrderPushQueue` + wake callback (no second queue; same-id dedup inherent in
+  the Map-backed queue). The existing drain in `fetch-work-orders.ts` consumes it unchanged.
+
+No change to `WORK_ORDER_AVAILABLE` subscription or the poll (Slice 5). Fail-closed: no trust anchor
+means no subscription. Reviewer SHIP-AS-IS; 15 node tests green.
+
 ## [2026-05-28] fix(p2p): Slice 0.6 BUG #5 wakeCb + TTL 600s + interruptable sleep (0.8.131)
 
 `0.8.130` -> `0.8.131`. D-P2P drain timing fix discovered during prod verification: push-queue
