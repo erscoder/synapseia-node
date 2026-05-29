@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -45,7 +45,6 @@ export interface EncryptedWallet {
 const getWalletDir = () => process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
 const WALLET_DIR = getWalletDir();
 const WALLET_FILE = path.join(WALLET_DIR, 'wallet.json');
-const BACKUP_FILE = path.join(WALLET_DIR, 'wallet-backup.json');
 
 // Encryption constants.
 //
@@ -265,89 +264,6 @@ export class WalletHelper {
   }
 
   /**
-   * Generate a new Solana wallet with mnemonic and encryption
-   */
-  async generateWallet(
-    walletDir: string = WALLET_DIR,
-    password?: string
-  ): Promise<WalletWithStatus> {
-    if (!existsSync(walletDir)) {
-      mkdirSync(walletDir, { recursive: true, mode: 0o700 });
-    }
-
-    // Get password if not provided
-    if (!password) {
-      password = await this.promptForNewPassword();
-    }
-
-    try {
-      // Dynamic imports
-      const solanaWeb3 = await import('@solana/web3.js');
-      const bip39 = await import('bip39');
-      const { Keypair } = solanaWeb3;
-
-      // Generate mnemonic (12 words = 128 bits entropy)
-      const mnemonic = bip39.generateMnemonic(128);
-
-      // Derive seed from mnemonic, then derive the Solana keypair via
-      // BIP44 path m/44'/501'/0'/0' so the mnemonic is portable to
-      // Phantom / Solflare / Solana CLI. A direct Keypair.fromSeed on
-      // the raw seed would produce a wallet unrecoverable from the
-      // mnemonic in any standard Solana wallet.
-      const { derivePath } = await import('ed25519-hd-key');
-      const seed = await bip39.mnemonicToSeed(mnemonic);
-      const derivationPath = "m/44'/501'/0'/0'";
-      const { key } = derivePath(derivationPath, seed.toString('hex'));
-
-      // Generate keypair from derived seed
-      const keypair = Keypair.fromSeed(key);
-
-      const wallet: SolanaWallet = {
-        publicKey: keypair.publicKey.toBase58(),
-        secretKey: Array.from(keypair.secretKey),
-        createdAt: new Date().toISOString(),
-        mnemonic, // Include mnemonic for display
-      };
-
-      // Encrypt wallet
-      const encryptedWallet = encryptWallet(wallet, password);
-
-      // Save encrypted wallet.json
-      writeFileSync(
-        path.join(walletDir, 'wallet.json'),
-        JSON.stringify(encryptedWallet, null, 2),
-        { mode: 0o600 }
-      );
-
-      // Save backup file with mnemonic (also encrypted with same password)
-      const backupData = {
-        version: 1,
-        publicKey: wallet.publicKey,
-        mnemonic: mnemonic,
-        encrypted: true,
-        encryptedSecretKey: encryptedWallet.encryptedData,
-        createdAt: wallet.createdAt,
-        warning: "IMPORTANT: Store this mnemonic in a secure location. Anyone with access to these words can control your funds."
-      };
-      writeFileSync(
-        BACKUP_FILE,
-        JSON.stringify(backupData, null, 2),
-        { mode: 0o600 }
-      );
-
-      // Return wallet with mnemonic for display (password not stored)
-      return {
-        wallet: { ...wallet },
-        isNew: true
-      };
-    } catch (error) {
-      throw new Error(
-        `Failed to generate Solana wallet. Make sure @solana/web3.js and bip39 are installed. ${error}`
-      );
-    }
-  }
-
-  /**
    * Load existing Solana wallet (requires password)
    */
   async loadWallet(
@@ -357,7 +273,7 @@ export class WalletHelper {
     const walletPath = path.join(walletDir, 'wallet.json');
 
     if (!existsSync(walletPath)) {
-      throw new Error(`Wallet not found at ${walletPath}. Run generateWallet() first.`);
+      throw new Error(`Wallet not found at ${walletPath}. Run 'syn start' to create an encrypted keystore wallet.`);
     }
 
     const content = readFileSync(walletPath, 'utf-8');
@@ -377,9 +293,14 @@ export class WalletHelper {
   }
 
   /**
-   * Get or create wallet (convenience function for CLI)
-   * Returns wallet and a flag indicating if it was newly created
-   * Retries password prompt up to 3 times on invalid password
+   * Load an existing legacy wallet.json (convenience wrapper for the CLI
+   * legacy-migration path). LOAD-ONLY: creation of new plaintext-backed
+   * wallets was removed — a fresh wallet is only ever created via the
+   * encrypted keystore on `syn start`. If no wallet.json exists this
+   * throws, so an operator without a legacy wallet is routed to the
+   * keystore fresh-install path instead of silently minting a new
+   * cleartext-backed wallet here.
+   * Retries password prompt up to 3 times on invalid password.
    */
   async getOrCreateWallet(
     walletDir: string = WALLET_DIR,
@@ -395,9 +316,11 @@ export class WalletHelper {
       } catch (error) {
         const errorMessage = (error as Error).message;
 
-        // Wallet doesn't exist - create new one
+        // Wallet doesn't exist — creation is no longer supported here.
+        // Surface the load error so the caller can route to the keystore
+        // path. NEVER mint a new plaintext-backed wallet.
         if (errorMessage.includes('Wallet not found')) {
-          return this.generateWallet(walletDir, password);
+          throw error;
         }
 
         // Invalid password - retry
@@ -456,7 +379,6 @@ export class WalletHelper {
 
     logger.warn('[Wallet] IMPORTANT — save your recovery phrase offline. Anyone with these 12 words controls your funds:');
     logger.log(`[Wallet] recovery phrase: ${wallet.mnemonic}`);
-    logger.log(`[Wallet] encrypted backup stored at ${BACKUP_FILE}`);
   }
 
   /**
@@ -491,9 +413,6 @@ export const promptForPassword = (...args: Parameters<WalletHelper['promptForPas
 
 export const promptForNewPassword = (...args: Parameters<WalletHelper['promptForNewPassword']>) =>
   new WalletHelper().promptForNewPassword(...args);
-
-export const generateWallet = (...args: Parameters<WalletHelper['generateWallet']>) =>
-  new WalletHelper().generateWallet(...args);
 
 export const loadWallet = (...args: Parameters<WalletHelper['loadWallet']>) =>
   new WalletHelper().loadWallet(...args);

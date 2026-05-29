@@ -20,7 +20,6 @@ describe('WalletService', () => {
         {
           provide: WalletHelper,
           useValue: {
-            generateWallet: jest.fn(),
             loadWallet: jest.fn(),
             getOrCreateWallet: jest.fn(),
             getWalletAddress: jest.fn(),
@@ -36,20 +35,6 @@ describe('WalletService', () => {
 
     service = module.get<WalletService>(WalletService);
     walletHelper = module.get(WalletHelper);
-  });
-
-  it('generate() delegates to generateWallet', async () => {
-    const mockResult = { wallet: mockWallet, isNew: true };
-    walletHelper.generateWallet.mockResolvedValue(mockResult as any);
-    const result = await service.generate('/tmp/wallet', 'password');
-    expect(walletHelper.generateWallet).toHaveBeenCalledWith('/tmp/wallet', 'password');
-    expect(result).toBe(mockResult);
-  });
-
-  it('generate() works without args', async () => {
-    walletHelper.generateWallet.mockResolvedValue({ wallet: mockWallet, isNew: true } as any);
-    await service.generate();
-    expect(walletHelper.generateWallet).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it('load() delegates to loadWallet', async () => {

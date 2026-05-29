@@ -5,10 +5,6 @@ import { WalletHelper, type SolanaWallet, type WalletWithStatus } from '../walle
 export class WalletService {
   constructor(private readonly walletHelper: WalletHelper) {}
 
-  generate(walletDir?: string, password?: string): Promise<WalletWithStatus> {
-    return this.walletHelper.generateWallet(walletDir, password);
-  }
-
   load(walletDir?: string, password?: string): Promise<SolanaWallet> {
     return this.walletHelper.loadWallet(walletDir, password);
   }

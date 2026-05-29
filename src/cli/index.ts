@@ -55,6 +55,7 @@ import { HardwareService } from '../modules/hardware/services/hardware.service';
 import { NodeConfigService } from '../modules/config/services/node-config.service';
 import { WalletService } from '../modules/wallet/services/wallet.service';
 import { EncryptedKeystore, EncryptedKeystoreError } from '../infrastructure/keystore/EncryptedKeystore';
+import { createKeypairIntoKeystore, runWalletCreate } from './wallet-create';
 import { ModelCatalogHelper, getOllamaTag } from '../modules/model/model-catalog';
 import { LlmProviderHelper } from '../modules/llm/llm-provider';
 import { CLOUD_PROVIDERS, resolveCloudApiKeyFromEnv } from '../modules/llm/providers';
@@ -396,8 +397,6 @@ async function bootstrap() {
           // non-TTY container path. Without this fallback, supervisor /
           // systemd / Docker fresh boots could not bootstrap a wallet.
           const { password: passwordPrompt } = await import('@inquirer/prompts');
-          const solanaWeb3 = await import('@solana/web3.js');
-          const bip39 = await import('bip39');
           const filePass = await readPassphraseFromFile(
             process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
             logger,
@@ -426,41 +425,16 @@ async function bootstrap() {
               process.exit(7);
             }
           }
-          // Generate via BIP39 so the operator gets a recovery phrase to
-          // back up (same convention as the legacy walletService path).
-          // Derive the keypair via BIP44 path m/44'/501'/0'/0' so the
-          // mnemonic can be imported into Phantom / Solflare / Solana CLI
-          // — Keypair.fromSeed(seed.slice(0,32)) would produce a wallet
-          // unrecoverable in standard Solana wallets.
-          const mnemonic = bip39.generateMnemonic(128);
-          const { derivePath } = await import('ed25519-hd-key');
-          const seed = await bip39.mnemonicToSeed(mnemonic);
-          const derivationPath = "m/44'/501'/0'/0'";
-          const { key } = derivePath(derivationPath, seed.toString('hex'));
-          const fresh = solanaWeb3.Keypair.fromSeed(key);
-          secretKeyBytes = fresh.secretKey;
-          await keystore.encrypt(secretKeyBytes, pass1);
-          logger.log(`[Keystore] new wallet encrypted at ${keystore.getPath()} (mode 0600)`);
-          // Inline backup banner — `walletService.displayCreationWarning`
-          // references the legacy wallet.json.backup file which the
-          // keystore path never writes (P10 / reviewer MEDIUM-7). Be
-          // explicit about WHERE the wallet lives and that the mnemonic
-          // is the operator's ONLY off-disk recovery path.
-          logger.warn('');
-          logger.warn('🔐  IMPORTANT — write down this recovery phrase NOW:');
-          logger.warn(`     ${mnemonic}`);
-          logger.warn('');
-          logger.warn(`     Wallet address: ${fresh.publicKey.toBase58()}`);
-          logger.warn(`     Keystore file:  ${keystore.getPath()}`);
-          logger.warn('     The mnemonic uses standard BIP44 Solana derivation (m/44/501/0/0)');
-          logger.warn('     and can be imported into Phantom, Solflare, or any Solana wallet.');
-          logger.warn('     The mnemonic is the ONLY way to recover this wallet if the keystore file is lost or corrupted. Store it offline (paper or hardware) and never share it.');
-          logger.warn('');
+          // Shared keystore-create flow (BIP39 → BIP44 m/44'/501'/0'/0' →
+          // encrypt → print mnemonic ONCE, never persisted). Identical
+          // logic backs `wallet-create` so the two cannot diverge.
+          const created = await createKeypairIntoKeystore(pass1, { keystore, logger });
+          secretKeyBytes = created.secretKeyBytes;
           wallet = {
-            publicKey: fresh.publicKey.toBase58(),
+            publicKey: created.address,
             secretKey: Array.from(secretKeyBytes),
             createdAt: new Date().toISOString(),
-            mnemonic,
+            mnemonic: created.mnemonic,
           };
           // Suppress the legacy `walletService.displayCreationWarning`
           // below — the inline banner above already covered backup.
@@ -1698,19 +1672,25 @@ async function bootstrap() {
     });
 
   // ── wallet-create ──────────────────────────────────────────────────────────
-  // Non-interactive: creates a fresh wallet encrypted with the
-  // passphrase piped via stdin (or a file-mounted secret) and writes
-  // node config in one atomic call. Used by the desktop UI during
-  // first-time setup. Refuses to overwrite an existing wallet — user
-  // must delete it explicitly to re-initialise.
+  // Non-interactive: creates a fresh wallet encrypted with the passphrase
+  // piped via stdin (or a file-mounted secret) and writes node config in
+  // one atomic call, then EXITS. Used by the desktop UI (node-ui) during
+  // first-time setup — it spawns `syn wallet-create --name <name>` and
+  // waits for the child to exit. `syn start` cannot replace it (start is a
+  // long-running daemon that never exits).
+  //
+  // KEYSTORE-ONLY: writes ONLY the encrypted keystore
+  // (~/.synapseia/wallet.keystore.json). It NEVER writes wallet.json or
+  // wallet-backup.json — the cleartext-backed legacy path was removed. The
+  // recovery mnemonic is printed ONCE to the terminal, never to disk.
   //
   // SECURITY (F-node-008 max-security): env-var passphrase is NEVER
-  // honoured. The Tauri wrapper now pipes the typed password to this
-  // command's stdin (with SYNAPSEIA_PASSPHRASE_FROM_STDIN=true);
-  // headless installs use SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE.
+  // honoured. The Tauri wrapper pipes the typed password to stdin (with
+  // SYNAPSEIA_PASSPHRASE_FROM_STDIN=true); headless installs use
+  // SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE.
   program
     .command('wallet-create')
-    .description('Create a new encrypted wallet + base config (non-interactive)')
+    .description('Create a new encrypted keystore wallet + base config (non-interactive)')
     .option('--name <name>', 'Node name')
     .option('--model <model>', 'Default model (provider/model)')
     .option('--llm-key <key>', 'LLM API key')
@@ -1734,52 +1714,18 @@ async function bootstrap() {
         process.env.SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE,
         logger,
       );
-      const stdinPassphrase = filePassphrase
-        ? undefined
+      const passphrase = filePassphrase
+        ? filePassphrase
         : await readPassphraseFromStdin(logger);
-      const newPassword = filePassphrase ?? stdinPassphrase;
-      if (!newPassword) {
-        logger.error('SYNAPSEIA_KEYSTORE_PASSPHRASE_FILE or SYNAPSEIA_PASSPHRASE_FROM_STDIN=true (with passphrase piped on stdin) is required for wallet-create');
-        process.exit(2);
-      }
-      if (newPassword.length < 8) {
-        logger.error('PASSWORD_TOO_SHORT: password must be at least 8 characters');
-        process.exit(2);
-      }
-      const nodeHome = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
-      const walletPath = path.join(nodeHome, 'wallet.json');
-      if (existsSync(walletPath)) {
-        logger.error('WALLET_ALREADY_EXISTS');
-        process.exit(5);
-      }
-      try {
-        // Create the wallet directory + encrypted wallet.json in one call
-        const { wallet } = await walletService.generate(nodeHome, newPassword);
 
-        // Persist the base config atomically (no partial state)
-        const cfgService = app.get(NodeConfigService);
-        const cfg = cfgService.load();
-        if (options.name) cfg.name = options.name;
-        if (options.model) cfg.defaultModel = options.model;
-        if (options.llmUrl) {
-          logger.warn('⚠️  --llm-url is deprecated and ignored (endpoints are hardcoded per provider)');
-        }
-        if (options.llmKey) cfg.llmKey = options.llmKey;
-        cfgService.save(cfg);
-
-        // Keep identity.json in sync with the chosen name so heartbeat broadcasts it
-        if (options.name) {
-          const identityService = app.get(IdentityService);
-          identityService.update({ name: options.name }, nodeHome);
-        }
-
-        logger.log(`__WALLET_OK__ ${wallet.publicKey}`);
-        process.exit(0);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`WALLET_CREATE_ERROR: ${msg}`);
-        process.exit(4);
-      }
+      const { exitCode } = await runWalletCreate(options, {
+        passphrase,
+        keystore: new EncryptedKeystore(),
+        configStore: app.get(NodeConfigService),
+        identityStore: app.get(IdentityService),
+        logger,
+      });
+      process.exit(exitCode);
     });
 
   program.parse();
