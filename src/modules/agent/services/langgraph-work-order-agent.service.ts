@@ -92,6 +92,20 @@ export class LangGraphWorkOrderAgentService {
     // If we're parked in sleep, break out so runLoop sees !shouldContinue
     // and exits cleanly instead of waiting the full intervalMs to notice.
     this.interruptSleep();
+    // Cascade teardown of the RoundListener WS this service started in
+    // start() — without this the Socket.IO client keeps retrying with
+    // `reconnectionAttempts: Infinity`, keeping the event loop alive and
+    // the coord WS connection open after the node is asked to shut down
+    // (audit nodeLOW-incomplete-graceful-shutdown).
+    try {
+      // Optional-call guards old test doubles that stub only
+      // startRoundListener; the production helper always defines it.
+      this.roundListenerHelper.stopRoundListener?.();
+    } catch (err) {
+      logger.warn(
+        `[LangGraph] RoundListener teardown threw during stop(): ${(err as Error).message}`,
+      );
+    }
     logger.log(' Stopping LangGraph agent...');
   }
 

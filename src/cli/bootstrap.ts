@@ -49,8 +49,11 @@ muteBigintBindingStderrWrite();
 // ES2020 target — tsup transpiles to ES2022 for the actual bundle.
 import('./index.js').catch((err) => {
     // Write directly to the original stderr (bypass our filter) so any real
-    // bootstrap failure surfaces loud and clear.
-    process.stderr.write(`[bootstrap] Failed to load CLI: ${(err as Error).message}\n`);
+    // bootstrap failure surfaces loud and clear. A rejected import can throw
+    // a non-Error value, so coerce safely instead of assuming `.message`
+    // (otherwise the message would print "undefined").
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[bootstrap] Failed to load CLI: ${msg}\n`);
     process.exit(1);
 });
 

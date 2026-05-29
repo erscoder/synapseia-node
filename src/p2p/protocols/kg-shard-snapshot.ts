@@ -12,9 +12,30 @@
  * topic handler (D.4-distribution.5).
  *
  * Auth on the dialer side: sign `req|<shardId>|<publishedAtMs>` with
- * the node's Ed25519 private key. The server-side handler verifies
- * against the dialer's libp2p pubkey (from `conn.remotePeer.publicKey`)
- * + checks the `kg_shard_authorizations` row.
+ * the node's Ed25519 *application identity* key (`identity.privateKey`).
+ *
+ * KNOWN GAP (audit nodeLOW-kg-shard-snapshot-handler-unregistered):
+ * there is currently NO server-side handler registered for
+ * KG_SHARD_SNAPSHOT_PROTOCOL on the node (node-runtime.ts registers
+ * KG_SHARD_QUERY_PROTOCOL but not this one). As a result every
+ * peer-first snapshot pull fails its peer candidates and falls through
+ * to the coord fallback in `fetch()`. Implementing the server handler
+ * is blocked on TWO unresolved design problems that this client-side
+ * file cannot fix alone:
+ *   1. Signature binding — the dialer signs with the app-layer Ed25519
+ *      identity key, but a libp2p stream handler only sees
+ *      `conn.remotePeer` (a libp2p peerId / pubkey from a DIFFERENT
+ *      keypair). There is no trusted node-side mapping from the libp2p
+ *      peerId to the app identity pubkey, so the request signature
+ *      cannot be verified against the connecting peer as the original
+ *      docstring implied.
+ *   2. Authorization — there is no node-side store of which requesters
+ *      are permitted to pull a shard (the ownership store only records
+ *      which shards THIS node hosts).
+ * Closing this requires a resolved auth model (signed coord redirect or
+ * a libp2p↔app-identity binding) + a requester-authorization source, so
+ * it is tracked as a dedicated follow-up rather than shipped half-built
+ * (a handler that "verifies" the wrong key would be a fake control).
  *
  * Memory `feedback_node_no_db`: zero TypeORM/pg drivers. Disk only.
  * Memory `feedback_logger`: project logger; never `console.*`.

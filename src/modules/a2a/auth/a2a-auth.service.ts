@@ -69,16 +69,20 @@ export class A2AAuthService {
       return false;
     }
 
-    // 2. Check nonce uniqueness (replay protection)
+    // 2. Check nonce uniqueness (replay protection). Only READ here — the
+    //    nonce is recorded AFTER the signature is confirmed valid (step 4),
+    //    so a failed-auth / forged request can no longer consume nonce-map
+    //    memory (audit nodeLOW-a2a-nonce-before-verify). Identity-binding
+    //    (step 0) and the payload-hash-covering message (step 3) still run
+    //    before the nonce write, so the ordering hardening is preserved.
     if (this.usedNonces.has(task.nonce)) {
       return false;
     }
-    this.usedNonces.set(task.nonce, Date.now());
-    this.cleanExpiredNonces();
 
     // 3. Verify Ed25519 signature (covers the payload hash, see buildMessage)
     const message = this.buildMessage(task);
 
+    let signatureValid = false;
     try {
       const publicKeyBytes = Buffer.from(senderPublicKeyHex, 'hex');
       const signatureBytes = Buffer.from(task.signature, 'hex');
@@ -87,10 +91,22 @@ export class A2AAuthService {
       const ED25519_DER_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
       const publicKeyDer = Buffer.concat([ED25519_DER_PREFIX, publicKeyBytes]);
       const keyObject = crypto.createPublicKey({ key: publicKeyDer, format: 'der', type: 'spki' });
-      return crypto.verify(null, messageBytes, keyObject, signatureBytes);
+      signatureValid = crypto.verify(null, messageBytes, keyObject, signatureBytes);
     } catch {
       return false;
     }
+
+    if (!signatureValid) {
+      return false;
+    }
+
+    // 4. Record the nonce only now that the signature is proven valid, so a
+    //    failed/forged request cannot grow the nonce map (replay protection
+    //    still binds the proven-authentic nonce against future replays).
+    this.usedNonces.set(task.nonce, Date.now());
+    this.cleanExpiredNonces();
+
+    return true;
   }
 
   /**

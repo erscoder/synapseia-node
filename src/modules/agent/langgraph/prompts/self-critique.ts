@@ -1,7 +1,17 @@
 /**
  * Self-critique prompt template for research quality assessment
  * Sprint B - LLM reviews its own output
+ *
+ * UNWIRED LEGACY BUILDER (P26, audit L1321): `buildSelfCritiquePrompt` has NO
+ * production caller. It is kept as a documented option. To stay safe by default
+ * for any future re-wiring, every field interpolated into the prompt is routed
+ * through `sanitizeForPrompt` here (the analysis fields are LLM-generated from
+ * peer-supplied paper text, so they are untrusted): jailbreak markers
+ * hard-reject, control chars stripped, over-long fields truncated. Do NOT
+ * re-wire this without keeping that gate.
  */
+
+import { sanitizeForPrompt } from '../../../../shared/prompt-safety';
 
 export interface SelfCritiquePromptParams {
   title: string;
@@ -14,13 +24,19 @@ export interface SelfCritiquePromptParams {
  * Build the self-critique prompt for the LLM
  */
 export function buildSelfCritiquePrompt(params: SelfCritiquePromptParams): string {
+  // P26: gate every interpolated field before it reaches the prompt.
+  const safeTitle = sanitizeForPrompt(params.title, 'params.title');
+  const safeSummary = sanitizeForPrompt(params.summary, 'params.summary');
+  const safeKeyInsights = sanitizeForPrompt(params.keyInsights, 'params.keyInsights');
+  const safeProposal = sanitizeForPrompt(params.proposal, 'params.proposal');
+
   return `You are reviewing your own research analysis. Score it honestly.
 
-Title: ${params.title}
+Title: ${safeTitle}
 Your analysis:
-- Summary: ${params.summary}
-- Key insights: ${params.keyInsights}
-- Proposal: ${params.proposal}
+- Summary: ${safeSummary}
+- Key insights: ${safeKeyInsights}
+- Proposal: ${safeProposal}
 
 Score each dimension 0-10:
 - accuracy: Are claims factually supported by the abstract?

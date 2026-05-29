@@ -45,6 +45,16 @@ export async function buildAuthHeaders(params: {
   const { method, path, body, privateKey, publicKey, peerId } = params;
   const timestamp = Date.now();
 
+  // Defensive normalization, mirroring buildWsHandshakeAuth: callers pass
+  // `Buffer.from(identity.privateKey/publicKey, 'hex')`, which is already the
+  // raw 32-byte key (identity.json stores raw hex, not DER), so this is a
+  // no-op for valid input. It only matters if a DER-wrapped key is ever
+  // passed in, in which case the trailing 32 bytes are sliced — keeping the
+  // HTTP signer symmetric with the WS handshake signer, which already did
+  // this. NOTE: the signed-message format below is unchanged.
+  const privateKeyRaw = rawEd25519Key(privateKey);
+  const publicKeyRaw = rawEd25519Key(publicKey);
+
   const bodyStr =
     typeof body === 'object' && body !== null
       ? JSON.stringify(sortObjectKeys(body))
@@ -53,27 +63,38 @@ export async function buildAuthHeaders(params: {
   const bodyHash = Buffer.from(sha256(new TextEncoder().encode(bodyStr))).toString('base64');
   const message = `${peerId}:${timestamp}:${path}:${bodyHash}`;
   const messageBytes = new TextEncoder().encode(message);
-  const signature = sign(messageBytes, privateKey);
+  const signature = sign(messageBytes, privateKeyRaw);
 
   return {
     'X-Peer-Id': peerId,
-    'X-Public-Key': Buffer.from(publicKey).toString('base64'),
+    'X-Public-Key': Buffer.from(publicKeyRaw).toString('base64'),
     'X-Timestamp': String(timestamp),
     'X-Signature': Buffer.from(signature).toString('base64'),
   };
 }
 
 /**
- * Identity files on disk store keys as PKCS8/SPKI DER (Node's
- * `KeyObject.export({ type: 'pkcs8' / 'spki', format: 'der' })`),
- * NOT raw Ed25519 32-byte seeds. The coord WS auth guard accepts only
- * raw hex (32 bytes for the public key), so we slice the trailing
- * 32 bytes from the DER blob before signing / sending. The DER prefix
- * for an Ed25519 PKCS8 private key is fixed at 16 bytes
- * (`30 2e 02 01 00 30 05 06 03 2b 65 70 04 22 04 20`); SPKI public is
- * 12 bytes (`30 2a 30 05 06 03 2b 65 70 03 21 00`). Anything longer
- * than 32 bytes is treated as DER and sliced; raw 32-byte buffers are
- * passed through.
+ * Normalize an Ed25519 key buffer down to the raw 32-byte form expected by
+ * the signer and the coordinator's auth guards.
+ *
+ * CORRECTION (audit): identity files on disk (`identity.json`) store keys as
+ * raw 32-byte hex, NOT DER. `IdentityHelper.generateIdentity` already slices
+ * the trailing 32 bytes off Node's PKCS8/SPKI DER export and persists only
+ * the raw scalar/point hex (see `modules/identity/identity.ts`). Callers
+ * therefore pass `Buffer.from(identity.privateKey/publicKey, 'hex')`, which
+ * is already exactly 32 bytes, so for the in-tree call sites this function is
+ * a pass-through (the `buf.length === 32` branch).
+ *
+ * It is kept as a defensive guard for the unlikely case a DER-wrapped key is
+ * ever handed in: anything longer than 32 bytes is treated as DER and the
+ * trailing 32 bytes are sliced (the Ed25519 PKCS8 prefix is 16 bytes, the
+ * SPKI prefix 12 bytes, so the key bytes are always the final 32).
+ *
+ * HISTORICAL ASYMMETRY (now resolved): `buildWsHandshakeAuth` always called
+ * this helper, but `buildAuthHeaders` previously signed/sent the input
+ * buffers directly. Both paths now route through `rawEd25519Key` so the HTTP
+ * and WS signers behave identically. This is purely defensive — it does NOT
+ * change the signed-message format on either path.
  */
 function rawEd25519Key(buf: Uint8Array): Uint8Array {
   if (buf.length === 32) return buf;

@@ -16,6 +16,16 @@ import { RequestPeerReviewTool } from './request-peer-review.tool';
 /** Bug I: thrown when a corpus/KG tool is called without a usable `topic`. */
 const MISSING_TOPIC_REASON = 'missing_topic';
 
+/** Returned when generate_embedding is called without a usable `text` arg. */
+const MISSING_TEXT_REASON = 'missing_text';
+
+/**
+ * Hard cap on model-supplied embedding text. Matches the GPU embedding cap in
+ * work-order.execution.ts (8000 chars) so an unbounded model-emitted string
+ * cannot blow the embedding-request size on this path either.
+ */
+const MAX_EMBEDDING_TEXT_CHARS = 8000;
+
 /**
  * Tools that are ALWAYS registered + credentialed for every execution context
  * (the medical/research tools wired as required ctor deps). The A2A tools
@@ -136,7 +146,17 @@ export class ToolRunnerService {
       }
       case 'generate_embedding': {
         const { text } = params as { text: string };
-        return this.generateEmbeddingTool.execute({ text });
+        // Validate + cap the model-supplied text before it reaches the
+        // embedding backend. Reject a non-string/empty arg as a structured
+        // failure (same shape the corpus/KG tools use) so the ReAct loop can
+        // self-correct, and slice to MAX_EMBEDDING_TEXT_CHARS so a runaway
+        // model-emitted string cannot blow the embedding request size
+        // (mirrors the inference caps in work-order.execution.ts).
+        if (!isNonEmptyString(text)) {
+          logger.info(`[ToolRunner] skipping ${toolName} — missing/invalid text arg`);
+          return { success: false, reason: MISSING_TEXT_REASON };
+        }
+        return this.generateEmbeddingTool.execute({ text: text.slice(0, MAX_EMBEDDING_TEXT_CHARS) });
       }
       case 'delegate_to_peer': {
         if (!this.delegateToPeerTool) throw new Error('DelegateToPeerTool not available (A2A not enabled)');

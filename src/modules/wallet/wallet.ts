@@ -150,19 +150,30 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
   decipher.setAuthTag(authTag);
 
   // Decrypt
+  let decrypted: Buffer | undefined;
   try {
-    const decrypted = Buffer.concat([
+    decrypted = Buffer.concat([
       decipher.update(encrypted),
       decipher.final()
     ]);
 
     return {
       publicKey: encryptedWallet.publicKey,
+      // Array.from copies the bytes; the source `decrypted` Buffer is wiped in
+      // the finally block below.
       secretKey: Array.from(decrypted),
       createdAt: encryptedWallet.createdAt,
     };
   } catch (error) {
     throw new Error('Invalid password. Wallet decryption failed.');
+  } finally {
+    // Best-effort zeroization (audit L1160): overwrite the derived KDF key and
+    // the plaintext secret-key Buffer once the bytes have been copied out. JS
+    // zeroization is best-effort only — the returned `secretKey` array still
+    // holds the key for the caller, and GC may already have copied these bytes;
+    // this narrows, not closes, the in-memory window.
+    key.fill(0);
+    if (decrypted) decrypted.fill(0);
   }
 }
 

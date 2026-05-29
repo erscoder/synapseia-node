@@ -3,7 +3,7 @@
  * Uses Ed25519 for signing and authentication
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync, statSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -68,7 +68,11 @@ export class IdentityHelper {
       status: 'idle',   // A16 - default status
     };
 
-    writeFileSync(path.join(identityDir, 'identity.json'), JSON.stringify(identity, null, 2));
+    // SECURITY (audit L1484): identity.json holds the node's raw Ed25519
+    // private key (its coordinator auth credential). Write it 0600 so it is
+    // not world-readable under the default umask 022 (0644). publickey.pem is
+    // public — no restriction needed.
+    writeFileSync(path.join(identityDir, 'identity.json'), JSON.stringify(identity, null, 2), { mode: 0o600 });
     writeFileSync(path.join(identityDir, 'publickey.pem'), `public key: ${publicKeyHex}\n`);
 
     return identity;
@@ -82,6 +86,24 @@ export class IdentityHelper {
 
     if (!existsSync(idPath)) {
       throw new Error(`Identity not found at ${idPath}. Run generateIdentity() or 'synapseia start' first.`);
+    }
+
+    // SECURITY (audit L1484): repair the permissions of pre-existing
+    // identity.json files written before the 0600 fix. If looser than 0600
+    // (e.g. legacy 0644 world-readable), warn and tighten in place — the file
+    // holds the node's private auth key. Best-effort: never fail the load over
+    // a chmod error (read-only FS / unusual ownership).
+    try {
+      const mode = statSync(idPath).mode & 0o777;
+      if (mode & 0o077) {
+        logger.warn(
+          `[Identity] identity.json at ${idPath} has loose permissions (0${mode.toString(8)}); ` +
+          'it holds the node private key — tightening to 0600.',
+        );
+        chmodSync(idPath, 0o600);
+      }
+    } catch {
+      /* best-effort permission repair; never block the load */
     }
 
     const content = readFileSync(idPath, 'utf-8');
@@ -215,7 +237,11 @@ export class IdentityHelper {
       identity.status = updates.status;
     }
 
-    writeFileSync(path.join(identityDir, 'identity.json'), JSON.stringify(identity, null, 2));
+    // SECURITY (audit L1484): preserve the restrictive 0600 mode on the
+    // private-key-bearing identity.json on update (writeFile mode only applies
+    // when the file is created, so chmod after to cover the overwrite path).
+    writeFileSync(path.join(identityDir, 'identity.json'), JSON.stringify(identity, null, 2), { mode: 0o600 });
+    chmodSync(path.join(identityDir, 'identity.json'), 0o600);
     return identity;
   }
 

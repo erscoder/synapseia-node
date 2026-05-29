@@ -1,4 +1,7 @@
 import { jest } from '@jest/globals';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { P2PNode, TOPICS, P2pHelper } from '../modules/p2p/p2p';
 const createP2PNode = (...args: Parameters<P2pHelper['createP2PNode']>) => new P2pHelper().createP2PNode(...args);
 import type { Identity } from '../modules/identity/identity';
@@ -6,14 +9,18 @@ import { createLibp2p } from 'libp2p';
 import { bootstrap } from '@libp2p/bootstrap';
 import { kadDHT } from '@libp2p/kad-dht';
 
-// Mock @noble/ed25519 before importing modules that use it
-jest.mock('@noble/ed25519', () => ({
-  getPublicKey: (jest.fn() as any).mockReturnValue(Buffer.alloc(32)),
-  sign: (jest.fn() as any).mockResolvedValue(Buffer.alloc(64)),
-  verify: (jest.fn() as any).mockResolvedValue(true),
-}));
+// NOTE: the inline `jest.mock('@noble/ed25519', …)` that used to live here
+// was a vacuous-crypto landmine — it stubbed verify→always-true and
+// sign→zero-bytes, overriding the shared real-crypto mock (jest.config
+// moduleNameMapper → src/__mocks__/@noble/ed25519.ts, backed by Node's
+// crypto). Neither p2p.ts nor identity.ts even import @noble/ed25519
+// (identity.ts signs/verifies via Node crypto), so the override only
+// served to make any signature assertion meaningless. Removed so the
+// shared real-crypto contract applies; the real-keypair heartbeat test
+// at the bottom of this file exercises genuine sign + tamper-reject.
 
-// Mock identity signing functions
+// Mock identity signing functions (wiring-only doubles — the real-crypto
+// heartbeat behaviour is asserted separately via jest.requireActual).
 jest.mock('../modules/identity/identity.js', () => ({
   sign: (jest.fn() as any).mockResolvedValue('mock-signature-hex'),
   canonicalPayload: jest.fn((data: Record<string, unknown>) => JSON.stringify(data)),
@@ -55,6 +62,34 @@ function makeMockNode() {
     services: { pubsub },
   };
 }
+
+describe('@libp2p/crypto/keys persistence round-trip (peerId stability)', () => {
+  // p2p.ts loadOrCreateKey persists the libp2p Ed25519 key via
+  // privateKeyToProtobuf → hex on disk → privateKeyFromProtobuf so the
+  // peerId stays stable across restarts. This proves the protobuf
+  // encode/decode round-trips faithfully — the prior mock returned a
+  // static zero key and ignored its input, which made every
+  // peerId-stability assertion silently vacuous (load(save(k)) !== k).
+  it('privateKeyFromProtobuf(privateKeyToProtobuf(k)) reproduces the same raw + public key bytes', async () => {
+    const keys = await import('@libp2p/crypto/keys');
+    const k = await keys.generateKeyPair('Ed25519');
+
+    const encoded = keys.privateKeyToProtobuf(k);
+    const decoded = keys.privateKeyFromProtobuf(encoded);
+
+    // Same private scalar → same identity.
+    expect(Buffer.from(decoded.raw).equals(Buffer.from(k.raw))).toBe(true);
+    // Public key (the peerId source) must survive the round-trip too.
+    expect(Buffer.from(decoded.public.raw).equals(Buffer.from(k.public.raw))).toBe(true);
+  });
+
+  it('distinct generated keys are NOT equal (mock is not a constant)', async () => {
+    const keys = await import('@libp2p/crypto/keys');
+    const a = await keys.generateKeyPair('Ed25519');
+    const b = await keys.generateKeyPair('Ed25519');
+    expect(Buffer.from(a.raw).equals(Buffer.from(b.raw))).toBe(false);
+  });
+});
 
 describe('TOPICS', () => {
   it('defines all 4 gossipsub topics', () => {
@@ -288,5 +323,76 @@ describe('createP2PNode()', () => {
   it('works with no args (default empty bootstrapAddrs)', async () => {
     const n = await createP2PNode(mockIdentity);
     expect(n.isRunning()).toBe(true);
+  });
+});
+
+describe('heartbeat signature (REAL crypto — non-vacuous sign + tamper-reject)', () => {
+  // The module-level jest.mock('../modules/identity/identity.js') above is
+  // a WIRING double (sign → constant, canonicalPayload → JSON.stringify) so
+  // the P2PNode tests can assert plumbing cheaply. That is NOT crypto
+  // coverage. This block uses the REAL IdentityHelper (jest.requireActual,
+  // backed by Node's Ed25519) to prove the heartbeat signing contract that
+  // P2PNode.publishHeartbeat depends on actually holds: a genuine signature
+  // verifies, and any tamper (payload / signature / pubkey) is rejected.
+  // The signed surface mirrors publishHeartbeat: sign(canonicalPayload(data)).
+  const real = jest.requireActual('../modules/identity/identity') as {
+    generateIdentity: (dir?: string, name?: string) => {
+      publicKey: string;
+      privateKey: string;
+    };
+    canonicalPayload: (d: Record<string, unknown>) => string;
+    sign: (msg: string, privHex: string) => Promise<string>;
+    verifySignature: (msg: string, sigHex: string, pubHex: string) => Promise<boolean>;
+  };
+
+  let tmpDir: string;
+  let identity: { publicKey: string; privateKey: string };
+
+  beforeAll(() => {
+    // generateIdentity writes identity.json to a real dir; isolate it.
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'syn-p2p-hb-'));
+    identity = real.generateIdentity(tmpDir);
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('a heartbeat signed over canonicalPayload(data) verifies with the matching pubkey', async () => {
+    const data = { peerId: 'remote', tier: 3, ts: 1000 };
+    const canonical = real.canonicalPayload(data);
+    const signature = await real.sign(canonical, identity.privateKey);
+
+    // Signature is a real 64-byte Ed25519 sig (128 hex chars), NOT zero bytes.
+    expect(signature).toMatch(/^[0-9a-f]{128}$/);
+    await expect(
+      real.verifySignature(canonical, signature, identity.publicKey),
+    ).resolves.toBe(true);
+  });
+
+  it('rejects a tampered payload', async () => {
+    const data = { peerId: 'remote', tier: 3 };
+    const signature = await real.sign(real.canonicalPayload(data), identity.privateKey);
+    const tampered = real.canonicalPayload({ peerId: 'remote', tier: 9 }); // tier flipped
+    await expect(
+      real.verifySignature(tampered, signature, identity.publicKey),
+    ).resolves.toBe(false);
+  });
+
+  it('rejects a signature produced by a different key', async () => {
+    const data = { peerId: 'remote', tier: 3 };
+    const canonical = real.canonicalPayload(data);
+    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), 'syn-p2p-hb-other-'));
+    try {
+      const other = real.generateIdentity(otherDir);
+      const wrongSig = await real.sign(canonical, other.privateKey);
+      // Verify the genuine payload against the FIRST identity's pubkey but
+      // with a signature from the OTHER key → must fail.
+      await expect(
+        real.verifySignature(canonical, wrongSig, identity.publicKey),
+      ).resolves.toBe(false);
+    } finally {
+      fs.rmSync(otherDir, { recursive: true, force: true });
+    }
   });
 });

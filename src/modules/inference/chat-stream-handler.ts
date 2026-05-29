@@ -119,7 +119,12 @@ export class ChatStreamHandler {
       'You are Synapseia-Agent, a biomedical research assistant. Answer the user concisely and truthfully. If you do not know, say so.',
     ];
     for (const m of messages) {
-      const role = m.role === 'assistant' ? 'Assistant' : m.role === 'system' ? 'System' : 'User';
+      // SECURITY (audit L1497): only the node-controlled preamble at index 0
+      // carries System authority. Remote-supplied messages are paid-chat input
+      // — collapse any client 'system'-role turn to User so a caller cannot
+      // forge a System instruction in the flattened prompt. This is a latent
+      // footgun if the chat path ever gains tools/privileged context.
+      const role = m.role === 'assistant' ? 'Assistant' : 'User';
       parts.push(`${role}: ${m.content}`);
     }
     parts.push('Assistant:');

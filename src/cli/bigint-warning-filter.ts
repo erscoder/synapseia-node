@@ -41,14 +41,23 @@ const BIGINT_PREFIX = 'bigint: Failed to load bindings';
 const BIGINT_LINE_FRAGMENT = 'bigint: Failed to load bindings, pure JS will be used';
 const DISABLE_ENV = 'SYNAPSEIA_DISABLE_BIGINT_FILTER';
 
+// Capture the genuine, unpatched `process.stderr.write` at module-load time —
+// BEFORE `muteBigintBindingStderrWrite()` replaces it. This gives
+// `noteTriggered` a true bypass of our own filter (the telemetry line does
+// not contain BIGINT_LINE_FRAGMENT, so it would pass through the patched
+// writer anyway, but writing via the captured original is unconditional and
+// future-proof against the fragment ever changing).
+const ORIGINAL_STDERR_WRITE: typeof process.stderr.write =
+    process.stderr.write.bind(process.stderr);
+
 /** Process-scoped one-shot so we don't spam stderr if the warning ever fires repeatedly. */
 let triggeredOnce = false;
 function noteTriggered(source: 'console.warn' | 'stderr.write'): void {
     if (triggeredOnce) return;
     triggeredOnce = true;
-    // Bypass our own stderr filter by using the bound original via fd write.
+    // Bypass our own stderr filter by using the original captured at load time.
     try {
-        process.stderr.write(`[bigint-filter] triggered source=${source} — module still useful on this platform\n`);
+        ORIGINAL_STDERR_WRITE(`[bigint-filter] triggered source=${source} — module still useful on this platform\n`);
     } catch { /* swallow — telemetry must never crash bootstrap */ }
 }
 

@@ -237,6 +237,23 @@ function decryptWallet(walletData: { encryptedData: string; kdfIterations?: numb
     iterations = PBKDF2_ITERATIONS_V1;
   }
 
+  // SECURITY (audit L1196): warn LOUDLY whenever a wallet is decrypted under a
+  // pre-OWASP-2024 KDF iteration count (<600k). A version-less legacy wallet
+  // silently falling back to 100k iterations was the finding's exposure: the
+  // operator had no signal that their key is protected by a weak KDF. The
+  // hardened migration path is `syn start`, which re-encrypts into the
+  // EncryptedKeystore (scrypt). Transparent in-place re-encrypt of the legacy
+  // wallet.json under the v2 600k path is NOT done here — this file has no
+  // encryptor and an in-place atomic rewrite of the only wallet copy is a
+  // corruption risk that needs its own scoped change.
+  if (iterations < PBKDF2_ITERATIONS_V2) {
+    process.stderr.write(
+      `[staking-cli] SECURITY WARNING: wallet decrypted under a WEAK KDF ` +
+      `(${iterations} PBKDF2 iterations < ${PBKDF2_ITERATIONS_V2} OWASP-2024 baseline). ` +
+      `Migrate to the hardened keystore via 'syn start' to re-encrypt under stronger parameters.\n`,
+    );
+  }
+
   const key = deriveKey(password, salt, iterations);
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(authTag);
@@ -246,7 +263,13 @@ function decryptWallet(walletData: { encryptedData: string; kdfIterations?: numb
     decipher.final()
   ]);
 
-  return new Uint8Array(decrypted);
+  // Copy into the returned Uint8Array, then best-effort wipe the derived KDF
+  // key and the plaintext source Buffer (audit L1160). JS zeroization is
+  // best-effort only — the returned array still holds the key for the caller.
+  const out = new Uint8Array(decrypted);
+  key.fill(0);
+  decrypted.fill(0);
+  return out;
 }
 
 // Load and decrypt the wallet. Tries the hardened EncryptedKeystore

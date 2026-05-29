@@ -29,6 +29,23 @@ import type { IKgShardOwnershipStore } from '../kg-shard/KgShardOwnershipStore';
 
 export const KG_SHARD_QUERY_PROTOCOL = '/synapseia/kg-shard-query/1.0.0';
 
+/** PubMedBERT embedding dimension — the only embedding size the KG uses.
+ *  Inbound requests carrying a pre-computed embedding MUST match this
+ *  exactly (audit nodeLOW-kg-shard-query-no-auth-rate-limit). */
+const VECTOR_DIM = 768;
+/** Hard ceiling on the requested hit count, independent of any clamp the
+ *  searcher applies — bounds work an unauthenticated requester can ask for. */
+const MAX_K = 100;
+/** Per-peer inbound query budget: at most MAX_QUERIES_PER_WINDOW queries
+ *  per RATE_WINDOW_MS sliding window. The inbound query protocol is not
+ *  requester-authenticated, so bound flood/fan-out per remote peer. */
+const RATE_WINDOW_MS = 10_000;
+const MAX_QUERIES_PER_WINDOW = 50;
+/** Above this many distinct tracked peers, sweep fully-expired keys so the
+ *  rate-limiter map cannot grow unbounded by ephemeral peer ids (the same
+ *  memory-DoS class the rate limit defends; audit nodeLOW-kg-shard-query). */
+const RATE_LIMITER_PRUNE_THRESHOLD = 1024;
+
 export interface KgShardQueryRequest {
   shardId: number;
   /** Pre-computed query embedding (cosine-normalised). Pass `null` to
@@ -90,16 +107,60 @@ function isValidRequest(x: unknown): x is KgShardQueryRequest {
   if (typeof x !== 'object' || x === null) return false;
   const req = x as Record<string, unknown>;
   if (typeof req.shardId !== 'number' || !Number.isFinite(req.shardId)) return false;
-  if (typeof req.k !== 'number' || !Number.isFinite(req.k) || req.k <= 0) return false;
+  // Cap k at the protocol level so an unauthenticated requester cannot ask
+  // for an unbounded top-K (don't rely solely on the searcher clamp).
+  if (typeof req.k !== 'number' || !Number.isFinite(req.k) || req.k <= 0 || req.k > MAX_K) {
+    return false;
+  }
   const hasEmbedding = Array.isArray(req.embedding);
   const hasQuery = typeof req.query === 'string' && (req.query as string).length > 0;
   if (!hasEmbedding && !hasQuery) return false;
   if (hasEmbedding) {
-    for (const v of req.embedding as unknown[]) {
+    // Cap embedding length at VECTOR_DIM (768) so an unauthenticated
+    // requester cannot push an oversized vector downstream into the
+    // searcher — reject anything longer than the KG's PubMedBERT dim.
+    const emb = req.embedding as unknown[];
+    if (emb.length > VECTOR_DIM) return false;
+    for (const v of emb) {
       if (typeof v !== 'number' || !Number.isFinite(v)) return false;
     }
   }
   return true;
+}
+
+/**
+ * Sliding-window per-peer rate limiter for the inbound (unauthenticated)
+ * query protocol. Keeps a bounded timestamp ring per remote peer; returns
+ * false when the peer has exceeded MAX_QUERIES_PER_WINDOW within
+ * RATE_WINDOW_MS. Empty/expired buckets are pruned to keep the map bounded.
+ */
+class PeerQueryRateLimiter {
+  private readonly hits = new Map<string, number[]>();
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  allow(peerId: string): boolean {
+    const t = this.now();
+    const cutoff = t - RATE_WINDOW_MS;
+    // Opportunistic prune: once the map grows past the threshold, drop every
+    // peer whose entire window has expired (newest ts <= cutoff). This makes
+    // the "buckets are pruned to keep the map bounded" invariant real instead
+    // of only bounding each bucket's length.
+    if (this.hits.size > RATE_LIMITER_PRUNE_THRESHOLD) {
+      for (const [key, tss] of this.hits) {
+        if (tss.length === 0 || tss[tss.length - 1] <= cutoff) this.hits.delete(key);
+      }
+    }
+    const bucket = (this.hits.get(peerId) ?? []).filter((ts) => ts > cutoff);
+    if (bucket.length >= MAX_QUERIES_PER_WINDOW) {
+      // Persist the pruned bucket so the window keeps sliding correctly.
+      this.hits.set(peerId, bucket);
+      return false;
+    }
+    bucket.push(t);
+    this.hits.set(peerId, bucket);
+    return true;
+  }
 }
 
 /**
@@ -110,8 +171,24 @@ export function makeKgShardQueryHandler(
   deps: HandlerDeps,
 ): (stream: any, connection: any) => Promise<void> {
   const searcher = deps.searcher ?? new StubKgShardSearcher();
-  return async function handler(stream: any, _connection: any): Promise<void> {
+  const rateLimiter = new PeerQueryRateLimiter();
+  return async function handler(stream: any, connection: any): Promise<void> {
     try {
+      // Per-peer rate limiting — the inbound query protocol has no requester
+      // authentication, so bound how often any single remote peer can query.
+      const remotePeerId =
+        connection?.remotePeer?.toString?.() ?? '<unknown-peer>';
+      if (!rateLimiter.allow(remotePeerId)) {
+        logger.warn(
+          `[KG-ShardQuery] rate limit exceeded for peer ${remotePeerId.slice(0, 12)}`,
+        );
+        await sendJsonOverStream(stream, {
+          error: 'BAD_REQUEST',
+          detail: 'rate limit exceeded',
+        } satisfies KgShardQueryErrorResponse);
+        return;
+      }
+
       const req = await readJsonFromStream<KgShardQueryRequest>(stream);
       if (!isValidRequest(req)) {
         await sendJsonOverStream(stream, {

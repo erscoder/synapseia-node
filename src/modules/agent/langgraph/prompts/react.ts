@@ -1,7 +1,18 @@
 /**
  * ReAct prompt template
  * Sprint C - ReAct Tool Calling
+ *
+ * UNWIRED LEGACY BUILDER (P26, audit L1321): `buildReActPrompt` currently has
+ * NO production caller — the live ReAct path uses the sanitized builders in
+ * work-order.execution.ts. It is kept as a documented option. To stay safe by
+ * default for any future re-wiring, every untrusted-origin field interpolated
+ * into the prompt (the peer-supplied work-order title/abstract and the tool
+ * observations) is routed through `sanitizeForPrompt` here, matching the live
+ * builders: jailbreak markers hard-reject, control chars stripped, over-long
+ * fields truncated. Do NOT re-wire this without keeping that gate.
  */
+
+import { sanitizeForPrompt } from '../../../../shared/prompt-safety';
 
 export function buildReActPrompt(
   wo: { title: string; abstract: string },
@@ -9,14 +20,22 @@ export function buildReActPrompt(
   availableTools: string,
   observations: Array<{ tool: string; result: string }>,
 ): string {
+  // P26: gate every untrusted-origin field before interpolation. title/abstract
+  // come from the coordinator-issued work order; observations[].tool/.result are
+  // tool outputs that may carry peer-fetched content.
+  const safeTitle = sanitizeForPrompt(wo.title, 'wo.title');
+  const safeAbstract = sanitizeForPrompt(wo.abstract, 'wo.abstract');
+
   const obsText = observations.length === 0
     ? 'None yet.'
-    : observations.map((o, i) => `[${i + 1}] ${o.tool}: ${o.result}`).join('\n');
+    : observations
+        .map((o, i) => `[${i + 1}] ${sanitizeForPrompt(o.tool, `observations[${i}].tool`)}: ${sanitizeForPrompt(o.result, `observations[${i}].result`)}`)
+        .join('\n');
 
   return `You are a scientific research agent analyzing a paper.
 
-Work Order: ${wo.title}
-Abstract: ${wo.abstract}
+Work Order: ${safeTitle}
+Abstract: ${safeAbstract}
 
 Execution Plan:
 ${plan.join('\n')}

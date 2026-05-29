@@ -11,13 +11,72 @@
  * fail-open path has since been removed, but the decoder is still the
  * thing that gates every coord-signed topic, so parity is mandatory.
  */
+import { jest } from '@jest/globals';
 import bs58 from 'bs58';
+import * as crypto from 'crypto';
+
+// PINNED trust anchor. The coordinator-pubkey constant is the Ed25519
+// public key every coord-signed gossip topic is verified against; an
+// UNINTENDED change here silently re-points the trust anchor of the whole
+// fleet. Pinning the decoded raw bytes means a rotation can only land via
+// a deliberate edit to BOTH the source constant AND this expected value
+// (a release event, per coordinator-pubkey.ts rotation ceremony) — a stray
+// edit fails the build instead of shipping a wrong anchor.
+//
+// Value derived from COORDINATOR_PUBKEY_BASE58 =
+//   '7RoGRRdZnDWzFqD6Sn5S7RpRq3SLWUfrgsLRJ4S4tNew'
+// (fp=9ca842c955bb30e7, the 2026-05-28 rotation recorded in source).
+const PINNED_COORD_PUBKEY_HEX =
+  '5f805fbccdc63bde13489cc2e8c00480712fe06a2caba393ec42b30456c05194';
+
+// ASN.1 DER PKCS8 header for a raw 32-byte Ed25519 private scalar (RFC 8410).
+const ED25519_PKCS8_HEADER = Buffer.from('302e020100300506032b657004220420', 'hex');
+
+/** Generate a raw 32-byte Ed25519 keypair (priv scalar + raw pub). */
+function newEd25519Key(): { privRaw: Buffer; pubRaw: Uint8Array } {
+  const { privateKey } = crypto.generateKeyPairSync('ed25519');
+  const privRaw = (privateKey.export({ format: 'der', type: 'pkcs8' }) as Buffer).subarray(-32);
+  const pubDer = crypto.createPublicKey(privateKey).export({ format: 'der', type: 'spki' }) as Buffer;
+  return { privRaw: Buffer.from(privRaw), pubRaw: new Uint8Array(pubDer.subarray(-32)) };
+}
+
+/** Sign `messageBytes` with a raw 32-byte Ed25519 private scalar. */
+function signRaw(messageBytes: Buffer, privRaw: Buffer): Buffer {
+  const der = Buffer.concat([ED25519_PKCS8_HEADER, privRaw]);
+  const keyObject = crypto.createPrivateKey({ key: der, format: 'der', type: 'pkcs8' });
+  return crypto.sign(null, messageBytes, keyObject);
+}
+
+/**
+ * Build a `WORK_ORDER_AVAILABLE` gossip envelope ({wo, ts, sig}) signed
+ * over `JSON.stringify({wo, ts})` exactly as CoordinatorPublisher does,
+ * encoded to the raw message bytes the handler consumes.
+ */
+function buildSignedEnvelope(privRaw: Buffer, ts: number): Uint8Array {
+  const wo = {
+    id: 'wo-1',
+    title: 'Test WO',
+    status: 'available',
+    rewardAmount: '1000',
+    requiredCapabilities: ['gpu'],
+    creatorAddress: 'creator-1',
+  };
+  const signed = JSON.stringify({ wo, ts });
+  const sig = signRaw(Buffer.from(signed, 'utf8'), privRaw).toString('base64');
+  return new TextEncoder().encode(JSON.stringify({ wo, ts, sig }));
+}
 
 describe('loadCoordinatorPubkey', () => {
   it('decodes the hardcoded COORDINATOR_PUBKEY_BASE58 to a 32-byte raw pubkey', async () => {
     const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
     const pubkey = loadCoordinatorPubkey();
     expect(pubkey).toHaveLength(32);
+  });
+
+  it('decodes to the PINNED trust-anchor bytes (an unintended rotation fails here)', async () => {
+    const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
+    const pubkey = loadCoordinatorPubkey();
+    expect(Buffer.from(pubkey).toString('hex')).toBe(PINNED_COORD_PUBKEY_HEX);
   });
 
   it('returns a stable result across calls (idempotent decode)', async () => {
@@ -95,5 +154,68 @@ describe('inline base58 decoder — golden vectors vs canonical bs58', () => {
       expect(() => _decodeBase58ForTest(bad)).toThrow();
       expect(() => bs58.decode(bad)).toThrow();
     }
+  });
+});
+
+describe('trust-anchor wiring — handleWorkOrderAvailable gates on the pubkey it is given', () => {
+  // The loader is only the FIRST half of the trust anchor; the gate that
+  // matters at runtime is the signature check inside
+  // handleWorkOrderAvailable, which verifies each envelope against the
+  // pubkey it is handed (loadCoordinatorPubkey() in production). These
+  // tests prove that gate end-to-end with real Ed25519 envelopes:
+  //   - an envelope NOT signed by the trust anchor is DROPPED (consumer
+  //     never invoked) when verified against the real loadCoordinatorPubkey().
+  //   - an envelope signed by the matching key is ACCEPTED.
+  // NOTE: this spec must NOT touch work-order-available.ts (source owned
+  // elsewhere) — it only drives the existing exported handler.
+  const FIXED_NOW = 1_717_000_000_000; // ms; envelopes use ts in seconds
+
+  it('DROPS a WORK_ORDER_AVAILABLE envelope signed by a key != loadCoordinatorPubkey()', async () => {
+    const { loadCoordinatorPubkey } = await import('../coordinator-pubkey');
+    const { handleWorkOrderAvailable } = await import('../../topics/work-order-available');
+
+    // Sign with an attacker key that is NOT the coordinator's.
+    const attacker = newEd25519Key();
+    const ts = Math.floor(FIXED_NOW / 1000);
+    const msg = buildSignedEnvelope(attacker.privRaw, ts);
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAvailable({
+      pubkey: loadCoordinatorPubkey(), // verify against the REAL trust anchor
+      msg,
+      consumer,
+      warn,
+      now: () => FIXED_NOW,
+    });
+
+    expect(consumer).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('ACCEPTS a WORK_ORDER_AVAILABLE envelope signed by the matching pubkey', async () => {
+    const { handleWorkOrderAvailable } = await import('../../topics/work-order-available');
+
+    // Positive case: sign with a key and verify against ITS public key —
+    // the wiring accepts an envelope whose signature matches the supplied
+    // anchor. (The production anchor's private key is secret, so we use a
+    // generated keypair to exercise the accept path; the negative case
+    // above ties the gate to the real loadCoordinatorPubkey().)
+    const coord = newEd25519Key();
+    const ts = Math.floor(FIXED_NOW / 1000);
+    const msg = buildSignedEnvelope(coord.privRaw, ts);
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAvailable({
+      pubkey: coord.pubRaw,
+      msg,
+      consumer,
+      warn,
+      now: () => FIXED_NOW,
+    });
+
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect((consumer.mock.calls[0][0] as { id: string }).id).toBe('wo-1');
   });
 });

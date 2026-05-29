@@ -11,6 +11,7 @@ import {
   resolveSelfUpdateTimeoutMs,
   resolveSelfUpdateVerifyTimeoutMs,
 } from '../utils/self-updater';
+import { checkVersion, UpdateStatus } from '../utils/update-checker';
 import { execSync, execFileSync, spawn } from 'child_process';
 import {
   existsSync,
@@ -793,6 +794,59 @@ describe('attemptSelfUpdate', () => {
     expect(result.success).toBe(false);
     expect(result.installType).toBe(InstallType.UNKNOWN);
     expect(calls.some((c) => c.startsWith('npm install -g'))).toBe(false);
+  });
+});
+
+describe('downgrade is refused at the update-decision boundary (never forwarded to install)', () => {
+  // attemptSelfUpdate() is intentionally version-decision-blind: it is
+  // handed an ALREADY-resolved target and only validates semver +
+  // verifies the staged tree. The "is this actually newer?" decision —
+  // and therefore the downgrade refusal — lives upstream in
+  // checkVersion() (update-checker.ts), which preflightVersionCheck()
+  // feeds attemptSelfUpdate(). These tests pin that contract so a
+  // regression that started forwarding a LOWER target (a downgrade /
+  // rollback-attack) to the installer fails CI. checkVersion only ever
+  // yields UPDATE_AVAILABLE / UPDATE_REQUIRED when lt(current, X) — a
+  // strictly-lower or equal `latest` can never trigger an update.
+  const PROTOCOL = 1;
+
+  it('a LOWER published "latest" than current → UP_TO_DATE (no update forwarded)', () => {
+    const result = checkVersion(
+      '0.8.106',
+      { protocolVersion: PROTOCOL, minNodeVersion: '0.8.0' },
+      '0.8.105', // registry served an OLDER version
+    );
+    expect(result.status).toBe(UpdateStatus.UP_TO_DATE);
+  });
+
+  it('an EQUAL published "latest" → UP_TO_DATE (no self-reinstall)', () => {
+    const result = checkVersion(
+      '0.8.106',
+      { protocolVersion: PROTOCOL, minNodeVersion: '0.8.0' },
+      '0.8.106',
+    );
+    expect(result.status).toBe(UpdateStatus.UP_TO_DATE);
+  });
+
+  it('a higher published "latest" → UPDATE_AVAILABLE (the only forward path)', () => {
+    const result = checkVersion(
+      '0.8.106',
+      { protocolVersion: PROTOCOL, minNodeVersion: '0.8.0' },
+      '0.8.107',
+    );
+    expect(result.status).toBe(UpdateStatus.UPDATE_AVAILABLE);
+    // The forwarded target is the higher version, never a downgrade.
+    expect(result.latestVersion).toBe('0.8.107');
+  });
+
+  it('minNodeVersion ABOVE current forces UPDATE_REQUIRED but still targets the higher latest, not a downgrade', () => {
+    const result = checkVersion(
+      '0.8.106',
+      { protocolVersion: PROTOCOL, minNodeVersion: '0.8.200' },
+      '0.8.210',
+    );
+    expect(result.status).toBe(UpdateStatus.UPDATE_REQUIRED);
+    expect(result.latestVersion).toBe('0.8.210');
   });
 });
 

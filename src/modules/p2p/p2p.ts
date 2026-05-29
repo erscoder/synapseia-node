@@ -16,6 +16,7 @@ import { ping } from '@libp2p/ping';
 import { Injectable } from '@nestjs/common';
 import type { Identity } from '../identity/identity';
 import { sign, canonicalPayload } from '../identity/identity';
+import { WORK_ORDER_ASSIGNED_BASE } from '../../p2p/topics/shard-routing';
 
 const SYNAPSEIA_HOME = process.env.SYNAPSEIA_HOME ?? path.join(os.homedir(), '.synapseia');
 const LIBP2P_KEY_PATH = path.join(SYNAPSEIA_HOME, 'libp2p-key');
@@ -36,6 +37,17 @@ export const TOPICS = {
    *  skip GET /work-orders/available when push messages are flowing. The
    *  HTTP fetch stays as a 5-min safety-net fallback. Phase 2A. */
   WORK_ORDER_AVAILABLE: '/synapseia/work-order/1.0.0',
+  /** BASE topic for the TARGETED work-order push channel. The node never
+   *  subscribes to this bare topic — it subscribes to the shard-routed
+   *  `<base>/shard/<k>` derived by `shardTopicForPeer()` in
+   *  `src/p2p/topics/shard-routing.ts`; this entry is therefore EXCLUDED
+   *  from the eager subscription loop in `start()`.
+   *  It exists here so the canonical topic map references the value too
+   *  (audit nodeLOW-topics-split-source-of-truth). The value is sourced
+   *  from `WORK_ORDER_ASSIGNED_BASE` in shard-routing.ts — the single
+   *  source of truth, which MUST stay byte-identical to the coordinator.
+   *  Tier 3 / D-P2P Slice 2. */
+  WORK_ORDER_ASSIGNED: WORK_ORDER_ASSIGNED_BASE,
   /** Coordinator broadcasts a signed kick on every newly-INSERTed
    *  evaluation row so the addressed evaluator's node fires
    *  `kickReviewCycle` immediately. Tier 3 §3.C.1. */
@@ -145,6 +157,12 @@ export class P2PNode {
     });
 
     for (const t of Object.values(TOPICS)) {
+      // WORK_ORDER_ASSIGNED is a BASE topic — the node subscribes to its
+      // shard-routed `<base>/shard/<k>` derivation via the lazy per-handler
+      // path (onRawMessage), never to the bare base. Skip it here so the
+      // eager loop matches what is actually consumed
+      // (audit nodeLOW-topics-split-source-of-truth).
+      if (t === TOPICS.WORK_ORDER_ASSIGNED) continue;
       this.node.services.pubsub.subscribe(t);
     }
 
@@ -247,10 +265,28 @@ export class P2PNode {
    * Subscribe to raw gossipsub message bytes for a topic. Used by paths
    * that need the original wire payload (e.g. signed-envelope verifiers
    * that must reconstruct the exact bytes the publisher signed).
+   *
+   * This is the lazy per-handler subscription path (audit
+   * nodeLOW-topics-split-source-of-truth): registering a raw handler also
+   * subscribes the underlying gossipsub topic, so callers no longer depend
+   * on the topic being present in the eager `TOPICS` loop in `start()`.
+   * This is what makes the shard-routed `WORK_ORDER_ASSIGNED/shard/<k>`
+   * topic (not a member of the canonical `TOPICS` map) actually receive
+   * messages. `pubsub.subscribe` is idempotent, so topics also covered by
+   * the eager loop are unaffected.
    */
   onRawMessage(topic: string, cb: RawMsgCb): void {
     const existing = this.rawHandlers.get(topic) ?? [];
     this.rawHandlers.set(topic, [...existing, cb]);
+    // Lazily subscribe so the handler genuinely receives traffic even for
+    // topics outside the canonical TOPICS map. Guard for the not-yet-started
+    // case (and test mocks without a pubsub service).
+    try {
+      this.node?.services?.pubsub?.subscribe?.(topic);
+    } catch {
+      // ignore — a not-started node / mock without pubsub falls back to the
+      // eager subscription in start() for canonical TOPICS.
+    }
   }
 
   async publish(topic: string, data: Record<string, unknown>): Promise<void> {
@@ -268,7 +304,15 @@ export class P2PNode {
       // demote to debug, do not propagate.
       const name = (err as Error)?.name ?? '';
       const msg = (err as Error)?.message ?? String(err);
-      if (name === 'StreamStateError' || /closed|stream/i.test(msg)) {
+      // Match ONLY the precise transient mesh-churn condition. The previous
+      // broad `/closed|stream/i` test swallowed any error whose message merely
+      // mentioned "closed" or "stream" — masking genuine publish failures.
+      // Restrict to the exact gossipsub StreamStateError surface (audit
+      // nodeLOW-publish-swallow-broad-regex).
+      const isTransientStreamClosed =
+        name === 'StreamStateError' ||
+        msg === 'Cannot write to a stream that is closed';
+      if (isTransientStreamClosed) {
         logger.debug?.(`[p2p] publish to ${topic} dropped (peer stream closed): ${msg}`);
         return;
       }

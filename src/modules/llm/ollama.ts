@@ -55,7 +55,21 @@ export class OllamaHelper {
   async checkOllama(url: string = process.env.OLLAMA_URL || 'http://localhost:11434'): Promise<OllamaStatus> {
     try {
       const response = await axios.get(`${url}/api/tags`, { timeout: 5000 });
-      const models: string[] = response.data.models.map((m: any) => m.name);
+      // Defensive: a 200 from `/api/tags` is not guaranteed to carry a
+      // `models` array (proxy/version drift, captive portal, unexpected
+      // body). Assuming it does throws an opaque TypeError on `.map`.
+      // Treat a missing/non-array shape as "unavailable" with a clear error.
+      const rawModels = response.data?.models;
+      if (!Array.isArray(rawModels)) {
+        return {
+          available: false,
+          url,
+          models: [],
+          recommendedModel: 'qwen2.5:0.5b',
+          error: `Unexpected /api/tags response shape from Ollama at ${url}: expected a 'models' array`,
+        };
+      }
+      const models: string[] = rawModels.map((m: any) => m.name);
 
       // Detect hardware to recommend appropriate model (dynamic import to avoid circular deps)
       const { HardwareHelper } = await import('../hardware/hardware.js');

@@ -341,6 +341,56 @@ export class DockingError extends Error {
   }
 }
 
+/**
+ * Resource-ceiling self-defense for the coordinator-issued binding-site /
+ * Vina parameters before they are stringified into the Vina argv. There is
+ * no injection risk (argv-shaped spawn, integers only), but an out-of-range
+ * or non-finite value (e.g. exhaustiveness=1e9, NaN size) would let a single
+ * WO consume unbounded CPU/time. Assert each value is a finite number within
+ * a documented bound; reject with a DockingError ('precheck') otherwise.
+ *
+ * Bounds:
+ *   - bindingSite center x/y/z   : finite (any coordinate; box is bounded by sizes)
+ *   - bindingSite sizeX/Y/Z (Å)  : 1..100
+ *   - vinaParams.exhaustiveness  : 1..32
+ *   - vinaParams.num_modes       : 1..100
+ *   - vinaParams.energy_range    : 0 (exclusive) .. 100
+ */
+function assertVinaParamsInBounds(
+  bindingSite: DockingWorkOrderPayload['bindingSite'],
+  vinaParams: DockingWorkOrderPayload['vinaParams'],
+): void {
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const inRange = (v: unknown, lo: number, hi: number, name: string): void => {
+    if (!finite(v) || v < lo || v > hi) {
+      throw new DockingError(`Docking param '${name}' out of bounds (got ${String(v)}, expected ${lo}..${hi})`, 'precheck');
+    }
+  };
+
+  if (!bindingSite || typeof bindingSite !== 'object') {
+    throw new DockingError('Docking payload missing bindingSite', 'precheck');
+  }
+  if (!vinaParams || typeof vinaParams !== 'object') {
+    throw new DockingError('Docking payload missing vinaParams', 'precheck');
+  }
+
+  for (const axis of ['x', 'y', 'z'] as const) {
+    if (!finite(bindingSite[axis])) {
+      throw new DockingError(`Docking bindingSite.${axis} is not a finite number (got ${String(bindingSite[axis])})`, 'precheck');
+    }
+  }
+  inRange(bindingSite.sizeX, 1, 100, 'bindingSite.sizeX');
+  inRange(bindingSite.sizeY, 1, 100, 'bindingSite.sizeY');
+  inRange(bindingSite.sizeZ, 1, 100, 'bindingSite.sizeZ');
+
+  inRange(vinaParams.exhaustiveness, 1, 32, 'vinaParams.exhaustiveness');
+  inRange(vinaParams.num_modes, 1, 100, 'vinaParams.num_modes');
+  // energy_range must be > 0; allow up to 100 kcal/mol.
+  if (!finite(vinaParams.energy_range) || vinaParams.energy_range <= 0 || vinaParams.energy_range > 100) {
+    throw new DockingError(`Docking param 'vinaParams.energy_range' out of bounds (got ${String(vinaParams.energy_range)}, expected >0..100)`, 'precheck');
+  }
+}
+
 // ── Binary availability ─────────────────────────────────────────────────────
 
 export async function assertBinariesAvailable(opts?: RunDockingOptions): Promise<void> {
@@ -797,6 +847,12 @@ export async function runDocking(
 ): Promise<DockingSubmissionPayload> {
   const { workOrderId, peerId, payload } = input;
   const start = Date.now();
+
+  // Resource-ceiling self-defense: validate coordinator-issued binding-site /
+  // Vina params are finite + within documented bounds before they reach the
+  // Vina argv (no injection — integer argv — but an out-of-range value could
+  // burn unbounded CPU).
+  assertVinaParamsInBounds(payload.bindingSite, payload.vinaParams);
 
   await assertBinariesAvailable(options);
 

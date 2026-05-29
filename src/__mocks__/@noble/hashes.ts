@@ -13,12 +13,55 @@ export const sha512 = (data: Uint8Array | string): Uint8Array => {
   return new Uint8Array(createHash('sha512').update(buf).digest());
 };
 
-export const hmac = {
-  create: () => ({
-    update: (data: Uint8Array) => hmac,
-    digest: () => new Uint8Array(32),
-  }),
+// HMAC backed by Node's real crypto (HMAC-SHA256) instead of a
+// zero-filled digest. The previous mock returned new Uint8Array(32)
+// (all zeros) and IGNORED both the key and the updated data, so any test
+// that relied on @noble's hmac silently passed against a constant —
+// a vacuous-crypto landmine. We key on the bytes passed to `create`
+// (when present) and digest the accumulated updates, producing a real,
+// input-dependent 32-byte MAC.
+//
+// @noble exposes hmac BOTH as a one-shot `hmac(hashCtor, key, message)`
+// and as a streaming `hmac.create(hashCtor, key)`. Support both. The
+// concrete hash algorithm is derived from output expectations; @noble's
+// callers here use SHA-256-based HMAC.
+type NobleHmac = {
+  (hashCtor: unknown, key: Uint8Array, message: Uint8Array): Uint8Array;
+  create: (
+    hashCtor?: unknown,
+    key?: Uint8Array,
+  ) => { update: (data: Uint8Array) => unknown; digest: () => Uint8Array };
 };
+
+const hmacImpl = ((
+  _hashCtor: unknown,
+  key: Uint8Array,
+  message: Uint8Array,
+): Uint8Array => {
+  const { createHmac } = require('crypto') as typeof import('crypto');
+  return new Uint8Array(
+    createHmac('sha256', Buffer.from(key ?? new Uint8Array(0)))
+      .update(Buffer.from(message ?? new Uint8Array(0)))
+      .digest(),
+  );
+}) as NobleHmac;
+
+hmacImpl.create = (_hashCtor?: unknown, key?: Uint8Array) => {
+  const { createHmac } = require('crypto') as typeof import('crypto');
+  const h = createHmac('sha256', Buffer.from(key ?? new Uint8Array(0)));
+  const wrapper = {
+    update(data: Uint8Array) {
+      h.update(Buffer.from(data));
+      return wrapper;
+    },
+    digest(): Uint8Array {
+      return new Uint8Array(h.digest());
+    },
+  };
+  return wrapper;
+};
+
+export const hmac = hmacImpl;
 
 export const randomBytes = (bytes: number): Uint8Array => {
   const { randomBytes: rb } = require('crypto') as typeof import('crypto');
@@ -83,10 +126,30 @@ export const byteSwap32 = (arr: Uint32Array): Uint32Array => arr;
 export const swap32IfBE = (u: Uint32Array): Uint32Array => u;
 
 // Constructor wrappers + misc.
-export const wrapConstructor = (_factory: unknown) => () => ({
-  update: (_data: unknown) => ({}),
-  digest: () => new Uint8Array(32),
-});
+//
+// Backed by Node's real SHA-256 (accumulating updates) instead of a
+// zero-filled digest. The previous stub ignored every update() and
+// returned new Uint8Array(32) (all zeros), so any consumer that hashed
+// through wrapConstructor/Hash/HMAC silently produced a constant — a
+// vacuous-crypto landmine identical to the old hmac stub. These now emit
+// a real, input-dependent 32-byte digest.
+const makeShaAccumulator = () => {
+  const { createHash } = require('crypto') as typeof import('crypto');
+  const h = createHash('sha256');
+  const wrapper = {
+    update(data: unknown) {
+      if (data != null) {
+        h.update(Buffer.from(data as Uint8Array));
+      }
+      return wrapper;
+    },
+    digest(): Uint8Array {
+      return new Uint8Array(h.digest());
+    },
+  };
+  return wrapper;
+};
+export const wrapConstructor = (_factory: unknown) => () => makeShaAccumulator();
 export const wrapXOFConstructorWithOpts = wrapConstructor;
 export const nextTick = async (): Promise<void> => Promise.resolve();
 export const u64 = (n: bigint | number): Uint8Array => {
@@ -94,9 +157,19 @@ export const u64 = (n: bigint | number): Uint8Array => {
   buf.writeBigUInt64LE(BigInt(n));
   return new Uint8Array(buf);
 };
+// Real SHA-256-backed streaming hash (was a zero-digest stub — same
+// vacuous-crypto landmine as the old hmac/wrapConstructor stubs). Accumulates
+// every update() and emits a real, input-dependent 32-byte digest so a test
+// that relies on the output can no longer pass against a constant.
 export const Hash = class {
-  update(_data: unknown) { return this; }
-  digest() { return new Uint8Array(32); }
+  private readonly _h = (require('crypto') as typeof import('crypto')).createHash('sha256');
+  update(data: unknown) {
+    if (data != null) {
+      this._h.update(Buffer.from(data as Uint8Array));
+    }
+    return this;
+  }
+  digest() { return new Uint8Array(this._h.digest()); }
   destroy() {}
   _cloneInto(_to?: unknown) { return new (this.constructor as new () => unknown)(); }
 };

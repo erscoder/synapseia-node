@@ -28,6 +28,11 @@ import type { IKgShardOwnershipStore } from '../kg-shard/KgShardOwnershipStore';
 import type { IKgShardStorage, SnapshotRecord } from '../kg-shard/KgShardStorage';
 
 const VECTOR_DIM = 768;
+/** Coord publishes at most `MAX_BATCH = 50` records per envelope
+ *  (KgEmbeddingDeltaPublisher). Enforce the same ceiling node-side as
+ *  defense-in-depth: bound the blast radius of a coord bug/compromise
+ *  even though the signer is trusted (audit nodeLOW-kg-embedding-delta-unbounded). */
+const MAX_BATCH = 50;
 
 export interface KgEmbeddingDeltaRecord {
   embeddingId: string;
@@ -123,6 +128,7 @@ function isValidBody(b: unknown): b is KgEmbeddingDeltaBody {
   if (typeof body.shardId !== 'number' || !Number.isFinite(body.shardId) || body.shardId < 0) return false;
   if (typeof body.publishedAtMs !== 'number' || !Number.isFinite(body.publishedAtMs)) return false;
   if (!Array.isArray(body.records) || body.records.length === 0) return false;
+  if (body.records.length > MAX_BATCH) return false;
   for (const r of body.records) {
     if (!isValidRecord(r)) return false;
     if (r.shardId !== body.shardId) return false;

@@ -148,6 +148,10 @@ export class EncryptedKeystore {
       cipher.final(),
     ]);
     const authTag = cipher.getAuthTag();
+    // Best-effort zeroization (audit L1160): the derived KDF key is no longer
+    // needed once the cipher has produced ciphertext + tag. JS zeroization is
+    // best-effort only (see decrypt()).
+    key.fill(0);
 
     const file: KeystoreFile = {
       version: 1,
@@ -238,8 +242,15 @@ export class EncryptedKeystore {
     const decipher = createDecipheriv('aes-256-gcm', key, nonce);
     decipher.setAuthTag(authTag);
 
+    // Best-effort zeroization (audit L1160): the derived KDF key and the
+    // intermediate plaintext Buffer hold secret material; overwrite them with
+    // .fill(0) before returning so they do not linger in the heap longer than
+    // necessary. NOTE: JS zeroization is best-effort only — the GC may have
+    // already copied these bytes and `secretKey` strings elsewhere are immutable
+    // and unreachable; this narrows, not closes, the in-memory exposure window.
+    let plaintext: Buffer | undefined;
     try {
-      const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       // Sanity: defend against degenerate-length payloads.
       if (plaintext.length === 0) {
         throw new EncryptedKeystoreError(
@@ -250,6 +261,7 @@ export class EncryptedKeystore {
       // Constant-time touch on the derived key length to discourage compiler
       // dead-code elimination; not security-critical but cheap.
       timingSafeEqual(key, key);
+      // Copy into the returned Uint8Array, then wipe the source plaintext below.
       return new Uint8Array(plaintext);
     } catch (err) {
       if (err instanceof EncryptedKeystoreError) throw err;
@@ -257,6 +269,9 @@ export class EncryptedKeystore {
         'Invalid passphrase or corrupted keystore (authentication failed)',
         'INVALID_PASSPHRASE',
       );
+    } finally {
+      key.fill(0);
+      if (plaintext) plaintext.fill(0);
     }
   }
 }
