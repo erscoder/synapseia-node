@@ -163,6 +163,97 @@ export function assertSafeForPrompt(value: unknown, fieldName: string): void {
 }
 
 /**
+ * Maximum length for a multi-line fenced context block. Larger than a single
+ * field because corpus/KG context legitimately concatenates several discovery
+ * summaries; still capped so a hostile peer cannot blow the prompt budget.
+ */
+export const MAX_PROMPT_CONTEXT_LEN = 16384;
+
+/**
+ * Fence tags used to wrap untrusted peer/coordinator-fetched context as DATA.
+ * The SYSTEM prompt must instruct the model to treat everything between the
+ * open and close tag as inert data, never as instructions. The closing tags
+ * are stripped/escaped out of the data by {@link sanitizeContextForPrompt} so
+ * the untrusted content cannot forge an early fence close and break out.
+ */
+export const REFERENCE_CONTEXT_FENCE_OPEN = '<reference_context>';
+export const REFERENCE_CONTEXT_FENCE_CLOSE = '</reference_context>';
+export const KG_CONTEXT_FENCE_OPEN = '<kg_context>';
+export const KG_CONTEXT_FENCE_CLOSE = '</kg_context>';
+
+/**
+ * Any fence-close-looking sequence a hostile block might inject to escape its
+ * own data fence. Matched case-insensitively with optional inner whitespace so
+ * `</ Reference_Context >` is neutralized too. Intentionally broad: it also
+ * catches the OPEN tags so an attacker cannot inject a nested/forged opener
+ * to confuse a naive reader.
+ */
+const FENCE_FORGERY_RE =
+  /<\s*\/?\s*(?:reference_context|kg_context)\s*>/gi;
+
+/**
+ * Sanitize a MULTI-LINE untrusted context block (peer/coordinator-fetched
+ * corpus or knowledge-graph text) for safe interpolation INSIDE an explicit
+ * data fence.
+ *
+ * Differs from {@link sanitizeForPrompt} (which is for single trusted-shape
+ * fields) in two ways dictated by the threat model for fenced corpus blocks:
+ *
+ *   1. JAILBREAK → NEUTRALIZE in place (does NOT throw). The block is other
+ *      nodes' discovery summaries/titles/content; throwing would discard the
+ *      entire legitimate research context on one poisoned entry (DoS the
+ *      pipeline) AND the data is already confined to a DATA fence the system
+ *      prompt tells the model to ignore as instructions. So instead of
+ *      failing closed we defang each marker by inserting a zero-width-free
+ *      separator (`[redacted-directive]`) so the live instruction text no
+ *      longer reads as a command, while the surrounding factual content
+ *      survives. This is intentionally different from the single-field path,
+ *      which hard-rejects because a poisoned title means the whole item is
+ *      hostile.
+ *   2. FENCE FORGERY → STRIP. Any occurrence of the open/close fence tags is
+ *      removed so the untrusted content cannot forge an early
+ *      `</reference_context>` and smuggle the rest of its payload out of the
+ *      data region as live instructions.
+ *
+ * Control chars are stripped and length is truncated to
+ * {@link MAX_PROMPT_CONTEXT_LEN}, reusing the same primitives as
+ * {@link sanitizeForPrompt}. Order matters: strip control chars → strip fence
+ * forgeries → neutralize jailbreak markers (on the full text, before truncation
+ * so a marker beyond the budget is still defanged) → truncate.
+ *
+ * @returns the sanitized block (NEVER throws on string input; only non-string
+ *          input throws `not_string`).
+ */
+export function sanitizeContextForPrompt(
+  value: unknown,
+  fieldName: string,
+): string {
+  if (typeof value !== 'string') {
+    throw new PromptSafetyError(fieldName, 'not_string');
+  }
+  // 1. Strip control chars (terminal/log hijack; also stops a marker hiding
+  //    behind a control byte from surviving the jailbreak scan below).
+  let out = value.replace(new RegExp(CONTROL_CHAR_RE.source, 'g'), '');
+  // 2. Strip any forged fence tags BEFORE neutralizing markers so the data can
+  //    never break out of the DATA fence the caller wraps it in.
+  out = out.replace(FENCE_FORGERY_RE, '[fence-stripped]');
+  // 3. Neutralize jailbreak markers in place (defang, do NOT throw). Scan the
+  //    full control-stripped text BEFORE truncation so a marker beyond the
+  //    budget is still defanged (no truncate-through bypass).
+  for (const re of JAILBREAK_PATTERNS) {
+    out = out.replace(
+      new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
+      '[redacted-directive]',
+    );
+  }
+  // 4. Truncate the now-neutralized text to the context budget.
+  if (out.length > MAX_PROMPT_CONTEXT_LEN) {
+    out = out.slice(0, MAX_PROMPT_CONTEXT_LEN);
+  }
+  return out;
+}
+
+/**
  * Convenience wrapper: validate without throwing. Returns the
  * PromptSafetyError on violation, or null on clean input. Useful when the
  * caller has multiple fields and wants to log ALL violations before
