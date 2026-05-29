@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] fix(self-update): verify npm provenance + artifact integrity, pin registry (3feb3c16)
+
+The unattended fleet self-updater (~every 30 min) only checked package name/version/file-presence before atomically swapping the staged tree over the live install — a compromised/hijacked published package or rogue registry was a fleet-wide RCE primitive. Adds two fail-closed gates BEFORE the swap, both over the pinned registry: (1) `npm audit signatures` verifies the registry signature + sigstore provenance of the published version (publish-npm.yml publishes with `--provenance` via OIDC); (2) cross-checks the staged resolved sha512 integrity (hash of the tarball bytes npm received) against `npm view dist.integrity`, catching MITM/transport swap + metadata divergence.
+
+Pins `--registry=https://registry.npmjs.org` on install + both verify commands and neutralizes `NPM_CONFIG_REGISTRY` / scoped / proxy / `.npmrc` redirects via `npmRegistryPinnedEnv`. Dedicated 60s verify timeout (`SYN_SELFUPDATE_VERIFY_TIMEOUT_MS`), raw output logged on reject. Every failure (signature mismatch, integrity divergence, unreachable, missing provenance, npm too old, parse, timeout) → success:false, no swap, live install untouched, staging purged. Out of scope (documented): post-extract staging-tree tampering by an already-privileged local attacker. Folds in the env-influenceable-registry MEDIUM. Found by the 2026-05-29 audit (HIGH, node-supply-chain).
+
 ## [2026-05-29] fix(agent): sanitize and fence untrusted corpus context in researcher prompts (6ba3d1a5)
 
 Peer-authored knowledge-graph / reference-corpus context (other nodes' discovery titles + content, via the coordinator `/corpus/context`) was interpolated RAW into researcher prompts while only title/abstract went through `sanitizeForPrompt` — an indirect prompt-injection vector across the network. Adds `sanitizeContextForPrompt` (neutralizes directive/jailbreak patterns in place rather than throwing, strips forged fence tags, length-caps) and wraps `kgContext`/`referenceContext` in `<kg_context>`/`<reference_context>` fences with a SYSTEM instruction that fenced content is UNTRUSTED DATA, never instructions.
