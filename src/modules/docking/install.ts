@@ -97,17 +97,17 @@ const VINA_SHA256: Readonly<Record<string, string>> = {
   // AutoDock-Vina v1.2.5 macOS release assets.
   // ccsb-scripps/AutoDock-Vina releases/download/v1.2.5/vina_1.2.5_mac_<arch>
   //
-  // ⚠️ PLACEHOLDER digests — these MUST be replaced with the real upstream
-  // SHA-256 sums before this code can install Vina on macOS. They are
-  // intentionally left as obviously-fake all-zero strings so a forgotten
-  // backfill fails closed (digest mismatch → no execution) rather than
-  // silently trusting a wrong value. Backfill procedure: download each
-  // asset over https from the official release page, run
-  // `shasum -a 256 vina_1.2.5_mac_aarch64` / `..._mac_x86_64`, paste below.
+  // Real SHA-256 sums, backfilled 2026-05-29. AutoDock-Vina does NOT publish
+  // a checksums file, so these are computed directly from the official GitHub
+  // release binaries: `curl -fsSL <release-url> -o vina && shasum -a 256 vina`.
+  // (aarch64 = 1171224 bytes, x86_64 = 1297344 bytes.) This is the integrity
+  // gate for a fresh macOS install: a download whose digest does not match
+  // fails closed (no chmod, no execution). To re-verify or bump the version,
+  // re-download each asset over https and recompute the sum.
   vina_1_2_5_mac_aarch64:
-    '0000000000000000000000000000000000000000000000000000000000000000',
+    '4999b3133f162b66d8b21bafdb54aa53c507ed6347489844e6778dac7871ff5f',
   vina_1_2_5_mac_x86_64:
-    '0000000000000000000000000000000000000000000000000000000000000000',
+    'de9402701fba0f69bce53aec94254a08a7044c7d1d459958896022a7f98b073d',
 };
 
 /**
