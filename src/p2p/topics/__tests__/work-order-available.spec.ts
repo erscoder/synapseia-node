@@ -21,8 +21,31 @@ function makeKeyPair(): KeyPair {
   return { rawPubKey, privateKey };
 }
 
+/**
+ * A fully-specified `wo` payload carrying every field execution requires
+ * (`id`, `title`, `status`, `rewardAmount`, `requiredCapabilities`,
+ * `creatorAddress`). Tests override individual fields to exercise the
+ * post-verify validation; `undefined` overrides delete the key.
+ */
+function completeWo(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    id: 'wo-1',
+    title: 'WO 1',
+    status: 'AVAILABLE',
+    rewardAmount: '1000',
+    requiredCapabilities: ['inference'],
+    creatorAddress: 'creator-addr',
+    type: 'CPU_INFERENCE',
+  };
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === undefined) delete base[k];
+    else base[k] = v;
+  }
+  return base;
+}
+
 function buildEnvelope(opts: {
-  wo: { id: string; missionId?: string; payload?: unknown };
+  wo: Record<string, unknown>;
   ts: number;
   privateKey: KeyPair['privateKey'];
 }): Uint8Array {
@@ -46,9 +69,9 @@ describe('handleWorkOrderAvailable', () => {
     resetStats();
   });
 
-  it('passes verified WOs to the consumer', async () => {
+  it('passes verified, fully-specified WOs to the consumer', async () => {
     const { handleWorkOrderAvailable } = await import('../work-order-available');
-    const wo = { id: 'wo-1', missionId: 'mission-A', payload: { kind: 'inference' } };
+    const wo = completeWo({ missionId: 'mission-A', payload: { kind: 'inference' } });
     const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
 
     const consumer = jest.fn();
@@ -179,5 +202,82 @@ describe('handleWorkOrderAvailable', () => {
 
     expect(consumer).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/missing wo\.id/));
+  });
+
+  // ── Post-verify payload validation (MEDIUM robustness fix) ──────────────
+  // A signature-verified envelope can still carry a `wo` that is missing or
+  // malformed in the fields execution consumes (rewardAmount,
+  // requiredCapabilities, type, status). Such a WO must be DROPPED+warned,
+  // never queued half-specified.
+
+  it.each([
+    ['rewardAmount', { rewardAmount: undefined }, /rewardAmount/],
+    ['requiredCapabilities (missing)', { requiredCapabilities: undefined }, /requiredCapabilities/],
+    ['requiredCapabilities (non-array)', { requiredCapabilities: 'inference' }, /requiredCapabilities/],
+    ['requiredCapabilities (non-string element)', { requiredCapabilities: [42] }, /requiredCapabilities/],
+    ['status', { status: undefined }, /status/],
+    ['title', { title: undefined }, /title/],
+    ['creatorAddress', { creatorAddress: undefined }, /creatorAddress/],
+    ['type (non-string)', { type: 123 }, /type/],
+  ])(
+    'drops a signed WO missing/malformed %s (not queued)',
+    async (_label, override, pattern) => {
+      const { handleWorkOrderAvailable } = await import('../work-order-available');
+      const wo = completeWo(override as Record<string, unknown>);
+      const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
+
+      const consumer = jest.fn();
+      const warn = jest.fn();
+      await handleWorkOrderAvailable({
+        pubkey: kp.rawPubKey,
+        msg,
+        consumer,
+        warn,
+        now: () => now * 1000,
+      });
+
+      expect(consumer).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/dropping work order/));
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(pattern as RegExp));
+    },
+  );
+
+  it('accepts a signed WO with all required execution fields present', async () => {
+    const { handleWorkOrderAvailable } = await import('../work-order-available');
+    const wo = completeWo({ id: 'wo-complete' });
+    const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAvailable({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect(consumer).toHaveBeenCalledWith(expect.objectContaining({ id: 'wo-complete' }));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('omitting optional type is still accepted', async () => {
+    const { handleWorkOrderAvailable } = await import('../work-order-available');
+    const wo = completeWo({ type: undefined });
+    const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAvailable({
+      pubkey: kp.rawPubKey,
+      msg,
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
   });
 });

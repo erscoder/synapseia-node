@@ -35,6 +35,24 @@ function buildEnvelope(wo: { id: string; [k: string]: unknown }, ts: number, pk:
   );
 }
 
+/**
+ * Fully-specified `wo` carrying every field execution requires. The
+ * post-verify validation in `handleWorkOrderAvailable` now DROPS a
+ * signed-but-half-specified WO, so the happy-path wiring test must use a
+ * complete payload.
+ */
+function completeWo(overrides: Record<string, unknown> = {}): { id: string; [k: string]: unknown } {
+  return {
+    id: 'wo-good',
+    title: 'WO good',
+    status: 'AVAILABLE',
+    rewardAmount: '1000',
+    requiredCapabilities: ['inference'],
+    creatorAddress: 'creator-addr',
+    ...overrides,
+  };
+}
+
 /** Minimal stand-in for `P2PNode` capturing the raw-bytes handler. */
 class FakeP2PNode {
   private rawCb: ((data: Uint8Array) => void | Promise<void>) | null = null;
@@ -88,7 +106,7 @@ describe('node-runtime wiring — signed WORK_ORDER_AVAILABLE', () => {
     wireVerifiedHandler({ pubkey: trusted.rawPubKey, p2p, consumer });
 
     const ts = Math.floor(Date.now() / 1000);
-    const wo = { id: 'wo-good', missionId: 'm-1' };
+    const wo = completeWo({ missionId: 'm-1' });
     const real = buildEnvelope(wo, ts, trusted.privateKey);
     await p2p.deliver(real);
 

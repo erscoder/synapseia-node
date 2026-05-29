@@ -467,6 +467,16 @@ function isWoPollDisabledFlag(rawValue: string | undefined): boolean {
  * Keep this aligned with `WorkOrderResponseDto` (coord-side
  * `packages/coordinator/src/application/work-orders/work-order.utils.ts ::
  * toResponseDto`) whenever either side ships new fields.
+ *
+ * Invariant: any `p` reaching this function via the gossipsub push path
+ * has already passed `validateWorkOrderPayload` in
+ * `handleWorkOrderAvailable` (p2p/topics/work-order-available.ts), so the
+ * required execution fields (`title`, `status`, `rewardAmount`,
+ * `requiredCapabilities`, `creatorAddress`, and `type` when present) are
+ * guaranteed present + well-typed here. We still defensively coerce
+ * `createdAt`/`status`/`metadata` below for shape differences, but we do
+ * NOT re-validate presence — the intake handler owns that drop-on-missing
+ * contract.
  */
 function pushedToWorkOrder(p: PushedWorkOrder): WorkOrder {
   // Reviewer M1 (Slice 0.5) — guard against NaN from malformed ISO. Coord
