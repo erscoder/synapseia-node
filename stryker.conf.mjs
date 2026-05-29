@@ -31,6 +31,15 @@ const config = {
         '<rootDir>/src/modules/inference/__tests__/inference-server.spec.ts',
         '<rootDir>/src/modules/model/__tests__/active-model-subscriber.spec.ts',
         '<rootDir>/src/modules/llm/__tests__/llm-provider.spec.ts',
+        // Signature-verification / reward-sensitive surface. Each spec below
+        // uses REAL crypto (native `crypto.sign`/`verify`, `bs58.decode`,
+        // SHA-256 Merkle) — no @noble/@libp2p mocks on the mutated path — so
+        // mutants in the corresponding source are actually killed.
+        '<rootDir>/src/modules/a2a/__tests__/auth.spec.ts',
+        '<rootDir>/src/p2p/topics/__tests__/work-order-available.spec.ts',
+        '<rootDir>/src/p2p/protocols/__tests__/coordinator-pubkey.spec.ts',
+        '<rootDir>/src/modules/crypto/__tests__/merkle-tree.spec.ts',
+        '<rootDir>/src/modules/agent/__tests__/commit-reveal-v2.spec.ts',
       ],
     },
   },
@@ -40,6 +49,21 @@ const config = {
     'src/modules/inference/inference-server.ts',
     'src/modules/model/active-model-subscriber.ts',
     'src/modules/llm/llm-provider.ts',
+    // Signature-verification / reward-sensitive files. Each is exercised by a
+    // real-crypto spec listed in jest.config.testMatch above:
+    //  - verify-ed25519.ts        → work-order-available.spec / node-auth.spec
+    //                               / auth.spec (all sign+verify with native crypto)
+    //  - work-order-available.ts  → work-order-available.spec (real Ed25519)
+    //  - a2a-auth.service.ts      → auth.spec (real Ed25519 keypairs + signing)
+    //  - coordinator-pubkey.ts    → coordinator-pubkey.spec (real bs58 golden vectors)
+    //  - merkle-tree.ts           → merkle-tree.spec (real SHA-256 known vectors)
+    //  - commit-reveal-v2.ts      → commit-reveal-v2.spec (real SHA-256 commit/reveal)
+    'src/p2p/protocols/verify-ed25519.ts',
+    'src/p2p/topics/work-order-available.ts',
+    'src/modules/a2a/auth/a2a-auth.service.ts',
+    'src/p2p/protocols/coordinator-pubkey.ts',
+    'src/modules/crypto/merkle-tree.ts',
+    'src/modules/agent/commit-reveal-v2.ts',
   ],
   reporters: ['clear-text', 'html', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
