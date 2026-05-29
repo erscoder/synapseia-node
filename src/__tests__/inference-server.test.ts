@@ -342,7 +342,11 @@ describe('inference-server', () => {
       expect(body.options.num_predict).toBe(200);
     });
 
-    it('should handle JSON parse errors', async () => {
+    it('should reject malformed JSON with 400 before forwarding to Ollama', async () => {
+      // Hardened parse path: a malformed JSON body maps to HTTP 400
+      // "Invalid JSON body" (invalid_request_error) BEFORE the training mutex
+      // is touched or the request is forwarded to Ollama. (An over-cap body
+      // maps to 413 — see the dedicated case below.)
       const { handleChatCompletions } = await import('../modules/inference/inference-server.js');
 
       const mockReq: Partial<http.IncomingMessage> = {
@@ -357,9 +361,13 @@ describe('inference-server', () => {
 
       await handleChatCompletions(mockReq as http.IncomingMessage, mockRes as http.ServerResponse, 'peer123');
 
-      expect(writeHeadSpy).toHaveBeenCalledWith(500, { 'Content-Type': 'application/json' });
+      expect(writeHeadSpy).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
       const response = JSON.parse(endSpy.mock.calls[0][0] as string);
-      expect(response.error.type).toBe('server_error');
+      expect(response.error.type).toBe('invalid_request_error');
+      expect(response.error.message).toBe('Invalid JSON body');
+
+      // The malformed body must never be forwarded to Ollama.
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should handle stream option', async () => {

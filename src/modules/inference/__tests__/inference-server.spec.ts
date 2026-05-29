@@ -20,6 +20,8 @@ import {
   handleState,
   handleHealth,
   startInferenceServer,
+  MAX_INFERENCE_BODY_BYTES,
+  PAYLOAD_TOO_LARGE,
   type ChatCompletionRequest,
   type OllamaChatResponse,
   type InferenceServerConfig,
@@ -38,6 +40,14 @@ class FakeReq extends EventEmitter {
   feed(body: string): void {
     setImmediate(() => {
       this.emit('data', Buffer.from(body));
+      this.emit('end');
+    });
+  }
+  // Emit several raw byte chunks then `end`, so size-cap accounting (which
+  // sums chunk.length) is exercised across multiple 'data' events.
+  feedChunks(chunks: Buffer[]): void {
+    setImmediate(() => {
+      for (const c of chunks) this.emit('data', c);
       this.emit('end');
     });
   }
@@ -122,6 +132,50 @@ describe('parseBody', () => {
     const p = parseBody(req as any);
     req.error(new Error('pipe broke'));
     await expect(p).rejects.toThrow(/pipe broke/);
+  });
+
+  // Memory-exhaustion DoS guard. An unbounded body must be rejected BEFORE
+  // JSON.parse runs (the parse would otherwise materialize the whole oversized
+  // string in RAM). We rely on raw-byte accounting across multiple chunks.
+  describe('body size cap', () => {
+    it('accepts a body exactly at the cap', async () => {
+      // Build a valid JSON string whose UTF-8 length is exactly the cap.
+      const filler = 'a'.repeat(MAX_INFERENCE_BODY_BYTES - '{"x":""}'.length);
+      const payload = `{"x":"${filler}"}`;
+      expect(Buffer.byteLength(payload)).toBe(MAX_INFERENCE_BODY_BYTES);
+      const req = new FakeReq();
+      const p = parseBody(req as any);
+      req.feed(payload);
+      await expect(p).resolves.toEqual({ x: filler });
+    });
+
+    it('rejects with PAYLOAD_TOO_LARGE one byte over the cap, before JSON.parse', async () => {
+      // Spy on JSON.parse to prove the parse never runs on the oversized body.
+      const parseSpy = jest.spyOn(JSON, 'parse');
+      const req = new FakeReq();
+      const p = parseBody(req as any);
+      // One byte over the cap, split across two chunks to exercise summation.
+      const half = Math.floor(MAX_INFERENCE_BODY_BYTES / 2);
+      req.feedChunks([
+        Buffer.alloc(half, 0x61),
+        Buffer.alloc(MAX_INFERENCE_BODY_BYTES - half + 1, 0x61),
+      ]);
+      await expect(p).rejects.toThrow(PAYLOAD_TOO_LARGE);
+      expect(parseSpy).not.toHaveBeenCalled();
+      parseSpy.mockRestore();
+    });
+
+    it('keeps draining the socket after the cap is crossed (later chunks ignored)', async () => {
+      const req = new FakeReq();
+      const p = parseBody(req as any);
+      // First chunk already over cap; a trailing chunk arrives but must be
+      // harmlessly discarded (no buffering, no throw on the extra data).
+      req.feedChunks([
+        Buffer.alloc(MAX_INFERENCE_BODY_BYTES + 1, 0x61),
+        Buffer.alloc(1024, 0x62),
+      ]);
+      await expect(p).rejects.toThrow(PAYLOAD_TOO_LARGE);
+    });
   });
 });
 
@@ -249,6 +303,29 @@ describe('handleChatCompletions', () => {
     req.feed(JSON.stringify({ model: 'm', messages: 'not-an-array' }));
     await p;
     expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 413 for an oversized body, before forwarding to Ollama', async () => {
+    const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+    const res = new FakeRes();
+    const p = handleChatCompletions(req as any, res as any, 'peer');
+    req.feedChunks([Buffer.alloc(MAX_INFERENCE_BODY_BYTES + 1, 0x61)]);
+    await p;
+    expect(res.statusCode).toBe(413);
+    expect(parseJson(res.body).error.message).toBe('Request body too large');
+    // The DoS guard must short-circuit BEFORE any Ollama forward.
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 (not 500) on malformed JSON body', async () => {
+    const req = new FakeReq({ method: 'POST', url: '/v1/chat/completions' });
+    const res = new FakeRes();
+    const p = handleChatCompletions(req as any, res as any, 'peer');
+    req.feed('not-json');
+    await p;
+    expect(res.statusCode).toBe(400);
+    expect(parseJson(res.body).error.type).toBe('invalid_request_error');
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('returns 200 + OpenAI-shaped response on happy path', async () => {

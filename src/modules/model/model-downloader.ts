@@ -81,6 +81,27 @@ function isValidSha256Hex(hex: string): boolean {
   return /^[0-9a-f]{64}$/.test(hex);
 }
 
+/**
+ * F-node-DoS — adapter download hardening.
+ *
+ * `downloadAdapter` fetches an arbitrary URL supplied by the coordinator. Two
+ * unbounded resources made it a DoS / OOM vector:
+ *   1. No fetch timeout — a slow-loris server (or a TCP black hole) could hang
+ *      the download indefinitely, pinning the trainer.
+ *   2. The whole response was buffered (`response.arrayBuffer()`) before any
+ *      size check, so a hostile / mis-sized URL could OOM the node. A lying or
+ *      absent Content-Length defeated any header-only guard.
+ *
+ * Defense: a connect/read timeout via `AbortSignal.timeout`, a Content-Length
+ * pre-check against a hard cap, and a streamed read with a running byte counter
+ * that aborts the moment cumulative bytes exceed the cap — so a missing/lying
+ * Content-Length cannot OOM the process. A LoRA adapter is a few hundred MB at
+ * most; 2 GiB is a defensible ceiling that bounds the worst case without
+ * rejecting legitimate large adapters.
+ */
+const ADAPTER_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 min connect+read budget
+const MAX_ADAPTER_BYTES = 2 * 1024 * 1024 * 1024; // 2 GiB hard cap
+
 @Injectable()
 export class ModelDownloaderHelper {
   getModelCacheDir(homeDir?: string): string {
@@ -229,8 +250,12 @@ export class ModelDownloaderHelper {
     logger.log(`[ModelDownloader] Downloading adapter from ${url}...`);
 
     let response: Response;
-    try { response = await fetch(url); }
-    catch (err) {
+    try {
+      // Bounded connect+read budget — a black-holed or slow-loris server can no
+      // longer pin the trainer indefinitely (the signal aborts the fetch and,
+      // below, the streamed read).
+      response = await fetch(url, { signal: AbortSignal.timeout(ADAPTER_DOWNLOAD_TIMEOUT_MS) });
+    } catch (err) {
       throw new AdapterIntegrityError(
         `Network error downloading adapter from "${url}": ${(err as Error).message}`,
         'download-failed',
@@ -244,7 +269,22 @@ export class ModelDownloaderHelper {
       );
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
+    // Header-only pre-check: reject early if the server advertises a body
+    // larger than the cap (cheap, avoids streaming a single byte). A missing or
+    // lying Content-Length is NOT trusted — the streamed counter below is the
+    // authoritative guard.
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_ADAPTER_BYTES) {
+      throw new AdapterIntegrityError(
+        `Adapter from "${url}" too large: Content-Length ${contentLength} exceeds cap ${MAX_ADAPTER_BYTES}`,
+        'download-failed',
+      );
+    }
+
+    // Stream the body with a running byte counter so an absent/lying
+    // Content-Length cannot OOM the node — we abort the moment cumulative bytes
+    // pass the cap, before buffering the over-limit data.
+    const buffer = await this.readBodyWithCap(response, url, MAX_ADAPTER_BYTES);
     const actualHex = createHash('sha256').update(buffer).digest('hex');
 
     if (actualHex !== expectedHex) {
@@ -265,6 +305,71 @@ export class ModelDownloaderHelper {
     logger.log(
       `[ModelDownloader] Adapter downloaded + verified at ${weightsPath} (${buffer.byteLength} bytes, sha256=${actualHex})`,
     );
+  }
+
+  /**
+   * Read a fetch Response body into a Buffer, aborting once cumulative bytes
+   * exceed `maxBytes`. Streams chunk-by-chunk so a lying/absent Content-Length
+   * cannot force the whole oversized body into memory before the size check —
+   * the read is torn down (`reader.cancel()`) the instant the cap is crossed.
+   *
+   * Falls back to a single `arrayBuffer()` read only when the body is not a
+   * readable stream (still re-checks the cap after the fact). On every error
+   * (including the timeout AbortError surfacing mid-stream) it throws an
+   * `AdapterIntegrityError` so the caller's fail-closed contract holds.
+   */
+  private async readBodyWithCap(response: Response, url: string, maxBytes: number): Promise<Buffer> {
+    const body = response.body;
+    if (!body || typeof body.getReader !== 'function') {
+      // No stream available — read whole body, then re-check the cap.
+      let arr: ArrayBuffer;
+      try {
+        arr = await response.arrayBuffer();
+      } catch (err) {
+        throw new AdapterIntegrityError(
+          `Network error reading adapter body from "${url}": ${(err as Error).message}`,
+          'download-failed',
+        );
+      }
+      if (arr.byteLength > maxBytes) {
+        throw new AdapterIntegrityError(
+          `Adapter from "${url}" too large: body ${arr.byteLength} bytes exceeds cap ${maxBytes}`,
+          'download-failed',
+        );
+      }
+      return Buffer.from(arr);
+    }
+
+    const reader = body.getReader();
+    const chunks: Buffer[] = [];
+    let received = 0;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        received += value.byteLength;
+        if (received > maxBytes) {
+          // Past the cap — tear down the stream and reject before buffering the
+          // over-limit data. cancel() releases the underlying socket.
+          await reader.cancel();
+          throw new AdapterIntegrityError(
+            `Adapter from "${url}" too large: streamed ${received} bytes exceeds cap ${maxBytes}`,
+            'download-failed',
+          );
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } catch (err) {
+      if (err instanceof AdapterIntegrityError) throw err;
+      // Includes the timeout AbortError if the signal fires mid-stream.
+      throw new AdapterIntegrityError(
+        `Network error streaming adapter body from "${url}": ${(err as Error).message}`,
+        'download-failed',
+      );
+    }
+    return Buffer.concat(chunks);
   }
 }
 

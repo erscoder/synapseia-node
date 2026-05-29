@@ -87,18 +87,56 @@ export interface OllamaChatResponse {
 let serverStartTime: number;
 
 /**
- * Parse JSON body from incoming request
+ * Hard cap on the POST body we buffer BEFORE JSON parsing. An unauthenticated
+ * caller must not be able to exhaust node memory by streaming an unbounded
+ * body — `parseBody` reads the whole request into RAM before `JSON.parse`, so
+ * without a ceiling a single request can OOM the process (memory-exhaustion
+ * DoS). 1 MiB is generous for a chat-completions payload (model + a handful of
+ * messages) and for the tiny `/inference/quote` body, while bounding the worst
+ * case. Mirrors the A2A server's 256 KiB cap pattern (raw-byte accounting,
+ * drain-and-discard so the 413 can still be written cleanly).
+ */
+export const MAX_INFERENCE_BODY_BYTES = 1024 * 1024; // 1 MiB
+
+/** Sentinel thrown by `parseBody` when the body exceeds the cap. */
+export const PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE';
+
+/**
+ * Parse JSON body from incoming request, enforcing a hard size cap.
  * Exported for testing
+ *
+ * Tracks RAW bytes (chunk.length, not string length) so multi-byte UTF-8
+ * cannot smuggle past the ceiling. Once over the cap we stop buffering and
+ * drain the socket, then reject with the PAYLOAD_TOO_LARGE sentinel BEFORE
+ * any `JSON.parse` runs — the parse never sees an oversized string.
  */
 // Standalone handlers exported for backward compatibility
 export function parseBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk.toString();
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    let tooLarge = false;
+    req.on('data', (chunk: Buffer) => {
+      if (tooLarge) return; // already over cap — drain & discard
+      bytes += chunk.length;
+      if (bytes > MAX_INFERENCE_BODY_BYTES) {
+        // Over the cap. Drop the buffered chunks and keep draining the
+        // socket so the response (413) can still be written cleanly —
+        // destroying the socket here would surface ECONNRESET to the
+        // client before it reads our status.
+        tooLarge = true;
+        chunks.length = 0;
+      } else {
+        chunks.push(chunk);
+      }
     });
     req.on('end', () => {
+      if (tooLarge) {
+        reject(new Error(PAYLOAD_TOO_LARGE));
+        return;
+      }
       try {
+        const body = Buffer.concat(chunks).toString('utf-8');
         resolve(body ? JSON.parse(body) : {});
       } catch (e) {
         reject(e);
@@ -227,9 +265,33 @@ export async function handleChatCompletions(
   coordinatorUrl?: string,
   signingIdentity?: InferenceSigningIdentity,
 ): Promise<void> {
+  let body: ChatCompletionRequest;
   try {
-    const body = await parseBody(req) as ChatCompletionRequest;
+    body = await parseBody(req) as ChatCompletionRequest;
+  } catch (error: any) {
+    // Oversized body (memory-exhaustion DoS guard) → 413, BEFORE we touch the
+    // TRAINING mutex or forward to Ollama. Any other parse error → 400.
+    if (error?.message === PAYLOAD_TOO_LARGE) {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: {
+          message: 'Request body too large',
+          type: 'invalid_request_error',
+        },
+      }));
+      return;
+    }
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: {
+        message: 'Invalid JSON body',
+        type: 'invalid_request_error',
+      },
+    }));
+    return;
+  }
 
+  try {
     if (!body.model || !body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
