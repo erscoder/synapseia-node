@@ -11,6 +11,11 @@
 import { generateKeyPairSync, sign } from 'crypto';
 
 import { resetStats } from '../../protocols/coord-sig-stats';
+import { ReplayGuard } from '../replay-guard';
+import {
+  DOMAIN_EVAL_ASSIGNMENTS,
+  DOMAIN_WO_ASSIGNED,
+} from '../verify-coordinator-envelope';
 
 interface KeyPair {
   rawPubKey: Uint8Array;
@@ -28,9 +33,17 @@ function buildEnvelope(opts: {
   payload: { targetPeerId: string; wo: { id: string; [k: string]: unknown }; seq?: number };
   ts: number;
   privateKey: KeyPair['privateKey'];
+  /** Override the domain tag the signature is minted under (cross-type test). */
+  domain?: string;
 }): Uint8Array {
+  // Signed bytes are the domain-tagged { domain, body, ts } wrapper (body =
+  // the payload); the wire envelope keeps the { payload, ts, sig } shape.
   const signedBytes = Buffer.from(
-    JSON.stringify({ payload: opts.payload, ts: opts.ts }),
+    JSON.stringify({
+      domain: opts.domain ?? DOMAIN_WO_ASSIGNED,
+      body: opts.payload,
+      ts: opts.ts,
+    }),
     'utf8',
   );
   const sig = sign(null, signedBytes, opts.privateKey);
@@ -211,5 +224,64 @@ describe('handleWorkOrderAssigned', () => {
 
     expect(consumer).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/missing wo\.id/));
+  });
+
+  // ── Cross-type signature replay (the core vuln this closes) ──────────────
+  it('REJECTS a signature minted under the EVALUATION_ASSIGNMENTS domain', async () => {
+    const { handleWorkOrderAssigned } = await import('../work-order-assigned');
+    // Sign with the REAL coordinator key but under the EVAL domain. The wire
+    // envelope is a perfectly-shaped WORK_ORDER_ASSIGNED envelope; only the
+    // domain the sig was minted under differs → the assigned handler must
+    // reconstruct under DOMAIN_WO_ASSIGNED and fail verification.
+    const msg = buildEnvelope({
+      payload: { targetPeerId: 'peer-MINE', wo: SAMPLE_WO, seq: 1 },
+      ts: now,
+      privateKey: kp.privateKey,
+      domain: DOMAIN_EVAL_ASSIGNMENTS,
+    });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    await handleWorkOrderAssigned({
+      pubkey: kp.rawPubKey,
+      msg,
+      myPeerId: 'peer-MINE',
+      consumer,
+      warn,
+      now: () => now * 1000,
+    });
+
+    expect(consumer).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/invalid signature/));
+  });
+
+  // ── Replay guard ─────────────────────────────────────────────────────────
+  it('rejects a REPLAYED envelope (same valid sig verified twice with a shared guard)', async () => {
+    const { handleWorkOrderAssigned } = await import('../work-order-assigned');
+    const msg = buildEnvelope({
+      payload: { targetPeerId: 'peer-MINE', wo: SAMPLE_WO, seq: 1 },
+      ts: now,
+      privateKey: kp.privateKey,
+    });
+    const replayGuard = new ReplayGuard(60);
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    const call = () =>
+      handleWorkOrderAssigned({
+        pubkey: kp.rawPubKey,
+        msg,
+        myPeerId: 'peer-MINE',
+        consumer,
+        warn,
+        now: () => now * 1000,
+        replayGuard,
+      });
+
+    await call(); // accepted
+    await call(); // replay
+
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/replayed envelope/));
   });
 });

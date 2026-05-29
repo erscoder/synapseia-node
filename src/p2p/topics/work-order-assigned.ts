@@ -8,18 +8,27 @@
  *   {
  *     payload: { targetPeerId, wo: { id, ... }, seq? },
  *     ts:      unix-seconds,
- *     sig:     base64(Ed25519(JSON.stringify({payload, ts})))
+ *     sig:     base64(Ed25519(signed-bytes))
  *   }
+ *
+ * The signed bytes are `JSON.stringify({ domain:
+ * 'synapseia/gossip/work-order-assigned/v1', body: payload, ts })`
+ * (coordinator `signedEnvelopeBytes` helper), NOT the wire envelope. The
+ * domain tag is never on the wire — the node supplies it per-handler via
+ * `verifyCoordinatorEnvelope`. This is what makes a WORK_ORDER_ASSIGNED
+ * signature DISTINCT from an EVALUATION_ASSIGNMENTS one even though both wire
+ * envelopes share the `{ payload, ts, sig }` shape (cross-type replay fix).
  *
  * Published to `WORK_ORDER_ASSIGNED/shard/<shardOf(targetPeerId, K)>`.
  * Every node on that shard receives it; THIS handler keeps the WO IFF
  * `payload.targetPeerId === myPeerId`, else drops it (mirrors the
  * EVALUATION_ASSIGNMENTS `nodeId === myPeerId` filter in node-runtime.ts).
  *
- * Verification (sig + freshness + coord-pubkey trust anchor) is identical
- * to `work-order-available.ts` / `evaluation-assignments.ts` — same
- * Ed25519 verify, same `{payload, ts}` signed-bytes reconstruction, same
- * 60s freshness window, same fail-closed pubkey gating upstream.
+ * Verification (sig + freshness + replay + coord-pubkey trust anchor) goes
+ * through the SHARED `verifyCoordinatorEnvelope` helper that
+ * `work-order-available.ts` / `evaluation-assignments.ts` also use — same
+ * Ed25519 verify, same 60s freshness window, same fail-closed pubkey gating
+ * upstream, differing ONLY in the domain constant.
  */
 import logger from '../../utils/logger';
 import {
@@ -29,7 +38,11 @@ import {
   recordVerify,
   shouldEmitWarn,
 } from '../protocols/coord-sig-stats';
-import { verifyEd25519 } from '../protocols/verify-ed25519';
+import type { ReplayGuard } from './replay-guard';
+import {
+  DOMAIN_WO_ASSIGNED,
+  verifyCoordinatorEnvelope,
+} from './verify-coordinator-envelope';
 
 const COORD_TOPIC = 'WORK_ORDER_ASSIGNED';
 
@@ -81,6 +94,12 @@ export interface HandleAssignedArgs {
   now?: () => number;
   /** Reject when `ts` is older than this. Defaults to 60s. */
   freshnessWindowSec?: number;
+  /**
+   * Optional bounded replay guard (one per topic, wired at the dispatch
+   * site). When provided, a signature already seen within the freshness
+   * window is rejected (warn + return) instead of forwarded.
+   */
+  replayGuard?: ReplayGuard;
 }
 
 interface ParsedEnvelope {
@@ -133,51 +152,46 @@ export async function handleWorkOrderAssigned(
     return;
   }
 
-  // 2. Verify signature against `JSON.stringify({payload, ts})` -----------
-  // Same key order the publisher used: `{ payload, ts }` (see
-  // CoordinatorPublisher.publishTargetedWorkOrder).
-  const signedBytes = new TextEncoder().encode(JSON.stringify({ payload, ts }));
-  let signatureBytes: Buffer;
-  try {
-    signatureBytes = Buffer.from(sig, 'base64');
-  } catch {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
-  if (signatureBytes.length !== 64) {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
+  // 2. Verify signature + freshness + replay via the shared helper -------
+  // `verifyCoordinatorEnvelope` reconstructs the coordinator's signed bytes
+  // `JSON.stringify({ domain, body, ts })` (domain = DOMAIN_WO_ASSIGNED,
+  // body = payload). The domain tag (supplied here, never read from the
+  // wire) is what makes this signature DISTINCT from an EVALUATION_ASSIGNMENTS
+  // one even though both carry an identical `{ payload, ts }` wire shape —
+  // this closes the cross-type signature replay.
+  const result = verifyCoordinatorEnvelope({
+    domain: DOMAIN_WO_ASSIGNED,
+    body: payload,
+    ts,
+    sigBase64: sig,
+    coordinatorPubkey: args.pubkey,
+    now: now(),
+    freshnessWindowSec,
+    replayGuard: args.replayGuard,
+  });
 
-  let ok = false;
-  try {
-    ok = verifyEd25519({
-      publicKeyBytes: args.pubkey,
-      signatureBytes,
-      messageBytes: signedBytes,
-    });
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
+  if (!result.ok) {
+    if (result.reason === 'stale') {
+      const ageSec = Math.floor(now() / 1000) - ts;
+      warn(
+        `[WO-Assigned-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`,
+      );
+      return;
+    }
+    if (result.reason === 'replayed') {
+      warn(
+        `[WO-Assigned-Verify] replayed envelope dropped (sigPrefix=${sig.slice(0, 8)})`,
+      );
+      return;
+    }
     emitInvalidSigWarn(warn, sig);
     return;
   }
 
   // Verify success — feed the rolling window (see WO-available handler).
   {
-    const sigPrefix =
-      typeof sig === 'string' && sig.length > 0 ? sig.slice(0, 8) : 'no-sig';
+    const sigPrefix = sig.length > 0 ? sig.slice(0, 8) : 'no-sig';
     recordVerify(COORD_TOPIC, sigPrefix, true);
-  }
-
-  // 3. Freshness check ----------------------------------------------------
-  const ageSec = Math.floor(now() / 1000) - ts;
-  if (ageSec > freshnessWindowSec) {
-    warn(
-      `[WO-Assigned-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`,
-    );
-    return;
   }
 
   // 4. Targeting filter — keep IFF targetPeerId === myPeerId -------------

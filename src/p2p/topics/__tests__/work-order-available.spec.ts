@@ -7,6 +7,8 @@
 import { generateKeyPairSync, sign } from 'crypto';
 
 import { resetStats } from '../../protocols/coord-sig-stats';
+import { ReplayGuard } from '../replay-guard';
+import { DOMAIN_WO_AVAILABLE } from '../verify-coordinator-envelope';
 
 interface KeyPair {
   rawPubKey: Uint8Array;
@@ -48,8 +50,19 @@ function buildEnvelope(opts: {
   wo: Record<string, unknown>;
   ts: number;
   privateKey: KeyPair['privateKey'];
+  /** Override the domain tag the signature is minted under (cross-type test). */
+  domain?: string;
 }): Uint8Array {
-  const signedBytes = Buffer.from(JSON.stringify({ wo: opts.wo, ts: opts.ts }), 'utf8');
+  // Signed bytes are the domain-tagged { domain, body, ts } wrapper; the wire
+  // envelope keeps the unchanged { wo, ts, sig } shape.
+  const signedBytes = Buffer.from(
+    JSON.stringify({
+      domain: opts.domain ?? DOMAIN_WO_AVAILABLE,
+      body: opts.wo,
+      ts: opts.ts,
+    }),
+    'utf8',
+  );
   const sig = sign(null, signedBytes, opts.privateKey);
   const envelope = {
     wo: opts.wo,
@@ -278,6 +291,55 @@ describe('handleWorkOrderAvailable', () => {
     });
 
     expect(consumer).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // ── Replay guard ────────────────────────────────────────────────────────
+  it('rejects a REPLAYED envelope (same valid sig verified twice with a shared guard)', async () => {
+    const { handleWorkOrderAvailable } = await import('../work-order-available');
+    const wo = completeWo({ id: 'wo-replay' });
+    const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
+    const replayGuard = new ReplayGuard(60);
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    const call = () =>
+      handleWorkOrderAvailable({
+        pubkey: kp.rawPubKey,
+        msg,
+        consumer,
+        warn,
+        now: () => now * 1000,
+        replayGuard,
+      });
+
+    await call(); // first: accepted
+    await call(); // second: same sig → replay
+
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/replayed envelope/));
+  });
+
+  it('without a replay guard the same envelope is accepted twice', async () => {
+    const { handleWorkOrderAvailable } = await import('../work-order-available');
+    const wo = completeWo({ id: 'wo-noguard' });
+    const msg = buildEnvelope({ wo, ts: now, privateKey: kp.privateKey });
+
+    const consumer = jest.fn();
+    const warn = jest.fn();
+    const call = () =>
+      handleWorkOrderAvailable({
+        pubkey: kp.rawPubKey,
+        msg,
+        consumer,
+        warn,
+        now: () => now * 1000,
+      });
+
+    await call();
+    await call();
+
+    expect(consumer).toHaveBeenCalledTimes(2);
     expect(warn).not.toHaveBeenCalled();
   });
 });

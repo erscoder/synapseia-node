@@ -7,8 +7,15 @@
  *   {
  *     wo:  WorkOrderEnvelopePayload,   // see type below
  *     ts:  unix-seconds,
- *     sig: base64(Ed25519(JSON.stringify({wo, ts})))
+ *     sig: base64(Ed25519(signed-bytes))
  *   }
+ *
+ * The signed bytes are NOT the wire envelope — they are
+ * `JSON.stringify({ domain: 'synapseia/gossip/work-order-available/v1',
+ * body: wo, ts })` computed by the coordinator's `signedEnvelopeBytes`
+ * helper and reconstructed here by `verifyCoordinatorEnvelope`. The domain
+ * tag is never on the wire (the node supplies it per-handler), which closes
+ * cross-type signature replay.
  *
  * The `wo` object mirrors the coordinator's `WorkOrderResponseDto`
  * (`toResponseDto`) and is consumed VERBATIM downstream — pushed into
@@ -32,7 +39,11 @@ import {
   recordVerify,
   shouldEmitWarn,
 } from '../protocols/coord-sig-stats';
-import { verifyEd25519 } from '../protocols/verify-ed25519';
+import type { ReplayGuard } from './replay-guard';
+import {
+  DOMAIN_WO_AVAILABLE,
+  verifyCoordinatorEnvelope,
+} from './verify-coordinator-envelope';
 
 const COORD_TOPIC = 'WORK_ORDER_AVAILABLE';
 
@@ -113,6 +124,12 @@ export interface HandleWOArgs {
   now?: () => number;
   /** Reject when `ts` is older than this. Defaults to 60s. */
   freshnessWindowSec?: number;
+  /**
+   * Optional bounded replay guard (one per topic, wired at the dispatch
+   * site). When provided, a signature already seen within the freshness
+   * window is rejected (warn + return) instead of re-queued.
+   */
+  replayGuard?: ReplayGuard;
 }
 
 interface ParsedEnvelope {
@@ -196,54 +213,45 @@ export async function handleWorkOrderAvailable(args: HandleWOArgs): Promise<void
     return;
   }
 
-  // 2. Verify signature against `JSON.stringify({wo, ts})` ----------------
-  // The signed payload MUST be reconstructed with the same key order the
-  // publisher used: `{ wo, ts }`. Coordinator publishes via
-  // `JSON.stringify({ wo, ts })` (see CoordinatorPublisher.ts), so we
-  // mirror that exactly.
-  const signedBytes = new TextEncoder().encode(JSON.stringify({ wo, ts }));
-  let signatureBytes: Buffer;
-  try {
-    signatureBytes = Buffer.from(sig, 'base64');
-  } catch {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
-  if (signatureBytes.length !== 64) {
+  // 2. Verify signature + freshness + replay via the shared helper -------
+  // `verifyCoordinatorEnvelope` reconstructs the coordinator's signed bytes
+  // `JSON.stringify({ domain, body, ts })` (domain = DOMAIN_WO_AVAILABLE,
+  // body = wo) — the SINGLE source of truth shared by all three topic
+  // handlers. The domain tag is supplied here (never read from the wire), so
+  // a signature minted for another topic cannot be replayed against this one.
+  const result = verifyCoordinatorEnvelope({
+    domain: DOMAIN_WO_AVAILABLE,
+    body: wo,
+    ts,
+    sigBase64: sig,
+    coordinatorPubkey: args.pubkey,
+    now: now(),
+    freshnessWindowSec,
+    replayGuard: args.replayGuard,
+  });
+
+  if (!result.ok) {
+    if (result.reason === 'stale') {
+      const ageSec = Math.floor(now() / 1000) - ts;
+      warn(`[WO-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`);
+      return;
+    }
+    if (result.reason === 'replayed') {
+      warn(`[WO-Verify] replayed envelope dropped (sigPrefix=${sig.slice(0, 8)})`);
+      return;
+    }
+    // bad-signature-encoding | invalid-signature → the existing throttled
+    // invalid-sig warn + crisis stats path.
     emitInvalidSigWarn(warn, sig);
     return;
   }
 
-  let ok = false;
-  try {
-    ok = verifyEd25519({
-      publicKeyBytes: args.pubkey,
-      signatureBytes,
-      messageBytes: signedBytes,
-    });
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
-
-  // Verify success — feed the rolling window so the crisis detector
-  // sees both sides (without this it would over-report failures when
-  // only a brief mismatch occurs amid healthy traffic).
+  // Verify success — feed the rolling window so the crisis detector sees both
+  // sides (without this it would over-report failures when only a brief
+  // mismatch occurs amid healthy traffic).
   {
-    const sigPrefix = typeof sig === 'string' && sig.length > 0
-      ? sig.slice(0, 8)
-      : 'no-sig';
+    const sigPrefix = sig.length > 0 ? sig.slice(0, 8) : 'no-sig';
     recordVerify(COORD_TOPIC, sigPrefix, true);
-  }
-
-  // 3. Freshness check ----------------------------------------------------
-  const ageSec = Math.floor(now() / 1000) - ts;
-  if (ageSec > freshnessWindowSec) {
-    warn(`[WO-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`);
-    return;
   }
 
   // 4. Post-verify payload shape -----------------------------------------

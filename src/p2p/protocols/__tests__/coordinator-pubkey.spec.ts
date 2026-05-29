@@ -15,6 +15,8 @@ import { jest } from '@jest/globals';
 import bs58 from 'bs58';
 import * as crypto from 'crypto';
 
+import { DOMAIN_WO_AVAILABLE } from '../../topics/verify-coordinator-envelope';
+
 // PINNED trust anchor. The coordinator-pubkey constant is the Ed25519
 // public key every coord-signed gossip topic is verified against; an
 // UNINTENDED change here silently re-points the trust anchor of the whole
@@ -49,8 +51,9 @@ function signRaw(messageBytes: Buffer, privRaw: Buffer): Buffer {
 
 /**
  * Build a `WORK_ORDER_AVAILABLE` gossip envelope ({wo, ts, sig}) signed
- * over `JSON.stringify({wo, ts})` exactly as CoordinatorPublisher does,
- * encoded to the raw message bytes the handler consumes.
+ * over the domain-tagged `JSON.stringify({domain, body: wo, ts})` exactly as
+ * CoordinatorPublisher does, encoded to the raw message bytes the handler
+ * consumes. The wire envelope keeps the unchanged { wo, ts, sig } shape.
  */
 function buildSignedEnvelope(privRaw: Buffer, ts: number): Uint8Array {
   const wo = {
@@ -61,7 +64,7 @@ function buildSignedEnvelope(privRaw: Buffer, ts: number): Uint8Array {
     requiredCapabilities: ['gpu'],
     creatorAddress: 'creator-1',
   };
-  const signed = JSON.stringify({ wo, ts });
+  const signed = JSON.stringify({ domain: DOMAIN_WO_AVAILABLE, body: wo, ts });
   const sig = signRaw(Buffer.from(signed, 'utf8'), privRaw).toString('base64');
   return new TextEncoder().encode(JSON.stringify({ wo, ts, sig }));
 }

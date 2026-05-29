@@ -7,8 +7,15 @@
  *   {
  *     payload: { nodeId },
  *     ts:      unix-seconds,
- *     sig:     base64(Ed25519(JSON.stringify({payload, ts})))
+ *     sig:     base64(Ed25519(signed-bytes))
  *   }
+ *
+ * The signed bytes are `JSON.stringify({ domain:
+ * 'synapseia/gossip/evaluation-assignments/v1', body: payload, ts })`
+ * (coordinator `signedEnvelopeBytes` helper), reconstructed by the shared
+ * `verifyCoordinatorEnvelope`. The domain tag is never on the wire and
+ * differs from the WORK_ORDER_ASSIGNED tag, so a signature minted for one
+ * cannot be replayed against the other (cross-type replay fix).
  *
  * Plan: Tier-3 §3.C.1.
  */
@@ -20,7 +27,11 @@ import {
   recordVerify,
   shouldEmitWarn,
 } from '../protocols/coord-sig-stats';
-import { verifyEd25519 } from '../protocols/verify-ed25519';
+import type { ReplayGuard } from './replay-guard';
+import {
+  DOMAIN_EVAL_ASSIGNMENTS,
+  verifyCoordinatorEnvelope,
+} from './verify-coordinator-envelope';
 
 const COORD_TOPIC = 'EVALUATION_ASSIGNMENTS';
 
@@ -63,6 +74,12 @@ export interface HandleEvalArgs {
   warn?: (msg: string) => void;
   now?: () => number;
   freshnessWindowSec?: number;
+  /**
+   * Optional bounded replay guard (one per topic, wired at the dispatch
+   * site). When provided, a signature already seen within the freshness
+   * window is rejected (warn + return) instead of forwarded.
+   */
+  replayGuard?: ReplayGuard;
 }
 
 interface ParsedEnvelope {
@@ -112,46 +129,40 @@ export async function handleEvaluationAssignments(args: HandleEvalArgs): Promise
     return;
   }
 
-  const signedBytes = new TextEncoder().encode(JSON.stringify({ payload, ts }));
-  let signatureBytes: Buffer;
-  try {
-    signatureBytes = Buffer.from(sig, 'base64');
-  } catch {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
-  if (signatureBytes.length !== 64) {
-    emitInvalidSigWarn(warn, sig);
-    return;
-  }
+  // Verify signature + freshness + replay via the shared helper. The signed
+  // bytes are `JSON.stringify({ domain: DOMAIN_EVAL_ASSIGNMENTS, body:
+  // payload, ts })`; the domain tag (supplied here, never read from the wire)
+  // makes this signature DISTINCT from a WORK_ORDER_ASSIGNED one despite the
+  // identical `{ payload, ts }` wire shape — cross-type replay fix.
+  const result = verifyCoordinatorEnvelope({
+    domain: DOMAIN_EVAL_ASSIGNMENTS,
+    body: payload,
+    ts,
+    sigBase64: sig,
+    coordinatorPubkey: args.pubkey,
+    now: now(),
+    freshnessWindowSec,
+    replayGuard: args.replayGuard,
+  });
 
-  let ok = false;
-  try {
-    ok = verifyEd25519({
-      publicKeyBytes: args.pubkey,
-      signatureBytes,
-      messageBytes: signedBytes,
-    });
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
+  if (!result.ok) {
+    if (result.reason === 'stale') {
+      const ageSec = Math.floor(now() / 1000) - ts;
+      warn(`[Eval-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`);
+      return;
+    }
+    if (result.reason === 'replayed') {
+      warn(`[Eval-Verify] replayed envelope dropped (sigPrefix=${sig.slice(0, 8)})`);
+      return;
+    }
     emitInvalidSigWarn(warn, sig);
     return;
   }
 
   // Verify success — feed the rolling window (see WO handler for rationale).
   {
-    const sigPrefix = typeof sig === 'string' && sig.length > 0
-      ? sig.slice(0, 8)
-      : 'no-sig';
+    const sigPrefix = sig.length > 0 ? sig.slice(0, 8) : 'no-sig';
     recordVerify(COORD_TOPIC, sigPrefix, true);
-  }
-
-  const ageSec = Math.floor(now() / 1000) - ts;
-  if (ageSec > freshnessWindowSec) {
-    warn(`[Eval-Verify] stale envelope (age=${ageSec}s > ${freshnessWindowSec}s)`);
-    return;
   }
 
   const nodeId = (payload as { nodeId?: unknown }).nodeId;

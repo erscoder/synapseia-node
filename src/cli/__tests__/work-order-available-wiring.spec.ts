@@ -15,6 +15,7 @@
 import { generateKeyPairSync, sign } from 'crypto';
 
 import { handleWorkOrderAvailable } from '../../p2p/topics/work-order-available';
+import { DOMAIN_WO_AVAILABLE } from '../../p2p/topics/verify-coordinator-envelope';
 
 interface KeyPair {
   rawPubKey: Buffer;
@@ -28,7 +29,12 @@ function makeKeyPair(): KeyPair {
 }
 
 function buildEnvelope(wo: { id: string; [k: string]: unknown }, ts: number, pk: KeyPair['privateKey']): Uint8Array {
-  const signed = Buffer.from(JSON.stringify({ wo, ts }), 'utf8');
+  // Signed bytes are the domain-tagged { domain, body, ts } wrapper; the wire
+  // envelope keeps the unchanged { wo, ts, sig } shape.
+  const signed = Buffer.from(
+    JSON.stringify({ domain: DOMAIN_WO_AVAILABLE, body: wo, ts }),
+    'utf8',
+  );
   const sig = sign(null, signed, pk);
   return new TextEncoder().encode(
     JSON.stringify({ wo, ts, sig: Buffer.from(sig).toString('base64') }),

@@ -14,6 +14,7 @@
 import { generateKeyPairSync, sign } from 'crypto';
 
 import { handleEvaluationAssignments } from '../../p2p/topics/evaluation-assignments';
+import { DOMAIN_EVAL_ASSIGNMENTS } from '../../p2p/topics/verify-coordinator-envelope';
 import { ReviewAgentHelper } from '../../modules/agent/review-agent';
 
 interface KeyPair {
@@ -28,7 +29,12 @@ function makeKeyPair(): KeyPair {
 }
 
 function buildEnvelope(payload: { nodeId: string }, ts: number, pk: KeyPair['privateKey']): Uint8Array {
-  const signed = Buffer.from(JSON.stringify({ payload, ts }), 'utf8');
+  // Signed bytes are the domain-tagged { domain, body, ts } wrapper (body =
+  // the payload); the wire envelope keeps the { payload, ts, sig } shape.
+  const signed = Buffer.from(
+    JSON.stringify({ domain: DOMAIN_EVAL_ASSIGNMENTS, body: payload, ts }),
+    'utf8',
+  );
   const sig = sign(null, signed, pk);
   return new TextEncoder().encode(
     JSON.stringify({ payload, ts, sig: Buffer.from(sig).toString('base64') }),
