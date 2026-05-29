@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { WorkOrderModule } from '../agent/work-order/work-order.module';
 import { AgentCardService } from './agent-card.service';
 import { A2AServer } from './a2a-server.service';
+import { A2AAuthorizationService } from './auth/a2a-authorization.service';
 import { TaskRouter } from './task-router';
 import { PeerReviewHandler } from './handlers/peer-review.handler';
 import { EmbeddingHandler } from './handlers/embedding.handler';
@@ -16,6 +17,7 @@ import { AuthModule } from './auth/auth.module';
   providers: [
     AgentCardService,
     A2AServer,
+    A2AAuthorizationService,
     TaskRouter,
     PeerReviewHandler,
     EmbeddingHandler,

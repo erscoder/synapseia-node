@@ -63,13 +63,29 @@ export class A2AClientService {
       const signature = this.authService.sign(task, ourPrivateKeyHex);
       const signedTask: A2ATask = { ...task, signature };
 
+      // Send the matching X-Public-Key so the server can bind the identity to
+      // senderPeerId (FINDING 1). Derived from our private key, never sent raw.
+      const ourPublicKeyHex = this.authService.derivePublicKeyHex(ourPrivateKeyHex);
+      if (!ourPublicKeyHex) {
+        return {
+          taskId: task.id,
+          success: false,
+          data: null,
+          error: 'Invalid private key — cannot derive public key for X-Public-Key header',
+          processingMs: Date.now() - start,
+        };
+      }
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
       let res: Response;
       try {
         res = await fetch(`${targetUrl}/tasks/send`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Public-Key': ourPublicKeyHex,
+          },
           body: JSON.stringify({ task: signedTask }),
           signal: controller.signal,
         });

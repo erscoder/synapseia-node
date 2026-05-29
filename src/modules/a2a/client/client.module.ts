@@ -28,5 +28,8 @@ import { A2AAuthService } from '../auth/a2a-auth.service';
     PeerSelectorService,
     CircuitBreakerService,
   ],
+  // PeerRegistryService is already exported above and consumed by
+  // A2AAuthorizationService (registered in A2AModule) as the known-peer
+  // trust source for authorization.
 })
 export class A2AClientModule {}
