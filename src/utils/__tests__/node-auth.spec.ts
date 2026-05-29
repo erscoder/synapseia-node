@@ -75,12 +75,12 @@ describe('buildAuthHeaders', () => {
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  it('signs `${peerId}:${ts}:${path}:${bodyHash}` verifiable with real Ed25519', async () => {
+  it('signs `${peerId}:${ts}:${METHOD}:${path}:${bodyHash}` verifiable with real Ed25519', async () => {
     const body = { x: 1, y: 2 };
     const h = await buildAuthHeaders({
       method: 'POST', path: '/p', body, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/p:${hashBody(JSON.stringify(body))}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/p:${hashBody(JSON.stringify(body))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -88,11 +88,49 @@ describe('buildAuthHeaders', () => {
     )).toBe(true);
   });
 
+  it('method is normalized to UPPERCASE in the signed message', async () => {
+    // Lowercase verb in → UPPERCASE bound into the signed message, so the
+    // string matches what the coordinator reconstructs from req.method
+    // (Express exposes the verb uppercased, but normalize both sides anyway).
+    const h = await buildAuthHeaders({
+      method: 'post', path: '/p', body: {}, privateKey, publicKey, peerId: 'p',
+    });
+    const upper = `p:${h['X-Timestamp']}:POST:/p:${hashBody('{}')}`;
+    const lower = `p:${h['X-Timestamp']}:post:/p:${hashBody('{}')}`;
+    expect(verifyEd25519(
+      new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
+      new TextEncoder().encode(upper),
+      publicKey,
+    )).toBe(true);
+    // The non-normalized (lowercase) form must NOT verify.
+    expect(verifyEd25519(
+      new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
+      new TextEncoder().encode(lower),
+      publicKey,
+    )).toBe(false);
+  });
+
+  it('different method over same path+body yields a different signed message', async () => {
+    // The vuln this binding closes: GET and POST over the identical
+    // path+body must produce distinct signed messages, so a GET signature
+    // cannot be replayed as a POST.
+    const get = await buildAuthHeaders({
+      method: 'GET', path: '/x', body: {}, privateKey, publicKey, peerId: 'p',
+    });
+    const postMsg = `p:${get['X-Timestamp']}:POST:/x:${hashBody('{}')}`;
+    // The GET signature must NOT verify against the POST message.
+    expect(verifyEd25519(
+      new Uint8Array(Buffer.from(get['X-Signature'], 'base64')),
+      new TextEncoder().encode(postMsg),
+      publicKey,
+    )).toBe(false);
+  });
+
   it('tampered path flips verify to false (sig is bound to path)', async () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/real', body: {}, privateKey, publicKey, peerId: 'p',
     });
-    const wrong = `p:${h['X-Timestamp']}:/different:${hashBody('{}')}`;
+    const wrong = `p:${h['X-Timestamp']}:POST:/different:${hashBody('{}')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(wrong),
@@ -104,7 +142,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/p', body: { b: 2, a: 1 }, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/p:${hashBody(JSON.stringify({ a: 1, b: 2 }))}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/p:${hashBody(JSON.stringify({ a: 1, b: 2 }))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -116,7 +154,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'GET', path: '/n', body: null, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/n:${hashBody('')}`;
+    const expected = `p:${h['X-Timestamp']}:GET:/n:${hashBody('')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -128,7 +166,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'GET', path: '/u', body: undefined, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/u:${hashBody('')}`;
+    const expected = `p:${h['X-Timestamp']}:GET:/u:${hashBody('')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -140,7 +178,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/s', body: 'plain', privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/s:${hashBody('plain')}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/s:${hashBody('plain')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -152,7 +190,7 @@ describe('buildAuthHeaders', () => {
     const h = await buildAuthHeaders({
       method: 'POST', path: '/n', body: 42, privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/n:${hashBody('42')}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/n:${hashBody('42')}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -166,7 +204,7 @@ describe('buildAuthHeaders', () => {
       privateKey, publicKey, peerId: 'p',
     });
     const expectedBody = JSON.stringify({ other: 3, outer: { a: 2, z: 1 } });
-    const expected = `p:${h['X-Timestamp']}:/nst:${hashBody(expectedBody)}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/nst:${hashBody(expectedBody)}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -180,7 +218,7 @@ describe('buildAuthHeaders', () => {
       privateKey, publicKey, peerId: 'p',
     });
     const expectedBody = JSON.stringify([{ a: 2, z: 1 }, { b: 3 }]);
-    const expected = `p:${h['X-Timestamp']}:/ao:${hashBody(expectedBody)}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/ao:${hashBody(expectedBody)}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -193,7 +231,7 @@ describe('buildAuthHeaders', () => {
       method: 'POST', path: '/arr', body: [3, 1, 2],
       privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/arr:${hashBody(JSON.stringify([3, 1, 2]))}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/arr:${hashBody(JSON.stringify([3, 1, 2]))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
@@ -235,11 +273,33 @@ describe('buildAuthHeaders', () => {
       method: 'POST', path: '/nn', body: { a: null, b: { c: null } },
       privateKey, publicKey, peerId: 'p',
     });
-    const expected = `p:${h['X-Timestamp']}:/nn:${hashBody(JSON.stringify({ a: null, b: { c: null } }))}`;
+    const expected = `p:${h['X-Timestamp']}:POST:/nn:${hashBody(JSON.stringify({ a: null, b: { c: null } }))}`;
     expect(verifyEd25519(
       new Uint8Array(Buffer.from(h['X-Signature'], 'base64')),
       new TextEncoder().encode(expected),
       publicKey,
     )).toBe(true);
+  });
+
+  // ── SHARED VECTOR ──────────────────────────────────────────────────────────
+  // Byte-parity contract between this signer and the coordinator's
+  // NodeSignatureGuard. The EXACT SAME expected string is asserted in the
+  // coordinator's NodeSignatureGuard.spec.ts ("SHARED VECTOR" test). If either
+  // side drifts (reorders the fields, drops/changes the method binding, etc.)
+  // exactly one of the two assertions fails and CI flags the mismatch.
+  //
+  // Fixed inputs: peerId, ts, method, path, body — pinned literals so the
+  // string is reproducible across both packages.
+  it('SHARED VECTOR: signed message is byte-identical to the coord guard contract', () => {
+    const SV_PEER_ID = 'shared-vec-peer';
+    const SV_TS = 1700000000000;
+    const SV_METHOD = 'POST';
+    const SV_PATH = '/work-orders/available?since=7';
+    const SV_BODY = { a: 1, b: 2 };
+    const SV_BODY_HASH = hashBody(JSON.stringify({ a: 1, b: 2 }));
+    const message = `${SV_PEER_ID}:${SV_TS}:${SV_METHOD}:${SV_PATH}:${SV_BODY_HASH}`;
+    expect(message).toBe(
+      `shared-vec-peer:1700000000000:POST:/work-orders/available?since=7:${SV_BODY_HASH}`,
+    );
   });
 });

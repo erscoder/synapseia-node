@@ -2,9 +2,12 @@
  * Shared Ed25519 signing utilities for node → coordinator requests.
  * Used by both WorkOrderCoordinatorHelper (NestJS HTTP) and HeartbeatHelper (axios).
  *
- * Signed message format (post-S0.6): `${peerId}:${timestamp}:${path}:${bodyHash}`
+ * Signed message format: `${peerId}:${timestamp}:${METHOD}:${path}:${bodyHash}`
  * - peerId: libp2p peer id (binds the signature to the claimed identity)
  * - timestamp: Unix milliseconds
+ * - METHOD: HTTP method, normalized to UPPERCASE (binds the signature to the
+ *   verb so a signature captured for `GET /x` cannot be replayed as
+ *   `POST /x` / `DELETE /x` on the same path+body — defense-in-depth)
  * - path: URL path (e.g. /peer/heartbeat)
  * - bodyHash: SHA-256 of JSON-stringified body, base64-encoded
  *
@@ -61,7 +64,11 @@ export async function buildAuthHeaders(params: {
       : String(body ?? '');
 
   const bodyHash = Buffer.from(sha256(new TextEncoder().encode(bodyStr))).toString('base64');
-  const message = `${peerId}:${timestamp}:${path}:${bodyHash}`;
+  // Bind the HTTP method (UPPERCASE) into the signed message between the
+  // timestamp and the path. The coordinator's NodeSignatureGuard normalizes
+  // `req.method` the same way and reconstructs the identical string.
+  const normMethod = String(method).toUpperCase();
+  const message = `${peerId}:${timestamp}:${normMethod}:${path}:${bodyHash}`;
   const messageBytes = new TextEncoder().encode(message);
   const signature = sign(messageBytes, privateKeyRaw);
 

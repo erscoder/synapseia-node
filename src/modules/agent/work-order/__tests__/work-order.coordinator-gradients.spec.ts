@@ -100,11 +100,11 @@ describe('WorkOrderCoordinatorHelper.uploadGradients — Bug 30 sign over gradie
     expect(typeof headers['X-Signature']).toBe('string');
     expect(typeof headers['X-Timestamp']).toBe('string');
 
-    // (3) Signature verifies against ${peerId}:${ts}:${path}:${sha256(canonical({peerId, gradientsHash}))}.
+    // (3) Signature verifies against ${peerId}:${ts}:POST:${path}:${sha256(canonical({peerId, gradientsHash}))}.
     const ts = headers['X-Timestamp'];
     const path = `/diloco/${domain}/gradients`;
     const bodyHash = canonicalBodyHash({ peerId, gradientsHash: expectedSha });
-    const expectedMessage = `${peerId}:${ts}:${path}:${bodyHash}`;
+    const expectedMessage = `${peerId}:${ts}:POST:${path}:${bodyHash}`;
     const sigOk = verifyEd25519(
       new Uint8Array(Buffer.from(headers['X-Signature'], 'base64')),
       new TextEncoder().encode(expectedMessage),

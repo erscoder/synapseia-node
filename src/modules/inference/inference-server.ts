@@ -211,7 +211,8 @@ export function transformToOpenAI(ollamaResponse: OllamaChatResponse, model: str
  * The coord route `POST /peers/:peerId/inference-request` is guarded by
  * NodeSignatureGuard, so the POST MUST carry the four signed headers
  * (X-Peer-Id, X-Public-Key, X-Timestamp, X-Signature). The guard verifies
- * the Ed25519 signature over `${peerId}:${ts}:${path}:${bodyHash}` where
+ * the Ed25519 signature over `${peerId}:${ts}:${METHOD}:${path}:${bodyHash}`
+ * (METHOD = uppercase HTTP verb, here POST) where
  * `path` is the request pathname (no query) and `bodyHash` is the base64
  * sha256 of the deterministically key-sorted JSON body. We sign exactly
  * that: body `{ peerId }`, path `/peers/<encoded>/inference-request`.

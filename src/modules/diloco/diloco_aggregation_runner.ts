@@ -33,7 +33,7 @@
  *   7. REVEAL: POST signed `:domain/aggregation-result` with the nonce +
  *      all invariants; the coord recomputes the commitment and rejects on
  *      mismatch. SIGN both requests with the node's Ed25519 key via the
- *      shared `buildAuthHeaders` (`${peerId}:${ts}:${path}:${bodyHash}`
+ *      shared `buildAuthHeaders` (`${peerId}:${ts}:${METHOD}:${path}:${bodyHash}`
  *      format the `NodeSignatureGuard` expects).
  *
  * DARK until Phase 4: the old coord (flag off) never dispatches this WO,
@@ -618,7 +618,7 @@ async function postReveal(
   //     (presence-checked + stored as the aggregator's attestation); it is
   //     NOT the transport auth.
   //   - `X-Signature` header (NodeSignatureGuard): the transport auth over
-  //     `${peerId}:${ts}:${path}:${bodyHash}` where bodyHash hashes the
+  //     `${peerId}:${ts}:${METHOD}:${path}:${bodyHash}` where bodyHash hashes the
   //     EXACT posted body. The guard recomputes the hash from `req.body`, so
   //     the header MUST be built over the COMPLETE body INCLUDING the
   //     `signature` field — otherwise the recomputed hash diverges and the

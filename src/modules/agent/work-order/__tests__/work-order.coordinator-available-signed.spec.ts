@@ -106,10 +106,10 @@ describe('WorkOrderCoordinatorHelper.fetchAvailableWorkOrders — F-coord-sec-01
     expect(Buffer.from(headers['X-Signature'], 'base64').length).toBe(64);
     expect(Buffer.from(headers['X-Public-Key'], 'base64').length).toBe(32);
 
-    // (5) Signature verifies against ${peerId}:${ts}:${path}:${sha256('')}.
+    // (5) Signature verifies against ${peerId}:${ts}:GET:${path}:${sha256('')}.
     const ts = headers['X-Timestamp'];
     const path = '/work-orders/available';
-    const expectedMessage = `${peerId}:${ts}:${path}:${emptyBodyHash()}`;
+    const expectedMessage = `${peerId}:${ts}:GET:${path}:${emptyBodyHash()}`;
     const sigOk = verifyEd25519(
       new Uint8Array(Buffer.from(headers['X-Signature'], 'base64')),
       new TextEncoder().encode(expectedMessage),

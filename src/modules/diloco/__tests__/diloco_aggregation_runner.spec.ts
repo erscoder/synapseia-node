@@ -313,7 +313,7 @@ describe('runDiLoCoAggregation', () => {
           : v;
     const bodyStr = JSON.stringify(sortKeys(body));
     const bodyHash = Buffer.from(sha256(new TextEncoder().encode(bodyStr))).toString('base64');
-    const message = `${PEER}:${headers['X-Timestamp']}:/diloco/med/aggregation-result:${bodyHash}`;
+    const message = `${PEER}:${headers['X-Timestamp']}:POST:/diloco/med/aggregation-result:${bodyHash}`;
     const ok = ed.verify(
       new Uint8Array(Buffer.from(headers['X-Signature'], 'base64')),
       new TextEncoder().encode(message),

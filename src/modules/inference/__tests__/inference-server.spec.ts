@@ -365,7 +365,7 @@ describe('handleChatCompletions', () => {
   // F-coord-sec-009 — the inference-request notify hits a NodeSignatureGuard'd
   // route. Pre-fix it sent a plain unsigned POST → 401. Assert the four signed
   // headers are present and the signature verifies against the guard's exact
-  // contract: message `${peerId}:${ts}:${path}:${bodyHash}`, body `{ peerId }`.
+  // contract: message `${peerId}:${ts}:${METHOD}:${path}:${bodyHash}`, body `{ peerId }`.
   it('signs the inference-request notify with the four NodeSignatureGuard headers', async () => {
     (global.fetch as any).mockResolvedValueOnce(ok({
       message: { role: 'assistant', content: 'p' }, done: true, model: 'm', created_at: 'x',
@@ -398,12 +398,13 @@ describe('handleChatCompletions', () => {
     expect(headers['X-Timestamp']).toMatch(/^\d+$/);
     expect(Buffer.from(headers['X-Signature'], 'base64').length).toBe(64);
 
-    // (3) Signature verifies against ${peerId}:${ts}:${path}:${bodyHash}.
+    // (3) Signature verifies against ${peerId}:${ts}:${METHOD}:${path}:${bodyHash}.
+    //     The notify is a POST, bound UPPERCASE into the signed message.
     const path = `/peers/${peerId}/inference-request`;
     expect(calledUrl).toBe(`http://coord${path}`);
     const ts = headers['X-Timestamp'];
     const bodyHash = Buffer.from(sha256(new TextEncoder().encode(JSON.stringify({ peerId })))).toString('base64');
-    const expectedMessage = `${peerId}:${ts}:${path}:${bodyHash}`;
+    const expectedMessage = `${peerId}:${ts}:POST:${path}:${bodyHash}`;
     const sigOk = verifyEd25519Sig(
       new Uint8Array(Buffer.from(headers['X-Signature'], 'base64')),
       new TextEncoder().encode(expectedMessage),
