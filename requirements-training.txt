@@ -9,11 +9,31 @@
 # The training scripts (scripts/diloco_*.py, scripts/train_*.py) hard-disable
 # CUDA and run CPU-only, so the default CPU wheels from PyPI are sufficient.
 #
-# ⚠️ Version policy: these pins MUST match whatever pre-built training
-# artifacts / gradient format the coordinator expects (the original Dockerfile
-# comment warned "must match the pre-built version"). When bumping torch,
-# re-validate DiLoCo aggregation determinism (sha256 of accumulated gradients)
-# before shipping. To regenerate with hashes, run `pip hash` or use
+# Version policy (design section 4.2 — what a torch bump must re-validate):
+#
+# The DiLoCo consensus key is the set of SCALAR INVARIANTS the aggregate
+# executor emits: avgGradientNorm, velocityNorm, and the accepted/rejected
+# peer sets. Those scalars are bit-stable given pinned inputs, and the
+# coordinator reaches consensus on them with a tolerance, NOT on any adapter
+# byte hash. The adapter PICKLE bytes / adapter sha256 are NON-deterministic
+# across runs (torch tensor pickling embeds storage metadata) and are
+# informational only. So when bumping torch, the re-validation target is
+# SCALAR-INVARIANT STABILITY (avgGradientNorm / velocityNorm / accept-reject
+# sets bit-equal across runs and across the old/new torch) — NOT an adapter
+# sha256. Run `pnpm --filter @synapseia-network/node test:diloco-compat`
+# (authoritatively inside the pinned /opt/training-venv) before shipping.
+#
+# Where torch is and is NOT needed:
+#   - COORDINATOR: verifies each uploaded submission blob by its sha256 +
+#     Ed25519 signature for INTEGRITY and AUTH only. It never deserializes
+#     torch tensors, so the coordinator needs NO torch pin.
+#   - NODES (training + aggregating): every node MUST share this exact `==`
+#     pin so the scalar invariants are computed identically across the swarm.
+#     Divergent torch on two nodes can drift the invariants past the coord's
+#     tolerance and split consensus. The `==` pin is what enforces that
+#     uniformity (and keeps the image build reproducible / supply-chain safe).
+#
+# To regenerate with hashes, run `pip hash` or use
 # `pip-compile --generate-hashes` against this file in CI.
 torch==2.5.1
 numpy==2.1.3

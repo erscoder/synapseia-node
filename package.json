@@ -36,6 +36,7 @@
     "postinstall": "patch-package",
     "start": "node dist/bootstrap.js",
     "test": "jest",
+    "test:diloco-compat": "PY=$([ -x /opt/training-venv/bin/python ] && echo /opt/training-venv/bin/python || command -v python3); echo \"[diloco-compat] python=$PY\"; \"$PY\" -c 'import torch;print(\"[diloco-compat] torch==\"+torch.__version__)'; echo '[diloco-compat] AUTHORITATIVE pre-release run MUST use the pinned torch==2.5.1 venv (/opt/training-venv); other torch versions are smoke-only'; \"$PY\" scripts/diloco_compat_smoke.py && \"$PY\" -m pytest scripts/__tests__/diloco_aggregate_executor_test.py -q",
     "test:mutation": "NODE_OPTIONS=--experimental-vm-modules stryker run",
     "lint": "eslint src"
   },
