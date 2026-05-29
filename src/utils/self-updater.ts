@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { execSync, execFileSync, spawn } from 'child_process';
 import {
   existsSync,
   mkdirSync,
@@ -14,6 +14,7 @@ import { homedir } from 'os';
 import { join, dirname, relative } from 'path';
 import { valid } from 'semver';
 import logger from './logger';
+import { npmRegistryPinnedEnv } from './subprocess-env';
 
 // `__filename` is a CJS global in jest and a tsup-injected shim in the
 // production ESM bundle (`shims: true` in tsup.config.ts). Both paths
@@ -119,12 +120,32 @@ function shellQuote(s: string): string {
  *  the integrity check can never drift apart. */
 const PACKAGE_NAME = '@synapseia-network/node';
 
+/**
+ * The ONLY registry the self-update path will ever talk to. The version
+ * CHECK upstream (update-checker.ts) already pins this; the actual
+ * install/download/verify MUST pin it too, otherwise a stray
+ * `NPM_CONFIG_REGISTRY` / `.npmrc` could redirect npm to a rogue
+ * registry that serves a trojaned tarball. Passed as `--registry=` on
+ * EVERY npm command in this file and force-set in the child env via
+ * `npmRegistryPinnedEnv`.
+ */
+const PINNED_REGISTRY = 'https://registry.npmjs.org';
+
 /** Default install timeout (10 min). 120s was the proven pod failure point —
  *  the full dependency tree on a slow registry/disk takes 6-10+ minutes, so
  *  a 120s SIGTERM kills npm mid-install (ETIMEDOUT) and, with the old in-place
  *  `npm install -g`, left the live global package corrupt. Overridable via
  *  `SYN_SELFUPDATE_TIMEOUT_MS` for operators on especially slow hosts. */
 const DEFAULT_SELFUPDATE_TIMEOUT_MS = 600_000;
+
+/** Short, DEDICATED timeout for the post-install verification gates
+ *  (`npm audit signatures` + `npm view ... dist.integrity`). These are
+ *  small metadata round-trips, NOT a full dependency-tree install, so they
+ *  must NOT reuse the ~10-min install timeout: an update CHECK runs at boot
+ *  and a hung audit on the install budget would stall startup for minutes.
+ *  Fail-closed (treated as "unverifiable") if either gate exceeds this.
+ *  Overridable via `SYN_SELFUPDATE_VERIFY_TIMEOUT_MS` for slow links. */
+const DEFAULT_SELFUPDATE_VERIFY_TIMEOUT_MS = 60_000;
 
 /** Resolve the install timeout. Honours `SYN_SELFUPDATE_TIMEOUT_MS` when it is
  *  a positive integer; otherwise falls back to the 10-minute default. Exported
@@ -140,6 +161,23 @@ export function resolveSelfUpdateTimeoutMs(
     }
   }
   return DEFAULT_SELFUPDATE_TIMEOUT_MS;
+}
+
+/** Resolve the SHORT verification timeout for the signature/integrity gates.
+ *  Honours `SYN_SELFUPDATE_VERIFY_TIMEOUT_MS` (positive integer ms); otherwise
+ *  the 60s default. Separate from `resolveSelfUpdateTimeoutMs` so a boot-time
+ *  update check never blocks for the full install budget on a hung audit. */
+export function resolveSelfUpdateVerifyTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env.SYN_SELFUPDATE_VERIFY_TIMEOUT_MS;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && Number.isInteger(n) && n > 0) {
+      return n;
+    }
+  }
+  return DEFAULT_SELFUPDATE_VERIFY_TIMEOUT_MS;
 }
 
 export interface IntegrityResult {
@@ -213,6 +251,273 @@ export function verifyInstalledPackage(
   } catch (err) {
     return { ok: false, reason: `integrity check error: ${(err as Error).message}` };
   }
+}
+
+/**
+ * REGISTRY-SIGNATURE + PROVENANCE gate for a freshly-staged install,
+ * BEFORE the atomic swap. `verifyInstalledPackage` only detects a
+ * *truncated* tree (right name/version, dist/ + scripts/ present). This
+ * gate adds the registry's own attestations on top.
+ *
+ * WHAT THIS VERIFIES — and what it does NOT.
+ * `npm audit signatures` verifies, AGAINST THE PINNED REGISTRY:
+ *   (a) the npm registry's ECDSA signature over the published version's
+ *       recorded tarball integrity/metadata, and
+ *   (b) the sigstore provenance attestation tying that published version
+ *       to the GitHub Actions build (`publish-npm.yml`, `--provenance`
+ *       under OIDC Trusted Publishing).
+ * It checks the REGISTRY's signed record of the published version. It
+ * does NOT re-hash the bytes npm extracted onto disk — empirically,
+ * mutating an already-extracted file still yields `npm audit signatures`
+ * exit 0, because the subcommand audits the registry's signed metadata
+ * for the resolved version, not the on-disk tree.
+ *
+ * So, combined with the registry pin + env neutralisation, this gate
+ * DEFEATS: a rogue/hijacked registry serving a tarball the real npmjs.org
+ * never signed; a version published WITHOUT valid sigstore provenance
+ * (e.g. via a stolen npm token but no GitHub-OIDC CI build); and an
+ * on-the-wire MITM tarball swap (the swapped bytes won't match the
+ * registry's signed integrity).
+ *
+ * It does NOT defend against tampering of the STAGED TREE after npm
+ * extracted it — a local attacker with write access to the staging
+ * prefix is OUT OF SCOPE here (such an attacker can tamper the live
+ * install directly, so this gate is not the relevant control). The
+ * companion on-disk hash cross-check (`verifyStagedIntegrity`) compares
+ * the integrity npm RESOLVED into the staged lockfile against the
+ * registry's `dist.integrity`, catching a registry that served divergent
+ * metadata; neither gate claims to re-hash arbitrary post-extract edits.
+ *
+ * FAIL-CLOSED on EVERYTHING: a non-zero exit, a thrown error (offline /
+ * registry unreachable / npm too old to support the subcommand), OR
+ * output that does not explicitly confirm verification, all return
+ * `ok:false`. We never swap on an unverifiable install — an unreachable
+ * registry means "skip the update", never "proceed unverified".
+ *
+ * Uses its OWN short timeout (`DEFAULT_SELFUPDATE_VERIFY_TIMEOUT_MS`), not the
+ * ~10-min install timeout, so a boot-time update check cannot stall on a
+ * hung audit. The raw audit output is logged on reject for diagnosability.
+ *
+ * `execFileSync` (NOT a shell string): argv is a fixed literal array, no
+ * shell, no interpolation of any external value → no command-injection
+ * surface. Never throws (errors are captured → `ok:false`).
+ */
+export function verifyStagedSignatures(
+  stagedPackageDir: string,
+  expectedVersion: string,
+): IntegrityResult {
+  let out: string;
+  try {
+    // `npm audit signatures` verifies registry signatures AND provenance
+    // attestations for the dependency tree rooted at `cwd`. We point it
+    // at the staged package dir so it audits the freshly-downloaded
+    // @synapseia-network/node, not the host's unrelated global tree.
+    //
+    // --registry pins npmjs.org (CLI flag beats env beats .npmrc); the
+    // child env strips every registry/proxy/.npmrc override and force-
+    // sets npm_config_registry to the same pin — so neither a stray env
+    // var nor a discovered .npmrc can redirect the verification.
+    out = execFileSync(
+      'npm',
+      ['audit', 'signatures', `--registry=${PINNED_REGISTRY}`],
+      {
+        cwd: stagedPackageDir,
+        encoding: 'utf-8',
+        // DEDICATED short timeout (NOT the ~10-min install budget) — a
+        // boot-time update check must not stall on a hung audit.
+        timeout: resolveSelfUpdateVerifyTimeoutMs(),
+        stdio: 'pipe',
+        env: npmRegistryPinnedEnv(PINNED_REGISTRY),
+      },
+    );
+  } catch (err) {
+    // Non-zero exit (signature/attestation FAILURE), offline, registry
+    // unreachable, or npm too old to support the subcommand. ALL of these
+    // are fail-closed: we do not trust the staged tree.
+    const e = err as { stdout?: string | Buffer; stderr?: string | Buffer; message?: string };
+    const combined =
+      `${e.stdout ? String(e.stdout) : ''}${e.stderr ? String(e.stderr) : ''}`.trim();
+    // Log the RAW audit/error output for diagnosability — a rejected
+    // update is a security-relevant event and operators need the npm
+    // wording to tell "registry down" from "signature actually invalid".
+    logger.warn(
+      `[SelfUpdate][SECURITY] npm audit signatures rejected v${expectedVersion}: ` +
+        `${combined || e.message || 'unknown error'}`,
+    );
+    return {
+      ok: false,
+      reason:
+        (`signature verification failed/unavailable: ` +
+          `${combined || e.message || 'unknown error'}`).slice(0, 300),
+    };
+  }
+
+  // Even on exit 0 we POSITIVELY confirm verification rather than trust a
+  // silent success. `npm audit signatures` prints "verified N package(s)"
+  // on success and "X package(s) have invalid/missing registry
+  // signatures" / "missing ... attestation" on failure. We require an
+  // explicit "verified" token AND no invalid/missing wording — fail-
+  // closed if either condition is unmet, so a future npm output change
+  // that drops the failure wording cannot be misread as success.
+  const lower = out.toLowerCase();
+  const badWording =
+    /(invalid|missing|untrusted|tamper|error)/.test(lower) &&
+    /(signature|attestation|provenance)/.test(lower);
+  const confirmedVerified = /\bverified\b/.test(lower);
+  if (badWording || !confirmedVerified) {
+    // Log the RAW audit output on reject — a "verified" token that never
+    // appeared, or failure wording on an exit-0 run, is exactly what an
+    // operator needs to diagnose a stuck update.
+    logger.warn(
+      `[SelfUpdate][SECURITY] npm audit signatures did not confirm v${expectedVersion}: ` +
+        `${out.trim()}`,
+    );
+    return {
+      ok: false,
+      reason:
+        (`signature audit did not positively confirm verification for ` +
+          `v${expectedVersion}: ${out.trim()}`).slice(0, 300),
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Extract the resolved `integrity` (SRI `sha512-…`) that npm recorded for
+ * `@synapseia-network/node` in the staged hidden lockfile
+ * (`<stagedModulesDir>/.package-lock.json`). When `npm install -g
+ * --prefix=<staging>` extracts the package, it writes this lockfile with
+ * an entry whose `integrity` is the hash npm computed for the tarball it
+ * actually fetched. Returns null when the lockfile / entry / integrity is
+ * absent or unparseable (caller treats null as fail-closed).
+ *
+ * Pure-ish: filesystem read only, never throws.
+ */
+export function readStagedResolvedIntegrity(stagedModulesDir: string): string | null {
+  try {
+    const lockPath = join(stagedModulesDir, '.package-lock.json');
+    if (!existsSync(lockPath)) return null;
+    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as {
+      packages?: Record<string, { integrity?: unknown }>;
+    };
+    const pkgs = parsed.packages;
+    if (!pkgs || typeof pkgs !== 'object') return null;
+    // npm keys the hidden lockfile by install path relative to the dir the
+    // lockfile lives in: `node_modules/@synapseia-network/node`. Accept that
+    // canonical key; fall back to scanning for any entry whose key ends with
+    // the package path (defensive against npm layout shifts).
+    const canonical = `node_modules/${PACKAGE_NAME}`;
+    const entry =
+      pkgs[canonical] ??
+      Object.entries(pkgs).find(([k]) => k.endsWith(`node_modules/${PACKAGE_NAME}`))?.[1];
+    const integrity = entry?.integrity;
+    if (typeof integrity !== 'string' || !integrity.startsWith('sha512-')) return null;
+    return integrity;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ARTIFACT-INTEGRITY gate (defence-in-depth) for a freshly-staged install,
+ * BEFORE the atomic swap. Complements `verifyStagedSignatures`: that gate
+ * checks the registry's SIGNATURE + provenance over the published version;
+ * this gate cross-checks the TARBALL HASH.
+ *
+ * WHAT THIS VERIFIES — and what it does NOT.
+ * The current flow extracts via `npm install -g --prefix=<staging>` (it
+ * does NOT download a standalone `.tgz`), so npm records the integrity it
+ * computed for the fetched tarball in the staged hidden lockfile. We:
+ *   1. read that resolved `integrity` (`readStagedResolvedIntegrity`), and
+ *   2. fetch the published `dist.integrity` for the EXACT target version
+ *      from the PINNED registry via `npm view`, and
+ *   3. require them to be byte-equal.
+ * A registry that served DIVERGENT metadata (a tarball whose hash differs
+ * from what npmjs.org recorded for the version) is caught here even if the
+ * structural gate passed. Like the signature gate this checks recorded /
+ * resolved hashes; it does NOT re-hash arbitrary post-extract edits, and
+ * staging-dir tampering by a local attacker with write access remains OUT
+ * OF SCOPE (that attacker can tamper the live install directly).
+ *
+ * FAIL-CLOSED on EVERYTHING: missing/unparseable staged integrity, `npm
+ * view` non-zero/throw/timeout/offline, a malformed published value, or a
+ * mismatch → `ok:false`. An unverifiable hash means "skip the update".
+ * Uses the SHORT dedicated verify timeout. Logs the compared values on
+ * reject for diagnosability.
+ *
+ * `execFileSync` (NOT a shell string): fixed argv, the only interpolated
+ * value is the caller-supplied (semver-validated) version inside an
+ * argument that the shell never sees → no command-injection surface.
+ */
+export function verifyStagedIntegrity(
+  stagedModulesDir: string,
+  expectedVersion: string,
+): IntegrityResult {
+  const resolved = readStagedResolvedIntegrity(stagedModulesDir);
+  if (!resolved) {
+    logger.warn(
+      `[SelfUpdate][SECURITY] could not read staged resolved integrity for v${expectedVersion} ` +
+        `from ${stagedModulesDir}/.package-lock.json`,
+    );
+    return { ok: false, reason: 'staged resolved integrity missing/unreadable' };
+  }
+
+  let published: string;
+  try {
+    // `npm view <pkg>@<version> dist.integrity` returns the SRI string the
+    // registry recorded for that exact version, fetched over the PINNED
+    // registry with the override env neutralised. The version is semver-
+    // validated by the caller and passed as a single execFile argv element
+    // (no shell), so it cannot inject extra npm flags or shell tokens.
+    const raw = execFileSync(
+      'npm',
+      ['view', `${PACKAGE_NAME}@${expectedVersion}`, 'dist.integrity', `--registry=${PINNED_REGISTRY}`],
+      {
+        encoding: 'utf-8',
+        timeout: resolveSelfUpdateVerifyTimeoutMs(),
+        stdio: 'pipe',
+        env: npmRegistryPinnedEnv(PINNED_REGISTRY),
+      },
+    );
+    published = String(raw).trim();
+  } catch (err) {
+    const e = err as { stdout?: string | Buffer; stderr?: string | Buffer; message?: string };
+    const combined =
+      `${e.stdout ? String(e.stdout) : ''}${e.stderr ? String(e.stderr) : ''}`.trim();
+    logger.warn(
+      `[SelfUpdate][SECURITY] npm view dist.integrity failed/unavailable for v${expectedVersion}: ` +
+        `${combined || e.message || 'unknown error'}`,
+    );
+    return {
+      ok: false,
+      reason:
+        (`published integrity fetch failed/unavailable: ` +
+          `${combined || e.message || 'unknown error'}`).slice(0, 300),
+    };
+  }
+
+  if (!published.startsWith('sha512-')) {
+    logger.warn(
+      `[SelfUpdate][SECURITY] malformed published dist.integrity for v${expectedVersion}: "${published}"`,
+    );
+    return { ok: false, reason: `malformed published integrity: "${published}"`.slice(0, 300) };
+  }
+
+  if (published !== resolved) {
+    // The registry served a tarball whose hash differs from the one it
+    // recorded for this version — divergent metadata. NEVER swap.
+    logger.warn(
+      `[SelfUpdate][SECURITY] integrity MISMATCH for v${expectedVersion}: ` +
+        `staged=${resolved} published=${published}. Live install left untouched — NO swap.`,
+    );
+    return {
+      ok: false,
+      reason:
+        (`integrity mismatch: staged ${resolved} != published ${published}`).slice(0, 300),
+    };
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -304,11 +609,25 @@ function ensureBinSymlinks(prefix: string, liveModulesDir: string): void {
  *
  *   npm install -g @synapseia-network/node@<targetVersion> --ignore-scripts
  *
- * `--ignore-scripts` is the residual supply-chain mitigation — it blocks
- * `preinstall` / `postinstall` / `prepare` lifecycle scripts from running
- * during install. The exact target version is PINNED (never the floating
- * `@latest`), so the install is reproducible and cannot be moved out from
- * under us by a registry change between the check and the install.
+ * `--ignore-scripts` blocks `preinstall` / `postinstall` / `prepare`
+ * lifecycle scripts from running during install. The exact target version
+ * is PINNED (never the floating `@latest`), so the install is reproducible
+ * and cannot be moved out from under us by a registry change between the
+ * check and the install. The REGISTRY itself is also pinned on the install
+ * (`--registry=registry.npmjs.org` + a sanitised child env, see
+ * npmRegistryPinnedEnv) so a stray NPM_CONFIG_REGISTRY / .npmrc cannot
+ * redirect the download to a rogue registry.
+ *
+ * NEITHER of those, on its own, stops a tarball that the real npmjs.org
+ * never signed (rogue/hijacked registry), a version published without
+ * valid provenance (stolen token, no OIDC CI build), or an on-the-wire
+ * MITM swap. Two registry-anchored gates run on the staged tree BEFORE
+ * the atomic swap — see the staging sequence below. Trust root = what
+ * npmjs.org recorded for the published version (registry signature +
+ * sigstore provenance + dist.integrity). Note: these gates verify the
+ * registry's signed record / recorded hash, NOT a re-hash of arbitrary
+ * post-extract on-disk edits; a local attacker with write access to the
+ * staging prefix is out of scope (they can tamper the live install).
  *
  * ATOMIC, NON-DESTRUCTIVE install (the 0.8.116 fix). The pod's slow npm took
  * 6-10+ min to fetch the full tree, so the old 120s timeout SIGTERM-killed
@@ -320,13 +639,32 @@ function ensureBinSymlinks(prefix: string, liveModulesDir: string): void {
  *   2. Install into a SEPARATE staging prefix (sibling of the live prefix,
  *      same filesystem) so npm builds a COMPLETE tree there without ever
  *      touching the live package.
- *   3. Verify the staged tree (verifyInstalledPackage): package.json present,
- *      version === target, dist/bootstrap.js present, scripts/ non-empty.
- *   4. Only on a passing verify, atomically `rename()` the staged package over
- *      the live one (old → .bak → swap → drop .bak; restore .bak on failure).
- * If the install times out / fails / fails verification, staging is cleaned
- * up and the LIVE install is left byte-for-byte untouched. There is no window
- * in which the live package is partial.
+ *   3. Verify the staged tree, THREE gates, all fail-closed:
+ *      a. STRUCTURAL (verifyInstalledPackage): package.json present,
+ *         version === target, dist/bootstrap.js present, scripts/ non-empty
+ *         — catches a truncated extract.
+ *      b. REGISTRY SIGNATURE + PROVENANCE (verifyStagedSignatures):
+ *         `npm audit signatures` over the PINNED registry verifies the
+ *         registry's signature over the published version + sigstore
+ *         provenance attestation. Defeats a rogue/unsigned-publish/MITM
+ *         vector. Does NOT re-hash on-disk bytes. Trust root = provenance
+ *         published by CI (`publish-npm.yml`, `--provenance` + OIDC).
+ *      c. ARTIFACT INTEGRITY (verifyStagedIntegrity, defence-in-depth):
+ *         cross-checks the `integrity` npm RESOLVED into the staged
+ *         lockfile against `npm view <pkg>@<target> dist.integrity` over
+ *         the PINNED registry. Catches a registry that served divergent
+ *         metadata. Like (b) it checks recorded/resolved hashes, not a
+ *         re-hash of arbitrary post-extract edits.
+ *      Gates (b) and (c) use a SHORT dedicated verify timeout, not the
+ *      ~10-min install budget, so a boot-time check cannot stall.
+ *   4. Only on ALL THREE gates passing, atomically `rename()` the staged
+ *      package over the live one (old → .bak → swap → drop .bak; restore
+ *      .bak on failure).
+ * If the install times out / fails / fails ANY verification gate (incl. a
+ * registry unreachable for the signature audit or the integrity view),
+ * staging is cleaned up and the LIVE install is left byte-for-byte
+ * untouched. There is no window in which the live package is partial OR
+ * unverified.
  *
  * Fail-closed: any failure returns `{success:false}` and the caller keeps
  * the node on its current version. Only NPM_GLOBAL installs self-update;
@@ -384,20 +722,31 @@ export async function attemptSelfUpdate(targetVersion: string): Promise<SelfUpda
         // complete tree under <staging>/lib/node_modules WITHOUT touching the
         // live install. A timeout/kill here corrupts only the throwaway
         // staging dir, never the running binary.
+        // --registry PINS npmjs.org on the actual install (the version
+        // CHECK was already pinned; the install must be too, or an
+        // attacker-influenced NPM_CONFIG_REGISTRY/.npmrc could redirect the
+        // DOWNLOAD to a rogue registry). The child env strips every
+        // registry/proxy/.npmrc override and force-sets the pin, so the
+        // CLI flag is the sole source of truth (CLI > env > .npmrc).
         execSync(
-          `npm install -g @synapseia-network/node@${shellQuote(targetVersion)} --ignore-scripts`,
+          `npm install -g @synapseia-network/node@${shellQuote(targetVersion)} ` +
+            `--ignore-scripts --registry=${PINNED_REGISTRY}`,
           {
             encoding: 'utf-8',
             timeout: timeoutMs,
             stdio: 'pipe',
-            env: {
-              ...process.env,
+            env: npmRegistryPinnedEnv(PINNED_REGISTRY, {
               NPM_CONFIG_PREFIX: stagingPrefix,
-            },
+            }),
           },
         );
 
-        // VERIFY the staged tree before we touch the live install.
+        // VERIFY the staged tree before we touch the live install. Three
+        // gates, in order; ALL must pass or we leave the live install
+        // byte-for-byte untouched and skip the update.
+        //
+        // Gate 1 — structural (truncation): right name/version, dist/
+        // bootstrap + scripts present. Catches a half-extracted tree.
         const stagedModulesDir = join(stagingPrefix, 'lib', 'node_modules');
         const stagedPackageDir = join(stagedModulesDir, '@synapseia-network', 'node');
         const integrity = verifyInstalledPackage(stagedPackageDir, targetVersion);
@@ -411,6 +760,59 @@ export async function attemptSelfUpdate(targetVersion: string): Promise<SelfUpda
             message:
               `Staged update to v${targetVersion} failed integrity check ` +
               `(${integrity.reason}). Live install left untouched.`,
+          };
+        }
+
+        // Gate 2 — CRYPTOGRAPHIC (trojaned-but-well-formed tarball): npm
+        // registry signature + sigstore provenance attestation over the
+        // pinned registry. This is the real supply-chain defence — gate 1
+        // would happily pass a tampered tarball with the correct name and
+        // version. Fail-closed: ANY mismatch / error / unreachable
+        // registry / unverifiable result leaves the live install
+        // untouched and SKIPS the update (never proceeds unverified).
+        const signatures = verifyStagedSignatures(stagedPackageDir, targetVersion);
+        if (!signatures.ok) {
+          logger.warn(
+            `[SelfUpdate][SECURITY] Refusing update to v${targetVersion}: ` +
+              `staged tarball failed cryptographic verification ` +
+              `(${signatures.reason}). Live install left untouched — NO swap.`,
+          );
+          try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* best effort */ }
+          stagingPrefix = null;
+          return {
+            success: false,
+            installType,
+            message:
+              `Staged update to v${targetVersion} failed cryptographic ` +
+              `signature/provenance verification (${signatures.reason}). ` +
+              `Live install left untouched.`,
+          };
+        }
+
+        // Gate 3 — ARTIFACT INTEGRITY (defence-in-depth): cross-check the
+        // integrity npm RESOLVED into the staged lockfile against the
+        // published dist.integrity fetched over the pinned registry. This
+        // catches a registry that served DIVERGENT metadata (a tarball
+        // whose hash differs from what npmjs.org recorded for the version)
+        // — a vector the signature audit's registry-record check cannot.
+        // Fail-closed: missing staged integrity, unreachable `npm view`,
+        // malformed value, or any mismatch leaves the live install
+        // untouched and SKIPS the update.
+        const artifact = verifyStagedIntegrity(stagedModulesDir, targetVersion);
+        if (!artifact.ok) {
+          logger.warn(
+            `[SelfUpdate][SECURITY] Refusing update to v${targetVersion}: ` +
+              `staged artifact failed integrity cross-check ` +
+              `(${artifact.reason}). Live install left untouched — NO swap.`,
+          );
+          try { rmSync(stagingPrefix, { recursive: true, force: true }); } catch { /* best effort */ }
+          stagingPrefix = null;
+          return {
+            success: false,
+            installType,
+            message:
+              `Staged update to v${targetVersion} failed artifact integrity ` +
+              `cross-check (${artifact.reason}). Live install left untouched.`,
           };
         }
 
@@ -428,7 +830,9 @@ export async function attemptSelfUpdate(targetVersion: string): Promise<SelfUpda
         return {
           success: true,
           installType,
-          message: `Updated to v${targetVersion} (npm latest, --ignore-scripts, atomic swap). Restarting...`,
+          message:
+            `Updated to v${targetVersion} (pinned registry, --ignore-scripts, ` +
+            `signature+provenance + dist.integrity verified, atomic swap). Restarting...`,
         };
       } catch (err) {
         // Any failure (timeout, ENOSPC, swap error) — purge staging so a

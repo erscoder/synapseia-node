@@ -86,6 +86,100 @@ export const SENSITIVE_ENV_VARS: readonly string[] = [
 ] as const;
 
 /**
+ * Env var names that can REDIRECT an npm registry/proxy lookup. The
+ * self-update path (self-updater.ts) hard-pins `registry.npmjs.org` on
+ * every npm invocation. The trust this provides is SPECIFIC and bounded:
+ * by forcing every install/view/audit to talk to the real npmjs.org, the
+ * pin guarantees that the registry signature + sigstore provenance that
+ * `npm audit signatures` checks, and the `dist.integrity` that the
+ * post-install hash cross-check fetches, are the ones npmjs.org actually
+ * recorded for the published version — not values minted by a rogue
+ * registry. That pin is worthless if a stray `NPM_CONFIG_REGISTRY` (or a
+ * `.npmrc` discovered via these path hints) silently points npm at a
+ * different registry: such a registry could serve a tarball npmjs.org
+ * never signed and answer `npm view ... dist.integrity` with a matching
+ * (attacker-chosen) hash, so BOTH the audit and the hash check would
+ * "pass" against the wrong source of truth.
+ *
+ * Scope of what stripping these BUYS (combined with the `--registry=`
+ * flag and the force-set pin in `npmRegistryPinnedEnv`): the verification
+ * inputs are always fetched FROM npmjs.org. It does NOT, on its own,
+ * re-hash the bytes npm extracted onto disk — that gap is covered by the
+ * post-install `dist.integrity` cross-check (registry-recorded hash vs.
+ * the integrity npm resolved into the staged lockfile) plus
+ * `npm audit signatures` (registry signature + provenance). Tampering of
+ * the staged tree AFTER npm extracts it, by a local attacker with write
+ * access to the staging prefix, is OUT OF SCOPE: such an attacker can
+ * tamper the live install directly, so the self-update gate is not the
+ * relevant control.
+ *
+ * These are NOT secrets — they are stripped from the npm child env in
+ * the update path so the explicit `--registry=` flag is the SOLE source
+ * of truth and cannot be overridden. Kept separate from
+ * SENSITIVE_ENV_VARS (which is about secret EXFILTRATION) because the
+ * threat is different (registry HIJACK) and only the update path needs
+ * the strip — general subprocesses (python/ollama) have no business
+ * reading npm config either, but conflating the two lists would change
+ * sanitizedEnvForSubprocess' contract for every caller.
+ */
+export const NPM_REGISTRY_OVERRIDE_ENV_VARS: readonly string[] = [
+  // Canonical registry override (npm reads NPM_CONFIG_<key> for every
+  // config key; `registry` is the one that matters here).
+  'NPM_CONFIG_REGISTRY',
+  // Scoped-registry override for the @synapseia-network scope. npm maps
+  // `@synapseia-network:registry` config to this env var name.
+  'NPM_CONFIG_@SYNAPSEIA-NETWORK:REGISTRY',
+  // Legacy lowercase form some npm versions still honour.
+  'npm_config_registry',
+  // `.npmrc` discovery hints — point npm at an attacker-controlled
+  // userconfig/globalconfig that could set `registry=`. Stripping these
+  // forces npm to fall back to our `--registry=` flag.
+  'NPM_CONFIG_USERCONFIG',
+  'NPM_CONFIG_GLOBALCONFIG',
+  'npm_config_userconfig',
+  'npm_config_globalconfig',
+  // HTTP(S) proxy redirection — a proxy could MITM the connection to the
+  // pinned registry and swap the bytes on the wire. Stripping the proxy
+  // env keeps the update path talking to npmjs.org directly; the registry
+  // signature / provenance audit and the dist.integrity cross-check then
+  // confirm the bytes match what npmjs.org recorded for the version.
+  'NPM_CONFIG_PROXY',
+  'NPM_CONFIG_HTTPS_PROXY',
+  'npm_config_proxy',
+  'npm_config_https_proxy',
+] as const;
+
+/**
+ * Return a shallow clone of `process.env` hardened for the self-update
+ * npm child: every registry/proxy/.npmrc-discovery override stripped,
+ * and `npm_config_registry` force-set to the pinned public registry so
+ * even a config key we have not enumerated cannot win over the explicit
+ * pin. The caller still passes `--registry=` on the command line (CLI
+ * flag > env > .npmrc in npm's precedence), so this is defence in depth.
+ *
+ * This hardens WHERE npm fetches from (always npmjs.org). It does not by
+ * itself verify the extracted bytes — that is the job of the install
+ * path's two gates (the dist.integrity hash cross-check and
+ * `npm audit signatures`), both of which rely on this pin so their
+ * trust inputs come from the real registry rather than a redirected one.
+ *
+ * `extra` is merged last (e.g. NPM_CONFIG_PREFIX for the staging dir).
+ */
+export function npmRegistryPinnedEnv(
+  pinnedRegistry: string,
+  extra: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+  const clone: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of NPM_REGISTRY_OVERRIDE_ENV_VARS) {
+    if (k in clone) delete clone[k];
+  }
+  // Force the pinned registry through the env layer too, so a config key
+  // outside our strip list still resolves to npmjs.org.
+  clone.npm_config_registry = pinnedRegistry;
+  return { ...clone, ...extra };
+}
+
+/**
  * Return a shallow clone of `process.env` with every sensitive key
  * removed. Use this as the `env` field of `spawn(...)` /
  * `spawnSync(...)` / `execFile(...)` for any child process that does

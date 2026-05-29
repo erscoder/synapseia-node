@@ -5,9 +5,13 @@ import {
   restartProcess,
   respawnDetached,
   verifyInstalledPackage,
+  verifyStagedSignatures,
+  verifyStagedIntegrity,
+  readStagedResolvedIntegrity,
   resolveSelfUpdateTimeoutMs,
+  resolveSelfUpdateVerifyTimeoutMs,
 } from '../utils/self-updater';
-import { execSync, spawn } from 'child_process';
+import { execSync, execFileSync, spawn } from 'child_process';
 import {
   existsSync,
   readFileSync,
@@ -25,6 +29,7 @@ jest.mock('../utils/logger', () => ({
 }));
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockExecFileSync = execFileSync as jest.MockedFunction<typeof execFileSync>;
 const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 const mockReadFileSync = readFileSync as jest.MockedFunction<typeof readFileSync>;
@@ -35,6 +40,9 @@ const mockRmSync = rmSync as jest.MockedFunction<typeof rmSync>;
 
 const TARGET_VERSION = '0.8.106';
 const PKG_NAME = '@synapseia-network/node';
+// A representative SRI hash. Both the staged lockfile and `npm view
+// dist.integrity` return this on the happy path so the cross-check matches.
+const VALID_INTEGRITY = 'sha512-gdjxDBWFezdxJc6BAO2lPN6wVz5hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
 
 describe('detectInstallType', () => {
   beforeEach(() => {
@@ -83,6 +91,29 @@ describe('resolveSelfUpdateTimeoutMs', () => {
 
   it('never uses the 120s value that caused the prod corruption loop', () => {
     expect(resolveSelfUpdateTimeoutMs({})).toBeGreaterThan(120_000);
+  });
+});
+
+describe('resolveSelfUpdateVerifyTimeoutMs (dedicated SHORT verify timeout)', () => {
+  it('defaults to 60_000 (60s) when env var is unset', () => {
+    expect(resolveSelfUpdateVerifyTimeoutMs({})).toBe(60_000);
+  });
+
+  it('honours a positive integer SYN_SELFUPDATE_VERIFY_TIMEOUT_MS override', () => {
+    expect(
+      resolveSelfUpdateVerifyTimeoutMs({ SYN_SELFUPDATE_VERIFY_TIMEOUT_MS: '120000' }),
+    ).toBe(120_000);
+  });
+
+  it('ignores a non-numeric / non-positive / non-integer override', () => {
+    expect(resolveSelfUpdateVerifyTimeoutMs({ SYN_SELFUPDATE_VERIFY_TIMEOUT_MS: 'abc' })).toBe(60_000);
+    expect(resolveSelfUpdateVerifyTimeoutMs({ SYN_SELFUPDATE_VERIFY_TIMEOUT_MS: '0' })).toBe(60_000);
+    expect(resolveSelfUpdateVerifyTimeoutMs({ SYN_SELFUPDATE_VERIFY_TIMEOUT_MS: '-5' })).toBe(60_000);
+    expect(resolveSelfUpdateVerifyTimeoutMs({ SYN_SELFUPDATE_VERIFY_TIMEOUT_MS: '1.5' })).toBe(60_000);
+  });
+
+  it('is SHORTER than the install timeout — a boot-time check must not stall on a hung audit', () => {
+    expect(resolveSelfUpdateVerifyTimeoutMs({})).toBeLessThan(resolveSelfUpdateTimeoutMs({}));
   });
 });
 
@@ -202,6 +233,235 @@ describe('verifyInstalledPackage', () => {
   });
 });
 
+describe('verifyStagedSignatures (cryptographic supply-chain gate)', () => {
+  const STAGED_DIR = '/prefix/.syn-update-staging-1/lib/node_modules/@synapseia-network/node';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('ok:true when npm audit signatures positively confirms verification', () => {
+    mockExecFileSync.mockReturnValue(
+      'audited 1 package\n1 package has a verified registry signature\n' as any,
+    );
+    expect(verifyStagedSignatures(STAGED_DIR, TARGET_VERSION)).toEqual({ ok: true });
+  });
+
+  it('pins the registry + sanitises the env on the audit child', () => {
+    mockExecFileSync.mockReturnValue('verified 1 package\n' as any);
+    process.env.NPM_CONFIG_REGISTRY = 'https://evil.example.com';
+    try {
+      verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    } finally {
+      delete process.env.NPM_CONFIG_REGISTRY;
+    }
+    const [file, args, opts] = mockExecFileSync.mock.calls[0] as any;
+    expect(file).toBe('npm');
+    expect(args).toEqual(['audit', 'signatures', '--registry=https://registry.npmjs.org']);
+    // The rogue env override must NOT survive into the child.
+    expect(opts.env.NPM_CONFIG_REGISTRY).toBeUndefined();
+    expect(opts.env.npm_config_registry).toBe('https://registry.npmjs.org');
+    expect(String(opts.cwd)).toBe(STAGED_DIR);
+    // The audit must use the SHORT dedicated verify timeout (60s), NOT the
+    // ~10-min install budget — a boot-time check cannot stall on a hung audit.
+    expect(opts.timeout).toBe(60_000);
+    expect(opts.timeout).toBeLessThan(resolveSelfUpdateTimeoutMs({}));
+  });
+
+  it('ok:false (FAIL-CLOSED) when the audit reports an invalid signature', () => {
+    mockExecFileSync.mockReturnValue(
+      '1 package has an invalid registry signature\n' as any,
+    );
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/did not positively confirm/i);
+  });
+
+  it('ok:false (FAIL-CLOSED) when provenance attestation is missing', () => {
+    mockExecFileSync.mockReturnValue(
+      '1 package has a missing attestation\n' as any,
+    );
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+  });
+
+  it('ok:false (FAIL-CLOSED) on a non-zero exit (signature failure)', () => {
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('Command failed') as any;
+      e.status = 1;
+      e.stdout = '1 package has invalid signatures';
+      e.stderr = '';
+      throw e;
+    });
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/verification failed\/unavailable/i);
+  });
+
+  it('ok:false (FAIL-CLOSED) when the registry is unreachable / offline', () => {
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('getaddrinfo ENOTFOUND registry.npmjs.org') as any;
+      e.code = 'ENOTFOUND';
+      throw e;
+    });
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/ENOTFOUND|unavailable/i);
+  });
+
+  it('ok:false (FAIL-CLOSED) when npm is too old to support the subcommand', () => {
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('Unknown command: "audit signatures"') as any;
+      e.status = 1;
+      throw e;
+    });
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+  });
+
+  it('ok:false (FAIL-CLOSED) when output is silent / lacks a "verified" token', () => {
+    // A future npm output change that drops both the failure wording AND
+    // the "verified" token must NOT be read as success.
+    mockExecFileSync.mockReturnValue('audited 1 package in 0.4s\n' as any);
+    const r = verifyStagedSignatures(STAGED_DIR, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe('readStagedResolvedIntegrity', () => {
+  const STAGED_MODULES = '/prefix/.syn-update-staging-1/lib/node_modules';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns the SRI recorded for the package in the staged hidden lockfile', () => {
+    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        packages: { [`node_modules/${PKG_NAME}`]: { integrity: VALID_INTEGRITY } },
+      }) as any,
+    );
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBe(VALID_INTEGRITY);
+  });
+
+  it('returns null when the lockfile is absent', () => {
+    mockExistsSync.mockReturnValue(false);
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+
+  it('returns null when the package entry / integrity is missing', () => {
+    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
+    mockReadFileSync.mockReturnValue(JSON.stringify({ packages: {} }) as any);
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+
+  it('returns null (never throws) on an unparseable lockfile', () => {
+    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
+    mockReadFileSync.mockReturnValue('{ broken json' as any);
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+
+  it('returns null when integrity is not an sha512 SRI', () => {
+    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        packages: { [`node_modules/${PKG_NAME}`]: { integrity: 'sha1-deadbeef' } },
+      }) as any,
+    );
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+});
+
+describe('verifyStagedIntegrity (artifact-integrity cross-check)', () => {
+  const STAGED_MODULES = '/prefix/.syn-update-staging-1/lib/node_modules';
+
+  function wireLockfile(integrity: string | null) {
+    mockExistsSync.mockImplementation((p: any) =>
+      integrity !== null && String(p).endsWith('.package-lock.json'),
+    );
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        packages:
+          integrity === null
+            ? {}
+            : { [`node_modules/${PKG_NAME}`]: { integrity } },
+      }) as any,
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('ok:true when staged integrity equals the published dist.integrity', () => {
+    wireLockfile(VALID_INTEGRITY);
+    mockExecFileSync.mockReturnValue(`${VALID_INTEGRITY}\n` as any);
+    expect(verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION)).toEqual({ ok: true });
+  });
+
+  it('pins the registry + sanitises env on the `npm view` child, with the SHORT verify timeout', () => {
+    wireLockfile(VALID_INTEGRITY);
+    mockExecFileSync.mockReturnValue(`${VALID_INTEGRITY}\n` as any);
+    process.env.NPM_CONFIG_REGISTRY = 'https://evil.example.com';
+    try {
+      verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
+    } finally {
+      delete process.env.NPM_CONFIG_REGISTRY;
+    }
+    const [file, args, opts] = mockExecFileSync.mock.calls[0] as any;
+    expect(file).toBe('npm');
+    expect(args).toEqual([
+      'view',
+      `${PKG_NAME}@${TARGET_VERSION}`,
+      'dist.integrity',
+      '--registry=https://registry.npmjs.org',
+    ]);
+    expect(opts.env.NPM_CONFIG_REGISTRY).toBeUndefined();
+    expect(opts.env.npm_config_registry).toBe('https://registry.npmjs.org');
+    expect(opts.timeout).toBe(60_000);
+  });
+
+  it('ok:false (FAIL-CLOSED) on integrity MISMATCH (registry served divergent metadata)', () => {
+    wireLockfile(VALID_INTEGRITY);
+    mockExecFileSync.mockReturnValue(
+      'sha512-DIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENT==\n' as any,
+    );
+    const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/integrity mismatch/i);
+  });
+
+  it('ok:false (FAIL-CLOSED) when the staged resolved integrity is missing', () => {
+    wireLockfile(null);
+    const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/staged resolved integrity/i);
+    // Never even reaches `npm view` — there is nothing to compare against.
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it('ok:false (FAIL-CLOSED) when `npm view` is unreachable / offline', () => {
+    wireLockfile(VALID_INTEGRITY);
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('getaddrinfo ENOTFOUND registry.npmjs.org') as any;
+      e.code = 'ENOTFOUND';
+      throw e;
+    });
+    const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/integrity fetch failed\/unavailable/i);
+  });
+
+  it('ok:false (FAIL-CLOSED) when the published value is malformed', () => {
+    wireLockfile(VALID_INTEGRITY);
+    mockExecFileSync.mockReturnValue('not-an-sri\n' as any);
+    const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/malformed published integrity/i);
+  });
+});
+
 describe('attemptSelfUpdate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -211,6 +471,8 @@ describe('attemptSelfUpdate', () => {
     // override existsSync to drive detection + verification.
     mockRenameSync.mockImplementation(() => undefined);
     mockRmSync.mockImplementation(() => undefined);
+    // Default crypto gate → success unless a test overrides it.
+    mockExecFileSync.mockReturnValue('verified 1 package\n' as any);
   });
 
   /**
@@ -218,9 +480,14 @@ describe('attemptSelfUpdate', () => {
    * COMPLETE staged tree so verifyInstalledPackage passes. Captures exec argv
    * and the options each install was invoked with.
    */
-  function wireHappyPath(): { calls: string[]; opts: any[] } {
+  function wireHappyPath(): {
+    calls: string[];
+    opts: any[];
+    auditCalls: { args: string[]; opts: any }[];
+  } {
     const calls: string[] = [];
     const opts: any[] = [];
+    const auditCalls: { args: string[]; opts: any }[] = [];
     mockExecSync.mockImplementation((cmd: any, o?: any) => {
       const s = String(cmd);
       calls.push(s);
@@ -228,17 +495,37 @@ describe('attemptSelfUpdate', () => {
       if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
       return '';
     });
-    // existsSync: true for the detect probe (package.json) AND the staged
-    // dist/bootstrap.js. False for live .bak/liveDir so swap treats it as a
-    // fresh install.
+    // execFileSync handles BOTH verification gates:
+    //   - `npm audit signatures …`  → registry-signature/provenance gate.
+    //   - `npm view …@v dist.integrity …` → published-integrity fetch for
+    //     the artifact cross-check; returns the matching SRI on the happy path.
+    // Capture audit argv + opts so tests can assert the registry pin + env.
+    mockExecFileSync.mockImplementation((_file: any, args: any, o?: any) => {
+      const argv = (args as string[]) ?? [];
+      if (argv[0] === 'view') return `${VALID_INTEGRITY}\n` as any;
+      auditCalls.push({ args: argv, opts: o });
+      return 'audited 1 package in 0.5s\n1 package has a verified registry signature\n' as any;
+    });
+    // existsSync: true for the detect probe (package.json), the staged
+    // dist/bootstrap.js, AND the staged hidden lockfile. False for live
+    // .bak/liveDir so swap treats it as a fresh install.
     mockExistsSync.mockImplementation((p: any) => {
       const s = String(p);
       if (s.endsWith('@synapseia-network/node/package.json')) return true;
       if (s.endsWith('dist/bootstrap.js')) return true;
+      if (s.endsWith('.package-lock.json')) return true;
       return false;
     });
     mockReadFileSync.mockImplementation((p: any) => {
-      if (String(p).endsWith('package.json')) {
+      const s = String(p);
+      if (s.endsWith('.package-lock.json')) {
+        return JSON.stringify({
+          packages: {
+            [`node_modules/${PKG_NAME}`]: { version: TARGET_VERSION, integrity: VALID_INTEGRITY },
+          },
+        }) as any;
+      }
+      if (s.endsWith('package.json')) {
         return JSON.stringify({ name: PKG_NAME, version: TARGET_VERSION }) as any;
       }
       return '' as any;
@@ -251,17 +538,19 @@ describe('attemptSelfUpdate', () => {
       if (String(p).endsWith('dist/scripts')) return ['build.js'] as any;
       return [] as any;
     });
-    return { calls, opts };
+    return { calls, opts, auditCalls };
   }
 
   it('stages → verifies → swaps; installs PINNED version with --ignore-scripts into a STAGING prefix', async () => {
-    const { calls, opts } = wireHappyPath();
+    const { calls, opts, auditCalls } = wireHappyPath();
 
     const result = await attemptSelfUpdate(TARGET_VERSION);
 
     expect(result.success).toBe(true);
     expect(result.installType).toBe(InstallType.NPM_GLOBAL);
     expect(result.message).toMatch(/atomic swap/i);
+    expect(result.message).toMatch(/signature\+provenance/i);
+    expect(result.message).toMatch(/dist\.integrity verified/i);
 
     const installCmd = calls.find((c) => c.startsWith('npm install -g'));
     expect(installCmd).toBeDefined();
@@ -276,6 +565,28 @@ describe('attemptSelfUpdate', () => {
     const installOpts = opts.find((o) => o?.env?.NPM_CONFIG_PREFIX?.includes('.syn-update-staging-'));
     expect(installOpts).toBeDefined();
     expect(installOpts.timeout).toBe(600_000);
+
+    // SECURITY — registry is PINNED on the actual install (not just the
+    // upstream version check) AND on the signature audit.
+    expect(installCmd).toMatch(/--registry=https:\/\/registry\.npmjs\.org/);
+
+    // SECURITY — the env override is neutralised on the install child:
+    // any NPM_CONFIG_REGISTRY/.npmrc-discovery hint is stripped and the
+    // pin is force-set so a CLI flag is not the only line of defence.
+    expect(installOpts.env.NPM_CONFIG_REGISTRY).toBeUndefined();
+    expect(installOpts.env.NPM_CONFIG_USERCONFIG).toBeUndefined();
+    expect(installOpts.env.npm_config_registry).toBe('https://registry.npmjs.org');
+
+    // SECURITY — the crypto gate (`npm audit signatures`) ran over the
+    // pinned registry, scoped to the staged package dir (cwd), with the
+    // same sanitised env.
+    expect(auditCalls.length).toBe(1);
+    expect(auditCalls[0].args).toContain('audit');
+    expect(auditCalls[0].args).toContain('signatures');
+    expect(auditCalls[0].args).toContain('--registry=https://registry.npmjs.org');
+    expect(String(auditCalls[0].opts.cwd)).toMatch(/\.syn-update-staging-.*@synapseia-network\/node$/);
+    expect(auditCalls[0].opts.env.NPM_CONFIG_REGISTRY).toBeUndefined();
+    expect(auditCalls[0].opts.env.npm_config_registry).toBe('https://registry.npmjs.org');
 
     // A successful swap renames the staged package into the live tree.
     expect(mockRenameSync).toHaveBeenCalled();
@@ -320,6 +631,76 @@ describe('attemptSelfUpdate', () => {
     // HARD GUARANTEE: a failed verify never swaps the live package.
     expect(mockRenameSync).not.toHaveBeenCalled();
     // Staging must be cleaned up.
+    expect(mockRmSync).toHaveBeenCalled();
+  });
+
+  it('SIGNATURE MISMATCH (trojaned tarball) → success:false, NO swap, live untouched, staging purged', async () => {
+    // Structural gate PASSES (correct name/version, dist/scripts present) —
+    // exactly the trojaned-but-well-formed case verifyInstalledPackage
+    // cannot catch. The crypto gate must reject it and the swap must NEVER
+    // run.
+    wireHappyPath();
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('Command failed: npm audit signatures') as any;
+      e.status = 1;
+      e.stdout = '1 package has an invalid registry signature';
+      e.stderr = '';
+      throw e;
+    });
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/cryptographic/i);
+    expect(result.message).toMatch(/signature\/provenance/i);
+    // THE load-bearing guarantee: a tarball that fails signature/provenance
+    // verification is NEVER swapped over the live install.
+    expect(mockRenameSync).not.toHaveBeenCalled();
+    // Staging must be purged so the rejected tree can't be picked up next run.
+    expect(mockRmSync).toHaveBeenCalled();
+  });
+
+  it('SIGNATURE AUDIT UNREACHABLE (offline/registry down) → fail-closed, NO swap (skip update)', async () => {
+    wireHappyPath();
+    mockExecFileSync.mockImplementation(() => {
+      const e = new Error('getaddrinfo ENOTFOUND registry.npmjs.org') as any;
+      e.code = 'ENOTFOUND';
+      throw e;
+    });
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/cryptographic/i);
+    // Unreachable registry ⇒ unverifiable ⇒ SKIP the update, never proceed.
+    expect(mockRenameSync).not.toHaveBeenCalled();
+    expect(mockRmSync).toHaveBeenCalled();
+  });
+
+  it('ARTIFACT INTEGRITY MISMATCH (divergent registry metadata) → success:false, NO swap, staging purged', async () => {
+    // Structural gate (gate 1) AND signature gate (gate 2) PASS — the
+    // happy-path wiring keeps `npm audit signatures` green. Gate 3 must
+    // catch a registry whose served tarball hash diverges from the
+    // staged-lockfile integrity, and the swap must NEVER run.
+    wireHappyPath();
+    // Override execFileSync: audit still verifies, but `npm view
+    // dist.integrity` returns a DIFFERENT hash than the staged lockfile.
+    mockExecFileSync.mockImplementation((_file: any, args: any) => {
+      const argv = (args as string[]) ?? [];
+      if (argv[0] === 'view') {
+        return 'sha512-DIVERGENThashDIVERGENThashDIVERGENThashDIVERGENThashDIVERGENThashDIVERGENT==\n' as any;
+      }
+      return '1 package has a verified registry signature\n' as any;
+    });
+
+    const result = await attemptSelfUpdate(TARGET_VERSION);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/artifact integrity/i);
+    // THE load-bearing guarantee: a tarball whose hash diverges from the
+    // registry-recorded dist.integrity is NEVER swapped over the live install.
+    expect(mockRenameSync).not.toHaveBeenCalled();
+    // Staging must be purged so the rejected tree can't be picked up next run.
     expect(mockRmSync).toHaveBeenCalled();
   });
 
