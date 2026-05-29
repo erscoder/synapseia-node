@@ -1,5 +1,33 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] fix(agent): fence mission-context, allowlist ReAct tools (c62fa5af)
+
+MEDIUM (audit 2026-05-29): coordinator-supplied mission context was injected raw into researcher prompts — now sanitized via `sanitizeContextForPrompt` and wrapped in `<mission_context>` fences with a SYSTEM data-instruction (the fence-forgery regex now also covers `mission_context`). The ReAct `tool-runner` could dispatch non-registered tools (confused-deputy) — now a fail-closed allowlist rejects unknown tools and only enables A2A tools when their helper is injected.
+
+## [2026-05-29] fix(node): bound inference + adapter-download request bodies, DoS/OOM (9f29dabb)
+
+MEDIUM (audit 2026-05-29): the inference HTTP `parseBody` now caps the body at 1 MiB (raw-byte count, 413 before `JSON.parse` and before the training mutex; malformed JSON -> 400). `model-downloader` adds `AbortSignal.timeout(5min)` + a `Content-Length` pre-check + a streamed reader that aborts past a 2 GiB cap (defeats a lying/absent `Content-Length` OOM); fail-closed (nothing persists on reject).
+
+## [2026-05-29] fix(node): pnpm --ignore-scripts Dockerfile + checksum-verify docking binary (d2b7fcc8)
+
+MEDIUM (audit 2026-05-29): the Dockerfile moved from `npm install` (runs all postinstall scripts) + unpinned pip to `pnpm install --frozen-lockfile --ignore-scripts` + explicit `patch-package`/`rebuild` + a pinned pip venv (`requirements-training.txt`). The macOS docking Vina install now verifies a pinned sha256 of the downloaded binary BEFORE `chmod +x`/execution, fail-closed on mismatch. NOTE: `VINA_SHA256` are placeholder zeros pending real digests, so mac docking is fail-closed (disabled, safe — the capability is gated by a runtime probe) until backfilled; the torch/numpy pins need DiLoCo gradient-format validation before prod.
+
+## [2026-05-29] fix(wallet): print recovery mnemonic to TTY only, never the telemetry-tapped logger (2f395705)
+
+MEDIUM (audit 2026-05-29): `displayWalletCreationWarning` printed the BIP39 mnemonic through the structured logger, which forwards every arg to the off-box telemetry tap. The mnemonic is now written only to an interactive TTY (`process.stdout.write` gated on `isTTY`) and withheld on a non-TTY flow (stderr notice); the non-secret warning stays on the logger.
+
+## [2026-05-29] test(node): real-crypto specs for merkle-tree + commit-reveal-v2, expand stryker mutate set (10bec7c4)
+
+MEDIUM (audit 2026-05-29): added real-hashing specs (known vectors, getProof re-hash, odd-leaf duplication, commit->reveal round-trip, tamper-reject) for the previously-untested reward-sensitive `merkle-tree.ts` + `commit-reveal-v2.ts`, and expanded the stryker `mutate[]` set from 5 to 11 files to include the signature-verification + reward files (each confirmed to have a real-crypto spec).
+
+## [2026-05-29] fix(p2p): validate gossip WO payload post-verify, drop+warn on malformed (b1dcd2af)
+
+MEDIUM (audit 2026-05-29): signature-verified `WORK_ORDER_AVAILABLE` envelopes had only `wo.id` checked, so a signed-but-malformed WO could queue half-specified and break capability matching / reward math. `handleWorkOrderAvailable` now validates the required execution fields (id/title/status/rewardAmount/creatorAddress non-empty, requiredCapabilities `string[]`, type optional string) and drops+warns on malformed; tightened the `WorkOrderEnvelopePayload` type + wire-format docblock.
+
+## [2026-05-29] fix(cli): stop wallet-create leaking the mnemonic to the telemetry-tapped logger (90bb797f)
+
+Security follow-up to the keystore-only wallet-create change (6e701e79): `createKeypairIntoKeystore` printed the mnemonic via `logger.warn` (which forwards to the off-box telemetry tap) on both `syn start` fresh-install and `wallet-create`. Now TTY-only (`process.stdout.write` gated on `isTTY`), withheld on non-TTY. Found by the 2026-05-29 audit (node-keystore).
+
 ## [2026-05-29] fix(self-update): verify npm provenance + artifact integrity, pin registry (3feb3c16)
 
 The unattended fleet self-updater (~every 30 min) only checked package name/version/file-presence before atomically swapping the staged tree over the live install — a compromised/hijacked published package or rogue registry was a fleet-wide RCE primitive. Adds two fail-closed gates BEFORE the swap, both over the pinned registry: (1) `npm audit signatures` verifies the registry signature + sigstore provenance of the published version (publish-npm.yml publishes with `--provenance` via OIDC); (2) cross-checks the staged resolved sha512 integrity (hash of the tarball bytes npm received) against `npm view dist.integrity`, catching MITM/transport swap + metadata divergence.
