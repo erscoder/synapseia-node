@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+import { createHash } from 'node:crypto';
 import { installDockingDeps, extractExitCode, extractStderrTail } from '../install';
 
 type ExecCall = { cmd: string };
@@ -75,12 +76,16 @@ function makeAptStub(installSteps: AptStep[]) {
 const fastSleep = jest.fn(async (_ms: number) => undefined);
 
 describe('installDockingDeps', () => {
-  it('darwin happy path (arm64): brew + curl mac_aarch64 Vina + chmod + version probe → installed=true', async () => {
+  it('darwin (arm64): curl uses mac_aarch64 asset; checksum gate runs BEFORE chmod/probe', async () => {
     // 0.8.55+ split: autodock-vina is NOT in homebrew-core, so the installer
     // brews open-babel and downloads the Vina binary from the AutoDock-Vina
     // GitHub release. Bug fixed 2026-05-17: prior template emitted
     // `vina_<ver>_macos_arm64` which 404s; real asset is `mac_aarch64`.
-    // Stub accepts: brew probe + brew install + curl + chmod + version probe.
+    //
+    // SUPPLY-CHAIN: production pins a SHA-256 for the asset. Injected
+    // `readFileFn` returns arbitrary "downloaded" bytes whose hash will NOT
+    // match the (placeholder) pinned digest, so the install fails closed
+    // here and — crucially — NEITHER chmod NOR the --version probe runs.
     const origArch = process.arch;
     Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
     try {
@@ -95,31 +100,33 @@ describe('installDockingDeps', () => {
         platform: 'darwin',
         execSyncFn: fn,
         env: {},
+        // Force the download+checksum path regardless of any vina binary
+        // that happens to exist in the dev machine's ~/.synapseia/bin/.
+        vinaAlreadyReadyFn: () => false,
+        readFileFn: () => Buffer.from('fake-downloaded-bytes'),
       });
-      expect(result.installed).toBe(true);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
-      // Either 2 calls (Vina already present + executable) or 5 calls
-      // (brew probe + brew install + curl + chmod + version probe).
       expect(calls[0].cmd).toBe('brew --version');
       expect(calls[1].cmd).toBe('brew install open-babel');
-      if (calls.length > 2) {
-        expect(calls.length).toBe(5);
-        // Regression guard against P28: literal substring of GH release
-        // naming convention. Any future drift (mac→macos, aarch64→arm64,
-        // version bump without updating template) trips this assertion.
-        expect(calls[2].cmd).toContain('vina_1.2.5_mac_aarch64');
-        expect(calls[2].cmd).toMatch(/^curl -sLf -o ".*\/\.synapseia\/bin\/vina" "https:\/\/github\.com\/ccsb-scripps\/AutoDock-Vina\/releases\/download\/v1\.2\.5\/vina_1\.2\.5_mac_aarch64"$/);
-        expect(calls[3].cmd).toMatch(/^chmod \+x ".*\/\.synapseia\/bin\/vina"$/);
-        // Post-download verify probe: vina --version. Catches HTML-404
-        // decoy pages that downloaded + chmod'd but aren't Mach-O.
-        expect(calls[4].cmd).toMatch(/^".*\/\.synapseia\/bin\/vina" --version$/);
-      }
+      // Download path is forced (vinaAlreadyReadyFn=false).
+      const curlCall = calls.find((c) => c.cmd.startsWith('curl '))!;
+      expect(curlCall).toBeDefined();
+      // Regression guard against P28: literal substring of GH release
+      // naming convention. Any future drift (mac→macos, aarch64→arm64,
+      // version bump without updating template) trips this assertion.
+      expect(curlCall.cmd).toContain('vina_1.2.5_mac_aarch64');
+      expect(curlCall.cmd).toMatch(/^curl -sLf -o ".*\/\.synapseia\/bin\/vina" "https:\/\/github\.com\/ccsb-scripps\/AutoDock-Vina\/releases\/download\/v1\.2\.5\/vina_1\.2\.5_mac_aarch64"$/);
+      // Checksum gate fired → fail-closed, NEVER executed the binary.
+      expect(result.installed).toBe(false);
+      expect(result.reason).toMatch(/checksum mismatch/);
+      expect(calls.find((c) => c.cmd.startsWith('chmod '))).toBeUndefined();
+      expect(calls.find((c) => /--version$/.test(c.cmd) && c.cmd.startsWith('"'))).toBeUndefined();
     } finally {
       Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
     }
   });
 
-  it('darwin happy path (x64): curl asset uses mac_x86_64 segment', async () => {
+  it('darwin (x64): curl asset uses mac_x86_64 segment', async () => {
     // Symmetric to arm64 test — assert the x86_64 arch mapping path. Same
     // GH release naming convention (`mac_x86_64`), no `macos_` prefix.
     const origArch = process.arch;
@@ -136,27 +143,106 @@ describe('installDockingDeps', () => {
         platform: 'darwin',
         execSyncFn: fn,
         env: {},
+        vinaAlreadyReadyFn: () => false,
+        readFileFn: () => Buffer.from('fake-downloaded-bytes'),
       });
-      expect(result.installed).toBe(true);
-      if (calls.length > 2) {
-        expect(calls[2].cmd).toContain('vina_1.2.5_mac_x86_64');
+      if (calls.some((c) => c.cmd.startsWith('curl '))) {
+        const curlCall = calls.find((c) => c.cmd.startsWith('curl '))!;
+        expect(curlCall.cmd).toContain('vina_1.2.5_mac_x86_64');
         // Negative guard: stale 0.8.55-0.8.65 literal must not reappear.
-        expect(calls[2].cmd).not.toContain('macos_');
-        expect(calls[2].cmd).not.toContain('mac_arm64');
+        expect(curlCall.cmd).not.toContain('macos_');
+        expect(curlCall.cmd).not.toContain('mac_arm64');
+        // Fail-closed at checksum gate (placeholder digest cannot match).
+        expect(result.installed).toBe(false);
       }
     } finally {
       Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
     }
   });
 
-  it('darwin: vina --version probe failure → installed=false with probe reason', async () => {
-    // P29 — exercise the real spawn-call path. The post-download verify
-    // catches the case where curl-with-`-f` somehow returned a non-Mach-O
-    // file (mirror outage HTML, captive portal, partial write). chmod
-    // succeeds on garbage; only `vina --version` reveals the corruption.
+  it('darwin: checksum MISMATCH → binary NOT chmod+x\'d, NOT executed, file quarantined', async () => {
+    // Core supply-chain regression: a 200-OK but tampered/wrong body must be
+    // rejected. `curl -f` would have passed it. The pinned-digest gate is the
+    // only thing standing between "downloaded bytes" and "executed on host".
     const origArch = process.arch;
     Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
     try {
+      const calls: ExecCall[] = [];
+      const fn = jest.fn((cmd: unknown) => {
+        const c = String(cmd);
+        calls.push({ cmd: c });
+        if (c === 'brew --version') return Buffer.from('');
+        if (c.startsWith('brew install')) return Buffer.from('');
+        if (c.startsWith('curl ')) return Buffer.from('');
+        // chmod and the --version probe MUST NOT be reached.
+        throw new Error(`stub: command must not run after checksum mismatch: ${c}`);
+      }) as unknown as typeof import('node:child_process').execSync;
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+        vinaAlreadyReadyFn: () => false,
+        // Bytes whose sha256 is guaranteed not to equal the pinned digest.
+        readFileFn: () => Buffer.from('malicious-or-corrupt-payload'),
+      });
+      // Download path is forced (vinaAlreadyReadyFn=false), so these assert
+      // unconditionally — no vacuous skip.
+      expect(calls.some((c) => c.cmd.startsWith('curl '))).toBe(true);
+      expect(result.installed).toBe(false);
+      expect(result.reason).toMatch(/checksum mismatch/);
+      // The downloaded bytes were NEVER made executable.
+      expect(calls.find((c) => c.cmd.startsWith('chmod '))).toBeUndefined();
+      // The binary was NEVER executed (no --version probe).
+      expect(calls.find((c) => /\/vina" --version$/.test(c.cmd))).toBeUndefined();
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin: checksum read failure → fail-closed, no chmod/probe', async () => {
+    // If the just-written file can't be read back for hashing, we must not
+    // assume it's fine — treat as failure and never execute it.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      const calls: ExecCall[] = [];
+      const fn = jest.fn((cmd: unknown) => {
+        const c = String(cmd);
+        calls.push({ cmd: c });
+        if (c === 'brew --version') return Buffer.from('');
+        if (c.startsWith('brew install')) return Buffer.from('');
+        if (c.startsWith('curl ')) return Buffer.from('');
+        throw new Error(`stub: command must not run after read failure: ${c}`);
+      }) as unknown as typeof import('node:child_process').execSync;
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+        vinaAlreadyReadyFn: () => false,
+        readFileFn: () => {
+          throw new Error('ENOENT: cannot read downloaded file');
+        },
+      });
+      expect(calls.some((c) => c.cmd.startsWith('curl '))).toBe(true);
+      expect(result.installed).toBe(false);
+      expect(result.reason).toMatch(/could not be read for checksum verification/);
+      expect(calls.find((c) => c.cmd.startsWith('chmod '))).toBeUndefined();
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin: checksum PASSES but vina --version probe fails → installed=false with probe reason', async () => {
+    // P29 — exercise the real spawn-call path. The post-VERIFY probe catches
+    // a checksum-matched-but-non-runnable binary (e.g. a future arch-mapping
+    // bug that pins the wrong-arch digest). To reach the probe at all, the
+    // checksum gate must pass first, so we inject `expectedSha256Fn` returning
+    // the sha256 of the fixture bytes that `readFileFn` hands back.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      const fixtureBytes = Buffer.from('a-valid-vina-binary-fixture');
+      const fixtureSha = createHash('sha256').update(fixtureBytes).digest('hex');
       // Stub accepts curl + chmod but throws on the version probe.
       const calls: ExecCall[] = [];
       const fn = jest.fn((cmd: unknown) => {
@@ -175,15 +261,84 @@ describe('installDockingDeps', () => {
         platform: 'darwin',
         execSyncFn: fn,
         env: {},
+        vinaAlreadyReadyFn: () => false,
+        readFileFn: () => fixtureBytes,
+        expectedSha256Fn: () => fixtureSha,
       });
-      // Only assert when Vina was actually downloaded (binary absent in test env).
-      // If $HOME/.synapseia/bin/vina happens to exist, vinaReady=true and we
-      // never hit the probe — that's the early-skip branch, not under test.
-      if (calls.some((c) => c.cmd.startsWith('curl '))) {
-        expect(result.installed).toBe(false);
-        expect(result.reason).toMatch(/Vina downloaded but --version probe failed/);
-        expect(result.reason).toMatch(/exec format error/);
-      }
+      // Checksum passed → chmod ran → probe ran → probe failed.
+      expect(calls.some((c) => c.cmd.startsWith('curl '))).toBe(true);
+      expect(calls.some((c) => c.cmd.startsWith('chmod '))).toBe(true);
+      expect(result.installed).toBe(false);
+      expect(result.reason).toMatch(/Vina downloaded but --version probe failed/);
+      expect(result.reason).toMatch(/exec format error/);
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin: checksum PASSES → chmod + probe succeed → installed=true', async () => {
+    // Happy path proving the full verified flow: matching checksum unlocks
+    // chmod +x and the --version probe, both succeed → installed.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      const fixtureBytes = Buffer.from('a-valid-vina-binary-fixture');
+      const fixtureSha = createHash('sha256').update(fixtureBytes).digest('hex');
+      const { fn, calls } = makeExecStub([
+        'brew --version',
+        'brew install',
+        'curl ',
+        'chmod ',
+        '"',
+      ]);
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+        vinaAlreadyReadyFn: () => false,
+        readFileFn: () => fixtureBytes,
+        expectedSha256Fn: () => fixtureSha,
+      });
+      expect(result.installed).toBe(true);
+      // Order: curl (download) → chmod (only after verify) → --version probe.
+      const order = calls.map((c) => c.cmd);
+      const curlIdx = order.findIndex((c) => c.startsWith('curl '));
+      const chmodIdx = order.findIndex((c) => c.startsWith('chmod '));
+      const probeIdx = order.findIndex((c) => /\/vina" --version$/.test(c));
+      expect(curlIdx).toBeGreaterThanOrEqual(0);
+      expect(chmodIdx).toBeGreaterThan(curlIdx);
+      expect(probeIdx).toBeGreaterThan(chmodIdx);
+    } finally {
+      Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
+    }
+  });
+
+  it('darwin: unpinned (version, arch) → fail-closed BEFORE download (no curl)', async () => {
+    // If no digest is pinned for this asset, we must refuse to even download
+    // and execute it. expectedSha256Fn returns undefined to simulate a
+    // missing pin; the installer must bail before curl.
+    const origArch = process.arch;
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    try {
+      const calls: ExecCall[] = [];
+      const fn = jest.fn((cmd: unknown) => {
+        const c = String(cmd);
+        calls.push({ cmd: c });
+        if (c === 'brew --version') return Buffer.from('');
+        if (c.startsWith('brew install')) return Buffer.from('');
+        throw new Error(`stub: must not download when unpinned: ${c}`);
+      }) as unknown as typeof import('node:child_process').execSync;
+      const result = await installDockingDeps({
+        platform: 'darwin',
+        execSyncFn: fn,
+        env: {},
+        vinaAlreadyReadyFn: () => false,
+        expectedSha256Fn: () => undefined,
+      });
+      expect(result.installed).toBe(false);
+      expect(result.reason).toMatch(/no pinned SHA-256/);
+      // Never attempted a download.
+      expect(calls.find((c) => c.cmd.startsWith('curl '))).toBeUndefined();
     } finally {
       Object.defineProperty(process, 'arch', { value: origArch, configurable: true });
     }

@@ -13,7 +13,15 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, accessSync, mkdirSync, constants as fsConstants } from 'node:fs';
+import {
+  existsSync,
+  accessSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  constants as fsConstants,
+} from 'node:fs';
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import * as path from 'node:path';
 
@@ -36,6 +44,84 @@ export interface InstallDockingDepsOptions {
    * Default: real `setTimeout`-based sleep (30s / 60s / 90s backoff).
    */
   sleepFn?: (ms: number) => Promise<void>;
+  /**
+   * Test-only override of `fs.readFileSync`, used to read the downloaded
+   * Vina binary bytes for checksum verification. Lets tests inject the
+   * "downloaded" bytes without touching the real filesystem.
+   * Default: real `readFileSync`.
+   */
+  readFileFn?: (p: string) => Buffer;
+  /**
+   * Test-only override of the "is the Vina binary already present?" check.
+   * Default: real `existsSync` + `accessSync(X_OK)`. Tests pass `() => false`
+   * to deterministically force the download+checksum path regardless of
+   * whatever happens to live in the dev machine's `~/.synapseia/bin/`.
+   */
+  vinaAlreadyReadyFn?: (vinaBinPath: string) => boolean;
+  /**
+   * Test-only override of the expected (pinned) SHA-256 for the Vina asset.
+   * Default: the production `VINA_SHA256` map keyed by (version, arch).
+   *
+   * This exists ONLY so tests can drive the post-checksum paths (chmod,
+   * `--version` probe) with arbitrary injected bytes — they set this to the
+   * sha256 of their own fixture. Production code NEVER passes it, so the
+   * real pinned digests are always used at runtime.
+   */
+  expectedSha256Fn?: (version: string, arch: string) => string | undefined;
+}
+
+/**
+ * Pinned SHA-256 digests for each (version, arch) AutoDock-Vina macOS GitHub
+ * release asset. These are the SUPPLY-CHAIN trust anchors: a downloaded
+ * binary is executed (chmod +x → `--version` probe → later docking runs)
+ * ONLY if its bytes hash to the value pinned here.
+ *
+ * Why pin instead of trusting `curl -f`: `-f` only rejects HTTP 4xx/5xx. A
+ * compromised release asset, a MITM on a downgraded TLS path, a CDN cache
+ * poisoning, or a typo-squatted mirror redirect can all serve a 200-OK body
+ * that is a malicious Mach-O. Without a pinned digest we'd `chmod +x` and
+ * execute attacker-controlled bytes on the operator's host.
+ *
+ * Key = `vina_<version>_mac_<arch>` (the exact GH asset filename, matching
+ * the curl URL tail). To add/rotate a version: download the official asset
+ * over https, `shasum -a 256 <file>`, and paste the digest here. Do NOT
+ * accept a digest from any source other than a trusted, manually-verified
+ * download of the upstream release.
+ *
+ * If a (version, arch) is NOT pinned here, the installer FAILS CLOSED:
+ * it reports `installed:false` and never executes the binary. This is the
+ * safe default for an optional, best-effort install — a missing pin must
+ * never degrade into "execute whatever was downloaded".
+ */
+const VINA_SHA256: Readonly<Record<string, string>> = {
+  // AutoDock-Vina v1.2.5 macOS release assets.
+  // ccsb-scripps/AutoDock-Vina releases/download/v1.2.5/vina_1.2.5_mac_<arch>
+  //
+  // ⚠️ PLACEHOLDER digests — these MUST be replaced with the real upstream
+  // SHA-256 sums before this code can install Vina on macOS. They are
+  // intentionally left as obviously-fake all-zero strings so a forgotten
+  // backfill fails closed (digest mismatch → no execution) rather than
+  // silently trusting a wrong value. Backfill procedure: download each
+  // asset over https from the official release page, run
+  // `shasum -a 256 vina_1.2.5_mac_aarch64` / `..._mac_x86_64`, paste below.
+  vina_1_2_5_mac_aarch64:
+    '0000000000000000000000000000000000000000000000000000000000000000',
+  vina_1_2_5_mac_x86_64:
+    '0000000000000000000000000000000000000000000000000000000000000000',
+};
+
+/**
+ * Build the `VINA_SHA256` lookup key for a (version, arch) pair. Version
+ * dots are replaced with underscores so the key is a valid identifier and
+ * matches the constant above (`1.2.5` → `1_2_5`).
+ */
+function vinaSha256Key(version: string, arch: string): string {
+  return `vina_${version.replace(/\./g, '_')}_mac_${arch}`;
+}
+
+/** Hex SHA-256 of a buffer. */
+function sha256Hex(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex');
 }
 
 /** Exit code returned by apt-get when the dpkg / apt lock is held. */
@@ -187,6 +273,19 @@ export async function installDockingDeps(
   const platform = opts?.platform ?? process.platform;
   const env = opts?.env ?? process.env;
   const sleep = opts?.sleepFn ?? realSleep;
+  const readFile = opts?.readFileFn ?? ((p: string) => readFileSync(p));
+  const vinaAlreadyReady =
+    opts?.vinaAlreadyReadyFn ??
+    ((vinaBinPath: string): boolean => {
+      if (!existsSync(vinaBinPath)) return false;
+      try {
+        accessSync(vinaBinPath, fsConstants.X_OK);
+        return true;
+      } catch {
+        // exists but not executable — re-download.
+        return false;
+      }
+    });
 
   if (env.DISABLE_AUTO_INSTALL_DOCKING === 'true') {
     return {
@@ -207,15 +306,7 @@ export async function installDockingDeps(
 
       // Step 2: AutoDock Vina via GitHub release binary.
       const vinaBinPath = path.join(homedir(), '.synapseia', 'bin', 'vina');
-      let vinaReady = false;
-      if (existsSync(vinaBinPath)) {
-        try {
-          accessSync(vinaBinPath, fsConstants.X_OK);
-          vinaReady = true;
-        } catch {
-          // exists but not executable — re-download.
-        }
-      }
+      const vinaReady = vinaAlreadyReady(vinaBinPath);
       if (!vinaReady) {
         // GH release asset naming convention (verified live 2026-05-17 against
         // ccsb-scripps/AutoDock-Vina v1.2.5): `vina_<ver>_mac_<arch>` where
@@ -225,13 +316,30 @@ export async function installDockingDeps(
         const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
         const vinaVersion = '1.2.5';
         const vinaUrl = `https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v${vinaVersion}/vina_${vinaVersion}_mac_${arch}`;
+
+        // Look up the pinned digest BEFORE downloading. If this (version,
+        // arch) is not pinned we fail closed immediately — never download +
+        // execute an asset we have no trust anchor for. (Supply-chain
+        // hardening: a missing pin must not degrade to "trust whatever".)
+        const expectedSha = opts?.expectedSha256Fn
+          ? opts.expectedSha256Fn(vinaVersion, arch)
+          : VINA_SHA256[vinaSha256Key(vinaVersion, arch)];
+        if (!expectedSha) {
+          return {
+            installed: false,
+            reason: `no pinned SHA-256 for Vina ${vinaVersion} (${arch}); refusing to download+execute unverified binary`,
+            durationMs: Date.now() - t0,
+          };
+        }
+
+        // Download to disk. NOTE: no `chmod +x` here — the bytes stay
+        // untrusted (and non-executable) until the checksum gate passes.
         try {
           mkdirSync(path.dirname(vinaBinPath), { recursive: true });
           exec(`curl -sLf -o "${vinaBinPath}" "${vinaUrl}"`, {
             stdio: 'inherit',
             timeout: 300_000,
           });
-          exec(`chmod +x "${vinaBinPath}"`, { stdio: 'pipe', timeout: 5_000 });
         } catch (err) {
           return {
             installed: false,
@@ -239,11 +347,57 @@ export async function installDockingDeps(
             durationMs: Date.now() - t0,
           };
         }
-        // Post-download verify: curl with `-f` already 404-fails, but a
-        // mis-redirected mirror or HTML decoy page could yield a chmod-able
-        // garbage file. Probe `vina --version` so a non-Mach-O binary is
-        // caught here instead of silently advertising `docking` cap and
-        // crashing later when the first WO arrives.
+
+        // SUPPLY-CHAIN GATE: hash the downloaded bytes and compare against
+        // the pinned digest BEFORE making the file executable and BEFORE the
+        // `--version` probe. `curl -f` only rejects HTTP errors; it cannot
+        // detect a 200-OK malicious/tampered body (compromised release asset,
+        // MITM, CDN poisoning, mirror redirect). On mismatch we delete the
+        // file and bail NON-FATALLY without ever executing it.
+        let actualSha: string;
+        try {
+          actualSha = sha256Hex(readFile(vinaBinPath));
+        } catch (err) {
+          try {
+            rmSync(vinaBinPath, { force: true });
+          } catch {
+            /* best-effort */
+          }
+          return {
+            installed: false,
+            reason: `Vina downloaded but could not be read for checksum verification: ${(err as Error).message}`,
+            durationMs: Date.now() - t0,
+          };
+        }
+        if (actualSha !== expectedSha) {
+          // Tampered / wrong bytes — quarantine by deleting, never chmod or run.
+          try {
+            rmSync(vinaBinPath, { force: true });
+          } catch {
+            /* best-effort */
+          }
+          return {
+            installed: false,
+            reason: `Vina checksum mismatch (expected ${expectedSha}, got ${actualSha}); refusing to execute unverified binary`,
+            durationMs: Date.now() - t0,
+          };
+        }
+
+        // Checksum verified — now it is safe to make the file executable.
+        try {
+          exec(`chmod +x "${vinaBinPath}"`, { stdio: 'pipe', timeout: 5_000 });
+        } catch (err) {
+          return {
+            installed: false,
+            reason: `Vina checksum verified but chmod +x failed: ${(err as Error).message}`,
+            durationMs: Date.now() - t0,
+          };
+        }
+
+        // Post-verify functional probe: a checksum-matched binary can still
+        // fail to run (wrong arch slipping through a future arch-mapping bug).
+        // Probe `vina --version` so a non-runnable binary is caught here
+        // instead of crashing on the first work order.
         try {
           exec(`"${vinaBinPath}" --version`, { stdio: 'pipe', timeout: 10_000 });
         } catch (err) {

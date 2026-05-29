@@ -1,0 +1,19 @@
+# Pinned Python dependencies for the PyTorch training/aggregation worker.
+#
+# These are installed into an isolated venv (/opt/training-venv) by the
+# runtime stage of the Dockerfile. Pinning (==) — instead of the previous
+# unpinned `pip3 install torch numpy` — makes the image build reproducible
+# and removes the supply-chain risk of silently pulling a newer (possibly
+# compromised or behaviorally-divergent) release on every rebuild.
+#
+# The training scripts (scripts/diloco_*.py, scripts/train_*.py) hard-disable
+# CUDA and run CPU-only, so the default CPU wheels from PyPI are sufficient.
+#
+# ⚠️ Version policy: these pins MUST match whatever pre-built training
+# artifacts / gradient format the coordinator expects (the original Dockerfile
+# comment warned "must match the pre-built version"). When bumping torch,
+# re-validate DiLoCo aggregation determinism (sha256 of accumulated gradients)
+# before shipping. To regenerate with hashes, run `pip hash` or use
+# `pip-compile --generate-hashes` against this file in CI.
+torch==2.5.1
+numpy==2.1.3
