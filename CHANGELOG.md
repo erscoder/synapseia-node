@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] fix(cli): keystore-only wallet-create, drop plaintext mnemonic backup (6e701e79)
+
+Removes the legacy plaintext wallet-creation path that wrote the BIP39 mnemonic in cleartext to `~/.synapseia/wallet-backup.json` (mislabelled `encrypted: true`) next to the encrypted `wallet.json`. Deletes `WalletHelper.generateWallet`, `WalletService.generate`, the `generateWallet` export wrapper and the `BACKUP_FILE` constant.
+
+`wallet-create` is rewritten as a keystore-only create-and-exit command: it generates a BIP39 -> BIP44 (`m/44'/501'/0'/0'`) keypair and encrypts it straight into `EncryptedKeystore` (`~/.synapseia/wallet.keystore.json`, mode `0600`). No `wallet.json` and no cleartext backup are ever written; the mnemonic is printed once to the terminal only.
+
+A shared `createKeypairIntoKeystore()` helper is now used by both the `syn start` fresh-install branch and `wallet-create`, so they cannot diverge. `getOrCreateWallet` is load-only. The node-ui contract is preserved verbatim (same args, stdin passphrase, `__WALLET_OK__` stdout sentinel, exit codes `2/4/5/0`), so node-ui needs no change. Legacy `wallet.json` load and keystore migration on `syn start` still work. Found by the 2026-05-29 audit.
+
 ## [2026-05-28] feat(p2p): subscribe + filter targeted WO envelopes, node side (D-P2P Slice 2) (bc345889)
 
 `0.8.131` -> `0.8.132`. Slice 2 node side of the D-P2P targeted-push plan. Receive the HTTP coord's
