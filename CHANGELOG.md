@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] fix(agent): sanitize and fence untrusted corpus context in researcher prompts (6ba3d1a5)
+
+Peer-authored knowledge-graph / reference-corpus context (other nodes' discovery titles + content, via the coordinator `/corpus/context`) was interpolated RAW into researcher prompts while only title/abstract went through `sanitizeForPrompt` — an indirect prompt-injection vector across the network. Adds `sanitizeContextForPrompt` (neutralizes directive/jailbreak patterns in place rather than throwing, strips forged fence tags, length-caps) and wraps `kgContext`/`referenceContext` in `<kg_context>`/`<reference_context>` fences with a SYSTEM instruction that fenced content is UNTRUSTED DATA, never instructions.
+
+Applied to both `buildMedicalResearcherPrompt` and the legacy `buildResearchPrompt` (P42 sibling). Audited every prompt builder; no other sink interpolates peer-fetched context raw. Tests: EN/ES directive neutralized + confined to the fence, forged closing fence stripped, clean context verbatim, truncation cannot escape the fence. Found by the 2026-05-29 audit (HIGH, node-prompt-injection).
+
 ## [2026-05-29] fix(a2a): bind auth to peerId, add allowlist, sign payload (c804dd49)
 
 A2A request auth no longer trusts the caller-supplied `X-Public-Key`. `verify()` derives the peerId from the presented Ed25519 pubkey (`publicKeyHex.slice(0,32)`, matching `IdentityHelper`) and rejects unless it equals `task.senderPeerId`, verifying the signature against that same key (fail-closed). New `A2AAuthorizationService` adds a default-deny allowlist (trust root = coordinator pubkey + TTL-bounded live peers; `health_check` public) enforced after signature + binding.
