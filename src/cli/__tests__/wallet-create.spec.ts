@@ -16,7 +16,7 @@
  * EncryptedKeystore, then proving NO cleartext-write path is ever invoked.
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
@@ -85,6 +85,16 @@ function makeCrypto() {
 }
 
 describe('createKeypairIntoKeystore', () => {
+  const originalIsTTY = process.stdout.isTTY;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: originalIsTTY,
+      configurable: true,
+    });
+  });
+
   it('encrypts a fresh BIP44 keypair into the keystore and returns a base58 address + mnemonic, persisting NOTHING in cleartext', async () => {
     const keystore = makeKeystore();
     const logger = makeLogger();
@@ -106,10 +116,63 @@ describe('createKeypairIntoKeystore', () => {
     // Address is a valid 32..44 char base58 token; mnemonic is 12 words.
     expect(result.address).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
     expect(result.mnemonic.trim().split(/\s+/)).toHaveLength(12);
+  });
 
-    // The mnemonic is printed ONCE for the operator to record.
-    const warned = logger.warn.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(warned).toContain(result.mnemonic);
+  it('NEVER routes the mnemonic through the structured logger (off-box telemetry tap)', async () => {
+    // SECURITY regression guard (mirrors wallet/__tests__/wallet-mnemonic-no-logger.spec.ts):
+    // the structured logger forwards every arg to the off-box telemetry tap,
+    // so the seed phrase must NEVER be passed to logger.log / warn / error.
+    // It is returned to the caller and (only on an interactive TTY) written
+    // raw to stdout — never logged.
+    const keystore = makeKeystore();
+    const logger = makeLogger();
+    const crypto = makeCrypto();
+
+    const result = await createKeypairIntoKeystore('a-strong-passphrase', {
+      keystore,
+      logger,
+      crypto,
+    });
+
+    // The function still RETURNS the mnemonic (caller owns it).
+    expect(result.mnemonic).toBe(crypto.mnemonic);
+
+    // No logger method ever received the mnemonic as an argument.
+    for (const fn of [logger.log, logger.warn, logger.error]) {
+      for (const call of fn.mock.calls) {
+        const joined = call.map((a) => String(a)).join(' ');
+        expect(joined).not.toContain(result.mnemonic);
+      }
+    }
+  });
+
+  it('on an interactive TTY writes the mnemonic raw to stdout (never to the logger)', async () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    const stdoutSpy = jest
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
+
+    const keystore = makeKeystore();
+    const logger = makeLogger();
+    const crypto = makeCrypto();
+
+    const result = await createKeypairIntoKeystore('a-strong-passphrase', {
+      keystore,
+      logger,
+      crypto,
+    });
+
+    // The mnemonic was written raw to stdout.
+    const stdoutText = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(stdoutText).toContain(result.mnemonic);
+
+    // ...and still NEVER through the structured logger.
+    for (const fn of [logger.log, logger.warn, logger.error]) {
+      for (const call of fn.mock.calls) {
+        const joined = call.map((a) => String(a)).join(' ');
+        expect(joined).not.toContain(result.mnemonic);
+      }
+    }
   });
 });
 

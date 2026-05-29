@@ -152,7 +152,19 @@ export async function createKeypairIntoKeystore(
   // recovery path; it is printed here and NEVER written to a file.
   logger.warn('');
   logger.warn('🔐  IMPORTANT — write down this recovery phrase NOW:');
-  logger.warn(`     ${mnemonic}`);
+  // SECURITY: the mnemonic must NEVER pass through the structured logger,
+  // which forwards every arg to the off-box telemetry tap (utils/logger.ts
+  // callTap). Print it ONLY to an interactive TTY; on a non-interactive flow
+  // (piped / stdin-passphrase, e.g. node-ui) withhold it rather than leak the
+  // seed — the operator must re-create on a terminal or use a dedicated GUI
+  // channel to view it.
+  if (process.stdout.isTTY) {
+    process.stdout.write(`     ${mnemonic}\n`);
+  } else {
+    process.stderr.write(
+      '     [recovery phrase withheld on non-interactive stdout to avoid logging the seed]\n',
+    );
+  }
   logger.warn('');
   logger.warn(`     Wallet address: ${address}`);
   logger.warn(`     Keystore file:  ${keystore.getPath()}`);
