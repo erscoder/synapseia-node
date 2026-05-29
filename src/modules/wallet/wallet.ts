@@ -377,8 +377,29 @@ export class WalletHelper {
   displayWalletCreationWarning(wallet: SolanaWallet): void {
     if (!wallet.mnemonic) return;
 
+    // SECURITY (F-node MEDIUM): the recovery mnemonic must NEVER pass
+    // through the structured logger. `logger.*` forwards every arg to the
+    // telemetry tap (see utils/logger.ts `callTap` → TelemetryClient), so
+    // a `logger.log(mnemonic)` would ship the seed phrase off-box. The
+    // loud warning banner carries no secret and is fine on the logger.
     logger.warn('[Wallet] IMPORTANT — save your recovery phrase offline. Anyone with these 12 words controls your funds:');
-    logger.log(`[Wallet] recovery phrase: ${wallet.mnemonic}`);
+
+    // The mnemonic itself goes ONLY to a raw, interactive TTY — never to a
+    // log transport. When stdout is piped/redirected/non-interactive (e.g.
+    // the node-ui stdin-passphrase creation flow), we do NOT emit the seed
+    // to any sink; we print a notice (also raw-TTY-gated) explaining the
+    // mnemonic is shown only at interactive creation.
+    if (process.stdout.isTTY) {
+      // Raw write — bypasses the logger/telemetry tap entirely.
+      process.stdout.write(`[Wallet] recovery phrase: ${wallet.mnemonic}\n`);
+    } else {
+      // Non-interactive: the mnemonic is intentionally withheld from every
+      // sink. Surfacing the notice through stderr (raw, no tap) keeps it
+      // off the structured logger as well.
+      process.stderr.write(
+        '[Wallet] recovery phrase available only at interactive (TTY) creation — re-create on a terminal to view it.\n'
+      );
+    }
   }
 
   /**
