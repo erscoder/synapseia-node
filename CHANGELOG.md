@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] fix(a2a): bind auth to peerId, add allowlist, sign payload (c804dd49)
+
+A2A request auth no longer trusts the caller-supplied `X-Public-Key`. `verify()` derives the peerId from the presented Ed25519 pubkey (`publicKeyHex.slice(0,32)`, matching `IdentityHelper`) and rejects unless it equals `task.senderPeerId`, verifying the signature against that same key (fail-closed). New `A2AAuthorizationService` adds a default-deny allowlist (trust root = coordinator pubkey + TTL-bounded live peers; `health_check` public) enforced after signature + binding.
+
+The signed message now binds the payload (`...:sha256(canonicalJson(payload))`, recursive stable key-sort) so a captured signature cannot be replayed with a swapped payload; `sign()`, `verify()` and the a2a client are updated symmetrically (the client previously never sent `X-Public-Key`). The A2A HTTP server now binds `127.0.0.1` by default (opt-in `A2A_BIND_ALL=true`) and caps the request body at 256 KiB before parse/auth. A2A is node<->node only; no coordinator caller is affected. Found by the 2026-05-29 audit (HIGH x2, node-p2p-security).
+
 ## [2026-05-29] fix(cli): keystore-only wallet-create, drop plaintext mnemonic backup (6e701e79)
 
 Removes the legacy plaintext wallet-creation path that wrote the BIP39 mnemonic in cleartext to `~/.synapseia/wallet-backup.json` (mislabelled `encrypted: true`) next to the encrypted `wallet.json`. Deletes `WalletHelper.generateWallet`, `WalletService.generate`, the `generateWallet` export wrapper and the `BACKUP_FILE` constant.
