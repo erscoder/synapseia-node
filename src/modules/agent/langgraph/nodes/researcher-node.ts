@@ -48,6 +48,13 @@ export class ResearcherNode {
       ? (meta['relatedDois'] as unknown[]).filter((d): d is string => typeof d === 'string')
       : undefined;
 
+    // P26 indirect prompt-injection: the mission brief is coordinator-supplied
+    // text (round.opened WS event). renderMissionBriefForPrompt sanitizes each
+    // field (defang jailbreak markers, strip forged fences) and wraps the block
+    // in an explicit <mission_context> DATA fence whose header declares the
+    // content as untrusted reference, never instructions — matching the
+    // kg/reference fence treatment in buildMedicalResearcherPrompt.
+    const missionContext = renderMissionBriefForPrompt();
     const prompt = buildMedicalResearcherPrompt({
       title: payload.title,
       abstract: payload.abstract,
@@ -55,7 +62,7 @@ export class ResearcherNode {
       kgContext,
       referenceContext,
       relatedDois,
-      missionContext: renderMissionBriefForPrompt(),
+      missionContext,
     });
 
     try {

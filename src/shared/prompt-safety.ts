@@ -180,6 +180,8 @@ export const REFERENCE_CONTEXT_FENCE_OPEN = '<reference_context>';
 export const REFERENCE_CONTEXT_FENCE_CLOSE = '</reference_context>';
 export const KG_CONTEXT_FENCE_OPEN = '<kg_context>';
 export const KG_CONTEXT_FENCE_CLOSE = '</kg_context>';
+export const MISSION_CONTEXT_FENCE_OPEN = '<mission_context>';
+export const MISSION_CONTEXT_FENCE_CLOSE = '</mission_context>';
 
 /**
  * Any fence-close-looking sequence a hostile block might inject to escape its
@@ -189,7 +191,7 @@ export const KG_CONTEXT_FENCE_CLOSE = '</kg_context>';
  * to confuse a naive reader.
  */
 const FENCE_FORGERY_RE =
-  /<\s*\/?\s*(?:reference_context|kg_context)\s*>/gi;
+  /<\s*\/?\s*(?:reference_context|kg_context|mission_context)\s*>/gi;
 
 /**
  * Sanitize a MULTI-LINE untrusted context block (peer/coordinator-fetched

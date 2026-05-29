@@ -171,8 +171,8 @@ describe('ToolRunnerService', () => {
     });
   });
 
-  describe('run - unknown tool', () => {
-    it('should return error for unknown tool', async () => {
+  describe('run - confused-deputy allowlist', () => {
+    it('rejects a tool name not in the registered set', async () => {
       const call: ToolCall = {
         toolName: 'unknown_tool',
         params: {},
@@ -181,7 +181,54 @@ describe('ToolRunnerService', () => {
       const result = await service.run(call);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Unknown tool: unknown_tool');
+      expect(result.error).toContain(
+        "Tool 'unknown_tool' is not registered for this execution context",
+      );
+      // Error lists the legitimate set so the ReAct loop can self-correct.
+      expect(result.error).toContain('search_reference_corpus');
+    });
+
+    it('rejects an A2A tool when its helper was not injected (A2A off)', async () => {
+      // `service` is built WITHOUT delegateToPeerTool / requestPeerReviewTool.
+      for (const toolName of ['delegate_to_peer', 'request_peer_review']) {
+        const result = await service.run({ toolName, params: {} } as ToolCall);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('is not registered for this execution context');
+      }
+    });
+
+    it('allows an A2A tool only when its helper IS injected', async () => {
+      const mockDelegate = { execute: jest.fn().mockResolvedValue({ ok: true }) };
+      const a2aService = new ToolRunnerService(
+        mockSearchCorpusTool as any,
+        mockQueryKgTool as any,
+        mockGenerateEmbeddingTool as any,
+        mockDelegate as any,
+      );
+
+      const result = await a2aService.run({
+        toolName: 'delegate_to_peer',
+        params: {
+          capability: 'analysis',
+          taskType: 't',
+          payload: {},
+          ourPeerId: 'p1',
+          ourPrivateKeyHex: 'deadbeef',
+        },
+      } as ToolCall);
+
+      expect(result.success).toBe(true);
+      expect(mockDelegate.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('still runs the always-registered tools after the allowlist gate', async () => {
+      mockGenerateEmbeddingTool.execute.mockResolvedValue([0.1, 0.2]);
+      const result = await service.run({
+        toolName: 'generate_embedding',
+        params: { text: 'hi' },
+      });
+      expect(result.success).toBe(true);
+      expect(mockGenerateEmbeddingTool.execute).toHaveBeenCalledWith({ text: 'hi' });
     });
   });
 });

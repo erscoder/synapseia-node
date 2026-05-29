@@ -16,6 +16,18 @@ import { RequestPeerReviewTool } from './request-peer-review.tool';
 /** Bug I: thrown when a corpus/KG tool is called without a usable `topic`. */
 const MISSING_TOPIC_REASON = 'missing_topic';
 
+/**
+ * Tools that are ALWAYS registered + credentialed for every execution context
+ * (the medical/research tools wired as required ctor deps). The A2A tools
+ * (`delegate_to_peer`, `request_peer_review`) are NOT here — they are optional
+ * and only allowed when their helper was actually injected (A2A enabled).
+ */
+const ALWAYS_REGISTERED_TOOLS = [
+  'search_reference_corpus',
+  'query_knowledge_graph',
+  'generate_embedding',
+] as const;
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -25,13 +37,29 @@ export class ToolRunnerService {
   private readonly TIMEOUT_MS = 10_000;
   private readonly MAX_CALLS_PER_EXECUTION = 5;
 
+  /**
+   * Confused-deputy guard: the explicit ALLOWLIST of tool names this instance
+   * is actually credentialed to dispatch. Built once from the injected deps —
+   * the optional A2A tools are only added when their helper was provided (A2A
+   * enabled), so the ReAct loop can never coax an uncredentialed dispatch by
+   * emitting an A2A tool name on a node where A2A is off. Any name outside this
+   * set is rejected at the boundary (fail-closed) instead of reaching a handler
+   * that would run without the credentials/context the loop never injected.
+   */
+  private readonly allowedTools: ReadonlySet<string>;
+
   constructor(
     private readonly searchCorpusTool: SearchCorpusTool,
     private readonly queryKgTool: QueryKgTool,
     private readonly generateEmbeddingTool: GenerateEmbeddingTool,
     @Optional() private readonly delegateToPeerTool?: DelegateToPeerTool,
     @Optional() private readonly requestPeerReviewTool?: RequestPeerReviewTool,
-  ) {}
+  ) {
+    const allowed = new Set<string>(ALWAYS_REGISTERED_TOOLS);
+    if (this.delegateToPeerTool) allowed.add('delegate_to_peer');
+    if (this.requestPeerReviewTool) allowed.add('request_peer_review');
+    this.allowedTools = allowed;
+  }
 
   async run(call: ToolCall): Promise<ToolResult> {
     if (!process.env.LANGFUSE_SECRET_KEY) {
@@ -67,6 +95,19 @@ export class ToolRunnerService {
 
   private async executeTool(call: ToolCall): Promise<unknown> {
     const { toolName, params } = call;
+
+    // Confused-deputy boundary: reject any tool not in the allowlist registered
+    // for THIS execution context (the always-registered medical/research tools
+    // plus only the A2A tools whose helper was injected). Fail closed before the
+    // dispatch switch so an unregistered or A2A-disabled tool name can never
+    // reach a handler the loop did not credential. The list of allowed names is
+    // included in the error so the ReAct loop can self-correct next iteration.
+    if (!this.allowedTools.has(toolName)) {
+      throw new Error(
+        `Tool '${toolName}' is not registered for this execution context. ` +
+          `Allowed tools: ${[...this.allowedTools].join(', ')}.`,
+      );
+    }
 
     switch (toolName) {
       case 'search_reference_corpus': {
