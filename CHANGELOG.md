@@ -1,5 +1,9 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-29] docs(adr): phased startNode() refactor plan (deferred)
+
+Records `docs/adr-0002-startnode-refactor.md`, the deferred-item WS1 plan to break up `startNode()` (~1160 lines) in `node-runtime.ts`. Documentation only, no code change. Phase 0 (mandatory first): a boot-integration test that exercises `startNode()` with mocked p2p/keystore and asserts the boot contract (six coordinator-signed topics + trust anchor + KG-shard wiring + blocking-heartbeat-before-WS + `stop()` teardown) as the regression oracle. Phase 1 (low-risk): extract Heartbeat / A2A-server / Inference-server bootstrap blocks. Phase 2 (high-risk): extract the P2P subscription service (the signed-topic + trust-anchor spine) and the KG-shard hosting service, each its own commit + reviewer + green suite. Deferred because the runtime is fleet-critical (npm + non-atomic self-update) and currently has no boot-integration test, so refactoring now would risk exactly the P27 wiring-drift regression class.
+
 ## [2026-05-29] fix(docking): backfill real AutoDock-Vina v1.2.5 macOS sha256 sums (41e2ddec)
 
 Resolves the deferred audit item on the `VINA_SHA256` integrity map. The two macOS entries were obviously-fake all-zero placeholders that fail closed on every fresh macOS Vina install (digest mismatch then no chmod/exec). Backfilled with the real upstream sums computed from the official `ccsb-scripps/AutoDock-Vina` v1.2.5 release binaries (upstream publishes no checksums file): `vina_1_2_5_mac_aarch64 = 4999b313..ff5f` (1171224 B), `vina_1_2_5_mac_x86_64 = de940270..073d` (1297344 B). Only the macOS fresh-download path is affected (Linux uses apt/dnf; a mac with vina already executable skips the gate). `install.spec.ts` green (25/25); the mismatch then no-exec invariant is unchanged.
