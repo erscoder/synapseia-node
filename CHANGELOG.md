@@ -1,5 +1,9 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-30] fix(deps): restore pnpm.overrides block in lockfile for pnpm-9 CI/deploy (5e7c2456)
+
+The publish CI + Fly Dockerfile pin pnpm 9, which ENFORCES a top-level `overrides:` block matching `package.json` `pnpm.overrides`. The session's lockfile regens ran under pnpm 11 (neither writes nor requires the block), dropping it -> the `node-v0.9.0` publish CI failed at install (`ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`). Regenerated with pnpm 9 to restore the block (34/34 keys) + re-enforce the CVE override pins the pnpm-11 lockfile had silently violated (ws->^8.17.1, semver->^7.5.2, ajv->>=8.18.0, etc. — the versions every prior pnpm-9 release incl 0.8.132 already deployed). Verified: the exact CI frozen-install command exits 0. `package.json` unchanged. Re-cut `node-v0.9.0` on this fix.
+
 ## [0.9.0] 2026-05-30 chore(release): tests-green + 9 follow-ups + audit remediation (a710f74d)
 
 Minor release (0.8.132 -> 0.9.0). Bundles the full 2026-05-30 batch + its audit remediation (entries below): backpressure per-class mock alignment; self-updater pre-install downgrade guard (P22); wallet weak-PBKDF2 transparent re-encrypt on unlock + atomic keystore write hardened to `fchmodSync 0o600` + unique tmp; KG_SHARD_SNAPSHOT coord-attested server handler with an 8-step fail-closed verify chain (closes the unregistered-handler gap) + peer-identity attestation cache; 100% coverage on the new auth path; and the completion of the exact version pin (0 ranged direct specifiers, reproducible npm installs). Both reviewers + the 21-agent re-audit: 0 BLOCKER/0 HIGH. Node suite 207/0/43.
