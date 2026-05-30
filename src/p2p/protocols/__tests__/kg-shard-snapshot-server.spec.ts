@@ -19,6 +19,7 @@ import { KgShardStorage, type SnapshotRecord } from '../../kg-shard/KgShardStora
 import { ReplayGuard } from '../../topics/replay-guard';
 import { DOMAIN_PEER_IDENTITY_ATTESTATION } from '../../topics/verify-coordinator-envelope';
 import { sign as appSign } from '../../../modules/identity/identity';
+import * as identityModule from '../../../modules/identity/identity';
 import {
   makeKgShardSnapshotServerHandler,
   type KgShardSnapshotServerDeps,
@@ -108,6 +109,13 @@ function buildStream(inbound: Uint8Array): FakeStream {
     },
   };
   return stream;
+}
+
+/** Build a stream that yields an arbitrary RAW byte sequence as its single
+ *  inbound chunk — bypasses `frameBytes` so a test can feed a hostile header
+ *  (e.g. an over-large declared length) that makes `readJsonFromStream` throw. */
+function buildStreamRaw(bytes: Uint8Array): FakeStream {
+  return buildStream(bytes);
 }
 
 /** Decode the captured outbound frames into JSON objects. */
@@ -271,6 +279,37 @@ describe('KG_SHARD_SNAPSHOT server — fail-closed reject paths', () => {
     expectReject(frames, 'BAD_REQUEST');
   });
 
+  // Exercise each individual `shapeCheck` guard arm (server.ts:106-126) so a
+  // single malformed/missing/wrong-typed field fails closed on its own branch.
+  it.each<[string, (r: SnapshotRequest) => unknown]>([
+    ['raw is not an object', () => 'not-an-object'],
+    ['shardId negative', (r) => ({ ...r, shardId: -1 })],
+    ['shardId NaN', (r) => ({ ...r, shardId: Number.NaN })],
+    ['shardId non-integer', (r) => ({ ...r, shardId: 1.5 })],
+    ['signature non-hex', (r) => ({ ...r, signature: 'not-hex-zz' })],
+    ['publishedAtMs not a number', (r) => ({ ...r, publishedAtMs: 'soon' })],
+    ['attestation.ts not a number', (r) => ({ ...r, attestation: { ...r.attestation, ts: 'now' } })],
+    ['attestation.sig empty', (r) => ({ ...r, attestation: { ...r.attestation, sig: '' } })],
+    ['body not an object', (r) => ({ ...r, attestation: { ...r.attestation, body: null } })],
+    ['body.p2pPeerId empty', (r) => ({ ...r, attestation: { ...r.attestation, body: { ...r.attestation.body, p2pPeerId: '' } } })],
+    ['body.appPubkey non-hex', (r) => ({ ...r, attestation: { ...r.attestation, body: { ...r.attestation.body, appPubkey: 'zz' } } })],
+    ['body.verified not a boolean', (r) => ({ ...r, attestation: { ...r.attestation, body: { ...r.attestation.body, verified: 'yes' } } })],
+  ])('step 1: BAD_REQUEST on malformed shape — %s', async (_label, mutate) => {
+    const req = await buildValidRequest();
+    const { frames } = await runHandler(mutate(req));
+    expectReject(frames, 'BAD_REQUEST');
+  });
+
+  it('step 3: NOT_AUTHORIZED when the connection has no resolvable remotePeer', async () => {
+    // `connection.remotePeer?.toString?.() ?? '<unknown>'` (server.ts:187-188)
+    // falls back to '<unknown>', which never matches the attested p2pPeerId, so
+    // the bind check (step 3) rejects — proving a peerless connection can't pull.
+    const req = await buildValidRequest();
+    const stream = buildStream(frameBytes(req));
+    await makeKgShardSnapshotServerHandler(makeDeps())(stream, {});
+    expectReject(decodeOut(stream), 'NOT_AUTHORIZED');
+  });
+
   it('step 2: NOT_AUTHORIZED on a forged attestation signature', async () => {
     const req = await buildValidRequest({ attSig: Buffer.alloc(64, 7).toString('base64') });
     const { frames } = await runHandler(req);
@@ -341,5 +380,80 @@ describe('KG_SHARD_SNAPSHOT server — fail-closed reject paths', () => {
     // Replaying the SAME request (same sig) is rejected.
     const second = await runHandler(req, deps);
     expectReject(second.frames, 'NOT_AUTHORIZED');
+  });
+
+  it('step 5: NOT_AUTHORIZED on a too-short req signature (sigLenOk fails)', async () => {
+    // A 16-hex-char signature passes `shapeCheck` (isHex, no length bound) and
+    // the attestation envelope verify, but `Buffer.from(sig,'hex').length` is 8
+    // (!== 64) so the sigLenOk/pubLenOk guard (server.ts:247-249) trips BEFORE
+    // any verifier call → NOT_AUTHORIZED, with no shard bytes served.
+    const req = await buildValidRequest();
+    const { frames } = await runHandler({ ...req, signature: 'deadbeefdeadbeef' });
+    expectReject(frames, 'NOT_AUTHORIZED');
+  });
+
+  it('step 5: NOT_AUTHORIZED on a wrong-length attested appPubkey (pubLenOk fails)', async () => {
+    // Same length guard, pubkey arm: a 16-hex-char appPubkey is valid hex but
+    // decodes to 8 bytes (!== 32) → pubLenOk false → NOT_AUTHORIZED.
+    const req = await buildValidRequest({ appPubkey: 'deadbeefdeadbeef' });
+    const { frames } = await runHandler(req);
+    expectReject(frames, 'NOT_AUTHORIZED');
+  });
+
+  it('step 1: BAD_REQUEST when the stream read throws (over-large declared frame length)', async () => {
+    // A raw 4-byte LE header declaring length 0xFFFFFFFF (> MAX_FRAME_BYTES =
+    // 1<<20, stream-codec.ts:65-66) makes `readJsonFromStream` throw, exercising
+    // the step-1 read catch (server.ts:194-196) → BAD_REQUEST, no shard served.
+    const header = new Uint8Array(4);
+    new DataView(header.buffer).setUint32(0, 0xffffffff, true);
+    const stream = buildStreamRaw(header);
+    const conn = { remotePeer: { toString: () => REMOTE_PEER } };
+    await makeKgShardSnapshotServerHandler(makeDeps())(stream, conn);
+    expectReject(decodeOut(stream), 'BAD_REQUEST');
+  });
+
+  it('step 8: INTERNAL when serving a VALID request and storage.read throws (no done frame)', async () => {
+    // Drive a fully-valid request through steps 1-7, then make the disk read
+    // fail so `streamShard` throws → the serve catch (server.ts:288-296) emits a
+    // single INTERNAL frame and NEVER a `done` frame.
+    const failingStorage = {
+      ...storage,
+      read: jest.fn().mockRejectedValue(new Error('disk')),
+    } as unknown as KgShardStorage;
+    const req = await buildValidRequest();
+    const { frames } = await runHandler(req, makeDeps({ storage: failingStorage }));
+    expectReject(frames, 'INTERNAL');
+  });
+
+  it('step 5: NOT_AUTHORIZED when verifySignature throws (defensive inner catch)', async () => {
+    // The REAL `verifySignature` self-catches a bad input and returns false, so
+    // it can never throw in prod — the inner try/catch at server.ts:253-257 is
+    // purely defensive. The handler reads the binding off the module at
+    // call-time, so spying lets us force a throw and prove that defensive catch
+    // sets `reqSigValid = false` → a single NOT_AUTHORIZED frame, no done frame.
+    const spy = jest
+      .spyOn(identityModule, 'verifySignature')
+      .mockRejectedValueOnce(new Error('boom'));
+    try {
+      const req = await buildValidRequest();
+      const { frames } = await runHandler(req);
+      expectReject(frames, 'NOT_AUTHORIZED');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('outer catch: INTERNAL when an unexpected throw escapes all inner guards', async () => {
+    // `replayGuard.seenBefore` runs at server.ts:271 — OUTSIDE every inner
+    // try/catch. Forcing it to throw on a fully-valid request reaches the
+    // last-resort outer catch (server.ts:310-322), which converts the throw
+    // into a single INTERNAL 'internal error' frame and serves no shard bytes.
+    const guard = new ReplayGuard(5 * 60);
+    jest.spyOn(guard, 'seenBefore').mockImplementation(() => {
+      throw new Error('guard exploded');
+    });
+    const req = await buildValidRequest();
+    const { frames } = await runHandler(req, makeDeps({ replayGuard: guard }));
+    expectReject(frames, 'INTERNAL');
   });
 });
