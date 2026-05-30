@@ -92,6 +92,11 @@ const mockBackpressure = {
   release: jest.fn(),
   getInFlight: jest.fn<() => number>().mockReturnValue(0),
   getMaxConcurrent: jest.fn<() => number>().mockReturnValue(2),
+  isDraining: jest.fn<() => boolean>().mockReturnValue(false),
+  getInFlightByClass: jest.fn<() => number>().mockReturnValue(0),
+  getMaxByClass: jest
+    .fn<(cls: string) => number>()
+    .mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 2)),
 };
 
 function makeState(overrides: Partial<AgentState> = {}): AgentState {

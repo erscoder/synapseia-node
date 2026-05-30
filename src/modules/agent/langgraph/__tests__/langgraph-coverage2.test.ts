@@ -244,7 +244,7 @@ describe('FetchWorkOrdersNode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsResearchWorkOrder.mockImplementation((wo: any) => wo?.type === 'RESEARCH');
-    const mockBackpressure = { canAccept: jest.fn().mockReturnValue(true), getInFlight: jest.fn().mockReturnValue(0), getMaxConcurrent: jest.fn().mockReturnValue(2), acquire: jest.fn().mockReturnValue(true), release: jest.fn() } as any;
+    const mockBackpressure = { canAccept: jest.fn().mockReturnValue(true), getInFlight: jest.fn().mockReturnValue(0), getMaxConcurrent: jest.fn().mockReturnValue(2), acquire: jest.fn().mockReturnValue(true), release: jest.fn(), isDraining: jest.fn().mockReturnValue(false), getInFlightByClass: jest.fn().mockReturnValue(0), getMaxByClass: jest.fn().mockImplementation((cls: string) => (cls === 'HEAVY' ? 1 : 2)) } as any;
     node = new FetchWorkOrdersNode(coordinator, execution, mockBackpressure);
     node.reset();
     // Bug 22: seed heartbeat snapshot covering all WO type primary caps
