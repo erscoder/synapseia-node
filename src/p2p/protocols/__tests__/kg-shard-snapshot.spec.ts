@@ -13,10 +13,24 @@ import { KgShardStorage, type SnapshotRecord } from '../../kg-shard/KgShardStora
 import {
   KgShardSnapshotClient,
   KG_SHARD_SNAPSHOT_PROTOCOL,
+  type IAttestationProvider,
   type ISnapshotDialer,
+  type SnapshotAttestation,
   type SnapshotRequest,
   type SnapshotDone,
 } from '../kg-shard-snapshot';
+
+/** Canned coord-signed attestation provider — the dialer reads it before
+ *  every peer pull (Workstream F). The signature value is irrelevant to the
+ *  CLIENT (only the SERVER verifies it); we just need a non-null cache. */
+const FAKE_ATTESTATION: SnapshotAttestation = {
+  body: { p2pPeerId: 'PEER-A', appPubkey: '01'.repeat(32), verified: true },
+  ts: 1_717_000_000,
+  sig: Buffer.alloc(64).toString('base64'),
+};
+const attestations: IAttestationProvider = {
+  getIdentityAttestation: () => FAKE_ATTESTATION,
+};
 
 interface CapturedFrame { bytes: Uint8Array; }
 
@@ -124,7 +138,7 @@ describe('KgShardSnapshotClient', () => {
         ]);
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     const total = await client.fetch(0, [{ peerId: 'PEER-A', isCoord: false }], 'COORD');
     expect(total).toBe(2);
     expect(calls).toEqual(['PEER-A']); // coord NOT dialed
@@ -145,7 +159,7 @@ describe('KgShardSnapshotClient', () => {
         ]);
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     const total = await client.fetch(0, [{ peerId: 'PEER-A', isCoord: false }], 'COORD');
     expect(total).toBe(1);
     expect(calls).toEqual(['PEER-A', 'COORD']);
@@ -169,7 +183,7 @@ describe('KgShardSnapshotClient', () => {
         ]);
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     const total = await client.fetch(0, [{ peerId: 'PEER-A', isCoord: false }], 'COORD');
     expect(total).toBe(1);
     expect(calls).toEqual(['PEER-A', 'COORD']);
@@ -184,7 +198,7 @@ describe('KgShardSnapshotClient', () => {
         throw new Error('boom');
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     await expect(
       client.fetch(0, [{ peerId: 'PEER-A', isCoord: false }], 'COORD'),
     ).rejects.toThrow(/all candidates failed/);
@@ -199,7 +213,7 @@ describe('KgShardSnapshotClient', () => {
         frameBytes({ done: true, total: 2, servedAtMs: Date.now() }),
       ])),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     const total = await client.fetch(0, [], 'COORD');
     expect(total).toBe(1);
     const seen: SnapshotRecord[] = [];
@@ -228,7 +242,7 @@ describe('KgShardSnapshotClient', () => {
         return stream;
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     await client.fetch(7, [], 'COORD');
     expect(captured).toBeTruthy();
     expect(captured!.shardId).toBe(7);
@@ -247,7 +261,7 @@ describe('KgShardSnapshotClient', () => {
         ]);
       }),
     };
-    const client = new KgShardSnapshotClient(dialer, identity, storage);
+    const client = new KgShardSnapshotClient(dialer, identity, storage, attestations);
     await client.fetch(0, [{ peerId: 'P1', isCoord: false }], 'COORD');
     expect(protocols.every((p) => p === KG_SHARD_SNAPSHOT_PROTOCOL)).toBe(true);
   });

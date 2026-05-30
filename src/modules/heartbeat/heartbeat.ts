@@ -759,17 +759,52 @@ export interface AttestationChallenge {
   length: number;
 }
 
+/**
+ * Workstream F (peer-identity binding) — coord-signed attestation projecting
+ * `{ p2pPeerId, appPubkey, verified }` from the node row, embedded in the
+ * heartbeat response. The node caches the latest one and the KG-shard snapshot
+ * dialer embeds it in its `SnapshotRequest` so a serving peer can verify the
+ * pull's libp2p connection ↔ app identity ↔ coord-verified membership.
+ *
+ * Wire shape MUST stay byte-identical to the coord side (`{ body, ts, sig }`,
+ * `body` key order `{ p2pPeerId, appPubkey, verified }`, `ts` unix-seconds,
+ * `sig` base64). See `audits/F-identity-binding-design.md` §2.
+ */
+export interface IdentityAttestation {
+  body: { p2pPeerId: string; appPubkey: string; verified: boolean };
+  /** Unix-SECONDS — the value the coordinator signed. */
+  ts: number;
+  /** Base64 Ed25519 signature over `{ domain, body, ts }`. */
+  sig: string;
+}
+
 export interface HeartbeatResponse {
   registered: boolean;
   peerId: string;
   /** Binary attestation challenge — respond in the NEXT heartbeat. */
   attestationChallenge?: AttestationChallenge;
+  /**
+   * Workstream F — coord-signed peer-identity attestation. Optional on the
+   * wire (a coord that has not shipped F1 yet simply omits it); the node only
+   * caches it when present. The KG-shard snapshot server REQUIRES it on the
+   * request, so an absent attestation means peer-first snapshot pulls fail
+   * fast and fall back to coord — never an insecure serve.
+   */
+  identityAttestation?: IdentityAttestation;
 }
 
 @Injectable()
 export class HeartbeatHelper {
   /** Pending attestation challenge from the last heartbeat response. */
   private pendingChallenge: AttestationChallenge | null = null;
+  /**
+   * Workstream F — latest coord-signed peer-identity attestation from the
+   * heartbeat response. Re-issued every cycle so it is always fresh; the
+   * KG-shard snapshot dialer reads it via `getIdentityAttestation()` and
+   * embeds it in its `SnapshotRequest`. Null until the first heartbeat that
+   * carries one.
+   */
+  private identityAttestation: IdentityAttestation | null = null;
   /** Own bundle content — loaded lazily on first attestation challenge. */
   private ownBundle: Buffer | null = null;
   /**
@@ -796,6 +831,16 @@ export class HeartbeatHelper {
    *  _sendHeartbeat can call p2pNode.getPeerId() for the p2pPeerId field. */
   setP2PNode(p2pNode: P2PNode): void {
     this.p2pNode = p2pNode;
+  }
+
+  /**
+   * Workstream F — latest coord-signed peer-identity attestation cached from
+   * the heartbeat response, or `null` if none has been received yet. The
+   * KG-shard snapshot dialer embeds this in its `SnapshotRequest`; a `null`
+   * here means the dialer cannot prove membership and must NOT dial a peer.
+   */
+  getIdentityAttestation(): IdentityAttestation | null {
+    return this.identityAttestation;
   }
 
   constructor(
@@ -950,6 +995,13 @@ export class HeartbeatHelper {
         // Store attestation challenge for the NEXT heartbeat
         if (response.attestationChallenge) {
           this.pendingChallenge = response.attestationChallenge;
+        }
+        // Workstream F — cache the latest coord-signed peer-identity
+        // attestation so the KG-shard snapshot dialer can embed it. Only
+        // overwrite when the response carries one; a coord blip that omits it
+        // keeps the previous (still within its 24h window) cached value.
+        if (response.identityAttestation) {
+          this.identityAttestation = response.identityAttestation;
         }
         return response;
       } catch (error) {

@@ -44,6 +44,15 @@ import type { ReplayGuard } from './replay-guard';
 export const DOMAIN_WO_AVAILABLE = 'synapseia/gossip/work-order-available/v1';
 export const DOMAIN_WO_ASSIGNED = 'synapseia/gossip/work-order-assigned/v1';
 export const DOMAIN_EVAL_ASSIGNMENTS = 'synapseia/gossip/evaluation-assignments/v1';
+/**
+ * Workstream F (peer-identity binding) — domain tag for the coord-signed
+ * peer-identity attestation embedded in the heartbeat response and carried in
+ * a `KG_SHARD_SNAPSHOT` request. MUST stay byte-identical to the coordinator
+ * constant (`DOMAIN_PEER_IDENTITY_ATTESTATION` in `CoordinatorPublisher.ts`).
+ * The shared-vector hex test on both sides pins the signed-bytes format.
+ */
+export const DOMAIN_PEER_IDENTITY_ATTESTATION =
+  'synapseia/gossip/peer-identity-attestation/v1';
 
 export interface VerifyCoordinatorEnvelopeArgs {
   /** Per-handler domain tag (NOT read from the wire). */

@@ -57,10 +57,42 @@ export const KG_SHARD_SNAPSHOT_PROTOCOL = '/synapseia/kg-shard-snapshot/1.0.0';
 
 const VECTOR_DIM = 768;
 
+/**
+ * Workstream F — coord-signed peer-identity attestation carried on the wire
+ * inside a `SnapshotRequest`. Byte-identical shape to the heartbeat-cached
+ * `{ body, ts, sig }` (see `heartbeat.ts :: IdentityAttestation` and
+ * `audits/F-identity-binding-design.md` §2). The serving node verifies it via
+ * the UNMODIFIED `verifyCoordinatorEnvelope` to bind this connection → app
+ * identity → coord-verified membership.
+ */
+export interface SnapshotAttestation {
+  body: { p2pPeerId: string; appPubkey: string; verified: boolean };
+  /** Unix-SECONDS — coord-signed. */
+  ts: number;
+  /** Base64 Ed25519 signature. */
+  sig: string;
+}
+
 export interface SnapshotRequest {
   shardId: number;
   signature: string;
   publishedAtMs: number;
+  /**
+   * Workstream F — coord-signed identity attestation (clean cut-over, NOT
+   * optional on the wire). The dialer reads it from the heartbeat cache; if
+   * none is cached the dialer throws BEFORE opening a stream (no
+   * attestation-absent legacy path — coord+node ship lockstep).
+   */
+  attestation: SnapshotAttestation;
+}
+
+/**
+ * Provider the dialer uses to read the latest cached coord-signed attestation
+ * (implemented by `HeartbeatHelper.getIdentityAttestation`). Kept as a thin
+ * interface so the spec can inject a canned attestation without a heartbeat.
+ */
+export interface IAttestationProvider {
+  getIdentityAttestation(): SnapshotAttestation | null;
 }
 
 export interface SnapshotDone {
@@ -100,12 +132,16 @@ export class KgShardSnapshotClient implements IKgShardSnapshotClient {
     private readonly dialer: ISnapshotDialer,
     private readonly identity: Identity,
     private readonly storage: IKgShardStorage,
+    private readonly attestations: IAttestationProvider,
   ) {
     if (!dialer) throw new Error('KgShardSnapshotClient: dialer is required');
     if (!identity?.privateKey) {
       throw new Error('KgShardSnapshotClient: identity with privateKey is required');
     }
     if (!storage) throw new Error('KgShardSnapshotClient: storage is required');
+    if (!attestations) {
+      throw new Error('KgShardSnapshotClient: attestation provider is required');
+    }
   }
 
   async fetch(
@@ -140,6 +176,17 @@ export class KgShardSnapshotClient implements IKgShardSnapshotClient {
    *  signed request, reads the framed snapshot into the storage tmp
    *  file, and atomically commits on `done`. */
   async fetchFromPeer(peerId: string, shardId: number): Promise<number> {
+    // Workstream F — read the cached coord-signed attestation BEFORE dialing.
+    // No attestation ⇒ we cannot prove coord-verified membership to a serving
+    // peer, so fail fast (the caller falls through to the coord fallback)
+    // rather than open a stream that is guaranteed to be rejected.
+    const attestation = this.attestations.getIdentityAttestation();
+    if (!attestation) {
+      throw new Error(
+        'KgShardSnapshotClient: no coord-signed identity attestation cached ' +
+          '(heartbeat has not delivered one yet) — cannot pull from peers',
+      );
+    }
     const stream = await this.dialer.dial(peerId, KG_SHARD_SNAPSHOT_PROTOCOL);
     const publishedAtMs = Date.now();
     const sigBytes = await ed25519Sign(
@@ -150,6 +197,7 @@ export class KgShardSnapshotClient implements IKgShardSnapshotClient {
       shardId,
       signature: sigBytes,
       publishedAtMs,
+      attestation,
     };
     await sendJsonFrame(stream, req);
 
