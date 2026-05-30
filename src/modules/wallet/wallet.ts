@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { readFileSync, existsSync, openSync, writeSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, openSync, writeSync, fsyncSync, fchmodSync, closeSync, renameSync, unlinkSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -189,10 +189,20 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
  * `wallet.json` stays untouched + valid.
  */
 function atomicWriteFileSync(targetPath: string, content: string, mode = 0o600): void {
-  const tmpPath = `${targetPath}.tmp`;
+  // L2: a unique per-write tmp name (pid + 6 random bytes) so two concurrent
+  // writers never share a tmp file. The catch-path unlink then only ever
+  // removes THIS caller's own tmp — never a sibling writer's in-progress one
+  // (loadWallet now re-encrypts+persists on every unlock, so a node-ui bg
+  // process and an operator `syn` command can both reach this concurrently).
+  const tmpPath = `${targetPath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   let fd: number | undefined;
   try {
     fd = openSync(tmpPath, 'w', mode);
+    // L1: openSync's `mode` only applies when the file is CREATED. Enforce
+    // 0o600 on the fd unconditionally so the final wallet.json (renamed from
+    // this tmp) can never inherit loose perms — the tmp holds the only copy of
+    // the encrypted secret key.
+    fchmodSync(fd, mode);
     // writeSync may write fewer bytes than supplied without throwing, so loop
     // until the whole buffer is flushed — a short write here would otherwise
     // let fsync+rename atomically commit a TRUNCATED keystore over the good
