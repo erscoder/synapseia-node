@@ -248,6 +248,21 @@ export class UpdateManager {
         return; // UP_TO_DATE — nothing to do
       }
 
+      // Downgrade guard (P22 supply-chain): a registry serving an
+      // OLD/rolled-back version must never trigger a downgrade-install.
+      // Mirror restartedButStillStale's coercion so a prerelease/dirty
+      // version compares consistently. valid() returns null for an
+      // uncoercible string → treat as 0.0.0 (never blocks a real upgrade).
+      const latest = valid(result.latestVersion);
+      const running = valid(this.getCurrentVersion()) ?? '0.0.0';
+      if (latest && lt(latest, running)) {
+        logger.warn(
+          `[UpdateManager] downgrade blocked: latest v${latest} < running ` +
+            `v${running} — skipping self-update this cycle.`,
+        );
+        return;
+      }
+
       // Loop-protection: never exceed the lifetime attempt cap.
       if (this.attempts >= MAX_SELF_UPDATE_ATTEMPTS) {
         this.giveUp = true;

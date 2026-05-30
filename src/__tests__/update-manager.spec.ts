@@ -168,6 +168,45 @@ describe('UpdateManager.runCycle — status routing', () => {
   });
 });
 
+// ── Downgrade guard (pre-install) ────────────────────────────────────────────
+
+describe('UpdateManager.runCycle — downgrade guard', () => {
+  it('registry reports an OLDER latestVersion than running → install NOT called', async () => {
+    const logger = require('../utils/logger').default as { warn: jest.Mock };
+    logger.warn.mockClear();
+    const { mgr, selfUpdate, restart, setDraining } = makeManager({
+      // npm/coord serving a rolled-back/old version while we run 0.8.106.
+      check: jest.fn().mockResolvedValue(
+        result(UpdateStatus.UPDATE_AVAILABLE, { latestVersion: '0.8.50' }),
+      ),
+      currentVersion: () => '0.8.106',
+    });
+    await mgr.runCycle();
+    expect(selfUpdate).not.toHaveBeenCalled();
+    expect(restart).not.toHaveBeenCalled();
+    // Must NOT have armed the drain latch (we bail before staging).
+    expect(setDraining).not.toHaveBeenCalled();
+    // A clear "downgrade blocked: latest <x> < running <y>" warning is logged.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/downgrade blocked: latest v0\.8\.50 < running v0\.8\.106/),
+    );
+  });
+
+  it('registry reports a NEWER version → install proceeds (no regression)', async () => {
+    const { mgr, selfUpdate, restart } = makeManager({
+      check: jest.fn().mockResolvedValue(
+        result(UpdateStatus.UPDATE_AVAILABLE, { latestVersion: '0.9.0' }),
+      ),
+      selfUpdate: jest.fn().mockResolvedValue(ok('0.9.0')),
+      currentVersion: () => '0.8.106',
+    });
+    await mgr.runCycle();
+    expect(selfUpdate).toHaveBeenCalledTimes(1);
+    expect(selfUpdate).toHaveBeenCalledWith('0.9.0');
+    expect(restart).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── Idle-gated restart ───────────────────────────────────────────────────────
 
 describe('UpdateManager.runCycle — idle gating', () => {
