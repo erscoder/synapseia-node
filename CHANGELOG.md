@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-30] perf(work-orders): periodic full-resync for ?since= delta polling (f31cdc79)
+
+- The `?since=<lastSeenSeq>` cursor poll of `/work-orders/available` is a hot-path short-circuit that skips work orders whose status reverts to assignable without a new `seq`. Added a periodic full-resync (poll without `?since=` every `FULL_RESYNC_EVERY_N_POLLS` polls and on coordinator-URL change) that reconciles those reverted WOs while keeping the persisted `lastSeenSeq` monotone.
+- Cadence bookkeeping only advances on a real HTTP poll (gossipsub-drain and killswitch-idle ticks do not burn the budget). Adds `fetch-work-orders-resync.spec`.
+- The `?since=` cursor transport and the coordinator `seq>:since` predicate were already shipped in D-P2P Slice 2; this commit only adds the lateral-guard resync.
+
 ## [0.9.1] 2026-05-30 fix(deps): torch 2.6.0 -> 2.9.1 (cu124 -> cu128), restores training caps on Python 3.14 (2b115a86)
 
 Patch release (0.9.0 -> 0.9.1). Found during post-deploy monitoring: node-kike (Python 3.14 venv) booted WITHOUT torch -> lost pytorch/DiLoCo training caps. `install-deps.ts` `selectTorchSpec` pinned `torch==2.6.0`/`cu124`, but 2.6.0 aged out of PyPI (default index now serves only 2.9.0-2.12.0) AND never shipped a cp314 wheel; `requirements-training.txt` pinned the also-gone `torch==2.5.1`. New pin `torch==2.9.1` + NVIDIA index `cu124 -> cu128` (oldest stable still served; real wheels for every (OS, Python) combo incl. cp314 on default/MPS+CPU and cu128 manylinux/win; cu128 needs driver >=570/CUDA 12.8, which the prod A5000/A40 pods already run). cp314 now non-best-effort (`selectTorchSpec` boundary `<=13 -> <=14`); `numpy` bumped `2.1.3 -> 2.3.2` (also lacked a cp314 wheel). Both files share the same `==` pin (ADR-0001). Re-validated per ADR-0001: isolated Python-3.14 venv `pip install torch==2.9.1 numpy==2.3.2` exit 0; `diloco_compat_smoke` PASS (scalar invariants bit-stable); `diloco_aggregate_executor` pytest 19/19. `install-deps-torch-wheel.spec` gains cp314 regression cases (52 specs pass). ADR doc + smoke NOTE comments updated. Pre-existing PyPI-drift bug (not from the 0.9.0 batch), code at `efa70833`.
