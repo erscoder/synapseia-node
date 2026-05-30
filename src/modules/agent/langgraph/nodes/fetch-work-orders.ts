@@ -59,6 +59,38 @@ export class FetchWorkOrdersNode {
    * the strict delta. Injectable for tests via the `seqStore` setter.
    */
   private seqStore: LastSeenSeqStore = getLastSeenSeqStore();
+  /**
+   * D-P2P Slice 2 (2026-05-28) — P18 lateral-guard state for the
+   * `?since=` delta short-circuit. The delta-only poll (`seq > since`)
+   * is a hot-path short-circuit: it deliberately SKIPS every WO with
+   * `seq <= since`. That is safe for the steady state (new WOs only get
+   * a HIGHER seq), but it silently misses the lateral case where a WO
+   * the node already saw flips its status back to assignable WITHOUT
+   * minting a new seq — e.g. an ACCEPTED WO whose assignee timed out is
+   * reset to PENDING by the coord reaper, or a round WO is re-released.
+   * Its seq stays <= the node's monotone cursor, so the delta path
+   * would never re-surface it and this node would never re-acquire it.
+   *
+   * Guard: once every `FULL_RESYNC_EVERY_N_POLLS` HTTP polls (the poll on
+   * which the per-cadence counter reaches N) — AND on every
+   * coordinator-change / reconnect — poll WITHOUT `?since=` (full
+   * assignable pool) so any such reverted WO is reconciled. The cursor
+   * itself stays monotone (`seqStore.update()` never decreases), so the
+   * full resync does NOT rewind it; its only job is to RE-FETCH the full
+   * pool this tick so a reverted WO gets processed again. Over-fetching
+   * once a minute is cheap relative to the every-tick full-pool egress
+   * the delta path eliminates.
+   */
+  private static readonly FULL_RESYNC_EVERY_N_POLLS = 12; // ~once/min at a 5s poll cadence
+  /** HTTP polls since the last full (no-`since`) resync. */
+  private pollsSinceFullResync = 0;
+  /**
+   * Coordinator URL observed on the previous HTTP poll. A change (the
+   * node failed over to a different coordinator, or reconnected) forces
+   * a full resync because the new coord's assignable pool is unrelated
+   * to this node's stale `lastSeenSeq` (seq is per-coordinator BIGSERIAL).
+   */
+  private lastPolledCoordinatorUrl: string | null = null;
   /** Test-only injection point — reset cache between tests. */
   __setFailureStoreForTests(store: WoFailureCountStore): void {
     this.failureStore = store;
@@ -66,6 +98,14 @@ export class FetchWorkOrdersNode {
   /** Test-only injection point — reset cursor between tests. */
   __setSeqStoreForTests(store: LastSeenSeqStore): void {
     this.seqStore = store;
+  }
+  /**
+   * Test-only — reset the full-resync cadence counters so a spec can
+   * drive the resync trigger deterministically.
+   */
+  __resetResyncStateForTests(): void {
+    this.pollsSinceFullResync = 0;
+    this.lastPolledCoordinatorUrl = null;
   }
 
   /**
@@ -140,6 +180,24 @@ export class FetchWorkOrdersNode {
     // (cold boot, no prior gossipsub) means the coord ships the full
     // assignable pool — pre-slice behaviour preserved.
     const sinceCursor = this.seqStore.get();
+    // D-P2P Slice 2 — P18 lateral-guard: decide whether THIS HTTP poll is
+    // a full resync (no `?since=`). Triggered when the coordinator URL
+    // changed since the last poll (failover / reconnect — the new coord's
+    // BIGSERIAL is unrelated to our cursor) OR every Nth poll on the cadence
+    // counter. On a full resync we drop the cursor for the wire request only
+    // (`effectiveSince = undefined`); the persisted cursor stays monotone.
+    // Bookkeeping (counter increment / reset, last-URL capture) happens AFTER
+    // the poll actually runs — see `didHttpPoll` below — so a tick that never
+    // reaches the HTTP path (gossipsub drain hit / killswitch idle) does not
+    // burn a poll from the cadence budget.
+    const coordinatorChanged =
+      this.lastPolledCoordinatorUrl !== null &&
+      this.lastPolledCoordinatorUrl !== coordinatorUrl;
+    const cadenceDue =
+      this.pollsSinceFullResync >= FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS;
+    const forceFullResync = coordinatorChanged || cadenceDue;
+    const effectiveSince = forceFullResync ? undefined : sinceCursor;
+    let didHttpPoll = false;
     try {
       const pushed = this.pushQueue.drain();
       drainedFromPush = pushed.length;
@@ -163,12 +221,17 @@ export class FetchWorkOrdersNode {
         logger.log('[D-P2P] WO HTTP poll disabled by killswitch — empty drain → idle');
         workOrders = [];
       } else {
-        logger.log(' Polling for available work orders...');
+        logger.log(
+          forceFullResync
+            ? ` Polling for available work orders (full resync${coordinatorChanged ? ' — coordinator changed' : ` — every ${FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS} polls`})...`
+            : ' Polling for available work orders...',
+        );
+        didHttpPoll = true;
         workOrders = await this.coordinator.fetchAvailableWorkOrders(
           coordinatorUrl,
           peerId,
           capabilities,
-          sinceCursor,
+          effectiveSince,
         );
         if (workOrders.length > 0) {
           discoverySourceCounter.increment('poll', workOrders.length);
@@ -189,12 +252,17 @@ export class FetchWorkOrdersNode {
         logger.log('[D-P2P] WO HTTP poll disabled by killswitch — drain error → idle');
         workOrders = [];
       } else {
-        logger.log(' Polling for available work orders...');
+        logger.log(
+          forceFullResync
+            ? ` Polling for available work orders (full resync${coordinatorChanged ? ' — coordinator changed' : ` — every ${FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS} polls`})...`
+            : ' Polling for available work orders...',
+        );
+        didHttpPoll = true;
         workOrders = await this.coordinator.fetchAvailableWorkOrders(
           coordinatorUrl,
           peerId,
           capabilities,
-          sinceCursor,
+          effectiveSince,
         );
         if (workOrders.length > 0) {
           // Fail-closed HTTP fallback still counts as poll-source discovery.
@@ -211,6 +279,17 @@ export class FetchWorkOrdersNode {
       if (typeof wo.seq === 'number' && Number.isFinite(wo.seq)) {
         this.seqStore.update(wo.seq);
       }
+    }
+    // D-P2P Slice 2 — P18 full-resync cadence bookkeeping. Only mutate the
+    // counters when an HTTP poll actually ran this tick (gossipsub-drain hits
+    // and killswitch-idle ticks do not consume the cadence budget). A forced
+    // resync resets the counter to 0; an ordinary delta poll increments it.
+    // The coordinator URL is captured every HTTP poll so the next tick can
+    // detect a failover. The persisted cursor is untouched here — it advances
+    // only via `seqStore.update()` above, so the full resync never rewinds it.
+    if (didHttpPoll) {
+      this.lastPolledCoordinatorUrl = coordinatorUrl;
+      this.pollsSinceFullResync = forceFullResync ? 0 : this.pollsSinceFullResync + 1;
     }
     drained = workOrders.length;
     if (workOrders.length === 0) {
