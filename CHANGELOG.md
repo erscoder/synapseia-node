@@ -1,5 +1,9 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.0] 2026-05-30 chore(release): tests-green + 9 follow-ups + audit remediation (a710f74d)
+
+Minor release (0.8.132 -> 0.9.0). Bundles the full 2026-05-30 batch + its audit remediation (entries below): backpressure per-class mock alignment; self-updater pre-install downgrade guard (P22); wallet weak-PBKDF2 transparent re-encrypt on unlock + atomic keystore write hardened to `fchmodSync 0o600` + unique tmp; KG_SHARD_SNAPSHOT coord-attested server handler with an 8-step fail-closed verify chain (closes the unregistered-handler gap) + peer-identity attestation cache; 100% coverage on the new auth path; and the completion of the exact version pin (0 ranged direct specifiers, reproducible npm installs). Both reviewers + the 21-agent re-audit: 0 BLOCKER/0 HIGH. Node suite 207/0/43.
+
 ## [2026-05-30] chore(deps): complete version pin + reconcile root/standalone lockfiles (audit L4/INFO-7) (87bff5a8)
 
 Tier 3 audit remediation. Pinned the remaining 23 node direct deps that the first pin left as ranges (their standalone lockfile resolved newer than the root workspace lock) to the deploy-canonical exact versions -> node now has 0 ranged direct specifiers (closes the floating `npm install` surface for the published CLI). Reconciled root/standalone lockfiles; the published versions are unchanged from what the standalone lock already resolved (axios 1.16.1, libp2p 3.3.1, @nestjs/core 11.1.23, @langchain/langgraph 1.3.2, etc.). Part of the workspace-wide fix that also drops the root pnpm-lock phantom deps (INFO-7) so root `--frozen-lockfile` + the 4 root CI jobs pass. Node suite 207/0/43 against the reconciled deps. osv-scanner: no new HIGH/CRIT.
