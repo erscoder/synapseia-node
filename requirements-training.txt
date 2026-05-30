@@ -35,5 +35,24 @@
 #
 # To regenerate with hashes, run `pip hash` or use
 # `pip-compile --generate-hashes` against this file in CI.
-torch==2.5.1
-numpy==2.1.3
+#
+# Pin history (PyPI drift + Python 3.14 / cp314):
+#   torch==2.5.1 / numpy==2.1.3 → both AGED OUT of PyPI. The default PyPI
+#   index now serves only torch {2.9.0, 2.9.1, 2.10.0, 2.11.0, 2.12.0}
+#   (2.5.1 and the 2.6.0 the installer briefly used are gone), and neither
+#   2.5.1 nor 2.6.0 ever shipped a cp314 wheel. A Python-3.14 node (e.g.
+#   node-kike, venv Python 3.14.5) therefore could not install the pinned
+#   torch and booted WITHOUT torch / training caps:
+#     ERROR: Could not find a version that satisfies the requirement
+#     torch==2.6.0 (from versions: 2.9.0, 2.9.1, 2.10.0, 2.11.0, 2.12.0)
+#   New pin: torch==2.9.1 — the OLDEST stable still served (least
+#   bleeding-edge) that ships a cp314 wheel on the default/cpu index AND
+#   the cu128 NVIDIA index. This MUST stay byte-identical to the version
+#   resolved by src/utils/install-deps.ts `selectTorchSpec` (the ADR
+#   requires every training node share the exact `==` pin) — see
+#   docs/adr-0001-diloco-torch-pin-policy.md.
+#   numpy==2.1.3 likewise has NO cp314 wheel (numpy cp314 wheels start at
+#   2.3.2); bumped to numpy==2.3.2 (lowest cp314-capable) so the pinned
+#   venv is installable on Python 3.14.
+torch==2.9.1
+numpy==2.3.2

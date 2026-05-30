@@ -32,7 +32,7 @@ SCOPE
 
 AUTHORITATIVE RUN
     The version that matters for a release runs INSIDE the pinned
-    torch==2.5.1 venv in CI (see test:diloco-compat in package.json). A
+    torch==2.9.1 venv in CI (see test:diloco-compat in package.json). A
     green run on some other locally-installed torch only proves the path
     is version-robust on that machine — it is NOT the release gate.
 
@@ -164,7 +164,7 @@ def main() -> int:
     print(f"[diloco-compat] running against torch=={torch_version}")
     print(
         "[diloco-compat] NOTE: the AUTHORITATIVE pre-release run MUST use the "
-        "pinned torch==2.5.1 venv (/opt/training-venv) in CI. A pass here only "
+        "pinned torch==2.9.1 venv (/opt/training-venv) in CI. A pass here only "
         "shows the consensus-key path is version-robust on THIS torch."
     )
 
