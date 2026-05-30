@@ -1,5 +1,9 @@
 # Changelog — @synapseia-network/node
 
+## [2026-05-30] chore(deps): complete version pin + reconcile root/standalone lockfiles (audit L4/INFO-7) (87bff5a8)
+
+Tier 3 audit remediation. Pinned the remaining 23 node direct deps that the first pin left as ranges (their standalone lockfile resolved newer than the root workspace lock) to the deploy-canonical exact versions -> node now has 0 ranged direct specifiers (closes the floating `npm install` surface for the published CLI). Reconciled root/standalone lockfiles; the published versions are unchanged from what the standalone lock already resolved (axios 1.16.1, libp2p 3.3.1, @nestjs/core 11.1.23, @langchain/langgraph 1.3.2, etc.). Part of the workspace-wide fix that also drops the root pnpm-lock phantom deps (INFO-7) so root `--frozen-lockfile` + the 4 root CI jobs pass. Node suite 207/0/43 against the reconciled deps. osv-scanner: no new HIGH/CRIT.
+
 ## [2026-05-30] test(p2p): cover KG_SHARD_SNAPSHOT server fail-closed branches (audit M1) (0700dfd7)
 
 Audit remediation M1 (test-only). The F2 coord-attested snapshot handler was at 89.4% line / 76.1% branch (below the `>=90%` rule); its hostile-input fail-closed branches were unexercised. Added cases (each asserts exactly one error frame, no shard record/`done` leaked): `signature`/`appPubkey` wrong BYTE length -> `NOT_AUTHORIZED` before `verifySignature`; oversized/truncated frame -> `BAD_REQUEST`; `storage.read` throws mid-serve -> `INTERNAL` (no `done`); `verifySignature` spied to reject -> inner catch -> `NOT_AUTHORIZED` (real impl self-catches, so via spy only); outer-catch (`replayGuard` throws) -> `INTERNAL`; a data-driven sweep over the 12 `shapeCheck` guard arms; the `<unknown>`-peer fallback. `kg-shard-snapshot-server.ts` now 100% stmts/branch/lines (90% funcs = the prod-only `sendJsonFrame` backpressure path, unreachable with a synchronous stream stub). 34 tests; `src/p2p` 209 tests green. Source untouched.
