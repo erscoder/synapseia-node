@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, openSync, writeSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -177,6 +177,50 @@ function decryptWallet(encryptedWallet: EncryptedWallet, password: string): Sola
   }
 }
 
+/**
+ * Atomically persist `wallet.json`.
+ *
+ * P18 (atomic file I/O): a partial/crashing write must NEVER leave a
+ * truncated keystore in place of the good one. We write the full content
+ * to a sibling `<file>.tmp` in the SAME directory (so `rename` is an
+ * atomic, same-filesystem operation on POSIX), `fsync` the descriptor to
+ * flush the bytes to disk before the rename, then `rename` over the
+ * original. On any failure the tmp is unlinked and the original
+ * `wallet.json` stays untouched + valid.
+ */
+function atomicWriteFileSync(targetPath: string, content: string, mode = 0o600): void {
+  const tmpPath = `${targetPath}.tmp`;
+  let fd: number | undefined;
+  try {
+    fd = openSync(tmpPath, 'w', mode);
+    // writeSync may write fewer bytes than supplied without throwing, so loop
+    // until the whole buffer is flushed — a short write here would otherwise
+    // let fsync+rename atomically commit a TRUNCATED keystore over the good
+    // one (the inverse of the P18 guarantee this helper provides).
+    const buf = Buffer.from(content, 'utf-8');
+    let written = 0;
+    while (written < buf.length) {
+      written += writeSync(fd, buf, written, buf.length - written);
+    }
+    // Flush the file contents to the storage device before we expose it via
+    // rename — otherwise a crash between rename and flush could surface a
+    // zero-length or partial file under the real name.
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    // Atomic on POSIX: the original never observes a partial state.
+    renameSync(tmpPath, targetPath);
+  } catch (err) {
+    // Clean up the descriptor + the partial tmp; the good original (if any)
+    // is left intact because we never wrote over it.
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closing on failure */ }
+    }
+    try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* best-effort cleanup */ }
+    throw err;
+  }
+}
+
 // SECURITY (F-node-008 / P9): env-var passphrases are PERMANENTLY
 // BLACKHOLED. Both `SYNAPSEIA_WALLET_PASSWORD` and the legacy
 // `WALLET_PASSWORD` are unreadable to this module no matter what other
@@ -300,7 +344,42 @@ export class WalletHelper {
     }
 
     // Decrypt wallet
-    return decryptWallet(encryptedWallet, password);
+    const wallet = decryptWallet(encryptedWallet, password);
+
+    // Workstream E: transparent weak-PBKDF2 upgrade on unlock. If the
+    // keystore that just decrypted is a legacy v1 (or any keystore whose
+    // recorded iteration count is below the v2 600k baseline), re-encrypt it
+    // under the SAME password to v2 and atomically persist over wallet.json.
+    // The authoritative signal is `kdfIterations` (the version tag is a
+    // coarse generation marker; pre-versioned wallets may have only the
+    // count). A missing/zero count means decrypt already resolved iterations
+    // from `version === 1` (→ 100k) — treat that as below-baseline too.
+    const recordedIterations =
+      typeof encryptedWallet.kdfIterations === 'number' && encryptedWallet.kdfIterations > 0
+        ? encryptedWallet.kdfIterations
+        : (encryptedWallet.version === 2 ? PBKDF2_ITERATIONS_V2 : PBKDF2_ITERATIONS_V1);
+
+    if (recordedIterations < PBKDF2_ITERATIONS_V2) {
+      // BEST-EFFORT: an upgrade write must NEVER throw out of the unlock
+      // path. The caller already holds their decrypted wallet; a failed
+      // re-encrypt/persist is logged (no secrets) and swallowed.
+      try {
+        const upgraded = encryptWallet(wallet, password);
+        atomicWriteFileSync(walletPath, JSON.stringify(upgraded, null, 2));
+        // Non-secret fact only: iter counts + version, never key/password/mnemonic.
+        logger.log(
+          `[Wallet] upgraded keystore v1->v2 (PBKDF2 ${recordedIterations}->${PBKDF2_ITERATIONS_V2} iterations)`,
+        );
+      } catch (err) {
+        // Log the error message only (it carries fs/path info, never secrets)
+        // and continue with the already-loaded wallet.
+        logger.warn(
+          `[Wallet] keystore v1->v2 upgrade failed (continuing with unlocked wallet): ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return wallet;
   }
 
   /**
@@ -429,10 +508,11 @@ export class WalletHelper {
     // Re-encrypt with new password
     const encryptedWallet = encryptWallet(wallet, newPassword);
 
-    writeFileSync(
+    // P18: atomic write so a partial/crashing write can never corrupt or
+    // lose the keystore (the only copy of the encrypted secret key).
+    atomicWriteFileSync(
       path.join(walletDir, 'wallet.json'),
       JSON.stringify(encryptedWallet, null, 2),
-      { mode: 0o600 }
     );
 
     logger.log('[Wallet] password changed successfully');
