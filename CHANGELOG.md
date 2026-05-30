@@ -1,6 +1,6 @@
 # Changelog — @synapseia-network/node
 
-## [2026-05-30] perf(work-orders): periodic full-resync for ?since= delta polling (f31cdc79)
+## [0.9.2] 2026-05-30 perf(work-orders): periodic full-resync for ?since= delta polling (f31cdc79)
 
 - The `?since=<lastSeenSeq>` cursor poll of `/work-orders/available` is a hot-path short-circuit that skips work orders whose status reverts to assignable without a new `seq`. Added a periodic full-resync (poll without `?since=` every `FULL_RESYNC_EVERY_N_POLLS` polls and on coordinator-URL change) that reconciles those reverted WOs while keeping the persisted `lastSeenSeq` monotone.
 - Cadence bookkeeping only advances on a real HTTP poll (gossipsub-drain and killswitch-idle ticks do not burn the budget). Adds `fetch-work-orders-resync.spec`.
