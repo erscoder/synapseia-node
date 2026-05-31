@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.4] 2026-05-31 fix(self-update): re-derive staged integrity via npm pack — unblock self-update (cd0baea5)
+
+- The integrity verifier (added 3feb3c16) read the staged artifact's resolved integrity from a `.package-lock.json` in the staging dir, but `npm install -g` NEVER writes a lockfile → the read always returned null → fail-closed → EVERY self-update refused. Nodes were stranded (node-kike stuck on 0.9.0, unable to reach the 0.9.3 discovery fix). Chicken-and-egg: the broken verifier blocked the update that would fix it.
+- Fix: re-derive the staged SRI from the extracted bytes via `npm pack --dry-run --json --ignore-scripts --registry=<pinned>` and cross-check against `npm view <pkg>@<v> dist.integrity` (registry-pinned on both). Reproduces the published sha512 exactly; a tampered/corrupt staged tree → mismatch → refusal. Fail-closed on every error; argv via execFileSync; version semver-validated. Security guarantee preserved (security review clean).
+- Carries the 0.9.3 work-order discovery + per-type fairness fix.
+- Tests: self-updater.spec 69/69 (happy + mismatch/missing/offline/malformed refusal negatives).
+
 ## [0.9.3] 2026-05-31 fix(work-orders): additive discovery + per-type fairness — revive RESEARCH/inference (c259ac03)
 
 - WO discovery was mutually exclusive (`if (push.length>0) use push; else poll`). The gossipsub push queue never empties (TRAINING floods it every minute), so the node always took the push branch and NEVER HTTP-polled. RESEARCH (poll-only) WOs were never discovered -> 0 submissions -> the CPU/GPU inference spawn pipeline dead network-wide since 2026-05-28 22:00.
