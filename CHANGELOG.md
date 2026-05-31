@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.3] 2026-05-31 fix(work-orders): additive discovery + per-type fairness — revive RESEARCH/inference (c259ac03)
+
+- WO discovery was mutually exclusive (`if (push.length>0) use push; else poll`). The gossipsub push queue never empties (TRAINING floods it every minute), so the node always took the push branch and NEVER HTTP-polled. RESEARCH (poll-only) WOs were never discovered -> 0 submissions -> the CPU/GPU inference spawn pipeline dead network-wide since 2026-05-28 22:00.
+- Additive discovery: each tick drains the push queue AND HTTP-polls on the existing full-resync cadence even when the queue is non-empty, merging both (dedup-by-id, push wins). Cadence now advances on push-hit ticks so a permanently-full queue can't starve the poll (worst case ~12 ticks). Honors `SYNAPSEIA_DISABLE_WO_POLL`. Push-queue TTL/re-queue semantics untouched (P21/P22).
+- Per-type fairness: among capable+available candidates, prefer the lowest recent-count type via a sliding-window in-memory counter (`wo-type-recent-counts`, 10-min window, not lifetime). Soft (stable-sort only, never idles when work exists). Keeps TRAINING/DiLoCo unchanged.
+- Specs: `fetch-work-orders-additive-fairness` (8) + corrected `resync` spec. Reviewer ship-as-is.
+
 ## [0.9.2] 2026-05-30 perf(work-orders): periodic full-resync for ?since= delta polling (f31cdc79)
 
 - The `?since=<lastSeenSeq>` cursor poll of `/work-orders/available` is a hot-path short-circuit that skips work orders whose status reverts to assignable without a new `seq`. Added a periodic full-resync (poll without `?since=` every `FULL_RESYNC_EVERY_N_POLLS` polls and on coordinator-URL change) that reconciles those reverted WOs while keeping the persisted `lastSeenSeq` monotone.
