@@ -13,6 +13,10 @@ import { isChatInferenceActive } from '../../../inference/chat-inference-state';
 import { getWoFailureCountStore, WoFailureCountStore } from '../../../../shared/wo-failure-counts';
 import { getLastSeenSeqStore, LastSeenSeqStore } from '../../../../shared/last-seen-seq';
 import {
+  getWoTypeRecentCounts,
+  WoTypeRecentCounts,
+} from '../../../../shared/wo-type-recent-counts';
+import {
   getGlobalTelemetryClient,
   makeWorkOrderQueueAuditEvent,
   getDiscoverySourceCounter,
@@ -32,13 +36,13 @@ export class FetchWorkOrdersNode {
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly execution: WorkOrderExecutionHelper,
     private readonly backpressure: BackpressureService,
-    // D-P2P Slice 0.5 (2026-05-28) — drain gossipsub-pushed WOs each tick
-    // BEFORE the HTTP fallback. Pre-Slice-0.5 the queue was wired into the
+    // D-P2P Slice 0.5 (2026-05-28) — gossipsub-pushed WO queue, drained
+    // each tick. D-P2P additive discovery (2026-05-31): the drain is no
+    // longer mutually exclusive with the HTTP poll — both run and are
+    // merged (see execute()). Pre-Slice-0.5 the queue was wired into the
     // node-runtime gossipsub handler but nothing ever called `drain()` —
-    // entries silently expired at the 60s TTL while every discovery still
-    // went through HTTP poll. See `/tmp/d-p2p-drain-check-2026-05-28.md`
-    // verdict (A). Slice 1 will add Prometheus counters; Slice 4 flips
-    // SYNAPSEIA_DISABLE_WO_POLL=true by default once this path is hot.
+    // entries silently expired at the TTL while every discovery still went
+    // through HTTP poll. See `/tmp/d-p2p-drain-check-2026-05-28.md`.
     private readonly pushQueue: WorkOrderPushQueue,
   ) {}
 
@@ -59,6 +63,13 @@ export class FetchWorkOrdersNode {
    * the strict delta. Injectable for tests via the `seqStore` setter.
    */
   private seqStore: LastSeenSeqStore = getLastSeenSeqStore();
+  /**
+   * D-P2P fairness (2026-05-31) — per-type sliding-window recent-work
+   * counter. Read during selection to give SOFT least-recently-done
+   * priority across capable WO types; written on every completion via
+   * `markCompleted`. Injectable for tests via `__setRecentCountsForTests`.
+   */
+  private recentCounts: WoTypeRecentCounts = getWoTypeRecentCounts();
   /**
    * D-P2P Slice 2 (2026-05-28) — P18 lateral-guard state for the
    * `?since=` delta short-circuit. The delta-only poll (`seq > since`)
@@ -98,6 +109,10 @@ export class FetchWorkOrdersNode {
   /** Test-only injection point — reset cursor between tests. */
   __setSeqStoreForTests(store: LastSeenSeqStore): void {
     this.seqStore = store;
+  }
+  /** Test-only injection point — reset recent-counts between tests. */
+  __setRecentCountsForTests(store: WoTypeRecentCounts): void {
+    this.recentCounts = store;
   }
   /**
    * Test-only — reset the full-resync cadence counters so a spec can
@@ -163,13 +178,22 @@ export class FetchWorkOrdersNode {
     // can toggle the env var without a restart (eventual: ~one iter).
     const woPollDisabled = isWoPollDisabledFlag(process.env.SYNAPSEIA_DISABLE_WO_POLL);
 
-    // D-P2P Slice 0.5 (2026-05-28) — drain the gossipsub push queue first.
-    // The HTTP fetch is the safety-net fallback: it only runs when the
-    // push queue is empty this tick. If `drain()` itself throws we log
-    // and fall back to HTTP (fail-closed on discovery — P2). The queue's
-    // contract is atomic: drain returns entries AND clears them in one
-    // pass (work-order-push-queue.ts:87) — preserved by reading from
-    // the immutable returned array below.
+    // D-P2P additive discovery (2026-05-31) — MERGE both sources every
+    // tick. Pre-fix the push queue and the HTTP poll were MUTUALLY
+    // EXCLUSIVE: a non-empty gossipsub drain short-circuited the poll, and
+    // because TRAINING WOs flood the push queue every minute the node took
+    // the push branch forever and NEVER HTTP-polled. Poll-only WO types
+    // (RESEARCH, *_INFERENCE) surfaced solely via `/work-orders/available`
+    // were therefore never discovered → 0 inference submissions network-
+    // wide. The fix: always drain the push queue AND poll on a gated
+    // cadence (even when the push queue is non-empty), then merge with
+    // dedup by id. The operator killswitch (SYNAPSEIA_DISABLE_WO_POLL)
+    // still fully suppresses the HTTP leg.
+    //
+    // The push drain stays atomic (drain returns entries AND clears them
+    // in one pass — work-order-push-queue.ts). If `drain()` throws we log
+    // and continue with whatever the HTTP poll yields (fail-closed on
+    // discovery — P2).
     let workOrders: WorkOrder[];
     let drainedFromPush = 0;
     const discoverySourceCounter = getDiscoverySourceCounter();
@@ -197,7 +221,13 @@ export class FetchWorkOrdersNode {
       this.pollsSinceFullResync >= FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS;
     const forceFullResync = coordinatorChanged || cadenceDue;
     const effectiveSince = forceFullResync ? undefined : sinceCursor;
-    let didHttpPoll = false;
+
+    // D-P2P additive discovery (2026-05-31) — STEP 1: always drain the
+    // push queue (P21/P22: the drain itself preserves the queue's TTL /
+    // re-queue / receivedAt semantics — we only map the returned, already-
+    // evicted entries). A drain failure is logged and treated as "0 pushed"
+    // so the HTTP leg can still surface work.
+    let pushedWorkOrders: WorkOrder[] = [];
     try {
       const pushed = this.pushQueue.drain();
       drainedFromPush = pushed.length;
@@ -205,70 +235,83 @@ export class FetchWorkOrdersNode {
         logger.log(
           `[D-P2P] drained ${pushed.length} from gossipsub (queue size=${this.pushQueue.size()})`,
         );
-        workOrders = pushed.map(pushedToWorkOrder);
+        pushedWorkOrders = pushed.map(pushedToWorkOrder);
         // D-P2P Slice 1 (2026-05-28) — bump gossipsub source counter
         // BEFORE downstream filters (cooldown / cap / capability) so the
         // delta represents "how much was DISCOVERED via gossipsub this
-        // tick", not "how much survived filters". The Slice 4 cutover
-        // gate is a discovery-ratio gate, not an acceptance-ratio gate.
+        // tick", not "how much survived filters".
         discoverySourceCounter.increment('gossipsub', pushed.length);
-      } else if (woPollDisabled) {
-        // D-P2P Slice 0.6 — killswitch ON + drain empty: do NOT touch
-        // the HTTP path. Returning `[]` keeps the iteration cheap and
-        // lets the agent loop sleep until the next gossipsub wake
-        // (`kickIteration()`) or the next scheduled tick. Log once per
-        // tick so the operator can see the killswitch is in effect.
-        logger.log('[D-P2P] WO HTTP poll disabled by killswitch — empty drain → idle');
-        workOrders = [];
-      } else {
-        logger.log(
-          forceFullResync
-            ? ` Polling for available work orders (full resync${coordinatorChanged ? ' — coordinator changed' : ` — every ${FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS} polls`})...`
-            : ' Polling for available work orders...',
-        );
-        didHttpPoll = true;
-        workOrders = await this.coordinator.fetchAvailableWorkOrders(
-          coordinatorUrl,
-          peerId,
-          capabilities,
-          effectiveSince,
-        );
-        if (workOrders.length > 0) {
-          discoverySourceCounter.increment('poll', workOrders.length);
-        }
       }
     } catch (drainErr) {
       // P2 / P10 — never swallow silently. Push path failed → log and
-      // fall back to HTTP so discovery keeps working. Comment in
-      // node-runtime.ts now correctly reflects this layered fallback.
+      // continue with the HTTP leg so discovery keeps working.
       logger.warn(
-        `[D-P2P] pushQueue.drain() threw — falling back to HTTP: ${(drainErr as Error).message}`,
+        `[D-P2P] pushQueue.drain() threw — relying on HTTP poll this tick: ${(drainErr as Error).message}`,
       );
-      // D-P2P Slice 0.6 — even on drain failure honour the killswitch.
-      // The flag opts the operator OUT of HTTP entirely; falling back
-      // here would silently re-open the path they explicitly disabled.
-      // P2 holds: the failure is logged at WARN above, just no HTTP.
-      if (woPollDisabled) {
-        logger.log('[D-P2P] WO HTTP poll disabled by killswitch — drain error → idle');
-        workOrders = [];
-      } else {
-        logger.log(
-          forceFullResync
-            ? ` Polling for available work orders (full resync${coordinatorChanged ? ' — coordinator changed' : ` — every ${FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS} polls`})...`
-            : ' Polling for available work orders...',
-        );
-        didHttpPoll = true;
-        workOrders = await this.coordinator.fetchAvailableWorkOrders(
+      pushedWorkOrders = [];
+      drainedFromPush = 0;
+    }
+
+    // D-P2P additive discovery (2026-05-31) — STEP 2: decide whether the
+    // HTTP poll fires THIS tick. It MUST fire even when the push queue is
+    // non-empty — but not on every single tick (that re-introduces the
+    // every-tick full-pool egress the cursor was built to avoid). We gate
+    // it to the SAME `FULL_RESYNC_EVERY_N_POLLS` cadence already used for
+    // the P18 lateral resync (~once/min at a 5s tick): poll when the push
+    // queue is empty (legacy safety-net), OR when the resync cadence is
+    // due / the coordinator changed. The operator killswitch suppresses
+    // the HTTP leg entirely regardless of cadence.
+    const pushEmpty = pushedWorkOrders.length === 0;
+    const shouldHttpPoll = !woPollDisabled && (pushEmpty || forceFullResync);
+    let pollWorkOrders: WorkOrder[] = [];
+    let didHttpPoll = false;
+    if (shouldHttpPoll) {
+      logger.log(
+        forceFullResync
+          ? ` Polling for available work orders (full resync${coordinatorChanged ? ' — coordinator changed' : ` — every ${FetchWorkOrdersNode.FULL_RESYNC_EVERY_N_POLLS} polls`})...`
+          : ' Polling for available work orders...',
+      );
+      didHttpPoll = true;
+      try {
+        pollWorkOrders = await this.coordinator.fetchAvailableWorkOrders(
           coordinatorUrl,
           peerId,
           capabilities,
           effectiveSince,
         );
-        if (workOrders.length > 0) {
-          // Fail-closed HTTP fallback still counts as poll-source discovery.
-          discoverySourceCounter.increment('poll', workOrders.length);
-        }
+      } catch (pollErr) {
+        // P2 — coordinator client already swallows network errors to []
+        // internally, but guard here too so a throw never strands the
+        // pushed WOs we already drained this tick.
+        logger.warn(
+          `[D-P2P] HTTP poll threw — using push-drained WOs only this tick: ${(pollErr as Error).message}`,
+        );
+        pollWorkOrders = [];
       }
+      if (pollWorkOrders.length > 0) {
+        discoverySourceCounter.increment('poll', pollWorkOrders.length);
+      }
+    } else if (woPollDisabled && pushEmpty) {
+      // D-P2P Slice 0.6 — killswitch ON + nothing pushed: cheap idle tick.
+      logger.log('[D-P2P] WO HTTP poll disabled by killswitch — empty drain → idle');
+    }
+
+    // D-P2P additive discovery (2026-05-31) — STEP 3: MERGE with dedup by
+    // id. The push-drained WOs come FIRST (they preserve the existing
+    // push-then-poll ordering downstream consumers expect) and a WO that
+    // appears in BOTH the push drain and the poll is only kept once (the
+    // pushed copy wins) so it is never double-processed.
+    const seenIds = new Set<string>();
+    workOrders = [];
+    for (const wo of pushedWorkOrders) {
+      if (seenIds.has(wo.id)) continue;
+      seenIds.add(wo.id);
+      workOrders.push(wo);
+    }
+    for (const wo of pollWorkOrders) {
+      if (seenIds.has(wo.id)) continue;
+      seenIds.add(wo.id);
+      workOrders.push(wo);
     }
     // D-P2P Slice 2 — advance the cursor for every WO surfaced this tick.
     // Update happens AFTER the source-counter bumps (so the cursor advance
@@ -280,16 +323,33 @@ export class FetchWorkOrdersNode {
         this.seqStore.update(wo.seq);
       }
     }
-    // D-P2P Slice 2 — P18 full-resync cadence bookkeeping. Only mutate the
-    // counters when an HTTP poll actually ran this tick (gossipsub-drain hits
-    // and killswitch-idle ticks do not consume the cadence budget). A forced
-    // resync resets the counter to 0; an ordinary delta poll increments it.
-    // The coordinator URL is captured every HTTP poll so the next tick can
-    // detect a failover. The persisted cursor is untouched here — it advances
-    // only via `seqStore.update()` above, so the full resync never rewinds it.
+    // D-P2P additive discovery (2026-05-31) — cadence bookkeeping.
+    //
+    // Pre-fix this counter advanced ONLY on HTTP polls. With additive
+    // discovery a node whose push queue is never empty would otherwise
+    // never advance the counter → `cadenceDue` would never fire → the
+    // poll would never run (the exact regression we are fixing). So the
+    // cadence budget is now consumed by EVERY discovery tick that drained
+    // the push queue WITHOUT polling (gossipsub-hit, poll skipped): each
+    // such tick increments the counter, and once it reaches
+    // FULL_RESYNC_EVERY_N_POLLS the next tick forces a poll. A tick that
+    // actually polled resets/advances the counter as before. Killswitch-
+    // idle ticks (no push, no poll) do NOT consume the budget.
+    //
+    // The coordinator URL is captured on every HTTP poll so the next tick
+    // can detect a failover. The persisted cursor is untouched here — it
+    // advances only via `seqStore.update()` above, so the full resync
+    // never rewinds it.
     if (didHttpPoll) {
       this.lastPolledCoordinatorUrl = coordinatorUrl;
+      // A forced resync (cadence-due or coordinator-changed poll) zeroes
+      // the budget; an ordinary delta poll increments it.
       this.pollsSinceFullResync = forceFullResync ? 0 : this.pollsSinceFullResync + 1;
+    } else if (!pushEmpty) {
+      // Gossipsub-hit tick with the poll skipped: spend one unit of the
+      // cadence budget so the poll is forced after N such ticks even
+      // though the push queue stays perpetually non-empty.
+      this.pollsSinceFullResync += 1;
     }
     drained = workOrders.length;
     if (workOrders.length === 0) {
@@ -431,8 +491,36 @@ export class FetchWorkOrdersNode {
       return { availableWorkOrders: [] };
     }
 
+    // D-P2P fairness (2026-05-31) — SOFT least-recently-done reorder for a
+    // homogeneous work mix. `pending` is already filtered to WOs this node
+    // is CAPABLE of (canLocallyAcceptWorkOrder enforces
+    // requiredCapabilities ⊆ caps + the type→cap mapping) and already
+    // within capacity (class-aware backpressure gate above), so fairness
+    // governs only WHICH type to prefer this tick, never whether to idle.
+    //
+    // SelectWorkOrderNode picks `availableWorkOrders[0]`, so it is enough
+    // to STABLE-sort `pending` by ascending recent count: the type with
+    // the fewest recent acceptances (sliding window) bubbles to the front;
+    // ties keep the existing push-then-poll / age ordering (V8 sort is
+    // stable). This is purely a reorder — no candidate is dropped, so if
+    // only the just-done type is available it still ends up at index 0 and
+    // gets taken ("sin pararse" — never idle when work exists).
+    const recentCountCache = new Map<string, number>();
+    const recentCountFor = (type: string | undefined): number => {
+      const key = type ?? '';
+      let c = recentCountCache.get(key);
+      if (c === undefined) {
+        c = this.recentCounts.countFor(type, now);
+        recentCountCache.set(key, c);
+      }
+      return c;
+    };
+    const fairnessOrdered = [...pending].sort(
+      (a, b) => recentCountFor(a.type) - recentCountFor(b.type),
+    );
+
     this.emitQueueAudit({ drained, requeued: 0, accepted, rejectedByCooldown, rejectedByCap });
-    return { availableWorkOrders: pending };
+    return { availableWorkOrders: fairnessOrdered };
   }
 
   /**
@@ -491,6 +579,12 @@ export class FetchWorkOrdersNode {
     // RDKit fallback) doesn't carry penalty across runs. P30
     // reviewer-lesson: don't strand transient state forever.
     this.failureStore.clear(workOrder.id);
+    // D-P2P fairness (2026-05-31) — record this completion against the
+    // per-type sliding-window counter so the next discovery tick rotates
+    // AWAY from the type just done (soft least-recently-done). Recorded
+    // for every WO type (training, research, inference, …) so the window
+    // reflects the actual recent work mix.
+    this.recentCounts.record(workOrder.type);
     if (this.execution.isResearchWorkOrder(workOrder)) {
       this.researchCooldowns.set(workOrder.id, Date.now() + RESEARCH_COOLDOWN_MS);
       return;

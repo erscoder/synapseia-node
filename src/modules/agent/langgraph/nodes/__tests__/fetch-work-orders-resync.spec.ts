@@ -257,9 +257,12 @@ describe('FetchWorkOrdersNode — D-P2P Slice 2 ?since= cursor + P18 full-resync
     expect(resynced.availableWorkOrders).toEqual([woWithSeq('wo-revert', 7)]);
   });
 
-  it('a gossipsub-drain tick does NOT consume a poll from the cadence budget', async () => {
-    // Drain returns a pushed WO → no HTTP poll this tick. The cadence counter
-    // must not advance, so the next HTTP poll still uses the delta cursor.
+  it('D-P2P additive discovery (2026-05-31) — gossipsub-drain ticks DO consume the cadence budget so the poll fires periodically even with a perpetually non-empty push queue', async () => {
+    // REGRESSION FIX: pre-additive, a gossipsub-drain tick was mutually
+    // exclusive with the HTTP poll AND did not consume the cadence budget,
+    // so a node whose push queue is never empty NEVER polled → poll-only
+    // WO types were never discovered. Now each push-hit tick (poll skipped)
+    // spends one unit of the cadence budget, so the Nth tick forces a poll.
     coordinator.fetchAvailableWorkOrders.mockImplementationOnce(
       async (_u: string, _p: string, _c: string[], since?: number) => {
         sinceCalls.push(since);
@@ -268,7 +271,7 @@ describe('FetchWorkOrdersNode — D-P2P Slice 2 ?since= cursor + P18 full-resync
     );
     await node.execute(baseState); // HTTP poll #1, since=undefined, cursor → 30
 
-    // Now N drain ticks (pushQueue returns one WO each). None hit HTTP.
+    // Now a perpetually non-empty push queue (the TRAINING-flood case).
     pushQueue.drain.mockReturnValue([
       {
         id: 'pushed-1',
@@ -282,16 +285,22 @@ describe('FetchWorkOrdersNode — D-P2P Slice 2 ?since= cursor + P18 full-resync
         seq: 31,
       },
     ]);
-    for (let i = 0; i < FULL_RESYNC_EVERY_N_POLLS + 2; i++) {
+
+    // The first N-1 push-hit ticks skip the poll (cadence not yet due).
+    for (let i = 0; i < FULL_RESYNC_EVERY_N_POLLS - 1; i++) {
       await node.execute(baseState);
     }
-    // Only the single HTTP poll happened.
     expect(coordinator.fetchAvailableWorkOrders).toHaveBeenCalledTimes(1);
 
-    // Next HTTP poll (drain empty again) is still an ORDINARY delta poll —
-    // the cadence budget was never consumed by the drain ticks.
-    pushQueue.drain.mockReturnValue([]);
-    await node.execute(baseState);
-    expect(sinceCalls[sinceCalls.length - 1]).toBe(31); // delta cursor, not undefined
+    // The cadence budget has now reached N → the next tick sees it as due
+    // and is FORCED to poll (full resync, since=undefined) even though the
+    // push queue is STILL non-empty. A following tick (budget reset to 0)
+    // does not poll again — proving the poll is periodic, not every-tick.
+    await node.execute(baseState); // forced poll fires here
+    await node.execute(baseState); // budget reset → no poll
+    expect(coordinator.fetchAvailableWorkOrders).toHaveBeenCalledTimes(2);
+    // The forced poll is a full resync (no `?since=`) so reverted WOs are
+    // reconciled; the persisted cursor stays monotone (never rewinds).
+    expect(sinceCalls[sinceCalls.length - 1]).toBeUndefined();
   });
 });
