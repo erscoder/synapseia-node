@@ -383,34 +383,53 @@ export function verifyStagedSignatures(
 }
 
 /**
- * Extract the resolved `integrity` (SRI `sha512-…`) that npm recorded for
- * `@synapseia-network/node` in the staged hidden lockfile
- * (`<stagedModulesDir>/.package-lock.json`). When `npm install -g
- * --prefix=<staging>` extracts the package, it writes this lockfile with
- * an entry whose `integrity` is the hash npm computed for the tarball it
- * actually fetched. Returns null when the lockfile / entry / integrity is
- * absent or unparseable (caller treats null as fail-closed).
+ * Re-derive the SRI (`sha512-…`) of the STAGED, freshly-extracted
+ * `@synapseia-network/node` tree from its actual on-disk bytes, using
+ * npm's own pack algorithm: `npm pack --dry-run --json --ignore-scripts`
+ * run inside the staged package dir. npm walks the package's publish file
+ * list (the same packlist used when the tarball was published) and reports
+ * the resulting tarball's `integrity` WITHOUT writing any file. Because it
+ * hashes the EXTRACTED bytes (not registry metadata), the value is a real
+ * fingerprint of what landed in staging — a tampered staged tree yields a
+ * different hash. Returns null on any failure (caller treats null as
+ * fail-closed).
  *
- * Pure-ish: filesystem read only, never throws.
+ * Why NOT read `.package-lock.json`: `npm install -g` (the staging install)
+ * NEVER writes a hidden lockfile (global installs have no lockfile concept,
+ * even with `--package-lock=true`), so the previous lockfile-read approach
+ * found nothing and refused every update. Re-packing the staged dir is the
+ * only lockfile-free way to obtain a hash bound to the extracted artifact.
+ *
+ * `--ignore-scripts` skips the `prepare`/`prepack` lifecycle (e.g. `tsup`,
+ * which is absent in the published tree and would otherwise abort pack).
+ * `--dry-run` guarantees no tarball is written to disk.
+ *
+ * The `stagedModulesDir` argument is `<staging>/lib/node_modules`; the
+ * package itself lives at `<stagedModulesDir>/@synapseia-network/node`,
+ * which is where pack must run so it reads only the target package.
+ *
+ * `execFileSync` (NOT a shell string): fixed argv, no interpolated value →
+ * no command-injection surface. Never throws.
  */
 export function readStagedResolvedIntegrity(stagedModulesDir: string): string | null {
   try {
-    const lockPath = join(stagedModulesDir, '.package-lock.json');
-    if (!existsSync(lockPath)) return null;
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as {
-      packages?: Record<string, { integrity?: unknown }>;
-    };
-    const pkgs = parsed.packages;
-    if (!pkgs || typeof pkgs !== 'object') return null;
-    // npm keys the hidden lockfile by install path relative to the dir the
-    // lockfile lives in: `node_modules/@synapseia-network/node`. Accept that
-    // canonical key; fall back to scanning for any entry whose key ends with
-    // the package path (defensive against npm layout shifts).
-    const canonical = `node_modules/${PACKAGE_NAME}`;
-    const entry =
-      pkgs[canonical] ??
-      Object.entries(pkgs).find(([k]) => k.endsWith(`node_modules/${PACKAGE_NAME}`))?.[1];
-    const integrity = entry?.integrity;
+    const pkgDir = join(stagedModulesDir, '@synapseia-network', 'node');
+    if (!existsSync(join(pkgDir, 'package.json'))) return null;
+    const raw = execFileSync(
+      'npm',
+      ['pack', '--dry-run', '--json', '--ignore-scripts', `--registry=${PINNED_REGISTRY}`],
+      {
+        cwd: pkgDir,
+        encoding: 'utf-8',
+        timeout: resolveSelfUpdateVerifyTimeoutMs(),
+        stdio: 'pipe',
+        env: npmRegistryPinnedEnv(PINNED_REGISTRY),
+      },
+    );
+    // npm pack --json prints an array of pack results; the integrity SRI for
+    // the (single) packed package lives at `[0].integrity`.
+    const parsed = JSON.parse(String(raw)) as Array<{ integrity?: unknown }>;
+    const integrity = Array.isArray(parsed) ? parsed[0]?.integrity : undefined;
     if (typeof integrity !== 'string' || !integrity.startsWith('sha512-')) return null;
     return integrity;
   } catch {
@@ -426,18 +445,21 @@ export function readStagedResolvedIntegrity(stagedModulesDir: string): string | 
  *
  * WHAT THIS VERIFIES — and what it does NOT.
  * The current flow extracts via `npm install -g --prefix=<staging>` (it
- * does NOT download a standalone `.tgz`), so npm records the integrity it
- * computed for the fetched tarball in the staged hidden lockfile. We:
- *   1. read that resolved `integrity` (`readStagedResolvedIntegrity`), and
+ * does NOT download a standalone `.tgz`, and a global install writes NO
+ * lockfile). We therefore RE-DERIVE the hash of the extracted tree itself:
+ *   1. re-pack the staged package dir with npm's own packlist algorithm
+ *      (`readStagedResolvedIntegrity` → `npm pack --dry-run --json
+ *      --ignore-scripts`), yielding the SRI of the bytes on disk, and
  *   2. fetch the published `dist.integrity` for the EXACT target version
  *      from the PINNED registry via `npm view`, and
  *   3. require them to be byte-equal.
- * A registry that served DIVERGENT metadata (a tarball whose hash differs
- * from what npmjs.org recorded for the version) is caught here even if the
- * structural gate passed. Like the signature gate this checks recorded /
- * resolved hashes; it does NOT re-hash arbitrary post-extract edits, and
- * staging-dir tampering by a local attacker with write access remains OUT
- * OF SCOPE (that attacker can tamper the live install directly).
+ * Because step 1 hashes the EXTRACTED FILES (not registry metadata), this
+ * catches a registry that served DIVERGENT metadata AND a staged tree whose
+ * publishable contents differ from what npmjs.org recorded for the version.
+ * It does not defend against a local attacker with write access to the
+ * staging prefix racing the swap (OUT OF SCOPE — such an attacker can
+ * tamper the live install directly), and pack normalises mtimes/ownership
+ * so it compares publishable CONTENT, not filesystem metadata.
  *
  * FAIL-CLOSED on EVERYTHING: missing/unparseable staged integrity, `npm
  * view` non-zero/throw/timeout/offline, a malformed published value, or a
@@ -457,7 +479,7 @@ export function verifyStagedIntegrity(
   if (!resolved) {
     logger.warn(
       `[SelfUpdate][SECURITY] could not read staged resolved integrity for v${expectedVersion} ` +
-        `from ${stagedModulesDir}/.package-lock.json`,
+        `via npm pack of ${stagedModulesDir}/@synapseia-network/node`,
     );
     return { ok: false, reason: 'staged resolved integrity missing/unreadable' };
   }

@@ -329,88 +329,168 @@ describe('verifyStagedSignatures (cryptographic supply-chain gate)', () => {
   });
 });
 
-describe('readStagedResolvedIntegrity', () => {
+describe('readStagedResolvedIntegrity (re-derives SRI from the staged tree via `npm pack`)', () => {
   const STAGED_MODULES = '/prefix/.syn-update-staging-1/lib/node_modules';
+  // npm pack runs in the package dir, not the node_modules dir.
+  const PKG_DIR = `${STAGED_MODULES}/@synapseia-network/node`;
+  // Representative `npm pack --dry-run --json` output: an array of pack
+  // results, each carrying the SRI of the (re-packed) staged tarball.
+  const packJson = (integrity: string) =>
+    JSON.stringify([{ id: `${PKG_NAME}@0.8.106`, name: PKG_NAME, integrity }]);
 
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('returns the SRI recorded for the package in the staged hidden lockfile', () => {
-    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        packages: { [`node_modules/${PKG_NAME}`]: { integrity: VALID_INTEGRITY } },
-      }) as any,
+    // package.json present in the staged package dir by default.
+    mockExistsSync.mockImplementation((p: any) =>
+      String(p).endsWith('@synapseia-network/node/package.json'),
     );
-    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBe(VALID_INTEGRITY);
   });
 
-  it('returns null when the lockfile is absent', () => {
+  it('re-packs the staged dir and returns the SRI npm computed for the extracted bytes', () => {
+    mockExecFileSync.mockReturnValue(packJson(VALID_INTEGRITY) as any);
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBe(VALID_INTEGRITY);
+    // Runs `npm pack --dry-run --json --ignore-scripts` in the PACKAGE dir,
+    // over the pinned registry, with the SHORT verify timeout.
+    const [file, args, opts] = mockExecFileSync.mock.calls[0] as any;
+    expect(file).toBe('npm');
+    expect(args).toEqual([
+      'pack',
+      '--dry-run',
+      '--json',
+      '--ignore-scripts',
+      '--registry=https://registry.npmjs.org',
+    ]);
+    expect(opts.cwd).toBe(PKG_DIR);
+    expect(opts.timeout).toBe(60_000);
+  });
+
+  it('returns null when the staged package dir has no package.json (truncated/missing)', () => {
     mockExistsSync.mockReturnValue(false);
     expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+    // Never even shells out to npm pack.
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('returns null when the package entry / integrity is missing', () => {
-    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
-    mockReadFileSync.mockReturnValue(JSON.stringify({ packages: {} }) as any);
+  it('returns null (never throws) when `npm pack` fails / is unavailable', () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error('npm pack exited 1');
+    });
     expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
   });
 
-  it('returns null (never throws) on an unparseable lockfile', () => {
-    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
-    mockReadFileSync.mockReturnValue('{ broken json' as any);
+  it('returns null (never throws) on unparseable npm pack JSON', () => {
+    mockExecFileSync.mockReturnValue('not json at all' as any);
+    expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+
+  it('returns null when the packed integrity is missing', () => {
+    mockExecFileSync.mockReturnValue(JSON.stringify([{ name: PKG_NAME }]) as any);
     expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
   });
 
   it('returns null when integrity is not an sha512 SRI', () => {
-    mockExistsSync.mockImplementation((p: any) => String(p).endsWith('.package-lock.json'));
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        packages: { [`node_modules/${PKG_NAME}`]: { integrity: 'sha1-deadbeef' } },
-      }) as any,
-    );
+    mockExecFileSync.mockReturnValue(packJson('sha1-deadbeef') as any);
     expect(readStagedResolvedIntegrity(STAGED_MODULES)).toBeNull();
+  });
+
+  // Fixture-based parse test: a representative lockfileVersion-3 npm
+  // `package-lock.json` (the structure npm writes for a NON-global install)
+  // keeps the package integrity under `packages["node_modules/<pkg>"]`. We
+  // assert we know the correct path (documents the format and guards a
+  // future refactor that reads a lockfile from the v3 `packages` map, NOT
+  // the legacy v1 `dependencies` map).
+  it('FIXTURE: lockfileVersion 3 stores the package integrity under packages["node_modules/<pkg>"]', () => {
+    const lockfileV3 = {
+      name: 'syn-stage-probe',
+      version: '0.0.0',
+      lockfileVersion: 3,
+      requires: true,
+      packages: {
+        '': { name: 'syn-stage-probe', version: '0.0.0', dependencies: { [PKG_NAME]: '0.8.106' } },
+        [`node_modules/${PKG_NAME}`]: {
+          version: '0.8.106',
+          resolved: `https://registry.npmjs.org/${PKG_NAME}/-/node-0.8.106.tgz`,
+          integrity: VALID_INTEGRITY,
+        },
+      },
+      // No legacy v1 `dependencies` map — npm v7+ omits it at lockfileVersion 3.
+    };
+    const v3 = lockfileV3.packages[`node_modules/${PKG_NAME}`]?.integrity;
+    expect(v3).toBe(VALID_INTEGRITY);
+    expect(v3?.startsWith('sha512-')).toBe(true);
+    // The legacy v1 path must be absent at lockfileVersion 3 (the original
+    // bug class: reading `dependencies[<pkg>].integrity` finds nothing).
+    expect((lockfileV3 as any).dependencies).toBeUndefined();
+  });
+
+  // NEGATIVE: a mismatched/absent integrity in the fixture must NOT be
+  // mistaken for the expected value (the cross-check stays meaningful).
+  it('FIXTURE negative: a tampered/absent integrity is distinguishable from the expected SRI', () => {
+    const tampered = {
+      lockfileVersion: 3,
+      packages: {
+        [`node_modules/${PKG_NAME}`]: {
+          integrity:
+            'sha512-TAMPEREDtamperedTAMPEREDtamperedTAMPEREDtamperedTAMPEREDtamperedTAMPEREDtampered==',
+        },
+      },
+    };
+    const absent = { lockfileVersion: 3, packages: { [`node_modules/${PKG_NAME}`]: {} } } as any;
+    expect(tampered.packages[`node_modules/${PKG_NAME}`].integrity).not.toBe(VALID_INTEGRITY);
+    expect(absent.packages[`node_modules/${PKG_NAME}`].integrity).toBeUndefined();
   });
 });
 
 describe('verifyStagedIntegrity (artifact-integrity cross-check)', () => {
   const STAGED_MODULES = '/prefix/.syn-update-staging-1/lib/node_modules';
 
-  function wireLockfile(integrity: string | null) {
+  // `npm pack --dry-run --json` output for the staged re-pack.
+  const packJson = (integrity: string) =>
+    JSON.stringify([{ id: `${PKG_NAME}@${TARGET_VERSION}`, name: PKG_NAME, integrity }]);
+
+  // verifyStagedIntegrity makes TWO execFileSync calls in order:
+  //   1. `npm pack ...`  (readStagedResolvedIntegrity → staged tree SRI)
+  //   2. `npm view ... dist.integrity` (published SRI)
+  // `staged === null` simulates the re-pack failing (fail-closed before view).
+  function wireIntegrity(staged: string | null, published: string | Error) {
+    // Staged package dir always has a package.json (present tree).
     mockExistsSync.mockImplementation((p: any) =>
-      integrity !== null && String(p).endsWith('.package-lock.json'),
+      String(p).endsWith('@synapseia-network/node/package.json'),
     );
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        packages:
-          integrity === null
-            ? {}
-            : { [`node_modules/${PKG_NAME}`]: { integrity } },
-      }) as any,
-    );
+    mockExecFileSync.mockImplementation((_file: any, args: any) => {
+      const argv = args as string[];
+      if (argv[0] === 'pack') {
+        if (staged === null) throw new Error('npm pack failed');
+        return packJson(staged) as any;
+      }
+      // `npm view dist.integrity`
+      if (published instanceof Error) throw published;
+      return `${published}\n` as any;
+    });
   }
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('ok:true when staged integrity equals the published dist.integrity', () => {
-    wireLockfile(VALID_INTEGRITY);
-    mockExecFileSync.mockReturnValue(`${VALID_INTEGRITY}\n` as any);
+  it('ok:true when the re-packed staged SRI equals the published dist.integrity', () => {
+    wireIntegrity(VALID_INTEGRITY, VALID_INTEGRITY);
     expect(verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION)).toEqual({ ok: true });
   });
 
   it('pins the registry + sanitises env on the `npm view` child, with the SHORT verify timeout', () => {
-    wireLockfile(VALID_INTEGRITY);
-    mockExecFileSync.mockReturnValue(`${VALID_INTEGRITY}\n` as any);
+    wireIntegrity(VALID_INTEGRITY, VALID_INTEGRITY);
     process.env.NPM_CONFIG_REGISTRY = 'https://evil.example.com';
     try {
       verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
     } finally {
       delete process.env.NPM_CONFIG_REGISTRY;
     }
-    const [file, args, opts] = mockExecFileSync.mock.calls[0] as any;
+    // Second execFileSync call is `npm view dist.integrity`.
+    const viewCall = (mockExecFileSync.mock.calls as any[]).find(
+      (c) => (c[1] as string[])[0] === 'view',
+    );
+    const [file, args, opts] = viewCall as any;
     expect(file).toBe('npm');
     expect(args).toEqual([
       'view',
@@ -423,40 +503,39 @@ describe('verifyStagedIntegrity (artifact-integrity cross-check)', () => {
     expect(opts.timeout).toBe(60_000);
   });
 
-  it('ok:false (FAIL-CLOSED) on integrity MISMATCH (registry served divergent metadata)', () => {
-    wireLockfile(VALID_INTEGRITY);
-    mockExecFileSync.mockReturnValue(
-      'sha512-DIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENT==\n' as any,
+  it('ok:false (FAIL-CLOSED) on integrity MISMATCH (staged tree differs from published)', () => {
+    wireIntegrity(
+      VALID_INTEGRITY,
+      'sha512-DIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENThashDIFFERENT==',
     );
     const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/integrity mismatch/i);
   });
 
-  it('ok:false (FAIL-CLOSED) when the staged resolved integrity is missing', () => {
-    wireLockfile(null);
+  it('ok:false (FAIL-CLOSED) when the staged resolved integrity is missing (re-pack failed)', () => {
+    wireIntegrity(null, VALID_INTEGRITY);
     const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/staged resolved integrity/i);
-    // Never even reaches `npm view` — there is nothing to compare against.
-    expect(mockExecFileSync).not.toHaveBeenCalled();
+    // Only the `npm pack` call ran — never reaches `npm view` (nothing to compare).
+    const viewCalled = (mockExecFileSync.mock.calls as any[]).some(
+      (c) => (c[1] as string[])[0] === 'view',
+    );
+    expect(viewCalled).toBe(false);
   });
 
   it('ok:false (FAIL-CLOSED) when `npm view` is unreachable / offline', () => {
-    wireLockfile(VALID_INTEGRITY);
-    mockExecFileSync.mockImplementation(() => {
-      const e = new Error('getaddrinfo ENOTFOUND registry.npmjs.org') as any;
-      e.code = 'ENOTFOUND';
-      throw e;
-    });
+    const offline = new Error('getaddrinfo ENOTFOUND registry.npmjs.org') as any;
+    offline.code = 'ENOTFOUND';
+    wireIntegrity(VALID_INTEGRITY, offline);
     const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/integrity fetch failed\/unavailable/i);
   });
 
   it('ok:false (FAIL-CLOSED) when the published value is malformed', () => {
-    wireLockfile(VALID_INTEGRITY);
-    mockExecFileSync.mockReturnValue('not-an-sri\n' as any);
+    wireIntegrity(VALID_INTEGRITY, 'not-an-sri');
     const r = verifyStagedIntegrity(STAGED_MODULES, TARGET_VERSION);
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/malformed published integrity/i);
@@ -496,36 +575,33 @@ describe('attemptSelfUpdate', () => {
       if (s === 'npm root -g') return '/usr/local/lib/node_modules\n';
       return '';
     });
-    // execFileSync handles BOTH verification gates:
-    //   - `npm audit signatures …`  → registry-signature/provenance gate.
-    //   - `npm view …@v dist.integrity …` → published-integrity fetch for
+    // execFileSync handles ALL verification gates:
+    //   - `npm pack --dry-run --json …` → re-derives the staged tree SRI for
     //     the artifact cross-check; returns the matching SRI on the happy path.
+    //   - `npm view …@v dist.integrity …` → published-integrity fetch.
+    //   - `npm audit signatures …`  → registry-signature/provenance gate.
     // Capture audit argv + opts so tests can assert the registry pin + env.
     mockExecFileSync.mockImplementation((_file: any, args: any, o?: any) => {
       const argv = (args as string[]) ?? [];
+      if (argv[0] === 'pack') {
+        return JSON.stringify([{ name: PKG_NAME, integrity: VALID_INTEGRITY }]) as any;
+      }
       if (argv[0] === 'view') return `${VALID_INTEGRITY}\n` as any;
       auditCalls.push({ args: argv, opts: o });
       return 'audited 1 package in 0.5s\n1 package has a verified registry signature\n' as any;
     });
-    // existsSync: true for the detect probe (package.json), the staged
-    // dist/bootstrap.js, AND the staged hidden lockfile. False for live
-    // .bak/liveDir so swap treats it as a fresh install.
+    // existsSync: true for the detect probe (package.json) and the staged
+    // dist/bootstrap.js. False for live .bak/liveDir so swap treats it as a
+    // fresh install. (No lockfile probe anymore — the staged SRI is re-derived
+    // via `npm pack`, since `npm install -g` writes no lockfile.)
     mockExistsSync.mockImplementation((p: any) => {
       const s = String(p);
       if (s.endsWith('@synapseia-network/node/package.json')) return true;
       if (s.endsWith('dist/bootstrap.js')) return true;
-      if (s.endsWith('.package-lock.json')) return true;
       return false;
     });
     mockReadFileSync.mockImplementation((p: any) => {
       const s = String(p);
-      if (s.endsWith('.package-lock.json')) {
-        return JSON.stringify({
-          packages: {
-            [`node_modules/${PKG_NAME}`]: { version: TARGET_VERSION, integrity: VALID_INTEGRITY },
-          },
-        }) as any;
-      }
       if (s.endsWith('package.json')) {
         return JSON.stringify({ name: PKG_NAME, version: TARGET_VERSION }) as any;
       }
