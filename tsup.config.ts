@@ -93,8 +93,19 @@ const sharedOptions = {
   // useless stack traces on user-reported errors. Keep off.
   minify: false,
   swcMinify: false,
-  // Sourcemaps so support requests can map back to TS source.
-  sourcemap: true,
+  // Sourcemaps DISABLED. With `noExternal: [/.*/]` we inline every
+  // dep, and two OpenTelemetry packages (`@opentelemetry/api` and
+  // `@opentelemetry/core`, pulled by `@opentelemetry/sdk-node` +
+  // `@langfuse/otel`) each ship a `baggage/utils.js.map` whose
+  // `sources` resolve to the SAME virtual path `src/baggage/utils.ts`
+  // with DIFFERENT contents. rollup's `collapseSourcemaps` (run when
+  // tsup renders the bundled chunk) then aborts with "Multiple
+  // conflicting contents for sourcemap source". Disabling sourcemaps
+  // skips that collapse step entirely. Safe here: this package is a
+  // CLI-only artifact (`bin.syn`, downloaded + run by node-ui) with
+  // no `types`/`exports`/`main` and zero typed consumers in the
+  // monorepo, so JS sourcemaps are non-essential.
+  sourcemap: false,
 };
 
 export default defineConfig([
