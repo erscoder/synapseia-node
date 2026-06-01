@@ -2,14 +2,17 @@
  * Config module tests - Uses real FS with SYNAPSEIA_HOME isolation
  */
 
+// MUST be first: sets SYNAPSEIA_HOME before config.ts is evaluated so
+// CONFIG_DIR points at an isolated temp dir, not the real ~/.synapseia.
+import { CONFIG_TEST_HOME } from '../test-support/config-home';
 import { jest } from '@jest/globals';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
-import { tmpdir } from 'os';
 import { join } from 'path';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
 import {
   NodeConfigHelper,
   CONFIG_FILE,
+  CONFIG_BAK_FILE,
   CONFIG_DIR,
   MODEL_SLUG_REGEX,
   DEFAULT_SOLANA_RPC_URL,
@@ -17,8 +20,7 @@ import {
 } from '../modules/config/config';
 import { OFFICIAL_COORDINATOR_URL, OFFICIAL_COORDINATOR_WS_URL } from '../constants/coordinator';
 
-const testConfigDir = join(tmpdir(), 'synapseia-test-' + Date.now());
-process.env.SYNAPSEIA_HOME = testConfigDir;
+const testConfigDir = CONFIG_TEST_HOME;
 
 describe('Config Module', () => {
   let helper: NodeConfigHelper;
@@ -33,7 +35,20 @@ describe('Config Module', () => {
   });
 
   beforeEach(() => {
+    // Wipe config.json AND its self-heal siblings (config.json.bak,
+    // config.json.corrupt-*) so each test starts from a clean slate. A
+    // leftover .bak from a previous test would otherwise be restored by
+    // the new self-heal path and mask the defaults-fallback behaviour
+    // these tests assert.
     try { rmSync(CONFIG_FILE); } catch {}
+    try { rmSync(CONFIG_BAK_FILE); } catch {}
+    if (existsSync(CONFIG_DIR)) {
+      for (const entry of readdirSync(CONFIG_DIR)) {
+        if (entry.startsWith('config.json.corrupt-')) {
+          try { rmSync(join(CONFIG_DIR, entry)); } catch {}
+        }
+      }
+    }
     delete process.env.SYNAPSEIA_COORDINATOR_URL;
     delete process.env.COORDINATOR_URL;
     delete process.env.COORDINATOR_WS_URL;

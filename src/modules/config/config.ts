@@ -1,4 +1,13 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  renameSync,
+  copyFileSync,
+  unlinkSync,
+} from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { Injectable } from '@nestjs/common';
@@ -19,6 +28,85 @@ export type AgentModeConfig = { mode: AgentMode };
 
 export const CONFIG_DIR = process.env.SYNAPSEIA_HOME ?? join(homedir(), '.synapseia');
 export const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
+/**
+ * Always-on sibling backup of {@link CONFIG_FILE}. Every successful save
+ * of a *non-default* config mirrors here, and {@link NodeConfigHelper.loadConfig}
+ * restores from it when the live config.json goes missing or corrupt.
+ * This is the recovery net for the recurring "config.json got reset to
+ * qwen0.5b defaults" incident — the operator's real model / API key /
+ * wallet survive a lost main file instead of being silently dropped.
+ */
+export const CONFIG_BAK_FILE = join(CONFIG_DIR, 'config.json.bak');
+
+/**
+ * The defaults-only fallback model — the slug {@link NodeConfigHelper.defaultConfig}
+ * lands on when neither a persisted config nor `LLM_CLOUD_MODEL` pin a
+ * real model. Exported so the backup heuristic can recognise a
+ * "defaults-only" config and refuse to clobber a good `.bak` with it,
+ * and so tests can assert the fallback without hard-coding the literal.
+ */
+export const FALLBACK_DEFAULT_MODEL = 'ollama/qwen2.5:0.5b';
+
+/**
+ * Forensic snapshot of a config file's on-disk state. Deliberately
+ * carries NO file contents — config.json may hold an LLM API key, so the
+ * breadcrumb is limited to existence + mtime + byte size, which is enough
+ * to correlate "config went missing" with a preceding event (update,
+ * restart, crash) in the log stream without ever leaking a secret.
+ */
+export interface ConfigFileForensics {
+  exists: boolean;
+  /** ISO-8601 mtime, or `null` when the file is absent / unreadable. */
+  mtime: string | null;
+  /** Size in bytes, or `null` when the file is absent / unreadable. */
+  size: number | null;
+}
+
+/**
+ * Read existence + mtime + size for a path WITHOUT reading its contents.
+ * Pure (no logging, no mutation) so callers can drive it from tests and
+ * compose it into the boot breadcrumb. Never throws: an unreadable file
+ * (race with deletion, permissions) collapses to the "absent" shape.
+ */
+export function statForensics(path: string): ConfigFileForensics {
+  try {
+    const st = statSync(path);
+    return { exists: true, mtime: st.mtime.toISOString(), size: st.size };
+  } catch {
+    return { exists: false, mtime: null, size: null };
+  }
+}
+
+/**
+ * Decide whether a config is worth mirroring to `config.json.bak`.
+ *
+ * Rule: back up only configs that carry genuine operator state, i.e. a
+ * `defaultModel` other than {@link FALLBACK_DEFAULT_MODEL}, OR any of the
+ * operator-set fields (`llmKey`, `wallet`, `name`, `rpcUrl`,
+ * non-empty `inferenceModels`, `inferenceEnabled`, `lat`/`lng`).
+ *
+ * Rationale: the `.bak` is the recovery net. If we let a defaults-only
+ * save (the qwen0.5b fallback the node writes after a reset) overwrite a
+ * good `.bak`, the self-heal would later "restore" defaults — defeating
+ * the whole guard. So a defaults-only config is explicitly NOT worth
+ * backing up; it can never clobber a real backup.
+ */
+export function isWorthBackingUp(config: Config): boolean {
+  if (config.defaultModel && config.defaultModel !== FALLBACK_DEFAULT_MODEL) {
+    return true;
+  }
+  return Boolean(
+    config.llmKey ||
+      config.wallet ||
+      config.name ||
+      config.rpcUrl ||
+      (config.inferenceModels && config.inferenceModels.length > 0) ||
+      config.inferenceEnabled ||
+      typeof config.lat === 'number' ||
+      typeof config.lng === 'number',
+  );
+}
 
 /**
  * Default Solana RPC URL used by node-side on-chain modules when neither
@@ -220,27 +308,39 @@ export class NodeConfigHelper {
     return {
       coordinatorUrl: getCoordinatorUrl(),
       coordinatorWsUrl: getCoordinatorWsUrl(),
-      defaultModel: process.env.LLM_CLOUD_MODEL ?? 'ollama/qwen2.5:0.5b',
+      defaultModel: process.env.LLM_CLOUD_MODEL ?? FALLBACK_DEFAULT_MODEL,
       llmKey: process.env.LLM_CLOUD_API_KEY,
     };
   }
 
   loadConfig(): Config {
-    let cfg: Config;
-    if (existsSync(CONFIG_FILE)) {
-      try {
-        cfg = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
-      } catch {
-        cfg = this.defaultConfig();
-      }
+    // Boot forensics breadcrumb: record config.json's on-disk state at
+    // every start so the log stream can later correlate "config went
+    // missing" with whatever happened just before (update, restart,
+    // crash). Existence + mtime + size ONLY — never the contents, which
+    // may hold an LLM API key.
+    const forensics = statForensics(CONFIG_FILE);
+    if (forensics.exists) {
+      logger.info(
+        `[config] config.json exists (mtime=${forensics.mtime}, size=${forensics.size} bytes)`,
+      );
     } else {
-      cfg = this.defaultConfig();
+      logger.warn('[config] config.json is MISSING at boot (no file present)');
     }
 
-    const migrated = this.applyMigrations(cfg);
-    if (migrated.changed) {
-      // Persist the rewritten slug + drop deprecated fields so the
-      // operator only sees the WARN once instead of every boot.
+    const resolved = this.resolveOnLoad(forensics);
+
+    const migrated = this.applyMigrations(resolved.config);
+    // Persist the rewritten slug + drop deprecated fields so the operator
+    // only sees the WARN once instead of every boot — UNLESS we just fell
+    // back to defaults after detecting a corrupt config.json with no
+    // recoverable .bak. In that case the corrupt bytes are still the live
+    // config.json (already copied aside as `.corrupt-<ts>` for forensics),
+    // and overwriting them with a defaults-only config on this very boot
+    // would destroy the operator's last on-disk state. Fail closed: leave
+    // the corrupt file in place this boot; a real save (wizard / CLI) will
+    // replace it later.
+    if (migrated.changed && !resolved.skipPersist) {
       try {
         this.saveConfig(migrated.config);
       } catch (err) {
@@ -254,6 +354,127 @@ export class NodeConfigHelper {
     migrated.config.coordinatorUrl = getCoordinatorUrl();
     migrated.config.coordinatorWsUrl = getCoordinatorWsUrl();
     return migrated.config;
+  }
+
+  /**
+   * Resolve the config to load, self-healing from `config.json.bak` when
+   * the live file is missing or corrupt. Pre-migration; returns a parsed
+   * Config (or {@link defaultConfig} as the last resort) plus a
+   * `skipPersist` flag telling {@link loadConfig} whether it is safe to
+   * write the post-migration config back to disk on this boot.
+   *
+   * Permutations:
+   *
+   *  1. live present + parses        → use it (happy path). persist OK.
+   *  2. live MISSING + valid .bak    → restore config.json from .bak, WARN.
+   *  3. live CORRUPT + valid .bak    → preserve corrupt as `.corrupt-<ts>`,
+   *                                    restore config.json from .bak, WARN.
+   *  4. live CORRUPT + no/bad .bak   → preserve corrupt as `.corrupt-<ts>`,
+   *                                    fall to defaults, WARN, and set
+   *                                    `skipPersist` so the defaults are NOT
+   *                                    written over the still-live corrupt
+   *                                    config.json on this boot (the corrupt
+   *                                    bytes are the operator's last state).
+   *  5. live MISSING + no .bak       → defaults, WARN (nothing to recover).
+   *                                    persist OK — there is no file to clobber.
+   *
+   * @param forensics the boot snapshot already taken by {@link loadConfig};
+   *   passed in (rather than re-stat'd) so the existence decision matches
+   *   the breadcrumb that was just logged.
+   */
+  private resolveOnLoad(
+    forensics: ConfigFileForensics,
+  ): { config: Config; skipPersist: boolean } {
+    if (forensics.exists) {
+      const live = this.tryParseFile(CONFIG_FILE);
+      if (live) return { config: live, skipPersist: false };
+
+      // Live file is corrupt. Preserve the bytes for forensics BEFORE
+      // any restore touches config.json, so the evidence is never lost.
+      const preserved = this.preserveCorruptFile();
+      const fromBak = this.tryParseFile(CONFIG_BAK_FILE);
+      if (fromBak) {
+        this.restoreFromBak();
+        logger.warn(
+          `[config] config.json was CORRUPT — preserved as ${preserved ?? '(copy failed)'} ` +
+            'and restored from config.json.bak',
+        );
+        return { config: fromBak, skipPersist: false };
+      }
+      logger.warn(
+        `[config] config.json was CORRUPT with no valid config.json.bak — ` +
+          `preserved corrupt file as ${preserved ?? '(copy failed)'}, falling back to defaults ` +
+          `(corrupt file left in place this boot)`,
+      );
+      return { config: this.defaultConfig(), skipPersist: true };
+    }
+
+    // Live file is absent.
+    const fromBak = this.tryParseFile(CONFIG_BAK_FILE);
+    if (fromBak) {
+      this.restoreFromBak();
+      logger.warn(
+        `[config] config.json was MISSING at boot — restored from config.json.bak ` +
+          `(mtime=${statForensics(CONFIG_BAK_FILE).mtime})`,
+      );
+      return { config: fromBak, skipPersist: false };
+    }
+    logger.warn(
+      '[config] config.json was absent at boot and no config.json.bak exists — using defaults',
+    );
+    return { config: this.defaultConfig(), skipPersist: false };
+  }
+
+  /**
+   * Read + JSON.parse a file, returning the Config on success or `null`
+   * when the file is missing, unreadable, or not valid JSON. Never throws
+   * and never logs the contents — the caller decides what to do with the
+   * `null`.
+   */
+  private tryParseFile(path: string): Config | null {
+    try {
+      if (!existsSync(path)) return null;
+      return JSON.parse(readFileSync(path, 'utf-8')) as Config;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Copy a corrupt config.json aside as `config.json.corrupt-<timestamp>`
+   * so an operator (or a future debugging session) can inspect exactly
+   * what was on disk when the parse failed. Returns the basename of the
+   * preserved copy, or `null` if the copy could not be made. Best-effort:
+   * a failure here must never block the self-heal.
+   */
+  private preserveCorruptFile(): string | null {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dest = join(CONFIG_DIR, `config.json.corrupt-${stamp}`);
+    try {
+      copyFileSync(CONFIG_FILE, dest);
+      return `config.json.corrupt-${stamp}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Restore config.json from config.json.bak. Best-effort: a copy failure
+   * is logged but does not throw — the parsed `.bak` Config has already
+   * been handed back to the caller, so the running process is correct even
+   * if the on-disk restore did not land.
+   */
+  private restoreFromBak(): void {
+    try {
+      if (!existsSync(CONFIG_DIR)) {
+        mkdirSync(CONFIG_DIR, { recursive: true });
+      }
+      copyFileSync(CONFIG_BAK_FILE, CONFIG_FILE);
+    } catch (err) {
+      logger.warn(
+        `[config] failed to restore config.json from .bak on disk: ${(err as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -300,7 +521,48 @@ export class NodeConfigHelper {
     if (!existsSync(CONFIG_DIR)) {
       mkdirSync(CONFIG_DIR, { recursive: true });
     }
-    writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    const serialized = JSON.stringify(config, null, 2);
+
+    // Atomic write of the live file: write a temp sibling then rename
+    // over config.json. A crash mid-write can leave the .tmp behind but
+    // can never leave config.json half-written / corrupt.
+    this.atomicWrite(CONFIG_FILE, serialized);
+
+    // Mirror to config.json.bak ONLY for configs that carry real operator
+    // state. A defaults-only config (the qwen0.5b fallback the node writes
+    // after a reset) must never clobber a good .bak — otherwise the
+    // self-heal on the next boot would "restore" defaults and the
+    // operator's real config would be lost for good.
+    if (isWorthBackingUp(config)) {
+      try {
+        this.atomicWrite(CONFIG_BAK_FILE, serialized);
+      } catch (err) {
+        // A failed backup must not fail the save — the live file is
+        // already persisted; the .bak is a best-effort safety net.
+        logger.warn(`[config] failed to write config.json.bak: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /**
+   * Write `data` to `path` atomically: serialize to `<path>.tmp`, then
+   * `renameSync` over the target (rename is atomic on the same
+   * filesystem). On failure the partial `.tmp` is removed so a retry is
+   * clean and the target is never left half-written.
+   */
+  private atomicWrite(path: string, data: string): void {
+    const tmp = `${path}.tmp`;
+    try {
+      writeFileSync(tmp, data);
+      renameSync(tmp, path);
+    } catch (err) {
+      try {
+        if (existsSync(tmp)) unlinkSync(tmp);
+      } catch {
+        /* best-effort cleanup of the temp file */
+      }
+      throw err;
+    }
   }
 
   validateCoordinatorUrl(url: string): boolean {
