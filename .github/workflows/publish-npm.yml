@@ -76,7 +76,19 @@ jobs:
             exit 1
           fi
 
+      - name: Test
+        # Pre-publish gate (2026-06-01): run the full jest suite before
+        # building/publishing so a logic regression can never ship to npm.
+        # Tests run against TS source (ts-jest/swc) and never build the
+        # bundle, so this is a genuinely independent gate from Build below.
+        # Any non-zero exit fails the job -> no Build, no Publish.
+        run: pnpm test
+
       - name: Build
+        # Second gate: the tsup bundle (esbuild JS + post-process) must
+        # succeed and produce dist/ before publishing. A broken build
+        # (e.g. a sourcemap-collapse conflict) blocks the release here
+        # rather than shipping an empty/partial package.
         run: pnpm run build
 
       - name: Verify version matches tag
