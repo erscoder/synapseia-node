@@ -9,6 +9,7 @@ import { existsSync as dotenvExists } from 'fs';
 import { join as dotenvJoin } from 'path';
 import { homedir as dotenvHomedir } from 'os';
 import { setMaxListeners } from 'events';
+import { applyTracingDefault } from './tracing-default';
 
 // `__dirname` is provided in both runtimes: tsup `shims: true` injects
 // it into the production ESM bundle, and Node injects it natively in
@@ -35,6 +36,16 @@ setMaxListeners(Infinity);
     if (dotenvExists(f)) { dotenvConfig({ path: f, debug: false, quiet: true }); break; }
   }
 })();
+
+// LangChain/LangSmith background tracing is OFF unless the operator opts in.
+// The node does not use LangSmith; a stray default-on or inherited
+// LANGCHAIN_TRACING_V2 makes the bundled langsmith SDK spam
+// "multipart request ... 403 Forbidden" when no LangSmith key is set.
+// Runs AFTER loadDotEnv (so a user's .env LANGCHAIN_TRACING_V2=true is
+// respected) and BEFORE any LangChain import reads the flag. langsmith
+// reads the flag lazily at trace time (inside bootstrap()), so this guard
+// — well before the agent runs — fully suppresses the 403s.
+applyTracingDefault(process.env);
 import { initTracing } from '../instrumentation';
 
 // Activate Langfuse OTel tracing before any NestJS module loads.
