@@ -43,6 +43,7 @@ import {
   HeartbeatHelper,
   __resetCapabilitySnapshotForTests,
   __seedLoraStackProbeForTests,
+  __seedCudaCacheForTests,
 } from '../heartbeat';
 import type { Hardware } from '../../hardware/hardware';
 
@@ -124,12 +125,19 @@ describe('HeartbeatHelper.determineCapabilitiesAsync — lora_training capabilit
 
   beforeEach(() => {
     __resetCapabilitySnapshotForTests();
+    // POD_HARDWARE is a CUDA-class A5000. Seed CUDA=true so the cpu/gpu_training
+    // split advertises gpu_training (and drops cpu_training) deterministically,
+    // and so lora_generation's own CUDA gate sees the same fact — without a real
+    // python spawn. Reset to null in afterEach so the sticky positive cache does
+    // not leak into other specs.
+    __seedCudaCacheForTests(true);
     helper = new HeartbeatHelper({ resolvePublicIp: jest.fn() } as any);
     warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     __resetCapabilitySnapshotForTests();
+    __seedCudaCacheForTests(null);
     warnSpy.mockRestore();
   });
 
@@ -140,8 +148,10 @@ describe('HeartbeatHelper.determineCapabilitiesAsync — lora_training capabilit
 
     expect(caps).toContain('lora_training');
     // Sanity: the rest of the POD cap set is also present — proves the
-    // success branch didn't accidentally short-circuit other gates.
-    expect(caps).toContain('cpu_training');
+    // success branch didn't accidentally short-circuit other gates. POD is a
+    // CUDA A5000, so under the CPU-vs-GPU training split it advertises
+    // gpu_training and NOT cpu_training (GPU-only). gpu_inference is unchanged.
+    expect(caps).not.toContain('cpu_training');
     expect(caps).toContain('gpu_training');
     expect(caps).toContain('gpu_inference');
   });

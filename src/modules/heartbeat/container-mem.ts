@@ -257,6 +257,21 @@ export function applyContainerMemoryGate(caps: string[]): string[] {
     return false;
   });
 
+  // Dependency cascade: `lora_generation` is a strict subtype of `lora_training`
+  // (same Python stack, same per-model memory envelope — BioGPT-Large generation
+  // can't run where LoRA training was just deemed too big for the container). It
+  // has no own threshold key, so the filter above would let it leak through when
+  // `lora_training` is stripped for memory. Drop it alongside its parent so the
+  // coordinator never routes a generation WO to a pod whose training cap was
+  // pulled for being undersized.
+  if (!filtered.includes('lora_training')) {
+    const genIdx = filtered.indexOf('lora_generation');
+    if (genIdx !== -1) {
+      filtered.splice(genIdx, 1);
+      stripped.push({ cap: 'lora_generation', needsMB: CONTAINER_MEM_THRESHOLDS.lora_training });
+    }
+  }
+
   if (!containerCheckLogged) {
     containerCheckLogged = true;
     if (stripped.length > 0) {

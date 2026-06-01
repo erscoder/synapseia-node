@@ -32,6 +32,7 @@ import {
   __resetCapabilitySnapshotForTests,
   __seedLoraStackProbeForTests,
   __seedDilocoModelProbeForTests,
+  __seedCudaCacheForTests,
 } from '../heartbeat';
 import {
   readContainerTotalMemMBUncached,
@@ -236,6 +237,30 @@ describe('container-mem — applyContainerMemoryGate()', () => {
     expect(out).not.toContain('diloco_training');
   });
 
+  it('cascades: stripping lora_training also strips its dependent lora_generation', () => {
+    // 8 GB container — below the 16 GB LoRA bar. lora_generation has no own
+    // threshold key, so without the dependency cascade it would leak through
+    // after its parent lora_training is stripped.
+    mockCgroup({ v2: '8589934592\n' });
+    const out = applyContainerMemoryGate([
+      'lora_training',
+      'lora_generation',
+      'cpu_training',
+    ]);
+    expect(out).not.toContain('lora_training');
+    expect(out).not.toContain('lora_generation'); // cascaded with its parent
+    expect(out).toContain('cpu_training'); // ungated cap untouched
+  });
+
+  it('keeps lora_generation when lora_training clears the container threshold', () => {
+    // 24 GB container — clears the 16 GB LoRA bar, so neither lora_training nor
+    // its dependent lora_generation is stripped (cascade must not over-fire).
+    mockCgroup({ v2: '25769803776\n' });
+    const out = applyContainerMemoryGate(['lora_training', 'lora_generation']);
+    expect(out).toContain('lora_training');
+    expect(out).toContain('lora_generation');
+  });
+
   it('logs the strip decision exactly once per process lifetime', () => {
     mockCgroup({ v2: '8589934592\n' }); // 8 GB
     applyContainerMemoryGate(['diloco_training']);
@@ -339,11 +364,20 @@ describe('HeartbeatHelper.determineCapabilitiesAsync — Bug 21 container gate i
     // container-gate decision from those concerns.
     __seedLoraStackProbeForTests(true);
     __seedDilocoModelProbeForTests(true);
+    // POD_HARDWARE is a CUDA-class GPU pod (A5000). Seed the CUDA cache to
+    // `true` so the cpu/gpu_training split is DETERMINISTIC and host-independent:
+    // without this, determineCapabilitiesAsync would fire a real
+    // `python3 -c torch.cuda.is_available()` spawn (with a 30s kill timer) and
+    // its result — hence whether cpu_training survives the split — would depend
+    // on whether the test host actually has CUDA (passes on a Mac, fails on a
+    // CUDA CI runner). Seeding pins it to the real-pod truth: CUDA present.
+    __seedCudaCacheForTests(true);
   });
 
   afterEach(() => {
     restoreCgroup();
     __resetCapabilitySnapshotForTests();
+    __seedCudaCacheForTests(null);
   });
 
   it('does NOT advertise diloco_training when container memory < threshold (POD1 live scenario)', async () => {
@@ -375,10 +409,16 @@ describe('HeartbeatHelper.determineCapabilitiesAsync — Bug 21 container gate i
     // the container gate is independent of self-reported `hardware.ramGb`.
     const caps = await helper.determineCapabilitiesAsync(POD_HARDWARE);
 
+    // Memory-floor target of this test: container < LoRA bar strips the
+    // RAM-heavy training caps regardless of self-reported hardware.ramGb.
     expect(caps).not.toContain('lora_training');
     expect(caps).not.toContain('lora_generation'); // gated on lora_training
     expect(caps).not.toContain('diloco_training');
-    // cpu_training is ungated by the container check
-    expect(caps).toContain('cpu_training');
+    // The container gate does NOT touch the cpu/gpu_training split — that is
+    // CUDA-gated. POD_HARDWARE is a CUDA node (cache seeded true in beforeEach),
+    // so it is GPU-only-always: gpu_training present, cpu_training absent. This
+    // is independent of the container memory floor under test above.
+    expect(caps).not.toContain('cpu_training');
+    expect(caps).toContain('gpu_training');
   });
 });

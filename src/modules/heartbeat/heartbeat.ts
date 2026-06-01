@@ -20,6 +20,7 @@ import {
 import {
   detectCudaAvailable,
   __resetCudaCacheForTests as __resetSharedCudaCacheForTests,
+  __seedCudaCacheForTests as __seedSharedCudaCacheForTests,
   __setCudaProbeSpawnOverrideForTests,
 } from '../../utils/gpu-detect';
 import type { Identity } from '../identity/identity';
@@ -401,6 +402,13 @@ export function __forceLoraProbeSpawnForTests(): void {
  *  shared helper (utils/gpu-detect.ts) which now owns the cache. */
 export function __resetCudaCacheForTests(): void {
   __resetSharedCudaCacheForTests();
+}
+
+/** Test-only: seed the shared CUDA cache directly (no python spawn) so the
+ *  cpu/gpu_training split in `determineCapabilitiesAsync` is deterministic.
+ *  Pass `true`/`false` to force the probe result, `null` to clear. */
+export function __seedCudaCacheForTests(value: boolean | null): void {
+  __seedSharedCudaCacheForTests(value);
 }
 
 /** Test-only export of the LoRA probe so the timer-leak spec can drive
@@ -1373,10 +1381,14 @@ export class HeartbeatHelper {
   determineCapabilities(hardware: Hardware): string[] {
     const capabilities: string[] = [];
 
-    // cpu_training: micro-transformer hyperparam search (PyTorch CPU, requires python3 + torch)
-    // NOTE: determineCapabilities() is sync but isPyTorchAvailable() is async.
-    // The heartbeat loop calls determineCapabilitiesAsync() instead for accuracy.
-    // This sync version assumes PyTorch IS available (conservative default).
+    // cpu_training: micro-transformer hyperparam search (PyTorch CPU, requires python3 + torch).
+    // NOTE: determineCapabilities() is sync but isPyTorchAvailable() AND the CUDA
+    // probe are async. This sync version emits a CONSERVATIVE PRE-PROBE DEFAULT
+    // (cpu_training + gpu_training-on-vram). The real CPU-vs-GPU training split —
+    // gpu_training iff CUDA, cpu_training iff NOT CUDA — is applied by
+    // determineCapabilitiesAsync(), which the heartbeat loop calls for the wire
+    // payload. The sync method is only consumed by the boot-time log in
+    // cli/index.ts, never by the heartbeat wire path.
     capabilities.push('cpu_training');
 
     // cpu_inference: tokenize/classify/embedding tasks that run on CPU without a full LLM.
@@ -1394,7 +1406,11 @@ export class HeartbeatHelper {
       capabilities.push('embedding');
     }
 
-    // gpu_training: DiLoCo LoRA fine-tuning — requires dedicated GPU VRAM
+    // gpu_training: DiLoCo LoRA fine-tuning — requires a CUDA GPU. The sync gate
+    // here is `gpuVramGb > 0` as a PRE-PROBE DEFAULT only; determineCapabilitiesAsync()
+    // re-decides this against the real CUDA probe (Mac MPS reports vram but is NOT
+    // CUDA-capable for training — train_micro.py has no MPS branch). See the
+    // CPU-vs-GPU training split block in determineCapabilitiesAsync().
     if (hardware.gpuVramGb > 0) {
       capabilities.push('gpu_training');
     }
@@ -1419,6 +1435,52 @@ export class HeartbeatHelper {
    */
   async determineCapabilitiesAsync(hardware: Hardware): Promise<string[]> {
     const caps = this.determineCapabilities(hardware);
+
+    // CPU-vs-GPU training split, discriminated by REAL GPU-training capability
+    // (CUDA), not by `gpuVramGb`. CPU_TRAINING and GPU_TRAINING are separate
+    // coordinator rounds; without this split every CUDA pod (which also reports
+    // vram>0) poaches the CPU rounds meant for CPU-only / Mac nodes, and a Mac
+    // (MPS, no CUDA) advertises a gpu_training cap it cannot honour because
+    // train_micro.py is CUDA-or-CPU only (no MPS branch).
+    //
+    //   - CUDA available  → keep gpu_training, DROP cpu_training ("GPU-only").
+    //   - CUDA absent     → DROP gpu_training (even on Mac MPS / vram>0), keep
+    //                        cpu_training.
+    //
+    // The discriminator for cpu_training suppression is CUDA-PRESENCE — a stable
+    // process-lifetime hardware fact — NOT the gpu_training cap. gpu_training can
+    // later be shed under memory pressure by applyMemoryPressureFilter; if we
+    // gated cpu_training on the gpu_training cap, a memory-pressured CUDA pod
+    // would flap back to cpu_training and poach CPU rounds. Gating on CUDA keeps
+    // a CUDA node GPU-only-always. gpu_inference is intentionally left untouched
+    // (it stays gated on vram>0 && LLM in determineCapabilities) because MPS/Metal
+    // genuinely accelerates inference (Ollama Metal) — only TRAINING is CUDA-gated.
+    let cudaAvailable = false;
+    try {
+      cudaAvailable = await isCudaAvailable();
+    } catch (err) {
+      // Fail-closed: an unusable CUDA probe is treated as "no CUDA", so the node
+      // advertises cpu_training (which it can always run) and never a
+      // gpu_training cap it might not be able to honour.
+      logger.warn(`[Heartbeat] CUDA probe failed in training split: ${(err as Error).message}`);
+      cudaAvailable = false;
+    }
+    // Boot-window note: gpu-detect.ts positive-caches `true` only (a `false`
+    // or thrown result is NOT cached, so a real probe re-runs next tick). A
+    // genuine CUDA node whose FIRST probe transiently fails (e.g. nvidia-smi
+    // not ready at boot, momentary spawn error) will briefly advertise
+    // cpu_training and drop gpu_training until the first SUCCESSFUL probe
+    // sticks the positive cache. This is self-healing within a few heartbeat
+    // ticks — a known, accepted boot-window transient, NOT a per-tick
+    // oscillation (once `true` is cached it never flaps back).
+    if (cudaAvailable) {
+      const cpuIdx = caps.indexOf('cpu_training');
+      if (cpuIdx !== -1) caps.splice(cpuIdx, 1);
+    } else {
+      const gpuIdx = caps.indexOf('gpu_training');
+      if (gpuIdx !== -1) caps.splice(gpuIdx, 1);
+    }
+
     // Verify PyTorch is actually available before claiming cpu_training
     const hasTorch = await isPyTorchAvailable();
     if (!hasTorch) {
@@ -1485,13 +1547,12 @@ export class HeartbeatHelper {
     // lora_generation: CUDA-only subtype (BioGPT-Large 1.5B). M1 MPS does NOT qualify.
     // Only push when CUDA is actually available, not just any GPU. Gated on lora_training
     // being present (otherwise the deps for generation aren't installed either).
+    // Reuse the `cudaAvailable` computed above for the cpu/gpu_training split —
+    // a redundant second probe would spawn python again on non-CUDA hosts and
+    // could (in principle) disagree with the first within one tick. One probe,
+    // one consistent CUDA decision per determineCapabilitiesAsync call.
     if (caps.includes('lora_training')) {
-      try {
-        const hasCuda = await isCudaAvailable();
-        if (hasCuda) caps.push('lora_generation');
-      } catch (err) {
-        logger.warn(`[Heartbeat] CUDA probe failed: ${(err as Error).message}`);
-      }
+      if (cudaAvailable) caps.push('lora_generation');
     }
 
     // diloco_training: requires the foundation model to be pre-downloaded
