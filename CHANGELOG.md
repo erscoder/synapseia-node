@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.7] 2026-06-01 fix(prompt): align research-agent prompts with quality gates (4d6f5bb0)
+
+- Weak cloud models (minimax) hit research fail-loops because the prompts under-specified two enforced constraints, so valid research never submitted.
+- **evidence_type vs DOI count**: `discovery-schema-validator` requires `≥3` distinct DOIs for `meta_analysis` and `≥2` for every other type, but the prompts only said "supporting_dois `≥2`" generically. Models picked `meta_analysis` with 2 DOIs → guaranteed reject loop. The prompts now encode the decision rule: `meta_analysis` ONLY with `≥3` distinct real DOIs; exactly 2 → `literature_review`; `contradiction_detected` only when `novel_contribution` names the conflict; the `≥2`-DOI floor always applies; never fabricate/duplicate/pad DOIs (reduces hallucination pressure, matches the validator exactly).
+- **summary floor**: the node-side gate rejects `hypothesis`/`summary` `< 30` chars; the prompts now state a too-short summary is auto-rejected and unrecoverable (always 2-3 complete sentences), reinforcing the `≥80` target.
+- Prompt-string-only (`synthesizer-node` `SCHEMA_RETRY_FIELD_EXAMPLES` + `medical-{synthesizer,react,researcher}.ts`); no validator, threshold, or control-flow change. Reviewer SHIP. Build clean, 66 prompt/synthesizer specs pass.
+
 ## [0.9.6] 2026-06-01 fix(submit): research-aware stale probe — submit re-offered PENDING WOs (95e8bea3)
 
 - **A research node never submitted results for an OPEN round under the cyclic re-offer model.** `submit-result.ts` ran a pre-submit status probe and dropped the result whenever the WO was not `ACCEPTED`. Under the RESEARCH cyclic re-offer the coordinator flips an accepted research WO back to `PENDING` while the node is still working it (single-node networks always re-offer to the same node), so the node logged `dropping stale result for WO <id> (status=PENDING)` and discarded every valid result. Live: node-kike dropped 18 consecutive results; the open round had `0` submissions.
