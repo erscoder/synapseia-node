@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [Unreleased] 2026-06-01 feat(heartbeat): split CPU/GPU training caps by CUDA (f99ff6cd)
+
+- Restores the intended design: GPU (CUDA) nodes advertise `gpu_training` and NOT `cpu_training` (compete only in `GPU_TRAINING` rounds); CPU and Mac-MPS nodes advertise `cpu_training` and NOT `gpu_training` (compete only in `CPU_TRAINING` rounds). Previously every GPU node advertised BOTH caps and crowded CPU-only nodes out of their own micro-training space.
+- `determineCapabilitiesAsync` resolves `isCudaAvailable()` once: CUDA present → drop `cpu_training` (GPU-only-always — not re-added even if `gpu_training` is later shed by the memory-floor filter, since the discriminator is CUDA-presence, a stable signal, not the flapping `gpu_training` cap). CUDA absent (incl. Mac MPS) → drop `gpu_training` (`train_micro.py` is CUDA-or-CPU only, no MPS device, so a Mac's `gpu_training` is meaningless for training). Probe throws → fail-closed to CPU node.
+- `gpu_inference` unchanged (`gpuVramGb>0` + LLM) — MPS/Metal accelerates inference so Macs keep it. The `lora_generation` gate now reuses the single `cudaAvailable` result (was a redundant second probe).
+- Lateral fail-closed fix: `applyContainerMemoryGate` cascades — when `lora_training` is stripped for memory, `lora_generation` (its strict subtype, no own threshold key) is stripped too, so the coordinator never routes a generation WO to a pod whose training cap was pulled.
+- Backward-compat: GPU nodes keep both caps until they upgrade; coordinator routes by advertised caps (no coord change). Reviewer: MEDIUM (host-GPU-dependent test) + LOW (fail-closed test) fixed; 94 heartbeat tests green.
+
 ## [Unreleased] 2026-06-01 fix(agent): stop re-iterating cancelled/closed-round work orders (42ce9381)
 
 - node-kike was infinitely re-training and re-submitting `TRAINING` / `GPU_TRAINING` work orders whose round had already closed (WO row `CANCELLED` on the coordinator), burning CPU and POSTing submissions into dead rounds. The coordinator already filters these on the poll path (open-round-only + status `PENDING`/`ACCEPTED`); the leak was node-side.
