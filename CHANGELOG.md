@@ -5,6 +5,7 @@
 - **`syn stop` now actually stops the daemon** (`11153ee4`). The old action called `workOrderAgentService.stop()` in the ephemeral CLI process and printed "Node stopped" without touching the running daemon — a no-op. `stopRunningNode()` now reads the pid from `~/.synapseia/node.lock`, SIGTERMs it, polls up to 10s, clears the lock, with honest messages (no-lock / stale-pid / poll-confirmed-stopped / timeout-no-SIGKILL / ESRCH-race). The daemon's own SIGTERM handler drains + releases the lock.
 - **`fix(build)`** (`51f5cd5f`): set `sourcemap:false` in `tsup.config.ts` to avoid a `RollupError: Multiple conflicting contents for sourcemap source src/baggage/utils.ts` (two bundled OpenTelemetry versions ship conflicting `baggage/utils.js.map`). CLI-only package, no typed consumers, so sourcemaps add no publish value. Build now produces `dist/` reliably.
 - **`ci(publish)`** (`e5865844`): the npm publish workflow now runs the full `pnpm test` suite (gate) before `pnpm run build` before publishing — a logic regression or broken build can no longer reach npm.
+- **`fix(test)`**: added `ts-jest@29.4.6` to devDependencies (+ standalone `pnpm-lock.yaml`, regenerated with pnpm 9 to match CI). The new CI test gate surfaced that `jest.config.mjs` requires `ts-jest/presets/default-esm` but `ts-jest` was only resolved via monorepo-root hoisting and absent from the node's own deps/lock — so the standalone repo could not run its tests. Now self-contained.
 
 ## [0.9.4] 2026-05-31 fix(self-update): re-derive staged integrity via npm pack — unblock self-update (cd0baea5)
 
