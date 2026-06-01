@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.9] 2026-06-01 fix(cli): LangChain/LangSmith tracing OFF by default (no 403 spam) (b5953c5f)
+
+- A user with **no env vars** got `Failed to send multipart request. Received status [403]: Forbidden` spam from the bundled `langsmith` SDK (a transitive dep of LangGraph): a stray/inherited `LANGCHAIN_TRACING_V2` (or a default-on path) made it try to upload traces with no LangSmith key. The node does not use LangSmith.
+- Fix: bootstrap guard `cli/tracing-default.ts` `applyTracingDefault(env)`, called right after `loadDotEnv()` and before any LangChain-touching import runs. Unless the operator explicitly opted in (`LANGCHAIN_TRACING_V2=true` or `LANGSMITH_TRACING=true`, incl. via `~/.synapseia/.env`), both flags are forced to `'false'`.
+- Safe despite ESM hoisting the LangChain imports above the guard: `langsmith` / `@langchain/core` read the flag **lazily per-invocation** (`CallbackManager.configure` → `isTracingEnabled`, live `process.env` read; no import-time cache), so mutating `process.env` in the top-level bootstrap takes effect before the agent runs. Opt-in preserved (`LANGSMITH_TRACING=true` alone still enables via the `LANGSMITH_* || LANGCHAIN_*` resolution). Pure helper + 4 unit tests. `instrumentation.ts` (Langfuse) untouched. Reviewer SHIP.
+
 ## [0.9.8] 2026-06-01 feat(llm): set MiniMax-M3 as the top minimax model (eaf208f0)
 
 - `MiniMax-M3` is the new top minimax model. Swapped the minimax `models.top` modelId from `MiniMax-M2.7` to `MiniMax-M3` in `providers.ts` (specs unchanged: 240K window, same cost/latency).
