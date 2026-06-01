@@ -44,11 +44,12 @@ const SCHEMA_VALIDATION_MAX_ATTEMPTS = 2;
 const SCHEMA_RETRY_FIELD_EXAMPLES =
   'CONCRETE EXAMPLES of the three most common failures:\n' +
   '- novel_contribution: WRONG: "" or "This study explores ALS." CORRECT: ' +
-  '"Riluzole at 50mg twice daily extends median ALS survival ~3 months versus placebo across replications, with consistent benefit in bulbar and limb-onset subgroups." (≥80 chars, references the discovery).\n' +
-  '- evidence_type: WRONG: "" or "study" or "randomized_trial" or "case_series". CORRECT: one of ' +
-  '"literature_review" | "meta_analysis" | "gap_analysis" | "hypothesis_generation" | "contradiction_detected".\n' +
-  '- supporting_dois: WRONG: ["10.x", "10.x"] (duplicates) or [] or fabricated. CORRECT: ' +
-  '["10.1056/NEJM199403033300901","10.1016/S0140-6736(96)91680-3"] (≥2 distinct, real DOIs from the abstract or critique).';
+  '"Riluzole at 50mg twice daily extends median ALS survival ~3 months versus placebo across replications." (≥80 chars, references the discovery).\n' +
+  '- evidence_type (one of literature_review|meta_analysis|gap_analysis|hypothesis_generation|contradiction_detected): pick by REAL distinct-DOI count — ' +
+  '"meta_analysis" ONLY with ≥3 distinct real DOIs; exactly 2 → "literature_review"; "contradiction_detected" only when novel_contribution names the conflict. ' +
+  'The ≥2-distinct-DOI floor ALWAYS applies (every type) — never submit with <2 real DOIs; NEVER pad/duplicate/fabricate DOIs to reach a count.\n' +
+  '- supporting_dois: WRONG: ["10.x","10.x"] (duplicates) or [] or fabricated. CORRECT: ' +
+  '["10.1056/NEJM199403033300901","10.1016/S0140-6736(96)91680-3"] (≥2 distinct real DOIs from the abstract or critique; "meta_analysis" needs ≥3).';
 
 @Injectable()
 export class SynthesizerNode {

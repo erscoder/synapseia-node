@@ -109,7 +109,7 @@ ${schemaBlock}
 
 Output ONLY a JSON object with exactly this shape (no markdown, no prose, no \`\`\`):
 {
-  "summary": "<2-3 sentence plain-text summary, ≥ 80 chars, not paraphrasing the abstract>",
+  "summary": "<2-3 sentence plain-text summary, ≥ 80 chars, not paraphrasing the abstract — a summary under ~30 characters or a sentence fragment is auto-rejected and unrecoverable; always write 2-3 complete sentences>",
   "keyInsights": ["<non-obvious finding, ≥ 30 chars>", "<another>", "<another>"],
   "discoveryType": "<one of: drug_repurposing | combination_therapy | biomarker | mechanism_link | procedure_refinement>",
   "structuredData": { <the required fields for the chosen discoveryType, copied from the schema above> }
@@ -159,7 +159,7 @@ Note: \`drug_rxnorm_id\`, \`disease_mesh_id\`, \`mechanism_summary\`, \`supporti
 - summary and keyInsights must be plain English, not JSON.
 - Do NOT include a "proposal" field — the proposal is built downstream from structuredData.
 - Use the EXACT field names from the schema block above. \`drug_rxnorm_id\` not \`"RxNorm"\`. \`disease_mesh_id\` not \`"MeSH"\`. \`umls_cui\` not \`"UMLS CUI"\`.
-- structuredData MUST include \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug/disease/pathway/biomarker terms above) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected). meta_analysis requires ≥ 3 distinct supporting_dois; contradiction_detected requires novel_contribution to use a conflict word (contradict / disagree / conflict / inconsist / oppose).
+- structuredData MUST include \`novel_contribution\` (≥ 80 chars, ≥ 15 distinct non-stopword tokens, references the drug/disease/pathway/biomarker terms above) and \`evidence_type\` (one of literature_review | meta_analysis | gap_analysis | hypothesis_generation | contradiction_detected). Choose evidence_type by the REAL distinct-DOI count you extracted: use \`meta_analysis\` ONLY with ≥ 3 distinct real DOIs; with exactly 2 distinct real DOIs use \`literature_review\` (or another non-meta type), NEVER \`meta_analysis\`; with fewer than 2 use \`hypothesis_generation\` or \`gap_analysis\`. NEVER fabricate, duplicate, or pad DOIs to reach a threshold. contradiction_detected requires novel_contribution to use a conflict word (contradict / disagree / conflict / inconsist / oppose).
 
 ❌ DO NOT confuse \`discoveryType\` (the structural class of the finding —
 one of drug_repurposing | combination_therapy | biomarker | mechanism_link |

@@ -107,6 +107,7 @@ Note four things in the proposal field:
 - discoveryType is one of: drug_repurposing, combination_therapy, biomarker, mechanism_link, procedure_refinement.
 - structuredData must contain every required field for the chosen discoveryType.
 - supporting_dois must contain ≥ 2 real DOIs (format "10.xxxx/yyyy"). NEVER invent a DOI — only use DOIs present in the researcher's output, abstract, or critique.
+- evidence_type ↔ DOI count (decide from the DOIs you ACTUALLY have, never pad to fit): use \`meta_analysis\` ONLY when you hold ≥ 3 distinct real DOIs; with exactly 2 distinct real DOIs use \`literature_review\` (or another non-meta type), NEVER \`meta_analysis\`; with fewer than 2 use \`hypothesis_generation\` or \`gap_analysis\`. NEVER fabricate, duplicate, or pad DOIs to reach a threshold — pick the evidence_type that matches the real DOI count.
 - If the researcher's structuredData was valid, preserve IDs unless the critique explicitly invalidates them.
 - If the critique identifies a fatal flaw (missing DOIs, wrong schema, invented IDs), emit a safer discoveryType that can be fully grounded, even if it is a weaker claim.
 - Use the EXACT schema field names. The coordinator strictly validates them and silently drops payloads with wrong keys.

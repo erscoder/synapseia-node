@@ -79,7 +79,7 @@ To deliver the final answer:
   "thought": "<brief rationale>",
   "action": "generate_answer",
   "answer": {
-    "summary": "<2-3 sentences, ≥ 80 chars>",
+    "summary": "<2-3 sentences, ≥ 80 chars — a summary under ~30 characters or a sentence fragment is auto-rejected and unrecoverable; always write 2-3 complete sentences>",
     "keyInsights": ["<insight, ≥ 30 chars>", "<insight>", "<insight>", "<insight>", "<insight>"],
     "proposal": "<prose paragraph (≥ 100 chars, ≥ 12 words) that describes the discovery in plain English, IMMEDIATELY FOLLOWED BY a JSON block {\\"discoveryType\\":\\"…\\",\\"structuredData\\":{…}} using the exact field names from the matching schema above>"
   }
@@ -93,6 +93,7 @@ Anti-patterns (these will be silently rejected by the coordinator):
 
 Rules:
 - supporting_dois ≥ 2 real DOIs from the abstract, observations, or the related list. NEVER invent DOIs.
+- evidence_type ↔ DOI count: use \`meta_analysis\` ONLY with ≥ 3 distinct real DOIs; with exactly 2 distinct real DOIs use \`literature_review\` (or another non-meta type), NEVER \`meta_analysis\`; with fewer than 2 use \`hypothesis_generation\` or \`gap_analysis\`. NEVER fabricate, duplicate, or pad DOIs to hit a threshold — match the evidence_type to the DOIs you actually extracted.
 - If no structured discovery can be grounded, pick mechanism_link (weakest claim) and still ground ≥ 2 DOIs.
 - summary and keyInsights are plain English, not JSON.
 - Use the EXACT schema field names. The coordinator strictly validates them and silently drops payloads with wrong keys.`;
