@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.5] 2026-06-01 fix(cli): syn stop signals the real daemon + build/ci hardening (e5865844)
+
+- **`syn stop` now actually stops the daemon** (`11153ee4`). The old action called `workOrderAgentService.stop()` in the ephemeral CLI process and printed "Node stopped" without touching the running daemon — a no-op. `stopRunningNode()` now reads the pid from `~/.synapseia/node.lock`, SIGTERMs it, polls up to 10s, clears the lock, with honest messages (no-lock / stale-pid / poll-confirmed-stopped / timeout-no-SIGKILL / ESRCH-race). The daemon's own SIGTERM handler drains + releases the lock.
+- **`fix(build)`** (`51f5cd5f`): set `sourcemap:false` in `tsup.config.ts` to avoid a `RollupError: Multiple conflicting contents for sourcemap source src/baggage/utils.ts` (two bundled OpenTelemetry versions ship conflicting `baggage/utils.js.map`). CLI-only package, no typed consumers, so sourcemaps add no publish value. Build now produces `dist/` reliably.
+- **`ci(publish)`** (`e5865844`): the npm publish workflow now runs the full `pnpm test` suite (gate) before `pnpm run build` before publishing — a logic regression or broken build can no longer reach npm.
+
 ## [0.9.4] 2026-05-31 fix(self-update): re-derive staged integrity via npm pack — unblock self-update (cd0baea5)
 
 - The integrity verifier (added 3feb3c16) read the staged artifact's resolved integrity from a `.package-lock.json` in the staging dir, but `npm install -g` NEVER writes a lockfile → the read always returned null → fail-closed → EVERY self-update refused. Nodes were stranded (node-kike stuck on 0.9.0, unable to reach the 0.9.3 discovery fix). Chicken-and-egg: the broken verifier blocked the update that would fix it.
