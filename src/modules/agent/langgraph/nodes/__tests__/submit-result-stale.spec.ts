@@ -122,6 +122,86 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     expect(coordinator.completeWorkOrder).toHaveBeenCalledTimes(1);
   });
 
+  it('still drops a non-research WO when probe status is PENDING (unchanged strict drop)', async () => {
+    coordinator.getWorkOrder.mockResolvedValue({ ...baseWO, status: 'PENDING' });
+
+    const out = await node.execute(baseState);
+
+    expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+    expect(fetchNode.markCompleted).toHaveBeenCalledWith(baseWO);
+    expect(out.submitted).toBe(true);
+    expect(out.completedWorkOrderIds).toContain('wo-1');
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining('dropping stale result for WO wo-1 (status=PENDING)'),
+    );
+  });
+
+  /**
+   * Bug — cyclic re-offer dropped valid RESEARCH submissions.
+   *
+   * While a research round is OPEN the coordinator re-offers the round's WOs
+   * round-robin and flips them back to PENDING while a node is still working
+   * them. The coordinator ACCEPTS a research submit for a PENDING WO when the
+   * round is OPEN (WorkOrderSubmissionService.ts, the OPEN-round RESEARCH
+   * branch ~L372-374), so the node must
+   * NOT drop a re-offered PENDING research WO locally — it must POST and let
+   * the server's round-OPEN check decide. Terminal states (COMPLETED /
+   * VERIFIED / CANCELLED) are still dropped.
+   */
+  describe('RESEARCH cyclic re-offer — PENDING is submittable', () => {
+    // RESEARCH WOs hit the client-side quality gate (validateResearchResultJsonString)
+    // BEFORE the stale probe; stub the execution helper to report RESEARCH and
+    // supply a payload that passes the gate (hypothesis >= 30 chars, no error markers).
+    const researchWO: WorkOrder = { ...baseWO, type: 'RESEARCH' };
+    const researchResultJson = JSON.stringify({
+      hypothesis: 'Distributed gradient averaging converges under heterogeneous batch sizes.',
+      keyInsights: ['loss decreased monotonically across all peers'],
+    });
+    const researchState = {
+      ...baseState,
+      selectedWorkOrder: researchWO,
+      executionResult: { success: true, result: researchResultJson },
+    } as any;
+
+    it('does NOT drop a PENDING research WO — proceeds to completeWorkOrder', async () => {
+      coordinator.getWorkOrder.mockResolvedValue({ ...researchWO, status: 'PENDING' });
+      coordinator.completeWorkOrder.mockResolvedValue(true);
+
+      const out = await node.execute(researchState);
+
+      expect(coordinator.completeWorkOrder).toHaveBeenCalledTimes(1);
+      expect(out.submitted).toBe(true);
+      const droppedLog = infoSpy.mock.calls
+        .map((c) => String(c[0]))
+        .find((m) => m.includes('dropping stale result'));
+      expect(droppedLog).toBeUndefined();
+    });
+
+    it('still drops a COMPLETED research WO (terminal state)', async () => {
+      coordinator.getWorkOrder.mockResolvedValue({ ...researchWO, status: 'COMPLETED' });
+
+      const out = await node.execute(researchState);
+
+      expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+      expect(out.submitted).toBe(true);
+      expect(infoSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dropping stale result for WO wo-1 (status=COMPLETED)'),
+      );
+    });
+
+    it('still drops a CANCELLED research WO (terminal state)', async () => {
+      coordinator.getWorkOrder.mockResolvedValue({ ...researchWO, status: 'CANCELLED' });
+
+      const out = await node.execute(researchState);
+
+      expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
+      expect(out.submitted).toBe(true);
+      expect(infoSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dropping stale result for WO wo-1 (status=CANCELLED)'),
+      );
+    });
+  });
+
   /**
    * Bug 34 (2026-05-18) — post-submission log must NOT print
    * `Potential reward: ${rewardAmount} SYN`. That field is the round

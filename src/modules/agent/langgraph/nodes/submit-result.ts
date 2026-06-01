@@ -144,19 +144,40 @@ export class SubmitResultNode {
     const updatedIds = [...completedIds];
 
     // Pre-submit status probe. The coordinator expires WOs on a cron and may
-    // have reassigned this WO to another node. Posting a result for a WO that
-    // is no longer ACCEPTED yields a 400 WORK_ORDER_NOT_ACCEPTABLE — drop the
-    // result, arm the cooldown, and let the agent loop close cleanly.
+    // have reassigned this WO to another node. Drop the result, arm the
+    // cooldown, and let the agent loop close cleanly when the WO has truly
+    // moved past us.
     //
     // Coordinator's WorkOrderStatus enum: PENDING | ACCEPTED | COMPLETED |
-    // VERIFIED | CANCELLED. Post-`acceptWorkOrder` the WO stays in `ACCEPTED`
-    // until completion — that is the only state in which a submission is
-    // valid. Any other status means the WO was completed by someone else,
-    // already verified, or cancelled — drop. `probe === null` (404 from
-    // coordinator) is treated as "still ours, proceed" so a transient coord
-    // blip doesn't drop a legitimate result.
+    // VERIFIED | CANCELLED. The submittable states differ by WO type:
+    //
+    //   - RESEARCH: a research round runs the cyclic re-offer model — while
+    //     the round is OPEN the coordinator re-offers the round's WOs
+    //     round-robin and flips them back to PENDING while a node is still
+    //     working them (on a single-node network the re-offer always returns
+    //     to the same node). So PENDING is a VALID submittable state here: the
+    //     coordinator ACCEPTS a research submit for a PENDING WO as long as the
+    //     round is OPEN (WorkOrderSubmissionService.ts, the OPEN-round RESEARCH
+    //     branch ~L372-374). We must NOT
+    //     drop a re-offered (PENDING) research WO locally — proceed to
+    //     completeWorkOrder and let the server's round-OPEN check decide; if
+    //     the round actually closed it returns RoundClosedException/410, which
+    //     the downstream error handling already covers. Only drop on the
+    //     genuinely terminal/reassigned states COMPLETED | VERIFIED | CANCELLED.
+    //   - Non-research: the WO stays in ACCEPTED until completion, so any
+    //     status other than ACCEPTED means it was completed by someone else,
+    //     already verified, or cancelled — drop.
+    //
+    // `probe === null` (404 from coordinator) is treated as "still ours,
+    // proceed" so a transient coord blip doesn't drop a legitimate result.
+    const RESEARCH_TERMINAL_STATES = ['COMPLETED', 'VERIFIED', 'CANCELLED'];
     const probe = await this.coordinator.getWorkOrder(coordinatorUrl, selectedWorkOrder.id);
-    if (probe && probe.status !== 'ACCEPTED') {
+    const shouldDrop = probe
+      ? (woTypeUpper === 'RESEARCH'
+          ? RESEARCH_TERMINAL_STATES.includes(probe.status)
+          : probe.status !== 'ACCEPTED')
+      : false;
+    if (shouldDrop) {
       logger.info(`[Submit] dropping stale result for WO ${selectedWorkOrder.id} (status=${probe.status})`);
       this.fetchNode.markCompleted(selectedWorkOrder);
       updatedIds.push(selectedWorkOrder.id);
