@@ -75,7 +75,7 @@ import type { ModelInfo, HardwareTier } from '../modules/hardware/hardware';
 import { CONFIG_FILE, MODEL_SLUG_REGEX, DEFAULT_SOLANA_RPC_URL } from '../modules/config/config';
 import { getCoordinatorUrl, getCoordinatorWsUrl } from '../constants/coordinator';
 import { HeartbeatHelper, warmCapabilityProbes } from '../modules/heartbeat/heartbeat';
-import { acquireLock, releaseLock, getActiveLock, type NodeLockSource } from '../modules/node-lock/node-lock';
+import { acquireLock, releaseLock, getActiveLock, stopRunningNode, type NodeLockSource } from '../modules/node-lock/node-lock';
 import {
   getGlobalTelemetryClient,
   TelemetryClient,
@@ -1244,13 +1244,22 @@ async function bootstrap() {
     });
 
   // ── stop ───────────────────────────────────────────────────────────────────
+  // Signals the long-lived daemon recorded in ~/.synapseia/node.lock. This
+  // process is ephemeral and shares NO state with the running daemon, so it
+  // MUST reach the daemon through the lock PID — calling stop() on a freshly
+  // constructed local agent (the historical bug) never touched the daemon.
   program
     .command('stop')
     .description('Stop the running Synapseia node')
-    .action(() => {
-      logger.log('🛑 Stopping Synapseia node...');
-      workOrderAgentService.stop();
-      logger.log('✅ Node stopped');
+    .action(async () => {
+      const result = await stopRunningNode({
+        kill: (pid, signal) => process.kill(pid, signal),
+        sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+        log: (msg) => logger.log(msg),
+      });
+      // Exit non-zero only when a live daemon failed to stop (P22: honest
+      // status). no-lock / stale / stopped are all successful no-op or stop.
+      process.exit(result.outcome === 'timeout' ? 1 : 0);
     });
 
   // ── config ─────────────────────────────────────────────────────────────────
