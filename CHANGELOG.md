@@ -1,5 +1,12 @@
 # Changelog — @synapseia-network/node
 
+## [Unreleased] 2026-06-01 fix(agent): stop re-iterating cancelled/closed-round work orders (42ce9381)
+
+- node-kike was infinitely re-training and re-submitting `TRAINING` / `GPU_TRAINING` work orders whose round had already closed (WO row `CANCELLED` on the coordinator), burning CPU and POSTing submissions into dead rounds. The coordinator already filters these on the poll path (open-round-only + status `PENDING`/`ACCEPTED`); the leak was node-side.
+- **Cause A (`submit-result.ts`)**: the pre-submit stale-probe failed OPEN when the coord probe returned `null`/404, so a purged or cancelled WO was resubmitted on every iteration. Now a terminal probe (`CANCELLED`/`COMPLETED`/`VERIFIED`, any WO type) marks the WO permanently dropped; a `null` probe stays fail-open once (transient blip) but becomes terminal after 2 consecutive nulls for the same id (`NULL_PROBE_TERMINAL_AFTER`).
+- **Cause B (`fetch-work-orders.ts`)**: `TRAINING`/`DiLoCo` WOs were only put on a 60s cooldown (`markCompleted`) instead of permanently excluded, so the fetch loop re-selected the same WO after cooldown (reviewer-lesson `P42`: guard on the primary path, side path bypasses it). Added `markPermanentlyDropped()` plus a `completedWorkOrderIds` guard on BOTH the `TRAINING` and `RESEARCH` branches of the pending filter.
+- `RESEARCH` cyclic re-offer preserved: a `PENDING` research WO in an OPEN round is still submittable; only terminal states drop. `nullProbeStreak` map is bounded (cleared on successful submit, on any non-null probe, on terminal cap, and via `reset()`). Added zombie-WO repro tests for the submit and fetch sides. Reviewer: HIGH (RESEARCH branch bypass) + MEDIUM (unbounded map) fixed; full `langgraph` suite green.
+
 ## [0.9.9] 2026-06-01 fix(cli): LangChain/LangSmith tracing OFF by default (no 403 spam) (b5953c5f)
 
 - A user with **no env vars** got `Failed to send multipart request. Received status [403]: Forbidden` spam from the bundled `langsmith` SDK (a transitive dep of LangGraph): a stray/inherited `LANGCHAIN_TRACING_V2` (or a default-on path) made it try to upload traces with no LangSmith key. The node does not use LangSmith.
