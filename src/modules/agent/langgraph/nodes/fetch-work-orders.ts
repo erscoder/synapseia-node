@@ -448,6 +448,24 @@ export class FetchWorkOrdersNode {
         return false;
       }
       if (this.execution.isResearchWorkOrder(wo)) {
+        // Bug Z1 (2026-06-01, P42/P6) — permanent exclusion must apply to
+        // RESEARCH too. SubmitResultNode terminal-drops a RESEARCH WO whose
+        // probe came back COMPLETED/VERIFIED/CANCELLED via
+        // `markPermanentlyDropped`, which adds the id to `completedWorkOrderIds`.
+        // The research branch returns FIRST, so the generic
+        // `!completedWorkOrderIds.has(wo.id)` at the bottom of this filter is
+        // unreachable for research — without this guard a terminal-dropped
+        // research WO that the coord/gossipsub re-offered re-entered selection
+        // next tick (same zombie loop the TRAINING branch already fixes). Check
+        // the permanent set FIRST so a terminal WO is dropped regardless of the
+        // research cooldown window, honouring markPermanentlyDropped's invariant
+        // ("every branch of the pending filter honours it"). The cyclic re-offer
+        // model is untouched: a PENDING research WO in an OPEN round was never
+        // added to the permanent set, so it stays submittable.
+        if (this.completedWorkOrderIds.has(wo.id)) {
+          logger.log(` Research WO "${wo.title}" skipped: permanently dropped (terminal)`);
+          return false;
+        }
         const cooldownUntil = this.researchCooldowns.get(wo.id);
         if (cooldownUntil && now < cooldownUntil) {
           const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
@@ -458,6 +476,21 @@ export class FetchWorkOrdersNode {
         return true;
       }
       if (this.execution.isTrainingWorkOrder(wo) || this.execution.isDiLoCoWorkOrder(wo)) {
+        // Bug Z1 (2026-06-01, P42) — permanent exclusion must apply to
+        // TRAINING/DiLoCo too. SubmitResultNode terminal-drops a WO whose
+        // round CLOSED (probe CANCELLED, or N consecutive 404s) via
+        // `markPermanentlyDropped`, which adds the id to the same
+        // `completedWorkOrderIds` set the generic branch below honours. Pre-
+        // fix this branch only consulted `trainingCooldowns`, so a
+        // terminal-dropped TRAINING WO that the coord/gossipsub re-offered
+        // re-entered selection after the 60s cooldown lapsed and was
+        // re-trained forever (live: iter=715,716 on a CANCELLED WO). Check
+        // the permanent set FIRST so a terminal WO is dropped regardless of
+        // the cooldown window.
+        if (this.completedWorkOrderIds.has(wo.id)) {
+          logger.log(` Training WO "${wo.title}" skipped: permanently dropped (round closed / terminal)`);
+          return false;
+        }
         // Mutex: if the node is currently servicing an inbound chat
         // inference, refuse new TRAINING/DILOCO WOs. They share CPU with the
         // LLM and push chat past the coordinator's stream timeout.
@@ -593,6 +626,29 @@ export class FetchWorkOrdersNode {
       this.trainingCooldowns.set(workOrder.id, Date.now() + TRAINING_COOLDOWN_MS);
       return;
     }
+    this.completedWorkOrderIds.add(workOrder.id);
+  }
+
+  /**
+   * Bug Z1 (2026-06-01) — permanently exclude a WO from re-selection,
+   * irrespective of type. Used by SubmitResultNode when a WO is TERMINAL
+   * for this node: its coordinator probe came back CANCELLED, or the round
+   * closed and the WO row 404'd on N consecutive probes. Unlike
+   * `markCompleted` (which arms a SHORT 60s cooldown for TRAINING/DiLoCo so
+   * the node can re-train with a fresh mutation while the round is still
+   * OPEN), this is a hard, permanent drop: the id goes into
+   * `completedWorkOrderIds`, which every branch of the pending filter —
+   * including the TRAINING/DiLoCo branch (Bug Z1 fix above) — now honours.
+   * That stops the observed zombie-WO loop where a CANCELLED training WO
+   * was re-trained + re-submitted across hundreds of iterations.
+   *
+   * We also clear any leftover cooldown for the id so the two maps cannot
+   * disagree about the WO's fate (the permanent set wins regardless, but
+   * keeping them consistent avoids confusing diagnostics).
+   */
+  markPermanentlyDropped(workOrder: WorkOrder): void {
+    this.trainingCooldowns.delete(workOrder.id);
+    this.researchCooldowns.delete(workOrder.id);
     this.completedWorkOrderIds.add(workOrder.id);
   }
 

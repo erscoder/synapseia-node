@@ -17,7 +17,7 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     getWorkOrder: jest.Mock;
     completeWorkOrder: jest.Mock;
   };
-  let fetchNode: { markCompleted: jest.Mock };
+  let fetchNode: { markCompleted: jest.Mock; markPermanentlyDropped: jest.Mock };
   let node: SubmitResultNode;
   let infoSpy: jest.SpiedFunction<typeof logger.info>;
   let logSpy: jest.SpiedFunction<typeof logger.log>;
@@ -48,7 +48,7 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
       getWorkOrder: jest.fn(),
       completeWorkOrder: jest.fn(),
     };
-    fetchNode = { markCompleted: jest.fn(), markFailedTimeout: jest.fn() };
+    fetchNode = { markCompleted: jest.fn(), markPermanentlyDropped: jest.fn(), markFailedTimeout: jest.fn() };
     // Bug 31 (2026-05-18) — SubmitResultNode now takes WorkOrderExecutionHelper
     // as a third dep for the client-side research-WO quality gate. Stub
     // `isResearchWorkOrder` to false here so the stale-WO test (TRAINING
@@ -77,7 +77,11 @@ describe('SubmitResultNode — pre-submit status check (Bug H1)', () => {
     const out = await node.execute(baseState);
 
     expect(coordinator.completeWorkOrder).not.toHaveBeenCalled();
-    expect(fetchNode.markCompleted).toHaveBeenCalledWith(baseWO);
+    // Bug Z1 (2026-06-01) — a COMPLETED probe is TERMINAL, so the WO is now
+    // dropped PERMANENTLY (markPermanentlyDropped) rather than cooldowned
+    // (markCompleted), which is what stops the zombie re-iteration loop.
+    expect(fetchNode.markPermanentlyDropped).toHaveBeenCalledWith(baseWO);
+    expect(fetchNode.markCompleted).not.toHaveBeenCalled();
     expect(out.submitted).toBe(true);
     expect(out.completedWorkOrderIds).toContain('wo-1');
     expect(infoSpy).toHaveBeenCalledWith(

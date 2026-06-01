@@ -8,6 +8,20 @@ import logger from '../../../../utils/logger';
 
 @Injectable()
 export class SubmitResultNode {
+  /**
+   * Bug Z1 (2026-06-01) — number of CONSECUTIVE null probes
+   * (`getWorkOrder` → null, i.e. 404 or network error) on the SAME
+   * non-research WO id before the node treats it as terminal-for-us and
+   * drops it permanently. A single null stays fail-open so one coord blip
+   * can't nuke a legitimate in-flight result; the cap closes the fail-open
+   * hole that let the node POST a CANCELLED/purged WO into a closed round
+   * forever.
+   */
+  private static readonly NULL_PROBE_TERMINAL_AFTER = 2;
+
+  /** Per-WO consecutive null-probe counter (reset by any non-null probe). */
+  private readonly nullProbeStreak = new Map<string, number>();
+
   constructor(
     private readonly coordinator: WorkOrderCoordinatorHelper,
     private readonly fetchNode: FetchWorkOrdersNode,
@@ -168,18 +182,75 @@ export class SubmitResultNode {
     //     status other than ACCEPTED means it was completed by someone else,
     //     already verified, or cancelled — drop.
     //
-    // `probe === null` (404 from coordinator) is treated as "still ours,
-    // proceed" so a transient coord blip doesn't drop a legitimate result.
-    const RESEARCH_TERMINAL_STATES = ['COMPLETED', 'VERIFIED', 'CANCELLED'];
+    // Bug Z1 (2026-06-01, P2 fail-closed) — `probe === null` (404 OR network
+    // error; `getWorkOrder` collapses both to null) used to be treated as
+    // "still ours, proceed" UNCONDITIONALLY. That is a fail-OPEN hole: a
+    // CANCELLED non-research WO whose row was purged 404s, so the node POSTed
+    // into a closed round on EVERY iteration — the observed zombie loop
+    // (iter=715,716 on a CANCELLED WO). We cannot tell a 404 apart from a
+    // network blip here (same null), so we keep a transient-blip guard:
+    //   - RESEARCH: a null probe stays fail-open ALWAYS. The authoritative
+    //     gate for research is the server-side round-OPEN check on POST, so a
+    //     missing row must never escalate to a local terminal drop.
+    //   - Non-research: a SINGLE null stays fail-open (don't nuke a
+    //     legitimate in-flight result on one blip), but after
+    //     `NULL_PROBE_TERMINAL_AFTER` (2) CONSECUTIVE nulls for the SAME id
+    //     we treat the WO as terminal-for-us and drop it PERMANENTLY. Any
+    //     non-null probe resets the streak. P10: the comment now matches the
+    //     fail-closed-after-N behaviour, not the old unconditional fail-open.
+    // Terminal coordinator states for ANY WO type (research and non-research
+    // alike): once a WO reaches one of these it is permanently dead for this
+    // node. (Renamed from RESEARCH_TERMINAL_STATES — the set is now consulted
+    // by the non-research branch below too, so the research-specific name was
+    // misleading. P10.)
+    const TERMINAL_STATES = ['COMPLETED', 'VERIFIED', 'CANCELLED'];
     const probe = await this.coordinator.getWorkOrder(coordinatorUrl, selectedWorkOrder.id);
-    const shouldDrop = probe
-      ? (woTypeUpper === 'RESEARCH'
-          ? RESEARCH_TERMINAL_STATES.includes(probe.status)
-          : probe.status !== 'ACCEPTED')
-      : false;
-    if (shouldDrop) {
-      logger.info(`[Submit] dropping stale result for WO ${selectedWorkOrder.id} (status=${probe.status})`);
-      this.fetchNode.markCompleted(selectedWorkOrder);
+    const isResearch = woTypeUpper === 'RESEARCH';
+
+    // A non-null probe ends any consecutive-miss streak for this id.
+    if (probe) this.nullProbeStreak.delete(selectedWorkOrder.id);
+
+    let dropKind: 'terminal' | 'reassigned' | null = null;
+    if (probe) {
+      if (isResearch) {
+        // Research terminal states are permanently dead for this node.
+        if (TERMINAL_STATES.includes(probe.status)) dropKind = 'terminal';
+      } else if (probe.status !== 'ACCEPTED') {
+        // CANCELLED/COMPLETED/VERIFIED are dead; PENDING means the coord
+        // reaper reset/reassigned it (it MAY be legitimately re-offered
+        // later), so that is a softer "reassigned" drop (cooldown), not a
+        // permanent one.
+        dropKind = TERMINAL_STATES.includes(probe.status) ? 'terminal' : 'reassigned';
+      }
+    } else if (!isResearch) {
+      // Null probe on a non-research WO: count consecutive misses.
+      const streak = (this.nullProbeStreak.get(selectedWorkOrder.id) ?? 0) + 1;
+      this.nullProbeStreak.set(selectedWorkOrder.id, streak);
+      if (streak >= SubmitResultNode.NULL_PROBE_TERMINAL_AFTER) {
+        logger.warn(
+          `[Submit] WO ${selectedWorkOrder.id} probe returned null ${streak}x consecutively ` +
+          `— treating as terminal (round closed / WO purged) and dropping permanently`,
+        );
+        dropKind = 'terminal';
+      }
+      // streak < cap → dropKind stays null → fail-open POST (single blip).
+    }
+
+    if (dropKind) {
+      const statusLabel = probe ? probe.status : `null-probe×${this.nullProbeStreak.get(selectedWorkOrder.id) ?? 0}`;
+      logger.info(`[Submit] dropping stale result for WO ${selectedWorkOrder.id} (status=${statusLabel})`);
+      if (dropKind === 'terminal') {
+        // Bug Z1 — terminal (CANCELLED / closed-round / repeated-404) WOs are
+        // removed from the iteration/active set PERMANENTLY so the node stops
+        // re-selecting + re-training them. `markCompleted` only arms a 60s
+        // cooldown for TRAINING/DiLoCo, which lapses and lets the WO back in.
+        this.nullProbeStreak.delete(selectedWorkOrder.id);
+        this.fetchNode.markPermanentlyDropped(selectedWorkOrder);
+      } else {
+        // Reassigned (non-research PENDING): the coord may re-offer it; a
+        // cooldown is the right lever, matching the prior behaviour.
+        this.fetchNode.markCompleted(selectedWorkOrder);
+      }
       updatedIds.push(selectedWorkOrder.id);
       return { submitted: true, completedWorkOrderIds: updatedIds };
     }
@@ -195,6 +266,13 @@ export class SubmitResultNode {
     );
 
     if (completed) {
+      // Bug Z1 (2026-06-01, leak fix) — a successful POST means we are done
+      // with this id, so drop any residual consecutive-null-probe counter for
+      // it. Without this the `nullProbeStreak` map keeps one stale entry per
+      // WO-id that hit exactly one transient null then succeeded (the streak
+      // is otherwise only deleted on a non-null probe or on reaching the cap),
+      // a slow leak on a node running for weeks.
+      this.nullProbeStreak.delete(selectedWorkOrder.id);
       // Bug 34 (2026-05-18) — honest log. The previous form printed
       // `Potential reward: ${rewardAmount} SYN` which was the *round
       // pool* (e.g. 6000), not the per-peer payout. Actual settlement
@@ -222,5 +300,18 @@ export class SubmitResultNode {
     }
 
     return { submitted: completed, completedWorkOrderIds: updatedIds };
+  }
+
+  /**
+   * Bug Z1 (2026-06-01) — clear the per-WO consecutive-null-probe counters.
+   * Mirrors `FetchWorkOrdersNode.reset()` so a caller that re-initialises the
+   * fetch node's in-memory state can drop this node's `nullProbeStreak` map in
+   * the same pass and the two nodes never disagree about a WO's fate. The map
+   * is otherwise pruned incrementally (deleted on any non-null probe, on a
+   * successful submit, and on reaching the terminal cap), so this is the
+   * coarse fallback that bounds the map across long-lived runs.
+   */
+  reset(): void {
+    this.nullProbeStreak.clear();
   }
 }
