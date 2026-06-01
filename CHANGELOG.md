@@ -1,6 +1,6 @@
 # Changelog — @synapseia-network/node
 
-## [Unreleased] 2026-06-02 feat(config): self-heal + forensics guard for config.json (d21d4739)
+## [0.9.11] 2026-06-02 feat(config): self-heal + forensics guard for config.json (d21d4739)
 
 - `~/.synapseia/config.json` keeps getting lost/reset (no code path in node or node-ui deletes it — suspected external/OS actor). On loss/corruption `loadConfig` silently fell back to defaults (`qwen2.5:0.5b`), losing the operator's real config (e.g. their minimax model) — the confirmed cause of a node degrading to the weak local model after a config loss.
 - `saveConfig` now atomically (temp+rename) mirrors a `config.json.bak`, only when the config is worth backing up (non-default model OR any operator field) so a defaults-only save can never clobber a good `.bak`.
