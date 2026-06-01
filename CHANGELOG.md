@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.8] 2026-06-01 feat(llm): set MiniMax-M3 as the top minimax model (eaf208f0)
+
+- `MiniMax-M3` is the new top minimax model. Swapped the minimax `models.top` modelId from `MiniMax-M2.7` to `MiniMax-M3` in `providers.ts` (specs unchanged: 240K window, same cost/latency).
+- Added `MiniMax-M3` + `minimax/MiniMax-M3` to the economic-eval cost map (`0.00222`), keeping the M2.7 entries for back-compat with nodes still pinned to M2.7.
+- `topSlugFor` / `SUPPORTED_MODELS` / `MODEL_METADATA` derive from the provider table → pick up M3 automatically; updated the two `llm-provider.spec` asserts that pin the dynamically-built top model. `mid` (abab7-chat-preview) / `budget` (abab6.5s-chat) untouched. Reviewer SHIP; build + provider/back-compat specs green.
+
 ## [0.9.7] 2026-06-01 fix(prompt): align research-agent prompts with quality gates (4d6f5bb0)
 
 - Weak cloud models (minimax) hit research fail-loops because the prompts under-specified two enforced constraints, so valid research never submitted.
