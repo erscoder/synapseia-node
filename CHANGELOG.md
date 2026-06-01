@@ -1,5 +1,11 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.6] 2026-06-01 fix(submit): research-aware stale probe — submit re-offered PENDING WOs (95e8bea3)
+
+- **A research node never submitted results for an OPEN round under the cyclic re-offer model.** `submit-result.ts` ran a pre-submit status probe and dropped the result whenever the WO was not `ACCEPTED`. Under the RESEARCH cyclic re-offer the coordinator flips an accepted research WO back to `PENDING` while the node is still working it (single-node networks always re-offer to the same node), so the node logged `dropping stale result for WO <id> (status=PENDING)` and discarded every valid result. Live: node-kike dropped 18 consecutive results; the open round had `0` submissions.
+- **Fix**: the probe is now research-aware. For `RESEARCH` WOs it drops ONLY on the genuinely terminal/reassigned states `COMPLETED | VERIFIED | CANCELLED`; a re-offered `PENDING` research WO proceeds to `completeWorkOrder` and lets the coordinator's round-OPEN check decide (the coordinator already accepts a research submit for a `PENDING` WO while the round is OPEN). Non-research WOs are unchanged (`status !== ACCEPTED` still drops). `probe === null` (404) still proceeds ("still ours").
+- Node-only change; the coordinator was already correct. Adds `submit-result-stale.spec` cases (research `PENDING` no-drop + submit, research `COMPLETED`/`CANCELLED` drop, non-research `PENDING` drop). Build clean, 36 submit-result specs pass.
+
 ## [0.9.5] 2026-06-01 fix(cli): syn stop signals the real daemon + build/ci hardening (e5865844)
 
 - **`syn stop` now actually stops the daemon** (`11153ee4`). The old action called `workOrderAgentService.stop()` in the ephemeral CLI process and printed "Node stopped" without touching the running daemon — a no-op. `stopRunningNode()` now reads the pid from `~/.synapseia/node.lock`, SIGTERMs it, polls up to 10s, clears the lock, with honest messages (no-lock / stale-pid / poll-confirmed-stopped / timeout-no-SIGKILL / ESRCH-race). The daemon's own SIGTERM handler drains + releases the lock.
