@@ -1,5 +1,13 @@
 # Changelog — @synapseia-network/node
 
+## [Unreleased] 2026-06-02 feat(config): self-heal + forensics guard for config.json (d21d4739)
+
+- `~/.synapseia/config.json` keeps getting lost/reset (no code path in node or node-ui deletes it — suspected external/OS actor). On loss/corruption `loadConfig` silently fell back to defaults (`qwen2.5:0.5b`), losing the operator's real config (e.g. their minimax model) — the confirmed cause of a node degrading to the weak local model after a config loss.
+- `saveConfig` now atomically (temp+rename) mirrors a `config.json.bak`, only when the config is worth backing up (non-default model OR any operator field) so a defaults-only save can never clobber a good `.bak`.
+- `loadConfig` self-heals: missing config + valid `.bak` → restore + WARN; corrupt config + valid `.bak` → restore + preserve the corrupt bytes as `config.json.corrupt-<ts>` and do NOT overwrite them with defaults this boot (`skipPersist`); missing/corrupt + no `.bak` → defaults + WARN.
+- Forensic breadcrumb at every load logs config.json existence + mtime + size (NEVER contents — config may hold an LLM key) so a future "config vanished" can be correlated with the preceding event in the log stream.
+- Also fixes a pre-existing test-isolation leak (`config.spec.ts` set `SYNAPSEIA_HOME` after importing `config.ts`, so ESM hoisting wrote the operator's LIVE config during tests). Reviewer SHIP-AS-IS; 50 config tests green, no secret ever logged (asserted at runtime).
+
 ## [0.9.10] 2026-06-01 feat(heartbeat): split CPU/GPU training caps by CUDA (f99ff6cd)
 
 - Restores the intended design: GPU (CUDA) nodes advertise `gpu_training` and NOT `cpu_training` (compete only in `GPU_TRAINING` rounds); CPU and Mac-MPS nodes advertise `cpu_training` and NOT `gpu_training` (compete only in `CPU_TRAINING` rounds). Previously every GPU node advertised BOTH caps and crowded CPU-only nodes out of their own micro-training space.
