@@ -103,7 +103,7 @@ export const CLOUD_PROVIDERS: readonly CloudProviderEntry[] = [
     endpoint: 'https://api.minimax.io/v1/chat/completions',
     apiKeyEnvVar: 'MINIMAX_API_KEY',
     models: {
-      top: { modelId: 'MiniMax-M2.7', latencyMs: 400, maxTokens: 245_760, costPerCall: 0.0015 },
+      top: { modelId: 'MiniMax-M3', latencyMs: 400, maxTokens: 245_760, costPerCall: 0.0015 },
       mid: { modelId: 'abab7-chat-preview', latencyMs: 350, maxTokens: 245_760, costPerCall: 0.0008 },
       budget: { modelId: 'abab6.5s-chat', latencyMs: 300, maxTokens: 245_760, costPerCall: 0.0003 },
     },

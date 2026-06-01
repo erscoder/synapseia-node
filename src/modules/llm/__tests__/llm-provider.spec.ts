@@ -155,7 +155,7 @@ describe('SUPPORTED_MODELS / MODEL_METADATA', () => {
     expect(SUPPORTED_MODELS['anthropic/claude-sonnet-4-6']).toBeDefined();
     expect(SUPPORTED_MODELS['google/gemini-2.5-pro']).toBeDefined();
     expect(SUPPORTED_MODELS['moonshot/kimi-k2.6']).toBeDefined();
-    expect(SUPPORTED_MODELS['minimax/MiniMax-M2.7']).toBeDefined();
+    expect(SUPPORTED_MODELS['minimax/MiniMax-M3']).toBeDefined();
     expect(SUPPORTED_MODELS['zhipu/glm-4.6']).toBeDefined();
   });
 
@@ -168,7 +168,7 @@ describe('SUPPORTED_MODELS / MODEL_METADATA', () => {
   it('exposes per-model metadata with cost only for cloud entries', () => {
     expect(MODEL_METADATA['qwen2.5:0.5b']?.costPerCall).toBeUndefined();
     expect(MODEL_METADATA['claude-sonnet-4-6']?.costPerCall).toBe(0.003);
-    expect(MODEL_METADATA['MiniMax-M2.7']?.costPerCall).toBe(0.0015);
+    expect(MODEL_METADATA['MiniMax-M3']?.costPerCall).toBe(0.0015);
   });
 });
 

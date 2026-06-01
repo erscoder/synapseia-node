@@ -25,6 +25,8 @@ const LLM_PRICE_TABLE: Record<string, number> = {
   'gemini-pro': 0.00035,
   'MiniMax-M2.7': 0.00222,
   'minimax/MiniMax-M2.7': 0.00222,
+  'MiniMax-M3': 0.00222,
+  'minimax/MiniMax-M3': 0.00222,
   // NVIDIA NIM free tier — ~5k credits/month, no per-call cost to the
   // operator. Listed explicitly so the unknown-model warn does not fire on
   // every research evaluation when NVIDIA is the active provider.
