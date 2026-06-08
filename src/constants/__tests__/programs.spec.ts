@@ -5,16 +5,19 @@ import {
   OFFICIAL_ESCROW_PROGRAM_ID,
   OFFICIAL_SYN_TOKEN_PROGRAM_ID,
   OFFICIAL_SYN_TOKEN_MINT,
+  OFFICIAL_REWARD_TOKEN_MINT,
   getStakingProgramIdString,
   getRewardsVaultProgramIdString,
   getEscrowProgramIdString,
   getSynTokenProgramIdString,
   getSynTokenMintString,
+  getRewardTokenMintString,
   getStakingProgramId,
   getRewardsVaultProgramId,
   getEscrowProgramId,
   getSynTokenProgramId,
   getSynTokenMint,
+  getRewardTokenMint,
 } from '../programs';
 
 // The five env vars the resolvers honour. Saved + restored per-test so
@@ -25,6 +28,7 @@ const ENV_KEYS = [
   'ESCROW_PROGRAM_ID',
   'SYN_TOKEN_PROGRAM_ID',
   'SYN_TOKEN_MINT',
+  'REWARD_TOKEN_MINT',
 ] as const;
 
 describe('constants/programs', () => {
@@ -50,7 +54,7 @@ describe('constants/programs', () => {
       'CYW5Cprp5JuzaXtPyV8LPBgPzbze6QHnc3oFBAVaFkfw',
     );
     expect(OFFICIAL_REWARDS_VAULT_PROGRAM_ID).toBe(
-      'D9pkzWv2Ak9J8vXDVcMM1P51hDmjRJEwbuYHxCuJKTEN',
+      '7v4cc41hQYYkpiiL9esg1X6y6ZHZ1L5wZm26m2pUrBWi',
     );
     expect(OFFICIAL_ESCROW_PROGRAM_ID).toBe(
       'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK',
@@ -63,6 +67,11 @@ describe('constants/programs', () => {
       'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8',
     );
     expect(OFFICIAL_SYN_TOKEN_MINT).not.toBe(OFFICIAL_SYN_TOKEN_PROGRAM_ID);
+    // Model B: rewards paid in USDC (devnet mint), distinct from the SYN mint.
+    expect(OFFICIAL_REWARD_TOKEN_MINT).toBe(
+      'EdeyUkspSkkcox5PFufzDBxSFWZBKnyNceJTtnu9U9FE',
+    );
+    expect(OFFICIAL_REWARD_TOKEN_MINT).not.toBe(OFFICIAL_SYN_TOKEN_MINT);
   });
 
   it('falls back to the canonical default when env is unset', () => {
@@ -71,6 +80,7 @@ describe('constants/programs', () => {
     expect(getEscrowProgramIdString()).toBe(OFFICIAL_ESCROW_PROGRAM_ID);
     expect(getSynTokenProgramIdString()).toBe(OFFICIAL_SYN_TOKEN_PROGRAM_ID);
     expect(getSynTokenMintString()).toBe(OFFICIAL_SYN_TOKEN_MINT);
+    expect(getRewardTokenMintString()).toBe(OFFICIAL_REWARD_TOKEN_MINT);
   });
 
   it('honours env overrides when set', () => {
@@ -83,12 +93,14 @@ describe('constants/programs', () => {
     process.env.ESCROW_PROGRAM_ID = overrideA;
     process.env.SYN_TOKEN_PROGRAM_ID = overrideB;
     process.env.SYN_TOKEN_MINT = overrideB;
+    process.env.REWARD_TOKEN_MINT = overrideB;
 
     expect(getStakingProgramIdString()).toBe(overrideA);
     expect(getRewardsVaultProgramIdString()).toBe(overrideA);
     expect(getEscrowProgramIdString()).toBe(overrideA);
     expect(getSynTokenProgramIdString()).toBe(overrideB);
     expect(getSynTokenMintString()).toBe(overrideB);
+    expect(getRewardTokenMintString()).toBe(overrideB);
   });
 
   it('treats whitespace-only env values as unset (.trim() || default)', () => {
@@ -97,12 +109,14 @@ describe('constants/programs', () => {
     process.env.ESCROW_PROGRAM_ID = '';
     process.env.SYN_TOKEN_PROGRAM_ID = '  \n  ';
     process.env.SYN_TOKEN_MINT = ' ';
+    process.env.REWARD_TOKEN_MINT = '\t';
 
     expect(getStakingProgramIdString()).toBe(OFFICIAL_STAKING_PROGRAM_ID);
     expect(getRewardsVaultProgramIdString()).toBe(OFFICIAL_REWARDS_VAULT_PROGRAM_ID);
     expect(getEscrowProgramIdString()).toBe(OFFICIAL_ESCROW_PROGRAM_ID);
     expect(getSynTokenProgramIdString()).toBe(OFFICIAL_SYN_TOKEN_PROGRAM_ID);
     expect(getSynTokenMintString()).toBe(OFFICIAL_SYN_TOKEN_MINT);
+    expect(getRewardTokenMintString()).toBe(OFFICIAL_REWARD_TOKEN_MINT);
   });
 
   it('PublicKey getters return valid PublicKey instances matching the string getters', () => {
@@ -112,6 +126,7 @@ describe('constants/programs', () => {
       [getEscrowProgramId, getEscrowProgramIdString],
       [getSynTokenProgramId, getSynTokenProgramIdString],
       [getSynTokenMint, getSynTokenMintString],
+      [getRewardTokenMint, getRewardTokenMintString],
     ];
     for (const [pk, str] of pairs) {
       const key = pk();

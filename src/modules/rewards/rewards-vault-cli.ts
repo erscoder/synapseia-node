@@ -19,7 +19,7 @@ import logger from '../../utils/logger';
 import { loadWalletWithPassword, sendAndConfirmFresh } from '../staking/staking-cli';
 import {
   getRewardsVaultProgramId as resolveRewardsVaultProgramId,
-  getSynTokenMint as resolveSynTokenMint,
+  getRewardTokenMint as resolveRewardTokenMint,
 } from '../../constants/programs';
 import {
   buildClaimRewardsInstruction,
@@ -29,6 +29,10 @@ import {
 
 const DEFAULT_CU_LIMIT = 1_400_000;
 const DEFAULT_CU_PRICE_MICROLAMPORTS = 10_000;
+// Reward payout mint is USDC (6 decimals), NOT SYN (9). The rewards-vault
+// flipped SYN→USDC; the claimable u64 in the RewardAccount PDA is denominated
+// in this mint's base units, so display divides by 1e6.
+const REWARD_TOKEN_DECIMALS_DIVISOR = 1_000_000;
 
 // Program id + mint resolution is centralised in `constants/programs.ts`
 // so a future devnet→mainnet flip is a single-file change.
@@ -36,8 +40,9 @@ function getRewardsVaultProgramId(): PublicKey {
   return resolveRewardsVaultProgramId();
 }
 
-function getSynMint(): PublicKey {
-  return resolveSynTokenMint();
+// Reward payout mint (USDC) — distinct from the SYN mint used by staking/faucet.
+function getRewardMint(): PublicKey {
+  return resolveRewardTokenMint();
 }
 
 function getSolanaRpcUrl(): string {
@@ -57,7 +62,7 @@ function getSolanaRpcUrl(): string {
  */
 export async function claimWorkOrderRewards(): Promise<string> {
   const programId = getRewardsVaultProgramId();
-  const synMint = getSynMint();
+  const rewardMint = getRewardMint();
 
   const connection = new Connection(getSolanaRpcUrl(), 'confirmed');
   const wallet = await loadWalletWithPassword();
@@ -71,32 +76,33 @@ export async function claimWorkOrderRewards(): Promise<string> {
       'No reward account on-chain yet. Run your node and earn rewards first.',
     );
   }
-  const unclaimed = Number(rewardInfo.data.readBigUInt64LE(8 + 32)) / 1_000_000_000;
+  const unclaimed =
+    Number(rewardInfo.data.readBigUInt64LE(8 + 32)) / REWARD_TOKEN_DECIMALS_DIVISOR;
   if (unclaimed === 0) {
     throw new Error('Claimable balance is zero — nothing to claim.');
   }
-  logger.log(`Claimable balance: ${unclaimed} SYN`);
+  logger.log(`Claimable balance: ${unclaimed} USDC`);
 
   const treasuryAuthority = deriveTreasuryAuthorityPDA(programId);
   const treasuryTokenAccount = await getAssociatedTokenAddress(
-    synMint,
+    rewardMint,
     treasuryAuthority,
     true, // allowOwnerOffCurve — treasuryAuthority is a PDA
   );
-  const ownerTokenAccount = await getAssociatedTokenAddress(synMint, owner);
+  const ownerTokenAccount = await getAssociatedTokenAddress(rewardMint, owner);
 
   const instructions: TransactionInstruction[] = [
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: DEFAULT_CU_PRICE_MICROLAMPORTS }),
     ComputeBudgetProgram.setComputeUnitLimit({ units: DEFAULT_CU_LIMIT }),
   ];
 
-  // Create the owner's SYN ATA when it doesn't exist yet — the program
-  // transfers into it, so it must be initialised beforehand.
+  // Create the owner's reward (USDC) ATA when it doesn't exist yet — the
+  // program transfers into it, so it must be initialised beforehand.
   const ownerAtaInfo = await connection.getAccountInfo(ownerTokenAccount);
   if (!ownerAtaInfo) {
     instructions.push(
       createAssociatedTokenAccountInstruction(
-        owner, ownerTokenAccount, owner, synMint,
+        owner, ownerTokenAccount, owner, rewardMint,
         TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
       ),
     );

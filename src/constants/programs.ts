@@ -18,13 +18,18 @@ import { PublicKey } from '@solana/web3.js';
 export const OFFICIAL_STAKING_PROGRAM_ID =
   'CYW5Cprp5JuzaXtPyV8LPBgPzbze6QHnc3oFBAVaFkfw';
 export const OFFICIAL_REWARDS_VAULT_PROGRAM_ID =
-  'D9pkzWv2Ak9J8vXDVcMM1P51hDmjRJEwbuYHxCuJKTEN';
+  '7v4cc41hQYYkpiiL9esg1X6y6ZHZ1L5wZm26m2pUrBWi';
 export const OFFICIAL_ESCROW_PROGRAM_ID =
   'HwFPR5rGCkd7ak6SivRkaPnb5jzRMMHvC3wENK1mW2eK';
 export const OFFICIAL_SYN_TOKEN_PROGRAM_ID =
   '8iFr3ciQuNeU4vkzQTp7NcWNgRr7AVhwyizNCAszaEQq';
 export const OFFICIAL_SYN_TOKEN_MINT =
   'DCdWHhoeEwHJ3Fy3DRTk4yvZPXq3mSNZKtbPJzUfpUh8';
+// Reward payout mint (USDC, 6 decimals). Distinct from SYN: rewards flipped
+// SYN→USDC on devnet — the redeployed rewards-vault pays this mint. Staking +
+// faucet stay on SYN. Operators override via REWARD_TOKEN_MINT for dev/mainnet.
+export const OFFICIAL_REWARD_TOKEN_MINT =
+  'EdeyUkspSkkcox5PFufzDBxSFWZBKnyNceJTtnu9U9FE';
 
 // String getters honour env override; PublicKey getters wrap them.
 export const getStakingProgramIdString = (): string =>
@@ -37,6 +42,8 @@ export const getSynTokenProgramIdString = (): string =>
   process.env.SYN_TOKEN_PROGRAM_ID?.trim() || OFFICIAL_SYN_TOKEN_PROGRAM_ID;
 export const getSynTokenMintString = (): string =>
   process.env.SYN_TOKEN_MINT?.trim() || OFFICIAL_SYN_TOKEN_MINT;
+export const getRewardTokenMintString = (): string =>
+  process.env.REWARD_TOKEN_MINT?.trim() || OFFICIAL_REWARD_TOKEN_MINT;
 
 export const getStakingProgramId = (): PublicKey =>
   new PublicKey(getStakingProgramIdString());
@@ -48,3 +55,5 @@ export const getSynTokenProgramId = (): PublicKey =>
   new PublicKey(getSynTokenProgramIdString());
 export const getSynTokenMint = (): PublicKey =>
   new PublicKey(getSynTokenMintString());
+export const getRewardTokenMint = (): PublicKey =>
+  new PublicKey(getRewardTokenMintString());

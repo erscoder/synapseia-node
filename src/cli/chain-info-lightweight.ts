@@ -313,8 +313,20 @@ async function fetchCoordinatorReachable(coordinatorUrl: string): Promise<boolea
 }
 
 /**
+ * Reward payout mint base-unit divisor. The rewards-vault pays USDC (6
+ * decimals), NOT SYN (9) — staking/faucet keep their own 1e9 divisors.
+ * Env-overridable for dev clusters / a future mint flip.
+ */
+function rewardTokenDecimalsDivisor(): number {
+  const raw = process.env.REWARD_TOKEN_DECIMALS?.trim();
+  const decimals = raw ? Number.parseInt(raw, 10) : 6;
+  return 10 ** (Number.isFinite(decimals) && decimals >= 0 ? decimals : 6);
+}
+
+/**
  * Read the `syn_rewards_vault` RewardAccount PDA and return the claimable
- * SYN (UI units, not lamports). Zero when the PDA doesn't exist yet.
+ * reward (UI units, not base units). The vault pays USDC (6 decimals), so the
+ * u64 is divided by 1e6, not 1e9. Zero when the PDA doesn't exist yet.
  *
  * Layout after the 8-byte Anchor discriminator:
  *   [8..40]   owner         Pubkey(32)
@@ -336,8 +348,8 @@ async function fetchVaultClaimable(
     );
     const info = await conn.getAccountInfo(pda, 'confirmed');
     if (!info || info.data.length < 8 + 32 + 8) return 0;
-    const lamports = info.data.readBigUInt64LE(8 + 32);
-    return Number(lamports) / 1_000_000_000;
+    const baseUnits = info.data.readBigUInt64LE(8 + 32);
+    return Number(baseUnits) / rewardTokenDecimalsDivisor();
   } catch {
     return 0;
   }
