@@ -1,5 +1,9 @@
 # Changelog — @synapseia-network/node
 
+## [0.9.13] 2026-06-08 revert(rewards): roll back to SYN claim (revert 0.9.12 USDC)
+
+Reverts the 0.9.12 USDC reward flip. Decision: keep node rewards in SYN for now (USDC model preserved in the `usdc-model` branch). The reward CLAIM path is restored to the SYN rewards-vault `D9pkzWv2…` with the SYN mint @ 9 decimals (`programs.ts`, `rewards-vault-cli.ts`, `chain-info-lightweight.ts`, `programs.spec.ts` reverted to the 0.9.11 state). 0.9.12 cannot be unpublished, so this ships forward as 0.9.13; nodes auto-update back to SYN. Staking + faucet were always SYN, unchanged.
+
 ## [0.9.12] 2026-06-08 fix(rewards): claim USDC from the new rewards-vault program (c8225a3d)
 
 SYN->USDC devnet flip cascade. The on-chain rewards-vault was redeployed as a NEW program (`7v4cc41hQYYkpiiL9esg1X6y6ZHZ1L5wZm26m2pUrBWi`) paying a devnet USDC mint (`EdeyUkspSkkcox5PFufzDBxSFWZBKnyNceJTtnu9U9FE`, 6 decimals); on-chain `claim_rewards` enforces `token::mint == vault_state.treasury_mint`. The reward CLAIM path (`rewards-vault-cli.ts`) now uses the reward (USDC) mint for the treasury ATA, owner ATA and create-owner-ATA, and formats claimable at 6 decimals. New env-overridable reward-mint resolver in `constants/programs.ts` (`REWARD_TOKEN_MINT` || `OFFICIAL_REWARD_TOKEN_MINT`=USDC) and bumped `OFFICIAL_REWARDS_VAULT_PROGRAM_ID`. `chain-info-lightweight.ts` vault-claimable display fixed 9->6 decimals (env `REWARD_TOKEN_DECIMALS`). Staking + faucet untouched (still SYN@9). Old SYN accruals stay claimable on the old vault `D9pkzWv2…`.
